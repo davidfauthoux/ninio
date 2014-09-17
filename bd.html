@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>Demo</title>
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+	<style>
+		html, body, ul, li {
+			padding: 0;
+			margin: 0;
+		}
+		body {
+			font-family: "Trebuchet MS", Helvetica, sans-serif;
+			background: black;
+			color: white;
+		}
+		#image {
+			width: 100%;
+			display: none;
+		}
+		#previous, #next, a {
+			padding: 20px;
+			display: block;
+			color: white;
+			text-decoration: none;
+			font-size: 20pt;
+		}
+		#previous {
+			float: left;
+			display: none;
+		}
+		#next {
+			float: right;
+			display: none;
+		}
+	</style>
+</head>
+<body>
+	<ul id="list">
+	</ul>
+	<img id="image" />
+	<div>
+		<a id="previous">Previous</a>
+		<a id="next">Next</a>
+	</div>
+
+	<script type="text/javascript">
+		var defaultDir = "bd";
+		
+		String.prototype.endsWith = function(suffix) {
+		    return this.indexOf(suffix, this.length - suffix.length) !== -1;
+		};
+		
+		var getUrlParameter = function(name){
+		    var results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+		    if (results == null){
+		       return null;
+		    }
+		    else{
+		       return results[1] || 0;
+		    }
+		}
+
+		var q = getUrlParameter("q");
+		if (q == null) {
+			q = encodeURIComponent("/" + defaultDir);
+		}
+		
+		var i = getUrlParameter("i");
+		
+		var dir = decodeURIComponent(q);
+		var current = null;
+
+		if (i != null) {
+			current = decodeURIComponent(i);
+		}
+	
+		$.getJSON(encodeURIComponent(dir), function(response) {
+			var previous = null;
+			var next = null;
+			var found = false;
+			$.each(response, function(i, o) {
+				if (o.endsWith("/")) {
+					$("#list").append("<li><a href=\"/bd.html?q=" + encodeURIComponent(dir + "/" + o) + "\">" + o + "</a></li>");
+			    	console.log(encodeURIComponent(o));
+			    	return;
+			    }
+				if (!o.endsWith(".jpg")) {
+					return;
+				}
+				
+				if (current == null) {
+					current = o;
+				}
+				
+			    if (o == current) {
+				    found = true;
+				    return;
+			    }
+			    
+			    if (!found) {
+			    	previous = o;
+			    }
+			    if (found && (next == null)) {
+			    	next = o;
+			    }
+			});
+
+	    	if (current != null) {
+				$("#image").attr("src", encodeURIComponent(dir + "/" + current));
+				$("#image").css("display", "block");
+	    	}
+			    	
+	    	if (previous != null) {
+				$("#previous").attr("href", "/bd.html?q=" + encodeURIComponent(dir) + "&i=" + encodeURIComponent(previous) + "&rand=" + Math.floor(Math.random() * 1000));
+				$("#previous").css("display", "block");
+	    	}
+			if (next != null) {
+				$("#next").attr("href", "/bd.html?q=" + encodeURIComponent(dir) + "&i=" + encodeURIComponent(next) + "&rand=" + Math.floor(Math.random() * 1000));
+				$("#next").css("display", "block");
+			}
+		});
+	
+	</script>
+</body>
