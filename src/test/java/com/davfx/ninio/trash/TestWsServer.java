@@ -81,7 +81,7 @@ public class TestWsServer {
 					.add(Pattern.compile(".*"), new HttpServerHandler() {
 								HttpRequest request;
 								@Override
-								public void ready(Write write) {
+								public void ready(final Write write) {
 									System.out.println("# READY");
 									String wsKey = request.getHeaders().get("Sec-WebSocket-Key");
 									String wsVersion = request.getHeaders().get("Sec-WebSocket-Version");

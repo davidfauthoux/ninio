@@ -25,13 +25,13 @@ public final class WaitingSshAvailable {
 	public RegisteredFunctionsScriptRunner register(RegisteredFunctionsScriptRunner runner) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
-			public void call(JsonElement request, AsyncScriptFunction.Callback<JsonElement> userCallback) {
+			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SshClient.DEFAULT_PORT));
 				WaitingTelnetClientCache.Connectable c = client.get(address);
 
-				String command = JsonUtils.getString(r, "command", "");
+				final String command = JsonUtils.getString(r, "command", "");
 				JsonElement init = r.get("init");
 				if (init != null) {
 					for (JsonElement e : init.getAsJsonArray()) {
@@ -50,7 +50,7 @@ public final class WaitingSshAvailable {
 					public void close() {
 					}
 					@Override
-					public void launched(String init, Callback callback) {
+					public void launched(final String init, Callback callback) {
 						callback.send(command, new WaitingTelnetClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {

@@ -70,14 +70,14 @@ public final class ProxyServer {
 	}
 
 	public void start() throws IOException {
-		Queue queue = new Queue();
+		final Queue queue = new Queue();
 		Executors.newSingleThreadExecutor().execute(new Runnable() {
 			@Override
 			public void run() {
 				while (true) {
 					try (ServerSocket ss = new ServerSocket(port)) {
 						while (true) {
-							Socket socket = ss.accept();
+							final Socket socket = ss.accept();
 							
 							Threads.run(ProxyServer.class, new Runnable() {
 								@Override
@@ -85,13 +85,13 @@ public final class ProxyServer {
 									Map<Integer, MutablePair<Address, CloseableByteBufferHandler>> connections = new HashMap<>();
 		
 									try {
-										DataOutputStream out = new DataOutputStream(socket.getOutputStream());
+										final DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 										DataInputStream in = new DataInputStream(socket.getInputStream());
 										LOGGER.debug("Accepted connection from: {}", socket.getInetAddress());
 										
 										while (true) {
 											LOGGER.trace("Server waiting for connection ID");
-											int connectionId = in.readInt();
+											final int connectionId = in.readInt();
 											int len = in.readShort();
 											if (len < 0) {
 												MutablePair<Address, CloseableByteBufferHandler> connection = connections.remove(connectionId);
@@ -104,10 +104,10 @@ public final class ProxyServer {
 												Address address = new Address(in.readUTF(), in.readInt());
 												ReadyFactory factory = proxyUtils.read(in);
 												Ready r = factory.create(queue, new OnceByteBufferAllocator());
-												MutablePair<Address, CloseableByteBufferHandler> connection = new MutablePair<Address, CloseableByteBufferHandler>(address, null);
+												final MutablePair<Address, CloseableByteBufferHandler> connection = new MutablePair<Address, CloseableByteBufferHandler>(address, null);
 												connections.put(connectionId, connection);
 												
-												Lock lock = new Lock();
+												final Lock lock = new Lock();
 												
 												r.connect(address, new ReadyConnection() {
 													@Override

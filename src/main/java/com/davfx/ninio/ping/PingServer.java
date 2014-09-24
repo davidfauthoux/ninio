@@ -28,7 +28,7 @@ public final class PingServer {
 	private static final int ERROR_CODE = 1;
 	private static final int BUFFER_SIZE = 1024;
 
-	public PingServer(int port) {
+	public PingServer(final int port) {
 		Executors.newSingleThreadExecutor().execute(new Runnable() {
 			@Override
 			public void run() {
@@ -38,10 +38,10 @@ public final class PingServer {
 						while (true) {
 							DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
 							ss.receive(receivePacket);
-							byte[] b = new byte[receivePacket.getLength()];
+							final byte[] b = new byte[receivePacket.getLength()];
 							System.arraycopy(receivePacket.getData(), receivePacket.getOffset(), b, 0, b.length);
-							InetAddress sourceAddress = receivePacket.getAddress();
-							int sourcePort = receivePacket.getPort();
+							final InetAddress sourceAddress = receivePacket.getAddress();
+							final int sourcePort = receivePacket.getPort();
 							LOGGER.trace("Packet received: " + b.length + " bytes from: " + sourceAddress + ":" + sourcePort);
 							Threads.run(PingServer.class, new Runnable() {
 								@Override

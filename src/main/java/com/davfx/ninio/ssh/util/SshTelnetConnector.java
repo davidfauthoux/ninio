@@ -67,7 +67,7 @@ public final class SshTelnetConnector implements TelnetConnector {
 	}
 	
 	@Override
-	public void connect(TelnetClientHandler clientHandler) {
+	public void connect(final TelnetClientHandler clientHandler) {
 		clientHandler.launched(new TelnetClientHandler.Callback() {
 			private String login = null;
 			private String password = null;

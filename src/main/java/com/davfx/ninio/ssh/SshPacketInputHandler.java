@@ -4,11 +4,12 @@ import java.nio.ByteBuffer;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
+import com.google.common.primitives.Ints;
 
 final class SshPacketInputHandler implements CloseableByteBufferHandler {
 	private ByteBuffer buffer = null;
 	private ByteBuffer paddingBuffer = null;
-	private ByteBuffer lengthBuffer = ByteBuffer.wrap(new byte[Integer.BYTES]);
+	private ByteBuffer lengthBuffer = ByteBuffer.wrap(new byte[Ints.BYTES]);
 	private int state = 0;
 	private int length = -1;
 	private final CloseableByteBufferHandler wrappee;

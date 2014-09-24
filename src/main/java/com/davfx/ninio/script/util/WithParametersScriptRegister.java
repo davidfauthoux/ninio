@@ -24,7 +24,7 @@ public final class WithParametersScriptRegister {
 		JsonElement call(Map<String, JsonElement> request);
 	}
 
-	public WithParametersScriptRegister register(String functionId, String[] parameters, WithParametersAsyncFunction function) {
+	public WithParametersScriptRegister register(String functionId, final String[] parameters, final WithParametersAsyncFunction function) {
 		StringBuilder b = new StringBuilder();
 		b.append("var _").append(functionId).append(" = ").append(functionId).append(";");
 		b.append("var ").append(functionId).append(" = function(");
@@ -57,7 +57,7 @@ public final class WithParametersScriptRegister {
 		});
 		return this;
 	}
-	public WithParametersScriptRegister register(String functionId, String[] parameters, WithParametersSyncFunction function) {
+	public WithParametersScriptRegister register(String functionId, final String[] parameters, final WithParametersSyncFunction function) {
 		StringBuilder b = new StringBuilder();
 		b.append("var _").append(functionId).append(" = ").append(functionId).append(";");
 		b.append("var ").append(functionId).append(" = function(");

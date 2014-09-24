@@ -63,9 +63,9 @@ public final class TelnetClient implements TelnetConnector {
 	}
 	
 	@Override
-	public void connect(TelnetClientHandler clientHandler) {
-		Queue q;
-		boolean shouldCloseQueue;
+	public void connect(final TelnetClientHandler clientHandler) {
+		final Queue q;
+		final boolean shouldCloseQueue;
 		if (queue == null) {
 			try {
 				q = new Queue();

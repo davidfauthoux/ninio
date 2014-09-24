@@ -45,7 +45,7 @@ public class TestSnmpClient {
 				}
 				
 				@Override
-				public void launched(Callback callback) {
+				public void launched(final Callback callback) {
 					callback.get(new Oid("1.3.6.1.2.1.1.5.0"), new SnmpClientHandler.Callback.GetCallback() {
 						
 						@Override

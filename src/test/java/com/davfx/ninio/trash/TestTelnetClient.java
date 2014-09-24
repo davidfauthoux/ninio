@@ -20,7 +20,7 @@ public class TestTelnetClient {
 				System.out.println("CLOSED");
 			}
 			@Override
-			public void launched(String init, Callback callback) {
+			public void launched(String init, final Callback callback) {
 				new Thread(new Runnable() {
 					@Override
 					public void run() {

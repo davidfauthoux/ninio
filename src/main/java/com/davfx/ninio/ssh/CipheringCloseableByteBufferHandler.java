@@ -12,6 +12,7 @@ import javax.crypto.spec.SecretKeySpec;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
+import com.google.common.primitives.Ints;
 
 final class CipheringCloseableByteBufferHandler implements CloseableByteBufferHandler {
 
@@ -84,7 +85,7 @@ final class CipheringCloseableByteBufferHandler implements CloseableByteBufferHa
 			return;
 		}
 
-		ByteBuffer sequenceBuffer = ByteBuffer.allocate(Integer.BYTES);
+		ByteBuffer sequenceBuffer = ByteBuffer.allocate(Ints.BYTES);
 		sequenceBuffer.putInt(sequence);
 		sequence++;
 		sequenceBuffer.flip();

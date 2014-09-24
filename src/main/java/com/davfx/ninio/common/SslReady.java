@@ -198,7 +198,7 @@ public final class SslReady implements Ready {
 			}
 			
 			@Override
-			public void connected(FailableCloseableByteBufferHandler write) {
+			public void connected(final FailableCloseableByteBufferHandler write) {
 				this.write = write;
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override

@@ -41,7 +41,7 @@ Sec-WebSocket-Protocol: chat
  */
 public class CopyOfTestWsServer {
 	public static void main(String[] args) throws Exception {
-		ScheduledExecutorService eee = Executors.newSingleThreadScheduledExecutor(); 
+		final ScheduledExecutorService eee = Executors.newSingleThreadScheduledExecutor(); 
 		try (Queue queue = new Queue(); HttpClient ccc = new HttpClient(queue, null)) {
 			new HttpServer(queue, new Address(8080), new HttpServerHandlerFactory() {
 				@Override

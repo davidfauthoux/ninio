@@ -5,9 +5,10 @@ import java.security.SecureRandom;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
+import com.google.common.primitives.Ints;
 
 final class SshPacketOuputHandler implements CloseableByteBufferHandler {
-	static final int PLEASE_AVOID_COPY_OFFSET = Integer.BYTES + Byte.BYTES;
+	static final int PLEASE_AVOID_COPY_OFFSET = Ints.BYTES + 1;
 	
 	private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -28,7 +29,7 @@ final class SshPacketOuputHandler implements CloseableByteBufferHandler {
 	public void handle(Address address, ByteBuffer buffer) {
 		int len = buffer.remaining();
 		
-		int pad = (-(len + Integer.BYTES + Byte.BYTES)) & (PADDING - 1);
+		int pad = (-(len + Ints.BYTES + 1)) & (PADDING - 1);
 		if (pad < PADDING) {
 			pad += PADDING;
 		}
@@ -37,8 +38,8 @@ final class SshPacketOuputHandler implements CloseableByteBufferHandler {
 		RANDOM.nextBytes(r);
 
 		if (buffer.position() < PLEASE_AVOID_COPY_OFFSET) {
-			ByteBuffer b = ByteBuffer.allocate(Integer.BYTES + Byte.BYTES + len + pad);
-			b.putInt(len + pad + Byte.BYTES);
+			ByteBuffer b = ByteBuffer.allocate(Ints.BYTES + 1 + len + pad);
+			b.putInt(len + pad + 1);
 			b.put((byte) pad);
 			b.put(buffer);
 			b.put(r);
@@ -47,7 +48,7 @@ final class SshPacketOuputHandler implements CloseableByteBufferHandler {
 		} else {
 			// This optimisation is valid (no buffer copy) if ByteBuffer has space before the actual data
 			buffer.position(buffer.position() - PLEASE_AVOID_COPY_OFFSET);
-			buffer.putInt(len + pad + Byte.BYTES);
+			buffer.putInt(len + pad + 1);
 			buffer.put((byte) pad);
 			buffer.position(buffer.position() + len);
 			buffer.limit(buffer.position() + r.length);

@@ -26,7 +26,7 @@ public class TestClientCache {
 							System.out.println("CLOSED");
 						}
 						@Override
-						public void launched(String init, Callback callback) {
+						public void launched(String init, final Callback callback) {
 							System.out.println("INIT --> " + init);
 							new Thread(new Runnable() {
 								@Override
@@ -63,7 +63,7 @@ public class TestClientCache {
 							System.out.println("2 CLOSED");
 						}
 						@Override
-						public void launched(String init, Callback callback) {
+						public void launched(String init, final Callback callback) {
 							System.out.println("2 INIT --> " + init);
 							new Thread(new Runnable() {
 								@Override

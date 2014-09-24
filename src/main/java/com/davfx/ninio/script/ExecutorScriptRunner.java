@@ -48,13 +48,13 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 			this.asyncFunction = asyncFunction;
 			this.syncFunction = syncFunction;
 		}
-		public String call(String fromScriptParameter, Object callback) throws ScriptException {
+		public String call(String fromScriptParameter, final Object callback) throws ScriptException {
 			if (callback == null) {
 				return syncFunction.call(fromScriptParameter);
 			}
 			asyncFunction.call(fromScriptParameter, new AsyncScriptFunction.Callback<String>() {
 				@Override
-				public void handle(String response) {
+				public void handle(final String response) {
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
@@ -76,7 +76,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 								}
 							}
 							
-							bindings.remove(callbackVar, callback);
+							bindings.remove(callbackVar);
 						}
 					});
 				}
@@ -86,7 +86,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 	}
 	
 	@Override
-	public void eval(Iterable<String> script, Failable fail, AsyncScriptFunction<String> asyncFunction, SyncScriptFunction<String> syncFunction) {
+	public void eval(final Iterable<String> script, final Failable fail, final AsyncScriptFunction<String> asyncFunction, final SyncScriptFunction<String> syncFunction) {
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {

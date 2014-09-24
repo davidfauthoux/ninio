@@ -30,7 +30,7 @@ public final class WaitingTelnetClient {
 		return this;
 	}
 
-	public void connect(WaitingTelnetClientHandler clientHandler) {
+	public void connect(final WaitingTelnetClientHandler clientHandler) {
 		client.connect(new TelnetClientHandler() {
 			private Callback clientCallback = null;
 			private WaitingTelnetClientHandler.Callback.SendCallback currentCallback = null;
@@ -92,7 +92,7 @@ public final class WaitingTelnetClient {
 			}
 			
 			@Override
-			public void launched(Callback callback) {
+			public void launched(final Callback callback) {
 				clientCallback = callback;
 				clientHandler.launched("", new WaitingTelnetClientHandler.Callback() {
 					@Override

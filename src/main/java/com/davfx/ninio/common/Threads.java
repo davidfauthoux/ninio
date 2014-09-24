@@ -8,7 +8,7 @@ public final class Threads {
 	private Threads() {
 	}
 	
-	public static void run(Class<?> from, Runnable r) {
+	public static void run(Class<?> from, final Runnable r) {
 		Thread t = new Thread(new Runnable() {
 			public void run() {
 				try {

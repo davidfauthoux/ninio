@@ -15,7 +15,7 @@ public class Reproxy {
 	private Reproxy() {
 	}
 
-	public static ProxyUtils.ClientSideConfigurator client(Address reproxyAddress, String underlyingType) {
+	public static ProxyUtils.ClientSideConfigurator client(final Address reproxyAddress, final String underlyingType) {
 		return new ProxyUtils.ClientSideConfigurator() {
 			@Override
 			public void configure(String connecterType, DataOutputStream out) throws IOException {

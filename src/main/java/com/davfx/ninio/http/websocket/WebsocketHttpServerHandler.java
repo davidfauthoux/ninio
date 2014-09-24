@@ -34,7 +34,7 @@ public final class WebsocketHttpServerHandler implements HttpServerHandler {
 	}
 	
 	@Override
-	public void ready(Write write) {
+	public void ready(final Write write) {
 		this.write = write;
 
 		String wsKey = request.getHeaders().get("Sec-WebSocket-Key");

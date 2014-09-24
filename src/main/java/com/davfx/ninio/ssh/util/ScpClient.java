@@ -55,7 +55,7 @@ public final class ScpClient {
 		return this;
 	}
 	
-	public void get(String filePath, FailableCloseableByteBufferHandler handler) {
+	public void get(String filePath, final FailableCloseableByteBufferHandler handler) {
 		client.exec("scp -f " + filePath.replace(" ", "\\ ")).connect(new ReadyConnection() {
 			private CloseableByteBufferHandler write;
 			private long size = -1L;
@@ -121,7 +121,7 @@ public final class ScpClient {
 		});
 	}
 	
-	public void put(String filePath, long fileSize, ReadyConnection in) {
+	public void put(final String filePath, final long fileSize, final ReadyConnection in) {
 		client.exec("scp -t " + filePath.replace(" ", "\\ ")).connect(new ReadyConnection() {
 			private CloseableByteBufferHandler write;
 			private int countAck = 0;
@@ -153,7 +153,7 @@ public final class ScpClient {
 			}
 
 			@Override
-			public void connected(FailableCloseableByteBufferHandler write) {
+			public void connected(final FailableCloseableByteBufferHandler write) {
 				this.write = write;
 				
 				String name = filePath;
@@ -186,7 +186,7 @@ public final class ScpClient {
 	
 	private static final int BUFFER_SIZE = 10 * 1024;
 	
-	public void put(String filePath, File source, Failable end) {
+	public void put(String filePath, final File source, final Failable end) {
 		put(filePath, source.length(), new ReadyConnection() {
 			@Override
 			public void failed(IOException e) {

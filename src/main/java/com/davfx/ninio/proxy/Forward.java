@@ -11,7 +11,7 @@ public class Forward {
 	}
 
 	public static ProxyUtils.ServerSideConfigurator forward(Address reproxyAddress) {
-		ProxyClient c = new ProxyClient(reproxyAddress);
+		final ProxyClient c = new ProxyClient(reproxyAddress);
 		return new ProxyUtils.ServerSideConfigurator() {
 			@Override
 			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {

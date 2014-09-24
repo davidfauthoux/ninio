@@ -66,7 +66,7 @@ public final class PingClientCache implements AutoCloseable {
 		return get(new Address(host, PingClient.DEFAULT_PORT));
 		
 	}
-	public Connectable get(Address address) {
+	public Connectable get(final Address address) {
 		return new Connectable() {
 			@Override
 			public void connect(PingClientHandler clientHandler) {
@@ -87,7 +87,7 @@ public final class PingClientCache implements AutoCloseable {
 					}
 					c = new Hold(pingClient.withAddress(address).withQueue(queue, repeatExecutor));
 					
-					Hold cc = c;
+					final Hold cc = c;
 					clients.put(address, cc);
 					c.handlers.add(clientHandler);
 					
@@ -107,7 +107,7 @@ public final class PingClientCache implements AutoCloseable {
 							}
 						}
 						@Override
-						public void launched(Callback callback) {
+						public void launched(final Callback callback) {
 							cc.launchedCallback = callback;
 							for (PingClientHandler h : cc.handlers) {
 								h.launched(new Callback() {
@@ -124,7 +124,7 @@ public final class PingClientCache implements AutoCloseable {
 						}
 					});
 				} else {
-					Hold cc = c;
+					final Hold cc = c;
 					
 					cc.handlers.add(clientHandler);
 					if (cc.launchedCallback != null) {

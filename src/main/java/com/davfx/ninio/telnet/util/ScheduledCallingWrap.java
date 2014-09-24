@@ -65,7 +65,7 @@ public final class ScheduledCallingWrap implements TelnetConnector {
 	}
 	
 	@Override
-	public void connect(TelnetClientHandler clientHandler) {
+	public void connect(final TelnetClientHandler clientHandler) {
 		final Set<TelnetClientHandler> connections = new HashSet<>();
 		if (callWithEmptyTime > 0d) {
 			callWithEmptyExecutor.scheduleAtFixedRate(new Runnable() {
@@ -102,7 +102,7 @@ public final class ScheduledCallingWrap implements TelnetConnector {
 			}
 			
 			@Override
-			public void launched(Callback callback) {
+			public void launched(final Callback callback) {
 				connections.add(clientHandler);
 				clientHandler.launched(new TelnetClientHandler.Callback() {
 					@Override

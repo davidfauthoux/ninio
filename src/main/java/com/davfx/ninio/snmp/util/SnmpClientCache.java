@@ -80,7 +80,7 @@ public final class SnmpClientCache implements AutoCloseable {
 		void connect(SnmpClientHandler clientHandler);
 	}
 	
-	public Connectable get(Address address) {
+	public Connectable get(final Address address) {
 		return new Connectable() {
 			private String community = null;
 			private String authLogin = null;
@@ -139,7 +139,7 @@ public final class SnmpClientCache implements AutoCloseable {
 					}
 					c = new Hold(snmpClient.withAddress(address).withQueue(queue, repeatExecutor));
 					
-					Hold cc = c;
+					final Hold cc = c;
 					clients.put(address, cc);
 					c.handlers.add(clientHandler);
 					
@@ -159,7 +159,7 @@ public final class SnmpClientCache implements AutoCloseable {
 							}
 						}
 						@Override
-						public void launched(Callback callback) {
+						public void launched(final Callback callback) {
 							cc.launchedCallback = callback;
 							for (SnmpClientHandler h : cc.handlers) {
 								h.launched(new Callback() {
@@ -176,7 +176,7 @@ public final class SnmpClientCache implements AutoCloseable {
 						}
 					});
 				} else {
-					Hold cc = c;
+					final Hold cc = c;
 					
 					cc.handlers.add(clientHandler);
 					if (cc.launchedCallback != null) {

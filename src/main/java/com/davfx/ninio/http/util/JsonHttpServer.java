@@ -45,9 +45,9 @@ public final class JsonHttpServer {
 		return this;
 	}
 	
-	public AutoCloseable start(JsonHttpServerHandler handler) {
-		Queue q;
-		boolean shouldCloseQueue;
+	public AutoCloseable start(final JsonHttpServerHandler handler) {
+		final Queue q;
+		final boolean shouldCloseQueue;
 		if (queue == null) {
 			try {
 				q = new Queue();
@@ -87,7 +87,7 @@ public final class JsonHttpServer {
 					}
 					
 					@Override
-					public void ready(Write write) {
+					public void ready(final Write write) {
 						HttpQuery query = new HttpQuery(request.getPath());
 						
 						String path = query.getPath();

@@ -29,7 +29,7 @@ public class TestSshClient {
 			}
 
 			@Override
-			public void connected(FailableCloseableByteBufferHandler write) {
+			public void connected(final FailableCloseableByteBufferHandler write) {
 				new Thread(new Runnable() {
 					@Override
 					public void run() {

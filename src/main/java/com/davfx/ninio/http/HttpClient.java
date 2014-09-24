@@ -152,7 +152,7 @@ public final class HttpClient implements AutoCloseable {
 						}
 						
 						@Override
-						public void connected(FailableCloseableByteBufferHandler write) {
+						public void connected(final FailableCloseableByteBufferHandler write) {
 							if (newRecycler.handler == null) {
 								return;
 							}

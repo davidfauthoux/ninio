@@ -27,7 +27,7 @@ public final class SnmpAvailable {
 	public RegisteredFunctionsScriptRunner register(RegisteredFunctionsScriptRunner runner) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
-			public void call(JsonElement request, AsyncScriptFunction.Callback<JsonElement> userCallback) {
+			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClient.DEFAULT_PORT));
@@ -56,7 +56,7 @@ public final class SnmpAvailable {
 					userCallback.handle(rr);
 					return;
 				}
-				Oid oid;
+				final Oid oid;
 				try {
 					oid = new Oid(oidAsString);
 				} catch (Exception e) {

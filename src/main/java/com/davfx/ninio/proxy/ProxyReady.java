@@ -39,10 +39,10 @@ final class ProxyReady {
 		return this;
 	}
 
-	public Ready get(Queue queue, String connecterType) {
+	public Ready get(final Queue queue, final String connecterType) {
 		return new Ready() {
 			@Override
-			public void connect(Address address, ReadyConnection connection) {
+			public void connect(final Address address, ReadyConnection connection) {
 				final DataOutputStream out;
 				final Map<Integer, Pair<Address, ReadyConnection>> connections;
 		
@@ -126,7 +126,7 @@ final class ProxyReady {
 					connections = currentConnections;
 				}
 				
-				int connectionId = nextConnectionId;
+				final int connectionId = nextConnectionId;
 				nextConnectionId++;
 				
 				connections.put(connectionId, new Pair<>(address, connection));

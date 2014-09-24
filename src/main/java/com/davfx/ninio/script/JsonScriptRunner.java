@@ -14,7 +14,7 @@ public final class JsonScriptRunner implements ScriptRunner<JsonElement> {
 	}
 
 	@Override
-	public void eval(Iterable<String> script, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+	public void eval(Iterable<String> script, Failable fail, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
 		String underlyingFunctionVar = '\'' + JsonScriptRunner.class.getCanonicalName() + '\'';
 		script = new PrependIterable<String>("this[" + underlyingFunctionVar + "] = " + ExecutorScriptRunner.CALL_FUNCTION_NAME + ";"
 				+ ExecutorScriptRunner.CALL_FUNCTION_NAME + " = function(parameter, callback) {"
@@ -22,7 +22,7 @@ public final class JsonScriptRunner implements ScriptRunner<JsonElement> {
 				+ "};", script);
 		wrappee.eval(script, fail, new AsyncScriptFunction<String>() {
 			@Override
-			public void call(String request, AsyncScriptFunction.Callback<String> callback) {
+			public void call(String request, final AsyncScriptFunction.Callback<String> callback) {
 				asyncFunction.call((request == null) ? null : new JsonParser().parse(request), new AsyncScriptFunction.Callback<JsonElement>() {
 					@Override
 					public void handle(JsonElement response) {

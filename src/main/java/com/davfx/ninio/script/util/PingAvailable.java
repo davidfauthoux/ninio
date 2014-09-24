@@ -25,17 +25,17 @@ public final class PingAvailable {
 	public RegisteredFunctionsScriptRunner register(RegisteredFunctionsScriptRunner runner) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
-			public void call(JsonElement request, AsyncScriptFunction.Callback<JsonElement> userCallback) {
+			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				String host = JsonUtils.getString(r, "host", "localhost");
 				PingClientCache.Connectable c = client.get(host);
 
-				int numberOfRetries = JsonUtils.getInt(r, "retry", 1);
-				double timeBetweenRetries = JsonUtils.getDouble(r, "between", 1d);
-				double retryTimeout = JsonUtils.getDouble(r, "timeout", 10d);
+				final int numberOfRetries = JsonUtils.getInt(r, "retry", 1);
+				final double timeBetweenRetries = JsonUtils.getDouble(r, "between", 1d);
+				final double retryTimeout = JsonUtils.getDouble(r, "timeout", 10d);
 				
-				PingableAddress address;
+				final PingableAddress address;
 				try {
 					address = PingableAddress.from(host);
 				} catch (IOException e) {

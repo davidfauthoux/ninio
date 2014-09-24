@@ -19,7 +19,7 @@ public class TestFtpClient {
 			}
 			
 			@Override
-			public void launched(Callback callback) {
+			public void launched(final Callback callback) {
 				callback.list("/irit", new Callback.ListCallback() {
 					@Override
 					public void failed(IOException e) {

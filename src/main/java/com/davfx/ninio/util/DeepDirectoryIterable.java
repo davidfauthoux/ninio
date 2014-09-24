@@ -16,7 +16,7 @@ public final class DeepDirectoryIterable implements Iterable<File> {
 	
 	@Override
 	public Iterator<File> iterator() {
-		Deque<List<File>> children = new LinkedList<>();
+		final Deque<List<File>> children = new LinkedList<>();
 		File[] l = root.listFiles();
 		if (l != null) {
 			children.add(Lists.newArrayList(l));
@@ -57,6 +57,11 @@ public final class DeepDirectoryIterable implements Iterable<File> {
 				File f = next;
 				getNext();
 				return f;
+			}
+			
+			@Override
+			public void remove() {
+				throw new UnsupportedOperationException();
 			}
 		};
 	}

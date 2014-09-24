@@ -41,9 +41,9 @@ public final class SimpleHttpServer {
 		return this;
 	}
 	
-	public AutoCloseable start(SimpleHttpServerHandler handler) {
-		Queue q;
-		boolean shouldCloseQueue;
+	public AutoCloseable start(final SimpleHttpServerHandler handler) {
+		final Queue q;
+		final boolean shouldCloseQueue;
 		if (queue == null) {
 			try {
 				q = new Queue();

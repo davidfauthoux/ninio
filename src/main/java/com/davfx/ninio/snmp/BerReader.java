@@ -140,10 +140,15 @@ public final class BerReader {
 	}
 	
 	private ByteBuffer doReadString(int length) throws IOException {
+		byte[] b = new byte[length];
+		buffer.get(b);
+		/* We HAVE to copy the bytes (because the NIO ByteBuffer may be reused)
 		ByteBuffer b = buffer.duplicate();
 		b.limit(b.position() + length);
 		buffer.position(buffer.position() + length);
 		return b;
+		*/
+		return ByteBuffer.wrap(b);
 	}
 	public ByteBuffer readBytes() throws IOException {
 		int type = readType();
@@ -217,8 +222,6 @@ public final class BerReader {
 		}
 
 		if (type == BerConstants.IPADDRESS) {
-			byte[] value = new byte[length];
-			buffer.get(value);
 			return new OidValue(OidValue.Type.IPADDRESS, doReadString(length));
 		}
 

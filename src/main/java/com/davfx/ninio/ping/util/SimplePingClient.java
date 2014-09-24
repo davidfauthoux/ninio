@@ -12,7 +12,7 @@ public final class SimplePingClient {
 		this.client = client;
 	}
 	
-	public void connect(SimplePingClientHandler clientHandler) {
+	public void connect(final SimplePingClientHandler clientHandler) {
 		client.connect(new PingClientHandler() {
 			@Override
 			public void failed(IOException e) {
@@ -23,14 +23,14 @@ public final class SimplePingClient {
 				clientHandler.close();
 			}
 			@Override
-			public void launched(PingClientHandler.Callback callback) {
+			public void launched(final PingClientHandler.Callback callback) {
 				clientHandler.launched(new SimplePingClientHandler.Callback() {
 					@Override
 					public void close() {
 						callback.close();
 					}
 					@Override
-					public void ping(String host, double timeout, SimplePingClientHandler.Callback.PingCallback c) {
+					public void ping(String host, double timeout, final SimplePingClientHandler.Callback.PingCallback c) {
 						PingableAddress a;
 						try {
 							a = PingableAddress.from(host);

@@ -22,6 +22,7 @@ import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
+import com.google.common.primitives.Ints;
 
 public final class SshClient {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshClient.class);
@@ -89,9 +90,9 @@ public final class SshClient {
 		return this;
 	}
 	
-	public void connect(ReadyConnection clientHandler) {
-		Queue q;
-		boolean shouldCloseQueue;
+	public void connect(final ReadyConnection clientHandler) {
+		final Queue q;
+		final boolean shouldCloseQueue;
 		if (queue == null) {
 			try {
 				q = new Queue();
@@ -331,7 +332,7 @@ public final class SshClient {
 											for (int o = 0; o < off; o++) {
 												sp.readByte();
 											}
-											off = Integer.BYTES + off + Integer.BYTES;
+											off = Ints.BYTES + off + Ints.BYTES;
 											len = (int) sp.readInt();
 										}
 										

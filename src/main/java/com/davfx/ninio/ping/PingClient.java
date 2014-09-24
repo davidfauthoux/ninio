@@ -91,13 +91,13 @@ public final class PingClient {
 		return this;
 	}
 	
-	public void connect(PingClientHandler clientHandler) {
-		Queue q;
-		ScheduledExecutorService re;
-		boolean shouldCloseQueue;
+	public void connect(final PingClientHandler clientHandler) {
+		final Queue q;
+		final ScheduledExecutorService re;
+		final boolean shouldCloseQueue;
 		
-		ReadyFactory rf;
-		InternalPingServerReadyFactory readyFactoryToClose;
+		final ReadyFactory rf;
+		final InternalPingServerReadyFactory readyFactoryToClose;
 		if (readyFactory == null) {
 			readyFactoryToClose = new InternalPingServerReadyFactory();
 			rf = readyFactoryToClose;
@@ -221,10 +221,10 @@ public final class PingClient {
 					}
 					
 					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
+					public void connected(final FailableCloseableByteBufferHandler write) {
 						instanceMappers.add(instanceMapper);
 						
-						PingWriter w = new PingWriter(write);
+						final PingWriter w = new PingWriter(write);
 						
 						clientHandler.launched(new PingClientHandler.Callback() {
 							@Override

@@ -10,7 +10,6 @@ public final class BerWriter {
 	private ByteBuffer buffer;
 	private final Deque<ByteBuffer> buffers = new LinkedList<ByteBuffer>();
 
-	int ooo = 0;
 	// private final Deque<Integer> toWriteLengthPositions = new LinkedList<Integer>();
 
 	public BerWriter(ByteBuffer buffer) {
@@ -53,7 +52,6 @@ public final class BerWriter {
 		int length = toWrite.position();
 		if (length < 0x80) {
 			buffer.put((byte) length);
-			ooo++;
 		} else {
 			int mask = 0xFF;
 			int bits = 0;
@@ -69,24 +67,20 @@ public final class BerWriter {
 			}
 
 			buffer.put((byte) (BerConstants.ASN_BIT8 | count)); // Number of bytes
-			ooo++;
 
 			while (bits >= 0) {
 				int b = (length >>> bits) & 0xFF;
 				buffer.put((byte) b);
-				ooo++;
 				bits -= 8;
 			}
 		}
 
 		// Not very optimal... but avoid to calculate length before writing something
 		buffer.put(toWrite.array(), 0, toWrite.position());
-		ooo += toWrite.position();
 	}
 
 	public void writeInteger(int value) {
 		buffer.put((byte) BerConstants.INTEGER);
-		ooo++;
 		willWriteLength();
 
 		int mask = 0x1FF << ((8 * 3) - 1);
@@ -98,7 +92,6 @@ public final class BerWriter {
 		mask = 0xFF << (8 * 3);
 		while (intsize > 0) {
 			buffer.put((byte) ((value & mask) >>> (8 * 3)));
-			ooo++;
 			value <<= 8;
 			intsize--;
 		}
@@ -113,7 +106,6 @@ public final class BerWriter {
 
 	public void writeOid(Oid oid) {
 		buffer.put((byte) BerConstants.OID);
-		ooo++;
 		willWriteLength();
 
 		int[] raw = oid.getRaw();
@@ -123,7 +115,6 @@ public final class BerWriter {
 		}
 
 		buffer.put((byte) ((raw[1] + (raw[0] * 40)) & 0xFF));
-		ooo++;
 
 		for (int i = 2; i < raw.length; i++) {
 			int value = raw[i];
@@ -145,7 +136,6 @@ public final class BerWriter {
 					b |= 0x80; // Continuation bit
 				}
 				buffer.put((byte) b);
-				ooo++;
 				bits -= 7;
 			}
 		}
@@ -155,16 +145,13 @@ public final class BerWriter {
 
 	public void writeString(ByteBuffer s) {
 		buffer.put((byte) BerConstants.OCTETSTRING);
-		ooo++;
 		willWriteLength();
-		ooo += s.remaining();
 		buffer.put(s);
 		doWriteLength();
 	}
 
 	public void beginWriteSequence() {
 		buffer.put((byte) BerConstants.SEQUENCE);
-		ooo++;
 		willWriteLength();
 	}
 
@@ -174,7 +161,6 @@ public final class BerWriter {
 
 	public void beginWriteRequestPdu(int type) {
 		buffer.put((byte) type);
-		ooo++;
 		willWriteLength();
 	}
 
@@ -184,7 +170,6 @@ public final class BerWriter {
 
 	public void beginWriteResponsePdu() {
 		buffer.put((byte) BerConstants.RESPONSE);
-		ooo++;
 		willWriteLength();
 	}
 
@@ -194,7 +179,6 @@ public final class BerWriter {
 
 	public void writeNull() {
 		buffer.put((byte) BerConstants.NULL);
-		ooo++;
 		willWriteLength();
 		doWriteLength();
 	}

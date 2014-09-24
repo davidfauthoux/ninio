@@ -118,10 +118,10 @@ public final class SnmpClient {
 		return this;
 	}
 	
-	public void connect(SnmpClientHandler clientHandler) {
-		Queue q;
-		ScheduledExecutorService re;
-		boolean shouldCloseQueue;
+	public void connect(final SnmpClientHandler clientHandler) {
+		final Queue q;
+		final ScheduledExecutorService re;
+		final boolean shouldCloseQueue;
 		if (queue == null) {
 			try {
 				q = new Queue();
@@ -221,10 +221,10 @@ public final class SnmpClient {
 					}
 					
 					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
+					public void connected(final FailableCloseableByteBufferHandler write) {
 						instanceMappers.add(instanceMapper);
 						
-						SnmpWriter w = new SnmpWriter(write, community, authEngine);
+						final SnmpWriter w = new SnmpWriter(write, community, authEngine);
 						
 						clientHandler.launched(new SnmpClientHandler.Callback() {
 							@Override

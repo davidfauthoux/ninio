@@ -79,7 +79,7 @@ public final class WaitingTelnetClientCache implements AutoCloseable {
 		void connect(WaitingTelnetClientHandler clientHandler);
 	}
 	
-	public Connectable get(Address address) {
+	public Connectable get(final Address address) {
 		return new Connectable() {
 			private final List<String> initCommands = new LinkedList<String>();
 			@Override
@@ -110,11 +110,11 @@ public final class WaitingTelnetClientCache implements AutoCloseable {
 					
 					c = new Hold(waitingTelnetClient);
 					
-					Hold cc = c;
+					final Hold cc = c;
 					clients.put(address, cc);
 					c.handlers.add(clientHandler);
 					
-					WaitingTelnetClientHandler.Callback.SendCallback continueToSendCallback = new WaitingTelnetClientHandler.Callback.SendCallback() {
+					final WaitingTelnetClientHandler.Callback.SendCallback continueToSendCallback = new WaitingTelnetClientHandler.Callback.SendCallback() {
 						@Override
 						public void failed(IOException e) {
 							clients.remove(address);
@@ -135,7 +135,7 @@ public final class WaitingTelnetClientCache implements AutoCloseable {
 						}
 					};
 					
-					Runnable readyRunnable = new Runnable() {
+					final Runnable readyRunnable = new Runnable() {
 						@Override
 						public void run() {
 							cc.ready = cc.initResponses.toString();
@@ -217,11 +217,11 @@ public final class WaitingTelnetClientCache implements AutoCloseable {
 						}
 					});
 				} else {
-					Hold cc = c;
+					final Hold cc = c;
 					
 					cc.handlers.add(clientHandler);
 					if (cc.ready != null) {
-						WaitingTelnetClientHandler.Callback.SendCallback continueToSendCallback = new WaitingTelnetClientHandler.Callback.SendCallback() {
+						final WaitingTelnetClientHandler.Callback.SendCallback continueToSendCallback = new WaitingTelnetClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {
 								clients.remove(address);

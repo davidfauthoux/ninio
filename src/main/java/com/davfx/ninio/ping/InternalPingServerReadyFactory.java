@@ -36,7 +36,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	public Ready create(Queue queue, ByteBufferAllocator allocator) {
 		return new Ready() {
 			@Override
-			public void connect(Address address, ReadyConnection connection) {
+			public void connect(Address address, final ReadyConnection connection) {
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					private volatile boolean closed = false;
 					@Override
@@ -114,7 +114,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 							}
 						}
 						
-						ByteBuffer s = ByteBuffer.allocate(1 + 1 + 1 + 2 + ip.length + 4 + (k * 4));
+						final ByteBuffer s = ByteBuffer.allocate(1 + 1 + 1 + 2 + ip.length + 4 + (k * 4));
 						s.put((byte) version);
 						s.put((byte) 2); // Message type
 						s.put((byte) ipVersion);

@@ -86,10 +86,10 @@ public final class SimpleHttpClient {
 	}
 	
 	public Finished finish() {
-		HttpClient onClient;
-		boolean shouldCloseClient;
-		Queue q;
-		boolean shouldCloseQueue;
+		final HttpClient onClient;
+		final boolean shouldCloseClient;
+		final Queue q;
+		final boolean shouldCloseQueue;
 		if (client == null) {
 			if (queue == null) {
 				try {

@@ -21,7 +21,7 @@ public class TestPing {
 				System.out.println("CLOSED");
 			}
 			@Override
-			public void launched(Callback callback) {
+			public void launched(final Callback callback) {
 				callback.ping("google.com", 10d, new SimplePingClientHandler.Callback.PingCallback() {
 					@Override
 					public void failed(IOException e) {

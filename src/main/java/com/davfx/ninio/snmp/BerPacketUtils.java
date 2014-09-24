@@ -16,14 +16,17 @@ public final class BerPacketUtils {
 	}
 	
 	public static int typeAndLengthBufferLength(ByteBuffer lengthBuffer) {
-		return Byte.BYTES + lengthBuffer.remaining();
+		return 1 + lengthBuffer.remaining();
 	}
 	
 	public static ByteBuffer bytes(String s) {
 		return ByteBuffer.wrap(s.getBytes(Charsets.US_ASCII));
 	}
 	public static String string(ByteBuffer bb) {
-		return new String(bb.array(), bb.position(), bb.remaining(), Charsets.US_ASCII);
+		ByteBuffer d = bb.duplicate();
+		byte[] b = new byte[d.remaining()];
+		d.get(b);
+		return new String(b, Charsets.US_ASCII); // Note that this copy is no more useful in Java 7
 	}
 	
 	public static ByteBuffer lengthBuffer(int length) {

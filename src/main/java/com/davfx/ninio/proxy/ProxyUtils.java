@@ -32,7 +32,7 @@ public final class ProxyUtils {
 	}
 	
 	public static ClientSide client() {
-		Map<String, ClientSideConfigurator> configurators = new HashMap<>(); // ConcurrentHashMap not necessary here because write() is always called from Queue
+		final Map<String, ClientSideConfigurator> configurators = new HashMap<>(); // ConcurrentHashMap not necessary here because write() is always called from Queue
 		configurators.put(SOCKET_TYPE, new ClientSideConfigurator() {
 			@Override
 			public void configure(String connecterType, DataOutputStream out) throws IOException {
@@ -70,7 +70,7 @@ public final class ProxyUtils {
 	}
 	
 	public static ServerSide server() {
-		Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
+		final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 		configurators.put(SOCKET_TYPE, new ServerSideConfigurator() {
 			@Override
 			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {

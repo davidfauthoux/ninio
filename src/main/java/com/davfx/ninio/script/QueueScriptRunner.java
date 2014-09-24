@@ -14,10 +14,10 @@ public final class QueueScriptRunner<T> implements ScriptRunner<T> {
 	
 	
 	@Override
-	public void eval(Iterable<String> script, Failable fail, AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
+	public void eval(Iterable<String> script, Failable fail, final AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
 		wrappee.eval(script, fail, new AsyncScriptFunction<T>() {
 			@Override
-			public void call(T request, AsyncScriptFunction.Callback<T> callback) {
+			public void call(final T request, final AsyncScriptFunction.Callback<T> callback) {
 				queue.post(new Runnable() {
 					@Override
 					public void run() {

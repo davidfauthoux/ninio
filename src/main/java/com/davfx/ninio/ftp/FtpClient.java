@@ -71,9 +71,9 @@ public final class FtpClient {
 		return this;
 	}
 	
-	public void connect(FtpClientHandler clientHandler) {
-		Queue q;
-		boolean shouldCloseQueue;
+	public void connect(final FtpClientHandler clientHandler) {
+		final Queue q;
+		final boolean shouldCloseQueue;
 		if (queue == null) {
 			try {
 				q = new Queue();
@@ -101,7 +101,7 @@ public final class FtpClient {
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				ByteBufferAllocator allocator = new OnceByteBufferAllocator();
+				final ByteBufferAllocator allocator = new OnceByteBufferAllocator();
 				Ready ready = readyFactory.create(q, allocator);
 				ready.connect(a, new ReadyConnection() {
 					private FtpResponseReader reader = null;

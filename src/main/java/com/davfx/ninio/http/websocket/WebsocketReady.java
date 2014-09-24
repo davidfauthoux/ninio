@@ -30,7 +30,7 @@ public final class WebsocketReady implements Ready {
 	}
 	
 	@Override
-	public void connect(Address address, ReadyConnection connection) {
+	public void connect(Address address, final ReadyConnection connection) {
 		HttpRequest request = new HttpRequest(address, false, HttpRequest.Method.GET, "/");
 		request.getHeaders().put("Sec-WebSocket-Key", BaseEncoding.base64().encode(String.valueOf(random.nextLong()).getBytes(Charsets.UTF_8)));
 		request.getHeaders().put("Sec-WebSocket-Version", "13");
@@ -67,7 +67,7 @@ public final class WebsocketReady implements Ready {
 			}
 			
 			@Override
-			public void ready(ByteBufferHandler write) {
+			public void ready(final ByteBufferHandler write) {
 				websocketFrameReader = new WebsocketFrameReader(new WebsocketFrameReader.Handler() {
 					@Override
 					public void failed(IOException e) {

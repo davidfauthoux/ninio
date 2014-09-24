@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
+import com.google.common.primitives.Ints;
 
 final class UncipheringCloseableByteBufferHandler implements CloseableByteBufferHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UncipheringCloseableByteBufferHandler.class);
@@ -24,7 +25,7 @@ final class UncipheringCloseableByteBufferHandler implements CloseableByteBuffer
 	private Mac mac = null;
 	private int sequence = 0;
 
-	private ByteBuffer lengthBuffer = ByteBuffer.wrap(new byte[Integer.BYTES]);
+	private ByteBuffer lengthBuffer = ByteBuffer.wrap(new byte[Ints.BYTES]);
 	private int count = 0;
 
 	private ByteBuffer firstBuffer = null;
@@ -161,7 +162,7 @@ final class UncipheringCloseableByteBufferHandler implements CloseableByteBuffer
 				if (macBuffer.position() == macBuffer.capacity()) {
 					macBuffer.flip();
 
-					ByteBuffer sequenceBuffer = ByteBuffer.allocate(Integer.BYTES);
+					ByteBuffer sequenceBuffer = ByteBuffer.allocate(Ints.BYTES);
 					sequenceBuffer.putInt(sequence);
 					sequence++;
 					sequenceBuffer.flip();
