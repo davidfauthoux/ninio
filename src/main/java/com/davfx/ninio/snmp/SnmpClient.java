@@ -265,6 +265,7 @@ public final class SnmpClient {
 	}
 	
 	private static final int LOOP_REQUEST_ID = 65000;
+	private static final Random RANDOM = new Random(System.currentTimeMillis());
 	
 	private static final class InstanceMapper {
 		private final int instancePrefix;
@@ -272,8 +273,7 @@ public final class SnmpClient {
 		private int nextInstance = 0;
 		
 		public InstanceMapper() {
-			Random random = new Random(System.currentTimeMillis());
-			int suffix = random.nextInt();
+			int suffix = RANDOM.nextInt();
 			instancePrefix = (((((int) System.currentTimeMillis() & 0x7F)) << 8) | (suffix & 0xFF)) << 16; // Nothing ensures this is unique, but it's a 'good' try: 8 bits based on time, 8 bits random. It will be composed with 16 bits random to create a requestId.
 		}
 		
