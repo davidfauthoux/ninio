@@ -7,6 +7,8 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,7 +18,6 @@ import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.Threads;
 import com.davfx.util.Pair;
 
 final class ProxyReady {
@@ -30,8 +31,31 @@ final class ProxyReady {
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
+	private Executor executor = Executors.newSingleThreadExecutor();
+	private ProxyListener listener = new ProxyListener() {
+		@Override
+		public void failed(IOException e) {
+		}
+		@Override
+		public void disconnected() {
+		}
+		@Override
+		public void connected() {
+		}
+	};
+	
 	public ProxyReady(Address proxyServerAddress) {
 		this.proxyServerAddress = proxyServerAddress;
+	}
+	
+	public ProxyReady withExecutor(Executor executor) {
+		this.executor = executor;
+		return this;
+	}
+	
+	public ProxyReady listen(ProxyListener listener) {
+		this.listener = listener;
+		return this;
 	}
 	
 	public ProxyReady override(String type, ProxyUtils.ClientSideConfigurator configurator) {
@@ -62,16 +86,24 @@ final class ProxyReady {
 							}
 							throw ee;
 						}
-					} catch (IOException ioe) {
+					} catch (final IOException ioe) {
 						connection.failed(new IOException("Connection to proxy cannot be established", ioe));
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								listener.failed(ioe);
+							}
+						});
 						return;
 					}
 		
 					connections = new ConcurrentHashMap<>();
 		
-					Threads.run(ProxyReady.class, new Runnable() {
+					executor.execute(new Runnable() {
 						@Override
 						public void run() {
+							listener.connected();
+
 							while (true) {
 								try {
 									LOGGER.trace("Client waiting for connection ID");
@@ -115,6 +147,8 @@ final class ProxyReady {
 							for (Pair<Address, ReadyConnection> c : connections.values()) {
 								c.second.close();
 							}
+							
+							listener.disconnected();
 						}
 					});
 					

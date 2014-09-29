@@ -31,18 +31,18 @@ public final class ProxyUtils {
 		void write(String connecterType, DataOutputStream out) throws IOException;
 	}
 	
+	public static final class EmptyClientSideConfiguration implements ClientSideConfigurator {
+		public EmptyClientSideConfiguration() {
+		}
+		@Override
+		public void configure(String connecterType, DataOutputStream out) throws IOException {
+		}
+	}
+	
 	public static ClientSide client() {
 		final Map<String, ClientSideConfigurator> configurators = new HashMap<>(); // ConcurrentHashMap not necessary here because write() is always called from Queue
-		configurators.put(SOCKET_TYPE, new ClientSideConfigurator() {
-			@Override
-			public void configure(String connecterType, DataOutputStream out) throws IOException {
-			}
-		});
-		configurators.put(DATAGRAM_TYPE, new ClientSideConfigurator() {
-			@Override
-			public void configure(String connecterType, DataOutputStream out) throws IOException {
-			}
-		});
+		configurators.put(SOCKET_TYPE, new EmptyClientSideConfiguration());
+		configurators.put(DATAGRAM_TYPE, new EmptyClientSideConfiguration());
 		return new ClientSide() {
 			@Override
 			public void override(String type, ClientSideConfigurator configurator) {
