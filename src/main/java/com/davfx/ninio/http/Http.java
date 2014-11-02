@@ -25,6 +25,7 @@ public interface Http {
 	String CONNECTION = "Connection";
 	String GZIP = "gzip";
 	String CLOSE = "close";
+	String KEEP_ALIVE = "keep-alive";
 	String CHUNKED = "chunked";
 	String CHARSET = "charset";
 	String LOCATION = "Location";
@@ -33,8 +34,8 @@ public interface Http {
 	String WILDCARD = "*";
 
 	interface ContentType {
-		String TEXT = "text/plain";
-		String JSON = "application/json";
+		String TEXT = "text/plain; charset=" + UTF8_CHARSET.name();
+		String JSON = "application/json; charset=" + UTF8_CHARSET.name();
 	}
 
 	char PARAMETERS_START = '?';

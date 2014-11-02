@@ -117,22 +117,22 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			failClose = true;
 			
 			while (!requestLineRead) {
-				// LOGGER.debug("Reading request line");
 				String line = lineReader.handle(buffer);
 				if (line == null) {
 					return;
 				}
+				LOGGER.trace("Request line: {}", line);
 				setRequestLine(line);
 				requestLineRead = true;
 			}
 	
 			while (!headersRead) {
-				// LOGGER.debug("Reading header line");
 				String line = lineReader.handle(buffer);
 				if (line == null) {
 					return;
 				}
 				if (line.isEmpty()) {
+					LOGGER.trace("Header line empty");
 					headersRead = true;
 					String accept = headers.get(Http.ACCEPT_ENCODING);
 					if (accept != null) {
@@ -160,7 +160,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 						handler.ready(new InnerWrite()); // Yes, can be so cool for ws://
 					}
 				} else {
-					// LOGGER.debug("Header line: {}", line);
+					LOGGER.trace("Header line: {}", line);
 					addHeader(line);
 				}
 			}

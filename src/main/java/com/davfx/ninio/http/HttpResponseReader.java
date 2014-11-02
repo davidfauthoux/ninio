@@ -5,8 +5,11 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 final class HttpResponseReader {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(HttpResponseReader.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(HttpResponseReader.class);
 
 	interface RecyclingHandler {
 		void recycle();
@@ -108,21 +111,21 @@ final class HttpResponseReader {
 			
 			failClose = true;
 			while (!responseLineRead) {
-				// LOGGER.debug("Reading response line");
 				String line = lineReader.handle(buffer);
 				if (line == null) {
 					return;
 				}
+				LOGGER.trace("Response line: {}", line);
 				setResponseLine(line);
 				responseLineRead = true;
 			}
 			while (!headersRead) {
-				// LOGGER.debug("Reading header line");
 				String line = lineReader.handle(buffer);
 				if (line == null) {
 					return;
 				}
 				if (line.isEmpty()) {
+					LOGGER.trace("Header line empty");
 					headersRead = true;
 					String contentLengthValue = headers.get(Http.CONTENT_LENGTH);
 					if (contentLengthValue != null) {
@@ -140,10 +143,10 @@ final class HttpResponseReader {
 						gzipReader = null;
 					}
 					chunked = Http.CHUNKED.equalsIgnoreCase(headers.get(Http.TRANSFER_ENCODING));
-					keepAlive = http11 && !Http.CLOSE.equalsIgnoreCase(headers.get(Http.CONNECTION));
+					keepAlive = http11 && Http.KEEP_ALIVE.equalsIgnoreCase(headers.get(Http.CONNECTION));
 					handler.received(new HttpResponse(responseCode, responseReason, headers));
 				} else {
-					// LOGGER.debug("Header line: {}", line);
+					LOGGER.trace("Header line: {}", line);
 					addHeader(line);
 				}
 			}
