@@ -13,10 +13,9 @@ import org.slf4j.LoggerFactory;
 public final class Queue implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Queue.class);
 
-	private final String name = Queue.class.getCanonicalName();
-	
+	private final long threadId;
 	private final Selector selector;
-	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>();
+	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); //TODO Consider using LinkedBlockingQueue to prevent OOM
 
 	public static Selector selector() throws IOException {
 		return SelectorProvider.provider().openSelector();
@@ -28,7 +27,7 @@ public final class Queue implements AutoCloseable {
 	public Queue(final Selector selector) {
 		this.selector = selector;
 		
-		Threads.run(Queue.class, new Runnable() {
+		threadId = Threads.run(Queue.class, new Runnable() {
 			@Override
 			public void run() {
 				while (true) {
@@ -68,7 +67,7 @@ public final class Queue implements AutoCloseable {
 	}
 	
 	private boolean isInside() {
-		return Thread.currentThread().getName().equals(name);
+		return Thread.currentThread().getId() == threadId;
 	}
 	
 	public Selector getSelector() {

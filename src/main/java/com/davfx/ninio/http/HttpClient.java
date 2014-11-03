@@ -12,6 +12,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.ByteBufferHandler;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
@@ -29,11 +32,15 @@ import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class HttpClient implements AutoCloseable {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.Recycler.class);
+	
 	private static final class Recycler {
 		public HttpResponseReader reader;
 		public HttpClientHandler handler;
 		public CloseableByteBufferHandler write;
 		public Date closeDate = null;
+		public boolean closed = false;
 	}
 
 	private static final Config CONFIG = ConfigUtils.load(HttpClient.class);
@@ -121,85 +128,94 @@ public final class HttpClient implements AutoCloseable {
 			public void run() {
 				HttpResponseReader reader = new HttpResponseReader(handler);
 				Deque<Recycler> oldRecyclers = recyclers.get(request.getAddress());
-				if (oldRecyclers == null) {
-					final Recycler newRecycler = new Recycler();
-					newRecycler.reader = reader;
-					newRecycler.handler = handler;
-					newRecycler.closeDate = null;
-					Ready ready;
-					if (request.isSecure()) {
-						ready = secureReadyFactory.create(queue, new OnceByteBufferAllocator());
-					} else {
-						ready = readyFactory.create(queue, new OnceByteBufferAllocator());
-					}
-					ready.connect(request.getAddress(), new ReadyConnection() {
-						private HttpResponseReader.RecyclingHandler recyclingHandler;
-						@Override
-						public void handle(Address address, ByteBuffer buffer) {
-							if (newRecycler.reader == null) {
-								return;
-							}
-							
-							newRecycler.reader.handle(buffer, recyclingHandler);
-						}
-						
-						@Override
-						public void failed(IOException e) {
-							if (newRecycler.reader == null) {
-								return;
-							}
-							newRecycler.reader.failed(e);
-						}
-						
-						@Override
-						public void connected(final FailableCloseableByteBufferHandler write) {
-							if (newRecycler.handler == null) {
-								return;
-							}
-							
-							recyclingHandler = new HttpResponseReader.RecyclingHandler() {
-								@Override
-								public void recycle() {
-									newRecycler.reader = null;
-									newRecycler.handler = null;
-									newRecycler.closeDate = DateUtils.from(DateUtils.from(new Date()) + recyclersTimeToLive);
-									Deque<Recycler> oldRecyclers = recyclers.get(request.getAddress());
-									if (oldRecyclers == null) {
-										oldRecyclers = new LinkedList<Recycler>();
-										recyclers.put(request.getAddress(), oldRecyclers);
-									}
-									oldRecyclers.add(newRecycler);
-								}
-								@Override
-								public void close() {
-									write.close();
-								}
-							};
 
-							newRecycler.write = write;
-							write.handle(null, createRequest(request));
-							newRecycler.handler.ready(write);
+				if (oldRecyclers != null) {
+					while (!oldRecyclers.isEmpty()) {
+						LOGGER.debug("Recycling connection to {}", request.getAddress());
+						Recycler oldRecycler = oldRecyclers.removeFirst();
+						if (oldRecyclers.isEmpty()) {
+							recyclers.remove(request.getAddress());
+						}
+						if (!oldRecycler.closed) {
+							oldRecycler.reader = reader;
+							oldRecycler.handler = handler;
+							oldRecycler.closeDate = null;
+							oldRecycler.write.handle(null, createRequest(request));
+							oldRecycler.handler.ready(oldRecycler.write);
+							return;
+						}
+					}
+				}
+
+				final Recycler newRecycler = new Recycler();
+				newRecycler.reader = reader;
+				newRecycler.handler = handler;
+				newRecycler.closeDate = null;
+				Ready ready;
+				if (request.isSecure()) {
+					ready = secureReadyFactory.create(queue, new OnceByteBufferAllocator());
+				} else {
+					ready = readyFactory.create(queue, new OnceByteBufferAllocator());
+				}
+				ready.connect(request.getAddress(), new ReadyConnection() {
+					private HttpResponseReader.RecyclingHandler recyclingHandler;
+					@Override
+					public void handle(Address address, ByteBuffer buffer) {
+						if (newRecycler.reader == null) {
+							return;
 						}
 						
-						@Override
-						public void close() {
-							if (newRecycler.reader == null) {
-								return;
-							}
-							newRecycler.reader.close();
-						}
-					});
-				} else {
-					Recycler oldRecycler = oldRecyclers.removeFirst();
-					if (oldRecyclers.isEmpty()) {
-						recyclers.remove(request.getAddress());
+						newRecycler.reader.handle(buffer, recyclingHandler);
 					}
-					oldRecycler.reader = reader;
-					oldRecycler.handler = handler;
-					oldRecycler.closeDate = null;
-					oldRecycler.write.handle(null, createRequest(request));
-					oldRecycler.handler.ready(oldRecycler.write);
-				}
+					
+					@Override
+					public void failed(IOException e) {
+						newRecycler.closed = true;
+						if (newRecycler.reader == null) {
+							return;
+						}
+						newRecycler.reader.failed(e);
+					}
+					
+					@Override
+					public void connected(final FailableCloseableByteBufferHandler write) {
+						if (newRecycler.handler == null) {
+							return;
+						}
+						
+						recyclingHandler = new HttpResponseReader.RecyclingHandler() {
+							@Override
+							public void recycle() {
+								newRecycler.reader = null;
+								newRecycler.handler = null;
+								newRecycler.closeDate = DateUtils.from(DateUtils.from(new Date()) + recyclersTimeToLive);
+								Deque<Recycler> oldRecyclers = recyclers.get(request.getAddress());
+								if (oldRecyclers == null) {
+									oldRecyclers = new LinkedList<Recycler>();
+									recyclers.put(request.getAddress(), oldRecyclers);
+								}
+								oldRecyclers.add(newRecycler);
+							}
+							@Override
+							public void close() {
+								write.close();
+							}
+						};
+
+						newRecycler.write = write;
+						write.handle(null, createRequest(request));
+						newRecycler.handler.ready(write);
+					}
+					
+					@Override
+					public void close() {
+						newRecycler.closed = true;
+						if (newRecycler.reader == null) {
+							return;
+						}
+						newRecycler.reader.close();
+					}
+				});
 			}
 		});
 	}
@@ -217,10 +233,13 @@ public final class HttpClient implements AutoCloseable {
 			appendHeader(header, h.getKey(), h.getValue());
 		}
 		if (!headers.containsKey(Http.HOST)) {
-			appendHeader(header, Http.HOST, request.getAddress().getHost() + Http.PORT_SEPARATOR + request.getAddress().getPort());
+			appendHeader(header, Http.HOST, request.getAddress().getHost()); // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
 		}
 		if (!headers.containsKey(Http.ACCEPT_ENCODING)) {
 			appendHeader(header, Http.ACCEPT_ENCODING, Http.GZIP);
+		}
+		if (!headers.containsKey(Http.CONNECTION)) {
+			appendHeader(header, Http.CONNECTION, Http.KEEP_ALIVE);
 		}
 		
 		header.append(Http.CR).append(Http.LF);

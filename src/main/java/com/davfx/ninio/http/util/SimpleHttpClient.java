@@ -125,13 +125,15 @@ public final class SimpleHttpClient {
 			
 			@Override
 			public Finished send(final SimpleHttpClientHandler handler) {
-				Address a = address;
+				final Address a;
 				if (host != null) {
 					if (port < 0) {
 						a = new Address(host, secure ? Http.DEFAULT_SECURE_PORT : Http.DEFAULT_PORT);
 					} else {
 						a = new Address(host, port);
 					}
+				} else {
+					a = address;
 				}
 				
 				if (post != null) {
@@ -166,12 +168,17 @@ public final class SimpleHttpClient {
 					
 					@Override
 					public void close() {
+						if (response == null) {
+							LOGGER.error("Closed before any response received");
+							handler.handle(-1, null, null);
+							return;
+						}
 						handler.handle(response.getStatus(), response.getReason(), body);
 					}
 					
 					@Override
 					public void failed(IOException e) {
-						LOGGER.error("Failed to connect to: {}", address, e);
+						LOGGER.error("Failed to connect to: {}", a, e);
 						handler.handle(-1, null, null);
 					}
 				});
