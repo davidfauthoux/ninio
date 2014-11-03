@@ -52,4 +52,9 @@ public final class JsonScriptRunner implements ScriptRunner<JsonElement> {
 			}
 		});
 	}
+	
+	@Override
+	public void close() {
+		wrappee.close();
+	}
 }

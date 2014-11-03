@@ -143,14 +143,6 @@ public final class PingClient {
 						for (InstanceMapper i : instanceMappers) {
 							i.repeat(now, minTimeToRepeat, timeoutFromBeginning);
 						}
-						
-						Iterator<InstanceMapper> ii = instanceMappers.iterator();
-						while (ii.hasNext()) {
-							InstanceMapper i = ii.next();
-							if (i.instances.isEmpty()) {
-								ii.remove();
-							}
-						}
 					}
 				});
 			}

@@ -18,7 +18,7 @@ public final class DeepDirectoryIterable implements Iterable<File> {
 	public Iterator<File> iterator() {
 		final Deque<List<File>> children = new LinkedList<>();
 		File[] l = root.listFiles();
-		if (l != null) {
+		if ((l != null) && (l.length > 0)) {
 			children.add(Lists.newArrayList(l));
 		}
 		
@@ -41,7 +41,7 @@ public final class DeepDirectoryIterable implements Iterable<File> {
 				}
 				if (next.isDirectory()) {
 					File[] l = next.listFiles();
-					if (l != null) {
+					if ((l != null) && (l.length > 0)) {
 						children.addFirst(Lists.newArrayList(l));
 					}
 				}

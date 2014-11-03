@@ -159,14 +159,6 @@ public final class SnmpClient {
 						for (InstanceMapper i : instanceMappers) {
 							i.repeat(now, minTimeToRepeat, timeoutFromBeginning, timeoutFromLastReception);
 						}
-						
-						Iterator<InstanceMapper> ii = instanceMappers.iterator();
-						while (ii.hasNext()) {
-							InstanceMapper i = ii.next();
-							if (i.instances.isEmpty()) {
-								ii.remove();
-							}
-						}
 					}
 				});
 			}
@@ -239,6 +231,7 @@ public final class SnmpClient {
 									re.shutdown();
 									q.close();
 								}
+								System.out.println("------------ ****** CLOSE " + instanceMappers.size());
 							}
 							@Override
 							public void get(Oid oid, GetCallback callback) {
@@ -425,6 +418,7 @@ public final class SnmpClient {
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
+				allResults = null;
 				c.failed(new IOException("Timeout from beginning"));
 				return;
 			}
@@ -433,6 +427,7 @@ public final class SnmpClient {
 				if ((n - DateUtils.from(receptionTimestamp)) >= timeoutFromLastReception) {
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
+					allResults = null;
 					c.failed(new IOException("Timeout from last reception"));
 					return;
 				}
@@ -473,6 +468,7 @@ public final class SnmpClient {
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
+				allResults = null;
 				c.failed(new IOException("Authentication failed"));
 				return;
 			}
@@ -510,6 +506,7 @@ public final class SnmpClient {
 							requestOid = null;
 							SnmpClientHandler.Callback.GetCallback c = callback;
 							callback = null;
+							allResults = null;
 							c.finished(found);
 							return;
 						}
@@ -529,6 +526,7 @@ public final class SnmpClient {
 					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
+					allResults = null;
 					c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
 				} else {
 					Oid lastOid = null;
@@ -568,7 +566,9 @@ public final class SnmpClient {
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;
 						callback = null;
-						c.finished(allResults);
+						List<Result> r = allResults;
+						allResults = null;
+						c.finished(r);
 					}
 				}
 			}

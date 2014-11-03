@@ -13,12 +13,16 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
 
 public final class ProxyUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyUtils.class);
 
-	public static final String SOCKET_TYPE = ProxyUtils.class.getPackage().getName() + ".socket";
-	public static final String DATAGRAM_TYPE = ProxyUtils.class.getPackage().getName() + ".datagram";
+	private static final Config CONFIG = ConfigUtils.load(ProxyUtils.class);
+
+	public static final String SOCKET_TYPE = CONFIG.getString("proxy.socket");
+	public static final String DATAGRAM_TYPE = CONFIG.getString("proxy.datagram");
 	
 	private ProxyUtils() {
 	}

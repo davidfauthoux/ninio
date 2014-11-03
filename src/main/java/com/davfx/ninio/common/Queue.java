@@ -74,6 +74,12 @@ public final class Queue implements AutoCloseable {
 	public Selector getSelector() {
 		return selector;
 	}
+
+	public void check() {
+		if (!isInside()) {
+			throw new IllegalStateException("Should be in queue thread");
+		}
+	}
 	
 	public void post(Runnable r) {
 		if (isInside()) {

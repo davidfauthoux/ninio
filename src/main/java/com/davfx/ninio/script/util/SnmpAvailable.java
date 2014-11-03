@@ -31,7 +31,7 @@ public final class SnmpAvailable {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClient.DEFAULT_PORT));
-				SnmpClientCache.Connectable c = client.get(address);
+				final SnmpClientCache.Connectable c = client.get(address);
 				c.withCommunity(JsonUtils.getString(r, "community", null));
 				
 				JsonElement security = r.get("security");
@@ -76,12 +76,14 @@ public final class SnmpAvailable {
 					public void close() {
 					}
 					@Override
-					public void launched(Callback callback) {
+					public void launched(final Callback callback) {
 						callback.get(oid, new SnmpClientHandler.Callback.GetCallback() {
 							@Override
 							public void failed(IOException e) {
 								JsonObject r = new JsonObject();
 								r.add("error", new JsonPrimitive(e.getMessage()));
+
+								callback.close();
 								userCallback.handle(r);
 							}
 							private void add(JsonObject r, Result result) {
@@ -93,12 +95,16 @@ public final class SnmpAvailable {
 								for (Result result : results) {
 									add(r, result);
 								}
+								
+								callback.close();
 								userCallback.handle(r);
 							}
 							@Override
 							public void finished(Result result) {
 								JsonObject r = new JsonObject();
 								add(r, result);
+								
+								callback.close();
 								userCallback.handle(r);
 							}
 						});

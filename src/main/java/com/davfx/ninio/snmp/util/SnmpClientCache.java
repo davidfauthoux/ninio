@@ -2,6 +2,7 @@ package com.davfx.ninio.snmp.util;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +15,11 @@ import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.SnmpClient;
 import com.davfx.ninio.snmp.SnmpClientHandler;
+import com.davfx.util.ConfigUtils;
 
 public final class SnmpClientCache implements AutoCloseable {
+	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(SnmpClientCache.class).getInt("snmp.cache.expire.threshold");
+	
 	private final Queue queue;
 	private final ScheduledExecutorService repeatExecutor = Executors.newSingleThreadScheduledExecutor();
 	
@@ -105,7 +109,20 @@ public final class SnmpClientCache implements AutoCloseable {
 				return this;
 			}
 			@Override
-			public void connect(SnmpClientHandler clientHandler) {
+			public void connect(final SnmpClientHandler clientHandler) {
+				if ((CACHE_EXPIRE_THRESHOLD > 0) && (clients.size() >= CACHE_EXPIRE_THRESHOLD)) {
+					Iterator<Hold> i = clients.values().iterator();
+					while (i.hasNext()) {
+						Hold c = i.next();
+						if (c.handlers.isEmpty()) {
+							if (c.launchedCallback != null) {
+								c.launchedCallback.close();
+							}
+							i.remove();
+						}
+					}
+				}
+				
 				Hold c = clients.get(address);
 				if (c == null) {
 					SnmpClient snmpClient = new SnmpClient();
@@ -165,7 +182,8 @@ public final class SnmpClientCache implements AutoCloseable {
 								h.launched(new Callback() {
 									@Override
 									public void close() {
-										// Never actually closed
+										// Connection never actually closed
+										cc.handlers.remove(clientHandler);
 									}
 									@Override
 									public void get(Oid oid, GetCallback getCallback) {
@@ -183,7 +201,8 @@ public final class SnmpClientCache implements AutoCloseable {
 						clientHandler.launched(new SnmpClientHandler.Callback() {
 							@Override
 							public void close() {
-								// Never actually closed
+								// Connection never actually closed
+								cc.handlers.remove(clientHandler);
 							}
 							@Override
 							public void get(Oid oid, GetCallback getCallback) {
@@ -207,5 +226,6 @@ public final class SnmpClientCache implements AutoCloseable {
 			}
 			c.handlers.clear();
 		}
+		clients.clear();
 	}
 }

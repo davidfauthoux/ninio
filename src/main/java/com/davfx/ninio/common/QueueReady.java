@@ -18,22 +18,42 @@ public final class QueueReady implements Ready {
 			public void run() {
 				wrappee.connect(address, new ReadyConnection() {
 					@Override
-					public void failed(IOException e) {
-						connection.failed(e);
+					public void failed(final IOException e) {
+						queue.post(new Runnable() {
+							@Override
+							public void run() {
+								connection.failed(e);
+							}
+						});
 					}
 					@Override
 					public void close() {
-						connection.close();
+						queue.post(new Runnable() {
+							@Override
+							public void run() {
+								connection.close();
+							}
+						});
 					}
 					
 					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						connection.handle(address, buffer);
+					public void handle(final Address address, final ByteBuffer buffer) {
+						queue.post(new Runnable() {
+							@Override
+							public void run() {
+								connection.handle(address, buffer);
+							}
+						});
 					}
 					
 					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
-						connection.connected(new QueueCloseableByteBufferHandler(queue, write));
+					public void connected(final FailableCloseableByteBufferHandler write) {
+						queue.post(new Runnable() {
+							@Override
+							public void run() {
+								connection.connected(new QueueCloseableByteBufferHandler(queue, write));
+							}
+						});
 					}
 				});
 			}
