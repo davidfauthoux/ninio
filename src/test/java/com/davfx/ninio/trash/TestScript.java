@@ -3,12 +3,8 @@ package com.davfx.ninio.trash;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
-import com.davfx.ninio.proxy.Forward;
-import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyServer;
-import com.davfx.ninio.proxy.ProxyUtils;
+import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunner;
@@ -50,29 +46,35 @@ public class TestScript {
 			}
 		});*/
 
-		new ProxyServer(6666).start();
+		//new ProxyServer(6666).start();
 		/*new ProxyServer(7777)
 		.override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666)))
 		.override(ProxyUtils.DATAGRAM_TYPE, Forward.forward(new Address("localhost", 6666)))
 		.start();*/
+		/*
 		new ProxyServer(8888)
 		.override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666)))
 		.override(ProxyUtils.DATAGRAM_TYPE, Forward.forward(new Address("localhost", 6666)))
 		.start();
 		ProxyClient proxy = new ProxyClient(new Address("localhost", 8888));
+		*/
+		//ProxyClient proxy = new ProxyClient(new Address("localhost", 6666));
 
-		try (AllAvailableScriptRunner r = new AllAvailableScriptRunner()) {
+		if ("a".equals("a" + "")) {
+		try (AllAvailableScriptRunner r = new AllAvailableScriptRunner(new Queue())) {
+			/*
 			r
 			.telnetSocketOverride(proxy.socket())
 			.snmpDatagramOverride(proxy.datagram())
 			.pingDatagramOverride(proxy.of("ping"));
-
+*/
 			for (int i = 0; i < 1; i++) {
 				System.out.println("-------------------------");
 				System.out.println("-------------------------");
 				System.out.println("-------------------------");
 				System.out.println("-------------------------");
 				for (int j = 0; j < 1; j++) {
+					A aa = new A("outside");
 			SimpleScriptRunnerScriptRegister rr = r.runner();
 			rr.register("fff", new AsyncScriptFunction<JsonElement>() {
 				@Override
@@ -105,12 +107,30 @@ public class TestScript {
 					callback.handle(new JsonPrimitive("ECHO " + request.getAsString()));
 				}
 			});
-			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { myfunc(JSON.stringify(r), function(rr) { log(rr); }); });"), new Failable() {
+			rr.register("myfunc2", new SyncScriptFunction<JsonElement>() {
+				A a = new A("in myfunc2");
+				@Override
+				public JsonElement call(JsonElement request) {
+					return new JsonPrimitive("ECHO " + request.getAsString());
+				}
+			});
+			/*
+			rrr.eval(new BasicScript().append("myfunc('titi', function(r) { log(myfunc2('toto ' + r)); });"), new Failable() {
 				@Override
 				public void failed(IOException e) {
 					e.printStackTrace();
 				}
 			});
+			*/
+			
+			//rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { myfunc(JSON.stringify(r), function(rr) { log(rr); }); });"), new Failable() {
+			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { log(r); });"), new Failable() {
+				@Override
+				public void failed(IOException e) {
+					e.printStackTrace();
+				}
+			});
+			
 			//rrr.eval(new BasicScript().append("fff({'a':'aa'}, function(r) { log(r); });fff({'a':'aa'}, function(r) { log(r); });"));
 			//rrr.eval(new BasicScript().append("log(ggg({'b':'bb'}));log(ggg({'b':'bb'}));"), null);
 			
@@ -142,8 +162,16 @@ public class TestScript {
 			System.out.println("------ END----------");
 			System.out.println("------ END----------");
 			System.out.println("------ END----------");
-			Thread.sleep(10000);
+			for (int i = 0; i < 10; i++) {
+				System.gc();
+				Thread.sleep(1000);
+				}
+			Thread.sleep(3000);
 		}
+		}
+
+		System.out.println("----------!!!!!--------");
+		
 		for (int i = 0; i < 100; i++) {
 		System.gc();
 		System.out.println(Runtime.getRuntime().freeMemory());

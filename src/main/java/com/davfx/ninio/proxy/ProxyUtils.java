@@ -10,9 +10,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
+import com.davfx.ninio.common.SyncDatagramReady;
+import com.davfx.ninio.common.SyncDatagramReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -74,6 +75,7 @@ public final class ProxyUtils {
 	}
 	
 	public static ServerSide server() {
+		final SyncDatagramReady.Receiver syncDatagramReceiver = new SyncDatagramReady.Receiver();
 		final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 		configurators.put(SOCKET_TYPE, new ServerSideConfigurator() {
 			@Override
@@ -84,7 +86,7 @@ public final class ProxyUtils {
 		configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
 			@Override
 			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-				return new DatagramReadyFactory();
+				return new SyncDatagramReadyFactory(syncDatagramReceiver);
 			}
 		});
 		return new ServerSide() {

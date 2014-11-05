@@ -3,7 +3,6 @@ package com.davfx.ninio.script;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.script.Bindings;
 import javax.script.ScriptContext;
@@ -42,19 +41,14 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 		private final Failable fail;
 		private final AsyncScriptFunction<String> asyncFunction;
 		private final SyncScriptFunction<String> syncFunction;
-		private static final AtomicInteger COUNT = new AtomicInteger(0);
 		private FromScript(ScriptEngine scriptEngine, ExecutorService executorService, Failable fail, AsyncScriptFunction<String> asyncFunction, SyncScriptFunction<String> syncFunction) {
 			this.scriptEngine = scriptEngine;
 			this.fail = fail;
 			this.executorService = executorService;
 			this.asyncFunction = asyncFunction;
 			this.syncFunction = syncFunction;
-			LOGGER.debug("COUNT={}", COUNT.incrementAndGet());
 		}
-		@Override
-		protected void finalize() {
-			LOGGER.debug("FINALIZE COUNT={}", COUNT.decrementAndGet());
-		}
+
 		public String call(String fromScriptParameter, final Object callback) throws ScriptException {
 			if (callback == null) {
 				return syncFunction.call(fromScriptParameter);
@@ -77,7 +71,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 								LOGGER.trace("Executing callback: {}", callbackScript);
 								scriptEngine.eval(callbackScript);
 							} catch (Exception e) {
-								LOGGER.error("Script error", e);
+								LOGGER.error("Script error in: {}", callbackScript, e);
 								if (fail != null) {
 									fail.failed(new IOException(e));
 								}
@@ -102,7 +96,6 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 				
 				String callVar = UNICITY_PREFIX + "call";
 				bindings.put(callVar, new FromScript(scriptEngine, executorService, fail, asyncFunction, syncFunction));
-
 				String callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + callVar + ".call(parameter, callback || null); }; ";
 				
 				try {

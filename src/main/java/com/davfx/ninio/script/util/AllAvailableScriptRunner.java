@@ -30,8 +30,8 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	private final SnmpClientCache snmp;
 	private final PingClientCache ping;
 
-	public AllAvailableScriptRunner() throws IOException {
-		queue = new Queue();
+	public AllAvailableScriptRunner(Queue queue) throws IOException {
+		this.queue = queue;
 		
 		scriptRunner = new RoundRobinScriptRunner<>();
 		for (int i = 0; i < THREADING; i++) {
@@ -123,6 +123,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	}
 	
 	public SimpleScriptRunnerScriptRegister runner() {
+		//TODO mal ecrit
 		return new PingAvailable(ping).register(
 				new SnmpAvailable(snmp).register(
 					new WaitingTelnetAvailable(telnet).register(
@@ -133,12 +134,11 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		queue.close();
-		scriptRunner.close();
 		http.close();
 		telnet.close();
 		ssh.close();
 		snmp.close();
 		ping.close();
+		scriptRunner.close();
 	}
 }

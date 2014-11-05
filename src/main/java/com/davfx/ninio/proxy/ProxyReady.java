@@ -184,6 +184,7 @@ final class ProxyReady {
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void close() {
+						connections.remove(connectionId);
 						try {
 							out.writeInt(connectionId);
 							out.writeInt(-1);

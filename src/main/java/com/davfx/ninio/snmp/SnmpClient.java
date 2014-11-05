@@ -231,7 +231,6 @@ public final class SnmpClient {
 									re.shutdown();
 									q.close();
 								}
-								System.out.println("------------ ****** CLOSE " + instanceMappers.size());
 							}
 							@Override
 							public void get(Oid oid, GetCallback callback) {
@@ -267,6 +266,7 @@ public final class SnmpClient {
 		
 		public InstanceMapper() {
 			int suffix = RANDOM.nextInt();
+			//TODO faire avec un int classique qui inc
 			instancePrefix = (((((int) System.currentTimeMillis() & 0x7F)) << 8) | (suffix & 0xFF)) << 16; // Nothing ensures this is unique, but it's a 'good' try: 8 bits based on time, 8 bits random. It will be composed with 16 bits random to create a requestId.
 		}
 		
@@ -330,6 +330,7 @@ public final class SnmpClient {
 			this.community = community;
 			this.authEngine = authEngine;
 		}
+		
 		public void get(int instanceId, Oid oid) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);

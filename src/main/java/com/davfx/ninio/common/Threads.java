@@ -13,6 +13,7 @@ public final class Threads {
 	private Threads() {
 	}
 	
+	//TODO Useless class?? use Executors single thread??
 	public static long run(Class<?> from, final Runnable r) {
 		Thread t = new Thread(new Runnable() {
 			public void run() {

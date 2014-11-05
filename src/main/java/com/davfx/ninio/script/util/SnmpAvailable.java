@@ -31,7 +31,7 @@ public final class SnmpAvailable {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClient.DEFAULT_PORT));
-				final SnmpClientCache.Connectable c = client.get(address);
+				SnmpClientCache.Connectable c = client.get(address);
 				c.withCommunity(JsonUtils.getString(r, "community", null));
 				
 				JsonElement security = r.get("security");
@@ -103,7 +103,7 @@ public final class SnmpAvailable {
 							public void finished(Result result) {
 								JsonObject r = new JsonObject();
 								add(r, result);
-								
+
 								callback.close();
 								userCallback.handle(r);
 							}
