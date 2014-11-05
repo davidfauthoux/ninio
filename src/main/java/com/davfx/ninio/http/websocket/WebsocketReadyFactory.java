@@ -1,6 +1,5 @@
 package com.davfx.ninio.http.websocket;
 
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyFactory;
@@ -14,7 +13,7 @@ public final class WebsocketReadyFactory implements ReadyFactory {
 	}
 	
 	@Override
-	public Ready create(Queue queue, ByteBufferAllocator allocator) {
+	public Ready create(Queue queue) {
 		return new WebsocketReady(httpClient);
 	}
 }

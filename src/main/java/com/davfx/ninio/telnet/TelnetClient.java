@@ -5,10 +5,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -93,8 +91,7 @@ public final class TelnetClient implements TelnetConnector {
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				ByteBufferAllocator allocator = new OnceByteBufferAllocator();
-				Ready ready = readyFactory.create(q, allocator);
+				Ready ready = readyFactory.create(q);
 				ready.connect(a, new ReadyConnection() {
 					private TelnetResponseReader reader = null;
 					@Override

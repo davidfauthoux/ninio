@@ -1,6 +1,5 @@
 package com.davfx.ninio.proxy;
 
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyFactory;
@@ -14,7 +13,7 @@ final class ProxyReadyFactory implements ReadyFactory {
 	}
 
 	@Override
-	public Ready create(Queue queue, ByteBufferAllocator allocator) {
+	public Ready create(Queue queue) {
 		return proxyReady.get(queue, type);
 	}
 }

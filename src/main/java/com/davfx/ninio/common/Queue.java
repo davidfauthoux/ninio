@@ -1,6 +1,7 @@
 package com.davfx.ninio.common;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
@@ -10,12 +11,20 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class Queue implements AutoCloseable {
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+
+public final class Queue implements AutoCloseable, ByteBufferAllocator {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Queue.class);
 
+	private static final Config CONFIG = ConfigUtils.load(Queue.class);
+	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.queue.buffer.size").intValue();
+	
 	private final long threadId;
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); //TODO Consider using LinkedBlockingQueue to prevent OOM
+	
+	private final ByteBuffer buffer = ByteBuffer.wrap(new byte[BUFFER_SIZE]); //TODO check everywhere ByteBuffer.array()
 
 	public static Selector selector() throws IOException {
 		return SelectorProvider.provider().openSelector();
@@ -26,7 +35,7 @@ public final class Queue implements AutoCloseable {
 	}
 	public Queue(final Selector selector) {
 		this.selector = selector;
-		
+
 		threadId = Threads.run(Queue.class, new Runnable() {
 			@Override
 			public void run() {
@@ -73,6 +82,12 @@ public final class Queue implements AutoCloseable {
 	public Selector getSelector() {
 		return selector;
 	}
+
+	public void check() {
+		if (!isInside()) {
+			throw new IllegalStateException("Should be in queue thread");
+		}
+	}
 	
 	public void post(Runnable r) {
 		if (isInside()) {
@@ -82,6 +97,11 @@ public final class Queue implements AutoCloseable {
 		
 		toRun.add(r);
 		selector.wakeup();
+	}
+	
+	@Override
+	public ByteBuffer allocate() {
+		return buffer;
 	}
 	
 	@Override

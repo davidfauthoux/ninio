@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
+import com.davfx.ninio.common.QueueReady;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.util.Pair;
@@ -64,9 +65,10 @@ final class ProxyReady {
 	}
 
 	public Ready get(final Queue queue, final String connecterType) {
-		return new Ready() {
+		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(final Address address, ReadyConnection connection) {
+				queue.check();
 				final DataOutputStream out;
 				final Map<Integer, Pair<Address, ReadyConnection>> connections;
 		
@@ -111,15 +113,17 @@ final class ProxyReady {
 									Pair<Address, ReadyConnection> currentConnection = connections.get(connectionId);
 									int len = in.readInt();
 									if (len < 0) {
+										connections.remove(connectionId);
 										if (currentConnection != null) {
 											currentConnection.second.failed(new IOException("Failed"));
 										}
 									} else if (len == 0) {
+										connections.remove(connectionId);
 										if (currentConnection != null) {
 											currentConnection.second.close();
 										}
 									} else {
-										byte[] b = new byte[len];
+										final byte[] b = new byte[len];
 										in.readFully(b);
 										if (currentConnection != null) {
 											currentConnection.second.handle(address, ByteBuffer.wrap(b));
@@ -164,10 +168,10 @@ final class ProxyReady {
 				nextConnectionId++;
 				
 				connections.put(connectionId, new Pair<>(address, connection));
-		
+
 				try {
 					out.writeInt(connectionId);
-					out.writeShort(0);
+					out.writeInt(0);
 					out.writeUTF(address.getHost());
 					out.writeInt(address.getPort());
 					proxyUtils.write(connecterType, out);
@@ -180,9 +184,10 @@ final class ProxyReady {
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void close() {
+						connections.remove(connectionId);
 						try {
 							out.writeInt(connectionId);
-							out.writeShort(-1);
+							out.writeInt(-1);
 							out.flush();
 						} catch (IOException ioe) {
 							try {
@@ -204,12 +209,12 @@ final class ProxyReady {
 					
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
+						if (!buffer.hasRemaining()) {
+							return;
+						}
 						try {
 							out.writeInt(connectionId);
-							if (buffer.remaining() > Short.MAX_VALUE) {
-								throw new IOException("Buffer too big");
-							}
-							out.writeShort(buffer.remaining());
+							out.writeInt(buffer.remaining());
 							out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());  // Should always work
 							out.flush();
 						} catch (IOException ioe) {
@@ -222,6 +227,6 @@ final class ProxyReady {
 					}
 				});
 			}
-		};
+		});
 	}
 }

@@ -16,21 +16,29 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
+import com.davfx.ninio.common.QueueReady;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.Threads;
 import com.davfx.util.MutablePair;
 import com.davfx.util.WaitUtils;
+import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 public final class ProxyServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyServer.class);
 
 	public static void main(String[] args) throws Exception {
-		new ProxyServer(ConfigFactory.load().getInt("proxy.port")).start();
+		Config config = ConfigFactory.load();
+		ProxyServer server = new ProxyServer(config.getInt("proxy.port"));
+		if (config.hasPath("proxy.forward")) {
+			for (Config c : config.getConfigList("proxy.forward")) {
+				server.override(c.getString("type"), Forward.forward(new Address(c.getString("host"), c.getInt("port")))).start();
+			}
+		}
+		server.start();
 	}
 	
 	private static final double WAIT_TIME_ON_ERROR = 5d;
@@ -78,21 +86,21 @@ public final class ProxyServer {
 					try (ServerSocket ss = new ServerSocket(port)) {
 						while (true) {
 							final Socket socket = ss.accept();
-							
+
 							Threads.run(ProxyServer.class, new Runnable() {
 								@Override
 								public void run() {
 									Map<Integer, MutablePair<Address, CloseableByteBufferHandler>> connections = new HashMap<>();
-		
+
 									try {
 										final DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 										DataInputStream in = new DataInputStream(socket.getInputStream());
 										LOGGER.debug("Accepted connection from: {}", socket.getInetAddress());
-										
+
 										while (true) {
 											LOGGER.trace("Server waiting for connection ID");
 											final int connectionId = in.readInt();
-											int len = in.readShort();
+											int len = in.readInt();
 											if (len < 0) {
 												MutablePair<Address, CloseableByteBufferHandler> connection = connections.remove(connectionId);
 												if (connection != null) {
@@ -103,7 +111,7 @@ public final class ProxyServer {
 											} else if (len == 0) {
 												Address address = new Address(in.readUTF(), in.readInt());
 												ReadyFactory factory = proxyUtils.read(in);
-												Ready r = factory.create(queue, new OnceByteBufferAllocator());
+												Ready r = new QueueReady(queue, factory.create(queue));
 												final MutablePair<Address, CloseableByteBufferHandler> connection = new MutablePair<Address, CloseableByteBufferHandler>(address, null);
 												connections.put(connectionId, connection);
 												

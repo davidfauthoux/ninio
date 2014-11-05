@@ -6,7 +6,6 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.Listen;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueListen;
 import com.davfx.ninio.common.SocketListen;
@@ -60,7 +59,7 @@ public final class HttpServer {
 			listening = new SslSocketListening(trust, listening);
 		}
 		
-		Listen listen = new SocketListen(queue.getSelector(), new OnceByteBufferAllocator());
+		Listen listen = new SocketListen(queue.getSelector(), queue);
 		listen = new QueueListen(queue, listen);
 		listen.listen(serverAddress, listening);
 	}

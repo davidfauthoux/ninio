@@ -27,4 +27,10 @@ public final class QueueScriptRunner<T> implements ScriptRunner<T> {
 			}
 		}, syncFunction);
 	}
+	
+	@Override
+	public void close() {
+		wrappee.close();
+	}
+
 }

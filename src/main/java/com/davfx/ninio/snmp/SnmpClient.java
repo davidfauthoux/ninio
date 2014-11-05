@@ -19,11 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -159,14 +157,6 @@ public final class SnmpClient {
 						for (InstanceMapper i : instanceMappers) {
 							i.repeat(now, minTimeToRepeat, timeoutFromBeginning, timeoutFromLastReception);
 						}
-						
-						Iterator<InstanceMapper> ii = instanceMappers.iterator();
-						while (ii.hasNext()) {
-							InstanceMapper i = ii.next();
-							if (i.instances.isEmpty()) {
-								ii.remove();
-							}
-						}
 					}
 				});
 			}
@@ -175,8 +165,7 @@ public final class SnmpClient {
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				ByteBufferAllocator allocator = new OnceByteBufferAllocator();
-				Ready ready = readyFactory.create(q, allocator);
+				Ready ready = readyFactory.create(q);
 				
 				ready.connect(a, new ReadyConnection() {
 					private final InstanceMapper instanceMapper = new InstanceMapper();
@@ -274,6 +263,7 @@ public final class SnmpClient {
 		
 		public InstanceMapper() {
 			int suffix = RANDOM.nextInt();
+			//TODO faire avec un int classique qui inc
 			instancePrefix = (((((int) System.currentTimeMillis() & 0x7F)) << 8) | (suffix & 0xFF)) << 16; // Nothing ensures this is unique, but it's a 'good' try: 8 bits based on time, 8 bits random. It will be composed with 16 bits random to create a requestId.
 		}
 		
@@ -337,6 +327,7 @@ public final class SnmpClient {
 			this.community = community;
 			this.authEngine = authEngine;
 		}
+		
 		public void get(int instanceId, Oid oid) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);
@@ -425,6 +416,7 @@ public final class SnmpClient {
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
+				allResults = null;
 				c.failed(new IOException("Timeout from beginning"));
 				return;
 			}
@@ -433,13 +425,14 @@ public final class SnmpClient {
 				if ((n - DateUtils.from(receptionTimestamp)) >= timeoutFromLastReception) {
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
+					allResults = null;
 					c.failed(new IOException("Timeout from last reception"));
 					return;
 				}
 			}
 
 			if ((n - DateUtils.from(sendTimestamp)) >= minTimeToRepeat) {
-				switch (shouldRepeatWhat) {
+				switch (shouldRepeatWhat) { 
 				case 0:
 					write.get(instanceId, requestOid);
 					break;
@@ -473,6 +466,7 @@ public final class SnmpClient {
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
+				allResults = null;
 				c.failed(new IOException("Authentication failed"));
 				return;
 			}
@@ -510,6 +504,7 @@ public final class SnmpClient {
 							requestOid = null;
 							SnmpClientHandler.Callback.GetCallback c = callback;
 							callback = null;
+							allResults = null;
 							c.finished(found);
 							return;
 						}
@@ -529,6 +524,7 @@ public final class SnmpClient {
 					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
+					allResults = null;
 					c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
 				} else {
 					Oid lastOid = null;
@@ -568,7 +564,9 @@ public final class SnmpClient {
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;
 						callback = null;
-						c.finished(allResults);
+						List<Result> r = allResults;
+						allResults = null;
+						c.finished(r);
 					}
 				}
 			}

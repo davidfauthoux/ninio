@@ -10,7 +10,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
@@ -33,7 +32,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	}
 	
 	@Override
-	public Ready create(Queue queue, ByteBufferAllocator allocator) {
+	public Ready create(Queue queue) {
 		return new Ready() {
 			@Override
 			public void connect(Address address, final ReadyConnection connection) {

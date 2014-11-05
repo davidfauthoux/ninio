@@ -50,7 +50,7 @@ public class TestClient {
 		System.out.println("LAUNCHING HTTP CLIENT");
 		Queue queue = new Queue();
 		try (HttpClient client = new HttpClient(queue, null)) {
-			client.override(new ProxyClient(new Address("localhost", 9999)).socket());
+			//client.override(new ProxyClient(new Address("localhost", 7777)).socket());
 			client.override(new ProxyClient(new Address("localhost", 9999)).override(Reproxy.DEFAULT_TYPE, Reproxy.client(new Address("localhost", 7777), ProxyUtils.SOCKET_TYPE)).of(Reproxy.DEFAULT_TYPE));
 			HttpRequest r = new HttpRequest(new Address("localhost", 8080), false, HttpRequest.Method.GET, "/");
 			r.getHeaders().put(Http.ACCEPT_ENCODING, Http.GZIP);

@@ -23,7 +23,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(ExecutorScriptRunner.class).getString("script.functions.call");
 	public static final String UNICITY_PREFIX = ConfigUtils.load(ExecutorScriptRunner.class).getString("script.functions.unicity.prefix");
 	
-	private ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
+	private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
 	public ExecutorScriptRunner() {
@@ -48,6 +48,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 			this.asyncFunction = asyncFunction;
 			this.syncFunction = syncFunction;
 		}
+
 		public String call(String fromScriptParameter, final Object callback) throws ScriptException {
 			if (callback == null) {
 				return syncFunction.call(fromScriptParameter);
@@ -70,7 +71,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 								LOGGER.trace("Executing callback: {}", callbackScript);
 								scriptEngine.eval(callbackScript);
 							} catch (Exception e) {
-								LOGGER.error("Script error", e);
+								LOGGER.error("Script error in: {}", callbackScript, e);
 								if (fail != null) {
 									fail.failed(new IOException(e));
 								}
@@ -95,7 +96,6 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 				
 				String callVar = UNICITY_PREFIX + "call";
 				bindings.put(callVar, new FromScript(scriptEngine, executorService, fail, asyncFunction, syncFunction));
-
 				String callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + callVar + ".call(parameter, callback || null); }; ";
 				
 				try {

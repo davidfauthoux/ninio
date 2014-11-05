@@ -10,14 +10,19 @@ import com.davfx.ninio.script.ExecutorScriptRunner;
 import com.davfx.ninio.script.JsonScriptRunner;
 import com.davfx.ninio.script.QueueScriptRunner;
 import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
+import com.davfx.ninio.script.RoundRobinScriptRunner;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.snmp.util.SnmpClientCache;
 import com.davfx.ninio.ssh.util.SshTelnetConnectorFactory;
 import com.davfx.ninio.telnet.util.WaitingTelnetClientCache;
+import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 
 public class AllAvailableScriptRunner implements AutoCloseable {
-	private final ExecutorScriptRunner executorScriptRunner;
+
+	private static final int THREADING = ConfigUtils.load(AllAvailableScriptRunner.class).getInt("script.threading");
+
+	private final RoundRobinScriptRunner<String> scriptRunner;
 	private final Queue queue;
 	private final HttpClient http;
 	private final WaitingTelnetClientCache telnet;
@@ -25,10 +30,14 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	private final SnmpClientCache snmp;
 	private final PingClientCache ping;
 
-	public AllAvailableScriptRunner() throws IOException {
-		queue = new Queue();
-		executorScriptRunner = new ExecutorScriptRunner();
+	public AllAvailableScriptRunner(Queue queue) throws IOException {
+		this.queue = queue;
 		
+		scriptRunner = new RoundRobinScriptRunner<>();
+		for (int i = 0; i < THREADING; i++) {
+			scriptRunner.add(new ExecutorScriptRunner());
+		}
+
 		http = new HttpClient(queue, null);
 		
 		telnet = new WaitingTelnetClientCache(queue);
@@ -114,19 +123,22 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	}
 	
 	public SimpleScriptRunnerScriptRegister runner() {
+		//TODO mal ecrit
 		return new PingAvailable(ping).register(
 				new SnmpAvailable(snmp).register(
 					new WaitingTelnetAvailable(telnet).register(
 					new WaitingSshAvailable(ssh).register(
 						new HttpAvailable(http).register(
-							new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(executorScriptRunner))))))));
+							new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner))))))));
 	}
 	
 	@Override
 	public void close() {
-		queue.close();
-		executorScriptRunner.close();
 		http.close();
 		telnet.close();
+		ssh.close();
+		snmp.close();
+		ping.close();
+		scriptRunner.close();
 	}
 }
