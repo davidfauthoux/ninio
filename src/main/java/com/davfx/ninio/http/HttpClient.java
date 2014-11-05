@@ -19,7 +19,6 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.ByteBufferHandler;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -153,9 +152,9 @@ public final class HttpClient implements AutoCloseable {
 				newRecycler.closeDate = null;
 				Ready ready;
 				if (request.isSecure()) {
-					ready = secureReadyFactory.create(queue, new OnceByteBufferAllocator());
+					ready = secureReadyFactory.create(queue);
 				} else {
-					ready = readyFactory.create(queue, new OnceByteBufferAllocator());
+					ready = readyFactory.create(queue);
 				}
 				ready.connect(request.getAddress(), new ReadyConnection() {
 					private HttpResponseReader.RecyclingHandler recyclingHandler;

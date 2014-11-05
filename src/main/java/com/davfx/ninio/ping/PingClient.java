@@ -18,10 +18,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -151,8 +149,7 @@ public final class PingClient {
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				ByteBufferAllocator allocator = new OnceByteBufferAllocator();
-				Ready ready = rf.create(q, allocator);
+				Ready ready = rf.create(q);
 				
 				ready.connect(a, new ReadyConnection() {
 					private final InstanceMapper instanceMapper = new InstanceMapper();

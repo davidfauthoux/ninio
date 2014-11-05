@@ -273,7 +273,7 @@ public final class WaitingTelnetClientCache implements AutoCloseable {
 			if (c.launchedCallback != null) {
 				c.launchedCallback.close();
 			}
-			c.handlers.clear();
 		}
+		clients.clear();
 	}
 }

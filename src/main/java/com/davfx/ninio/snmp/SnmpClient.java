@@ -19,11 +19,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -167,8 +165,7 @@ public final class SnmpClient {
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				ByteBufferAllocator allocator = new OnceByteBufferAllocator();
-				Ready ready = readyFactory.create(q, allocator);
+				Ready ready = readyFactory.create(q);
 				
 				ready.connect(a, new ReadyConnection() {
 					private final InstanceMapper instanceMapper = new InstanceMapper();
@@ -435,7 +432,7 @@ public final class SnmpClient {
 			}
 
 			if ((n - DateUtils.from(sendTimestamp)) >= minTimeToRepeat) {
-				switch (shouldRepeatWhat) {
+				switch (shouldRepeatWhat) { 
 				case 0:
 					write.get(instanceId, requestOid);
 					break;

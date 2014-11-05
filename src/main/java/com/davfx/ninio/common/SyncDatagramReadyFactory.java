@@ -8,7 +8,7 @@ public final class SyncDatagramReadyFactory implements ReadyFactory {
 	}
 	
 	@Override
-	public Ready create(Queue queue, ByteBufferAllocator allocator) {
+	public Ready create(Queue queue) {
 		return new QueueReady(queue, new SyncDatagramReady(receiver));
 	}
 }

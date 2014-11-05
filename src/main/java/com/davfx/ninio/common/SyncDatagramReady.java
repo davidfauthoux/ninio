@@ -13,9 +13,14 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+
 public final class SyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SyncDatagramReady.class);
-	
+	private static final Config CONFIG = ConfigUtils.load(OnceByteBufferAllocator.class);
+	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.sync.buffer.size").intValue();
+
 	public static final class Receiver {
 		private DatagramSocket socket = null;
 		private final Object lock = new Object();
@@ -25,21 +30,18 @@ public final class SyncDatagramReady implements Ready {
 				@Override
 				public void run() {
 					try {
-						ByteBufferAllocator byteBufferAllocator = new OnceByteBufferAllocator(); // Independent allocator
-						ByteBuffer buffer = byteBufferAllocator.allocate();
+						byte[] buffer = new byte[BUFFER_SIZE];
 						synchronized (lock) {
 							socket = new DatagramSocket();
 							lock.notifyAll();
 						}
 						try {
-							DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity()); //TODO Gerer quand buffer.array() n'existe pas
+							DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
 							while (true) {
 								socket.receive(packet);
 								ReadyConnection connection = connections.get(key(packet.getAddress().getHostAddress(), packet.getPort()));
 								if (connection != null) {
-									buffer.position(packet.getOffset());
-									buffer.limit(packet.getLength());
-									connection.handle(null, buffer);
+									connection.handle(null, ByteBuffer.wrap(buffer, packet.getOffset(), packet.getLength()));
 								}
 							}
 						} finally {

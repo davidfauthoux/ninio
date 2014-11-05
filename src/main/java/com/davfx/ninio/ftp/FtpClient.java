@@ -11,10 +11,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -101,8 +99,7 @@ public final class FtpClient {
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				final ByteBufferAllocator allocator = new OnceByteBufferAllocator();
-				Ready ready = readyFactory.create(q, allocator);
+				Ready ready = readyFactory.create(q);
 				ready.connect(a, new ReadyConnection() {
 					private FtpResponseReader reader = null;
 					@Override
@@ -120,7 +117,7 @@ public final class FtpClient {
 					
 					@Override
 					public void connected(FailableCloseableByteBufferHandler write) {
-						reader = new FtpResponseReader(q, allocator, login, password, clientHandler, write);
+						reader = new FtpResponseReader(q, login, password, clientHandler, write);
 						clientHandler.launched(new FtpClientHandler.Callback() {
 							@Override
 							public void close() {
@@ -191,15 +188,13 @@ public final class FtpClient {
 		private String currentRawPath;
 
 		private final Queue queue;
-		private final ByteBufferAllocator allocator;
-		
+
 		private boolean closed = false;
 		private final LineReader lineReader = new LineReader();
 		private final FtpClientHandler handler;
 
-		public FtpResponseReader(Queue queue, ByteBufferAllocator allocator, String login, String password, FtpClientHandler handler, CloseableByteBufferHandler write) {
+		public FtpResponseReader(Queue queue, String login, String password, FtpClientHandler handler, CloseableByteBufferHandler write) {
 			this.queue = queue;
-			this.allocator = allocator;
 			this.handler = handler;
 			this.write = write;
 			this.login = login;
@@ -420,7 +415,7 @@ public final class FtpClient {
 					String file = path.get(path.size() - 1);
 
 					if (file.isEmpty()) {
-						new SocketReady(queue.getSelector(), allocator).connect(dataAddress, new ReadyConnection() {
+						new SocketReady(queue.getSelector(), queue).connect(dataAddress, new ReadyConnection() {
 							private final LineReader lineReader = new LineReader();
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
@@ -483,7 +478,7 @@ public final class FtpClient {
 						writeLine("TYPE A");
 						state = State.TYPE_A;
 					} else {
-						new SocketReady(queue.getSelector(), allocator).connect(dataAddress, new ReadyConnection() {
+						new SocketReady(queue.getSelector(), queue).connect(dataAddress, new ReadyConnection() {
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
 								if (closed) {

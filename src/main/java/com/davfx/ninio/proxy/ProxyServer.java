@@ -14,10 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueReady;
 import com.davfx.ninio.common.Ready;
@@ -98,7 +96,6 @@ public final class ProxyServer {
 										final DataOutputStream out = new DataOutputStream(socket.getOutputStream());
 										DataInputStream in = new DataInputStream(socket.getInputStream());
 										LOGGER.debug("Accepted connection from: {}", socket.getInetAddress());
-										final ByteBufferAllocator byteBufferAllocator = new OnceByteBufferAllocator();
 
 										while (true) {
 											LOGGER.trace("Server waiting for connection ID");
@@ -114,7 +111,7 @@ public final class ProxyServer {
 											} else if (len == 0) {
 												Address address = new Address(in.readUTF(), in.readInt());
 												ReadyFactory factory = proxyUtils.read(in);
-												Ready r = new QueueReady(queue, factory.create(queue, byteBufferAllocator));
+												Ready r = new QueueReady(queue, factory.create(queue));
 												final MutablePair<Address, CloseableByteBufferHandler> connection = new MutablePair<Address, CloseableByteBufferHandler>(address, null);
 												connections.put(connectionId, connection);
 												

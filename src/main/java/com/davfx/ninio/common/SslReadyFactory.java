@@ -6,7 +6,7 @@ public final class SslReadyFactory implements ReadyFactory {
 		this.trust = trust;
 	}
 	@Override
-	public Ready create(Queue queue, ByteBufferAllocator allocator) {
-		return new QueueReady(queue, new SslReady(trust, new SocketReady(queue.getSelector(), allocator)));
+	public Ready create(Queue queue) {
+		return new QueueReady(queue, new SslReady(trust, new SocketReady(queue.getSelector(), queue)));
 	}
 }

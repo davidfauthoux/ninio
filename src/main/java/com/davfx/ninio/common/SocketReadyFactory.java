@@ -4,7 +4,7 @@ public final class SocketReadyFactory implements ReadyFactory {
 	public SocketReadyFactory() {
 	}
 	@Override
-	public Ready create(Queue queue, ByteBufferAllocator allocator) {
-		return new QueueReady(queue, new SocketReady(queue.getSelector(), allocator));
+	public Ready create(Queue queue) {
+		return new QueueReady(queue, new SocketReady(queue.getSelector(), queue));
 	}
 }
