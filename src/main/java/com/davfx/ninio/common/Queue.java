@@ -106,6 +106,7 @@ public final class Queue implements AutoCloseable, ByteBufferAllocator {
 	
 	@Override
 	public ByteBuffer allocate() {
+		buffer.rewind();
 		return buffer;
 	}
 	

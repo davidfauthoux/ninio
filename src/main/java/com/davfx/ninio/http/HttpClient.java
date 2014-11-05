@@ -125,7 +125,39 @@ public final class HttpClient implements AutoCloseable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				HttpResponseReader reader = new HttpResponseReader(handler);
+				final HttpResponseReader reader = new HttpResponseReader(handler);
+				if (request.getMethod() != HttpRequest.Method.GET) {
+					Ready ready;
+					if (request.isSecure()) {
+						ready = secureReadyFactory.create(queue);
+					} else {
+						ready = readyFactory.create(queue);
+					}
+					ready.connect(request.getAddress(), new ReadyConnection() {
+						@Override
+						public void handle(Address address, ByteBuffer buffer) {
+							reader.handle(buffer, null);
+						}
+						
+						@Override
+						public void failed(IOException e) {
+							reader.failed(e);
+						}
+						
+						@Override
+						public void connected(final FailableCloseableByteBufferHandler write) {
+							write.handle(null, createRequest(request));
+							handler.ready(write);
+						}
+						
+						@Override
+						public void close() {
+							reader.close();
+						}
+					});
+					return;
+				}
+				
 				Deque<Recycler> oldRecyclers = recyclers.get(request.getAddress());
 
 				if (oldRecyclers != null) {

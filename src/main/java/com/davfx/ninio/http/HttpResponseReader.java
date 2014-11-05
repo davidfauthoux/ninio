@@ -167,10 +167,12 @@ final class HttpResponseReader {
 						chunkHeaderRead = false;
 						failClose = false;
 						if (chunkLength == 0) {
-							if (keepAlive) {
-								recyclingHandler.recycle();
-							} else {
-								recyclingHandler.close();
+							if (recyclingHandler != null) {
+								if (keepAlive) {
+									recyclingHandler.recycle();
+								} else {
+									recyclingHandler.close();
+								}
 							}
 							if (!closed) {
 								closed = true;
@@ -224,10 +226,12 @@ final class HttpResponseReader {
 					}
 					if (countRead == contentLength) {
 						failClose = false;
-						if (keepAlive) {
-							recyclingHandler.recycle();
-						} else {
-							recyclingHandler.close();
+						if (recyclingHandler != null) {
+							if (keepAlive) {
+								recyclingHandler.recycle();
+							} else {
+								recyclingHandler.close();
+							}
 						}
 						ended = true;
 						if (!closed) {

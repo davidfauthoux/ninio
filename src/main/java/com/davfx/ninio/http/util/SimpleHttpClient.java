@@ -27,6 +27,7 @@ public final class SimpleHttpClient {
 	private boolean secure = false;
 	private String path = "/";
 	private HttpRequest.Method method = HttpRequest.Method.GET;
+	private String postContentType = null;
 	private ByteBuffer post = null;
 	
 	private HttpClient client = null;
@@ -72,7 +73,8 @@ public final class SimpleHttpClient {
 		this.method = method;
 		return this;
 	}
-	public SimpleHttpClient post(ByteBuffer post) {
+	public SimpleHttpClient post(String contentType, ByteBuffer post) {
+		postContentType = contentType;
 		this.post = post;
 		return this;
 	}
@@ -142,6 +144,9 @@ public final class SimpleHttpClient {
 				HttpRequest request = new HttpRequest(a, secure, method, path);
 				if (post != null) {
 					request.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(post.remaining()));
+					if (postContentType != null) {
+						request.getHeaders().put(Http.CONTENT_TYPE, postContentType);
+					}
 				}
 				onClient.send(request, new HttpClientHandler() {
 					private HttpResponse response = null;

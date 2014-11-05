@@ -36,6 +36,7 @@ public interface Http {
 	interface ContentType {
 		String TEXT = "text/plain; charset=" + UTF8_CHARSET.name();
 		String JSON = "application/json; charset=" + UTF8_CHARSET.name();
+		String WWW_FORM_URL_ENCODED = "application/x-www-form-urlencoded";
 	}
 
 	char PARAMETERS_START = '?';

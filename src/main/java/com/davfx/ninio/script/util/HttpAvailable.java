@@ -52,9 +52,14 @@ public final class HttpAvailable {
 				JsonObject r = request.getAsJsonObject();
 				SimpleHttpClient c = new SimpleHttpClient().on(client);
 				c.withMethod(HttpRequest.Method.valueOf(getString(r, "method", "GET").toUpperCase()));
-				String post = getString(r, "post", null);
+				JsonElement post = r.get("post");
 				if (post != null) {
-					c.post(ByteBuffer.wrap(post.getBytes(Http.UTF8_CHARSET)));
+					JsonObject postObject = post.getAsJsonObject();
+					String postBody = getString(postObject, "body", null);
+					String postContentTyString = getString(postObject, "type", Http.ContentType.JSON);
+					if (postBody != null) {
+						c.post(postContentTyString, ByteBuffer.wrap(postBody.getBytes(Http.UTF8_CHARSET)));
+					}
 				}
 				
 				String path = getString(r, "path", null);
