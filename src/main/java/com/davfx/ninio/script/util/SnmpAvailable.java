@@ -24,7 +24,7 @@ public final class SnmpAvailable {
 		this.client = client;
 	}
 	
-	public RegisteredFunctionsScriptRunner register(RegisteredFunctionsScriptRunner runner) {
+	public void registerOn(RegisteredFunctionsScriptRunner runner) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
@@ -79,6 +79,21 @@ public final class SnmpAvailable {
 					public void launched(final Callback callback) {
 						callback.get(oid, new SnmpClientHandler.Callback.GetCallback() {
 							@Override
+							public void result(Result result) {
+								JsonObject r = new JsonObject();
+								r.add(result.getOid().toString(), new JsonPrimitive(result.getValue().asString()));
+								userCallback.handle(r);
+							}
+							
+							@Override
+							public void close() {
+								callback.close();
+
+								JsonObject r = new JsonObject(); // Empty object on finish
+								userCallback.handle(r);
+							}
+							
+							@Override
 							public void failed(IOException e) {
 								JsonObject r = new JsonObject();
 								r.add("error", new JsonPrimitive(e.getMessage()));
@@ -86,6 +101,7 @@ public final class SnmpAvailable {
 								callback.close();
 								userCallback.handle(r);
 							}
+							/*%%%
 							private void add(JsonObject r, Result result) {
 								r.add(result.getOid().toString(), new JsonPrimitive(result.getValue().asString()));
 							}
@@ -107,12 +123,11 @@ public final class SnmpAvailable {
 								callback.close();
 								userCallback.handle(r);
 							}
+							*/
 						});
 					}
 				});
 			}
 		});
-		
-		return runner;
 	}
 }

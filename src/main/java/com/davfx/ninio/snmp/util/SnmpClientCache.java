@@ -224,7 +224,6 @@ public final class SnmpClientCache implements AutoCloseable {
 			if (c.launchedCallback != null) {
 				c.launchedCallback.close();
 			}
-			c.handlers.clear();
 		}
 		clients.clear();
 	}

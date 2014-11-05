@@ -22,9 +22,9 @@ public final class Queue implements AutoCloseable, ByteBufferAllocator {
 	
 	private final long threadId;
 	private final Selector selector;
-	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); //TODO Consider using LinkedBlockingQueue to prevent OOM
+	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 	
-	private final ByteBuffer buffer = ByteBuffer.wrap(new byte[BUFFER_SIZE]); //TODO check everywhere ByteBuffer.array()
+	private final ByteBuffer buffer = ByteBuffer.wrap(new byte[BUFFER_SIZE]); // In the whole package, ByteBuffer is ALWAYS assumed to implement array(), so to be sure we wrap() instead of allocate()
 
 	public static Selector selector() throws IOException {
 		return SelectorProvider.provider().openSelector();
@@ -36,7 +36,7 @@ public final class Queue implements AutoCloseable, ByteBufferAllocator {
 	public Queue(final Selector selector) {
 		this.selector = selector;
 
-		threadId = Threads.run(Queue.class, new Runnable() {
+		Thread t = new Thread(new Runnable() {
 			@Override
 			public void run() {
 				while (true) {
@@ -73,6 +73,11 @@ public final class Queue implements AutoCloseable, ByteBufferAllocator {
 				}
 			}
 		});
+		
+		t.setName("Queue");
+		t.start();
+		
+		threadId = t.getId();
 	}
 	
 	private boolean isInside() {

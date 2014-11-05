@@ -123,13 +123,13 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	}
 	
 	public SimpleScriptRunnerScriptRegister runner() {
-		//TODO mal ecrit
-		return new PingAvailable(ping).register(
-				new SnmpAvailable(snmp).register(
-					new WaitingTelnetAvailable(telnet).register(
-					new WaitingSshAvailable(ssh).register(
-						new HttpAvailable(http).register(
-							new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner))))))));
+		RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner)));
+		new PingAvailable(ping).registerOn(runner);
+		new SnmpAvailable(snmp).registerOn(runner);
+		new WaitingTelnetAvailable(telnet).registerOn(runner);
+		new WaitingSshAvailable(ssh).registerOn(runner);
+		new HttpAvailable(http).registerOn(runner);
+		return runner;
 	}
 	
 	@Override

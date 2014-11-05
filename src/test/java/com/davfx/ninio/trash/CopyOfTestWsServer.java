@@ -86,7 +86,7 @@ public class CopyOfTestWsServer {
 
 			new TelnetClient().withQueue(queue).withAddress(new Address("localhost", 8080)).override(new ReadyFactory() {
 				@Override
-				public Ready create(Queue queue, ByteBufferAllocator allocator) {
+				public Ready create(Queue queue) {
 					return new WebsocketReady(ccc);
 				}
 			}).connect(new TelnetClientHandler() {

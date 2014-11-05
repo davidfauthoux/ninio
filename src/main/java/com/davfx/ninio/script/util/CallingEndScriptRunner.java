@@ -13,7 +13,6 @@ public final class CallingEndScriptRunner implements SimpleScriptRunner {
 
 	private final SimpleScriptRunner wrappee;
 
-	//TODO mettre la fonction end ici en Runnable
 	public CallingEndScriptRunner(SimpleScriptRunner wrappee) {
 		this.wrappee = wrappee;
 	}

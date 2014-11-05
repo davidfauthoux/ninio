@@ -45,7 +45,9 @@ public final class PingClient {
 	private ScheduledExecutorService repeatExecutor = null;
 
 	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ping.timeoutFromBeginning");
-	
+
+	private int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
+
 	private ReadyFactory readyFactory = null;
 
 	public PingClient() {
@@ -62,6 +64,11 @@ public final class PingClient {
 
 	public PingClient withTimeoutFromBeginning(double timeoutFromBeginning) {
 		this.timeoutFromBeginning = timeoutFromBeginning;
+		return this;
+	}
+
+	public PingClient withMaxSimultaneousClients(int maxSimultaneousClients) {
+		this.maxSimultaneousClients = maxSimultaneousClients;
 		return this;
 	}
 
@@ -97,7 +104,7 @@ public final class PingClient {
 		final ReadyFactory rf;
 		final InternalPingServerReadyFactory readyFactoryToClose;
 		if (readyFactory == null) {
-			readyFactoryToClose = new InternalPingServerReadyFactory();
+			readyFactoryToClose = new InternalPingServerReadyFactory(maxSimultaneousClients);
 			rf = readyFactoryToClose;
 		} else {
 			rf = readyFactory;

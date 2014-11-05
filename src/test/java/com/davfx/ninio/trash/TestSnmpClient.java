@@ -55,7 +55,7 @@ public class TestSnmpClient {
 						}
 						
 						@Override
-						public void finished(Result result) {
+						public void result(Result result) {
 							new Thread(new Runnable() {
 								@Override
 								public void run() {
@@ -67,20 +67,18 @@ public class TestSnmpClient {
 										
 										@Override
 										public void failed(IOException e) {
-											System.out.println("# FAILED");
+											System.out.println("## FAILED");
 											System.exit(1);
 										}
 										
 										@Override
-										public void finished(Result result) {
+										public void result(Result result) {
 											System.out.println(result);
 										}
 										
 										@Override
-										public void finished(Iterable<Result> results) {
-											for (Result result : results) {
-												System.out.println(result);
-											}						
+										public void close() {
+											System.out.println("## END");
 										}
 									});
 								}
@@ -89,10 +87,8 @@ public class TestSnmpClient {
 						}
 						
 						@Override
-						public void finished(Iterable<Result> results) {
-							for (Result result : results) {
-								System.out.println(result);
-							}						
+						public void close() {
+							System.out.println("# END");
 						}
 					});
 				}
@@ -124,15 +120,13 @@ public class TestSnmpClient {
 						}
 						
 						@Override
-						public void finished(Result result) {
+						public void result(Result result) {
 							System.out.println(result);
 						}
-						
+
 						@Override
-						public void finished(Iterable<Result> results) {
-							for (Result result : results) {
-								System.out.println(result);
-							}						
+						public void close() {
+							System.out.println("# END");
 						}
 					});
 				}
@@ -164,15 +158,13 @@ public class TestSnmpClient {
 						}
 						
 						@Override
-						public void finished(Result result) {
+						public void result(Result result) {
 							System.out.println(result);
 						}
 						
 						@Override
-						public void finished(Iterable<Result> results) {
-							for (Result result : results) {
-								System.out.println(result);
-							}						
+						public void close() {
+							System.out.println("# END");
 						}
 					});
 				}

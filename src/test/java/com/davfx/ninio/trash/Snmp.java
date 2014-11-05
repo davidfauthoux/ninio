@@ -38,19 +38,14 @@ public final class Snmp {
 						}
 						
 						@Override
-						public void finished(Result result) {
+						public void result(Result result) {
 							System.out.println("#" + j + " " + result);
 							// System.exit(0);
 						}
 						
 						@Override
-						public void finished(Iterable<Result> results) {
-							System.out.println("#" + j + " --");
-							for (Result result : results) {
-								System.out.println("#" + j + " " + result);
-							}						
-							System.out.println("#" + j + " --");
-							// System.exit(0);
+						public void close() {
+							System.out.println("#" + j + " " + " CLOSED");
 						}
 					});
 				}

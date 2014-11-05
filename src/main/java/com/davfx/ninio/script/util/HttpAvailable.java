@@ -24,7 +24,7 @@ public final class HttpAvailable {
 		this.client = client;
 	}
 	
-	public RegisteredFunctionsScriptRunner register(RegisteredFunctionsScriptRunner runner) {
+	public void registerOn(RegisteredFunctionsScriptRunner runner) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			private String getString(JsonObject r, String key, String defaultValue) {
 				JsonElement e = r.get(key);
@@ -83,7 +83,5 @@ public final class HttpAvailable {
 				});
 			}
 		});
-		
-		return runner;
 	}
 }

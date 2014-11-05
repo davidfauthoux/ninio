@@ -6,14 +6,13 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +51,8 @@ public final class SnmpClient {
 	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromBeginning");
 	private double timeoutFromLastReception = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromLastReception");
 	
+	private double repeatRandomization = ConfigUtils.getDuration(CONFIG, "snmp.repeatRandomization");
+	
 	private ReadyFactory readyFactory = new DatagramReadyFactory();
 
 	public SnmpClient() {
@@ -72,6 +73,11 @@ public final class SnmpClient {
 	}
 	public SnmpClient withTimeoutFromLastReception(double timeoutFromLastReception) {
 		this.timeoutFromLastReception = timeoutFromLastReception;
+		return this;
+	}
+
+	public SnmpClient withRepeatRandomization(double repeatRandomization) {
+		this.repeatRandomization = repeatRandomization;
 		return this;
 	}
 
@@ -116,6 +122,28 @@ public final class SnmpClient {
 		return this;
 	}
 	
+	private static final Random RANDOM = new Random(System.currentTimeMillis());
+
+	private static final class RequestIdProvider {
+		private static final int LOOP_REQUEST_ID = 2 ^ 16;
+		private static final AtomicInteger PREFIX = new AtomicInteger(RANDOM.nextInt());
+		
+		private final int prefix = PREFIX.getAndIncrement();
+		private int nextRequestId = 0;
+
+		public RequestIdProvider() {
+		}
+		
+		public int get() {
+			int id = ((prefix & 0xFFFF) << 16) | (nextRequestId & 0xFFFF);
+			nextRequestId++;
+			if (nextRequestId == LOOP_REQUEST_ID) {
+				nextRequestId = 0;
+			}
+			return id;
+		}
+	}
+	
 	public void connect(final SnmpClientHandler clientHandler) {
 		final Queue q;
 		final ScheduledExecutorService re;
@@ -146,6 +174,8 @@ public final class SnmpClient {
 			a = address;
 		}
 		
+		final RequestIdProvider requestIdProvider = new RequestIdProvider();
+		
 		final Set<InstanceMapper> instanceMappers = new HashSet<>();
 		re.scheduleAtFixedRate(new Runnable() {
 			@Override
@@ -155,7 +185,7 @@ public final class SnmpClient {
 					public void run() {
 						Date now = new Date();
 						for (InstanceMapper i : instanceMappers) {
-							i.repeat(now, minTimeToRepeat, timeoutFromBeginning, timeoutFromLastReception);
+							i.repeat(now);
 						}
 					}
 				});
@@ -168,7 +198,7 @@ public final class SnmpClient {
 				Ready ready = readyFactory.create(q);
 				
 				ready.connect(a, new ReadyConnection() {
-					private final InstanceMapper instanceMapper = new InstanceMapper();
+					private final InstanceMapper instanceMapper = new InstanceMapper(requestIdProvider);
 
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -231,7 +261,7 @@ public final class SnmpClient {
 							}
 							@Override
 							public void get(Oid oid, GetCallback callback) {
-								Instance i = new Instance(instanceMapper, callback, w, oid, getLimit, bulkSize);
+								Instance i = new Instance(instanceMapper, callback, w, oid, getLimit, bulkSize, minTimeToRepeat, timeoutFromBeginning, timeoutFromLastReception, repeatRandomization);
 								instanceMapper.map(i);
 								w.get(i.instanceId, oid);
 							}
@@ -253,29 +283,18 @@ public final class SnmpClient {
 		});
 	}
 	
-	private static final int LOOP_REQUEST_ID = 65000;
-	private static final Random RANDOM = new Random(System.currentTimeMillis());
-	
 	private static final class InstanceMapper {
-		private final int instancePrefix;
 		private final Map<Integer, Instance> instances = new HashMap<>();
-		private int nextInstance = 0;
+		private RequestIdProvider requestIdProvider;
 		
-		public InstanceMapper() {
-			int suffix = RANDOM.nextInt();
-			//TODO faire avec un int classique qui inc
-			instancePrefix = (((((int) System.currentTimeMillis() & 0x7F)) << 8) | (suffix & 0xFF)) << 16; // Nothing ensures this is unique, but it's a 'good' try: 8 bits based on time, 8 bits random. It will be composed with 16 bits random to create a requestId.
+		public InstanceMapper(RequestIdProvider requestIdProvider) {
+			this.requestIdProvider = requestIdProvider;
 		}
 		
 		public void map(Instance instance) {
-			int instanceId = instancePrefix | nextInstance;
-			nextInstance++;
+			int instanceId = requestIdProvider.get();
 
-			if (nextInstance == LOOP_REQUEST_ID) {
-				nextInstance = 0;
-			}
-			
-			if (instances.containsKey(nextInstance)) {
+			if (instances.containsKey(instanceId)) {
 				LOGGER.warn("The maximum number of simultaneous request has been reached");
 				return;
 			}
@@ -303,9 +322,9 @@ public final class SnmpClient {
 			i.handle(errorStatus, errorIndex, results);
 		}
 		
-		public void repeat(Date now, double minTimeToRepeat, double timeoutFromBeginning, double timeoutFromLastReception) {
+		public void repeat(Date now) {
 			for (Instance i : instances.values()) {
-				i.repeat(now, minTimeToRepeat, timeoutFromBeginning, timeoutFromLastReception);
+				i.repeat(now);
 			}
 			
 			Iterator<Instance> ii = instances.values().iterator();
@@ -366,7 +385,8 @@ public final class SnmpClient {
 		private final SnmpWriter write;
 		private final Oid initialRequestOid;
 		private Oid requestOid;
-		private List<Result> allResults = null;
+		//%% private List<Result> allResults = null;
+		private int countResults = 0;
 		private final int getLimit;
 		private final int bulkSize;
 		private final Date beginningTimestamp = new Date();
@@ -374,8 +394,14 @@ public final class SnmpClient {
 		private Date sendTimestamp = new Date();
 		private int shouldRepeatWhat = 0;
 		public int instanceId;
+		private final double minTimeToRepeat;
+		private final double timeoutFromBeginning;
+		private final double timeoutFromLastReception;
+		private final double repeatRandomizationRandomized;
 
-		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, int getLimit, int bulkSize) {
+		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid,
+				int getLimit, int bulkSize,
+				double minTimeToRepeat, double timeoutFromBeginning, double timeoutFromLastReception, double repeatRandomization) {
 			this.instanceMapper = instanceMapper;
 			this.callback = callback;
 			this.write = write;
@@ -383,25 +409,29 @@ public final class SnmpClient {
 			this.getLimit = getLimit;
 			this.bulkSize = bulkSize;
 			initialRequestOid = requestOid;
+			
+			this.minTimeToRepeat = minTimeToRepeat;
+			this.timeoutFromBeginning = timeoutFromBeginning;
+			this.timeoutFromLastReception = timeoutFromLastReception;
+			repeatRandomizationRandomized = (RANDOM.nextDouble() * repeatRandomization) - (1d / 2d); // [ -0.5, 0.5 [
 		}
 		
 		public void closedByPeer() {
+			if (callback == null) {
+				return;
+			}
 			if (requestOid == null) {
 				return;
 			}
 			
 			shouldRepeatWhat = -1;
 			requestOid = null;
-
-			if (callback == null) {
-				return;
-			}
 			SnmpClientHandler.Callback.GetCallback c = callback;
 			callback = null;
 			c.failed(new IOException("Closed by peer"));
 		}
 		
-		public void repeat(Date now, double minTimeToRepeat, double timeoutFromBeginning, double timeoutFromLastReception) {
+		public void repeat(Date now) {
 			if (callback == null) {
 				return;
 			}
@@ -411,12 +441,12 @@ public final class SnmpClient {
 			
 			double n = DateUtils.from(now);
 			
-			if ((n - DateUtils.from(beginningTimestamp)) >= timeoutFromBeginning) {
+			if ((n - DateUtils.from(beginningTimestamp)) >= (timeoutFromBeginning)) {
 				shouldRepeatWhat = -1;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
-				allResults = null;
+				//%% allResults = null;
 				c.failed(new IOException("Timeout from beginning"));
 				return;
 			}
@@ -425,13 +455,14 @@ public final class SnmpClient {
 				if ((n - DateUtils.from(receptionTimestamp)) >= timeoutFromLastReception) {
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
-					allResults = null;
+					//%% allResults = null;
 					c.failed(new IOException("Timeout from last reception"));
 					return;
 				}
 			}
 
-			if ((n - DateUtils.from(sendTimestamp)) >= minTimeToRepeat) {
+			if ((n - DateUtils.from(sendTimestamp)) >= (minTimeToRepeat + repeatRandomizationRandomized)) {
+				LOGGER.debug("Repeating {}", requestOid);
 				switch (shouldRepeatWhat) { 
 				case 0:
 					write.get(instanceId, requestOid);
@@ -451,27 +482,26 @@ public final class SnmpClient {
 		
 		private void handle(int errorStatus, int errorIndex, Iterable<Result> results) {
 			if (callback == null) {
+				LOGGER.trace("Received more but finished");
+				return;
+			}
+			if (requestOid == null) {
 				return;
 			}
 
 			receptionTimestamp = new Date();
 			
-			if (requestOid == null) {
-				LOGGER.trace("Received more but finished");
-				return;
-			}
-
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED) {
-				shouldRepeatWhat = -1;
+				//%% shouldRepeatWhat = -1;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
-				allResults = null;
+				//%% allResults = null;
 				c.failed(new IOException("Authentication failed"));
 				return;
 			}
 			
-			if (allResults == null) {
+			if (shouldRepeatWhat == 0) {
 				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
 					LOGGER.trace("Retrying GET after receiving auth engine completion message");
 					instanceMapper.map(this);
@@ -500,18 +530,18 @@ public final class SnmpClient {
 							found = r;
 						}
 						if (found != null) {
-							shouldRepeatWhat = -1;
+							//%% shouldRepeatWhat = -1;
 							requestOid = null;
 							SnmpClientHandler.Callback.GetCallback c = callback;
 							callback = null;
-							allResults = null;
-							c.finished(found);
+							//%% allResults = null;
+							c.result(found);
+							c.close();
 							return;
 						}
 					}
 					if (fallback) {
-						allResults = new LinkedList<>();
-	
+						//%% allResults = new LinkedList<>();
 						instanceMapper.map(this);
 						sendTimestamp = new Date();
 						shouldRepeatWhat = 1;
@@ -520,11 +550,11 @@ public final class SnmpClient {
 				}
 			} else {
 				if (errorStatus != 0) {
-					shouldRepeatWhat = -1;
+					//%% shouldRepeatWhat = -1;
 					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
-					allResults = null;
+					//%% allResults = null;
 					c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
 				} else {
 					Oid lastOid = null;
@@ -541,12 +571,15 @@ public final class SnmpClient {
 							break;
 						}
 						LOGGER.trace("Addind to results: {}", r);
-						if ((getLimit > 0) && (allResults.size() == getLimit)) {
+						if ((getLimit > 0) && (countResults >= getLimit)) {
+						//%% if ((getLimit > 0) && (allResults.size() == getLimit)) {
 							LOGGER.warn("{} reached limit", requestOid);
 							lastOid = null;
 							break;
 						}
-						allResults.add(r);
+						countResults++;
+						callback.result(r);
+						//%% allResults.add(r);
 						lastOid = r.getOid();
 					}
 					if (lastOid != null) {
@@ -560,13 +593,16 @@ public final class SnmpClient {
 						write.getBulk(instanceId, requestOid, bulkSize);
 					} else {
 						// Stop here
-						shouldRepeatWhat = -1;
+						//%% shouldRepeatWhat = -1;
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;
 						callback = null;
+						/*%%
 						List<Result> r = allResults;
 						allResults = null;
 						c.finished(r);
+						*/
+						c.close();
 					}
 				}
 			}

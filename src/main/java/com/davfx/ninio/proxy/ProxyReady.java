@@ -215,7 +215,7 @@ final class ProxyReady {
 						try {
 							out.writeInt(connectionId);
 							out.writeInt(buffer.remaining());
-							out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());  // Should always work
+							out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
 							out.flush();
 						} catch (IOException ioe) {
 							try {

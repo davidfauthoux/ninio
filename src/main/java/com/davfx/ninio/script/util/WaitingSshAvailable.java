@@ -22,7 +22,7 @@ public final class WaitingSshAvailable {
 		this.client = client;
 	}
 	
-	public RegisteredFunctionsScriptRunner register(RegisteredFunctionsScriptRunner runner) {
+	public void registerOn(RegisteredFunctionsScriptRunner runner) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
@@ -70,7 +70,5 @@ public final class WaitingSshAvailable {
 				});
 			}
 		});
-		
-		return runner;
 	}
 }

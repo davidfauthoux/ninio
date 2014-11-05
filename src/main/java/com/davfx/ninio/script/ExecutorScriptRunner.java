@@ -68,7 +68,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 							String fromFunctionParameter = new JsonPrimitive(response).toString();
 							String callbackScript = callbackVar + "(" + fromFunctionParameter + ");";
 							try {
-								LOGGER.trace("Executing callback: {}", callbackScript);
+								LOGGER.debug("Executing callback: {}", callbackScript);
 								scriptEngine.eval(callbackScript);
 							} catch (Exception e) {
 								LOGGER.error("Script error in: {}", callbackScript, e);
@@ -103,7 +103,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 					LOGGER.trace("Executing functions: {}", callFunctions);
 					scriptEngine.eval(callFunctions);
 					for (String s : script) {
-						LOGGER.trace("Executing: {}", s);
+						LOGGER.debug("Executing: {}", s);
 						scriptEngine.eval(s);
 					}
 				} catch (Exception e) {

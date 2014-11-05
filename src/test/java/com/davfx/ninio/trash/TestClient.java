@@ -38,13 +38,13 @@ public class TestClient {
 
 		Thread.sleep(1000);
 		System.out.println("LAUNCHING PROXY 6666");
-		new ProxyServer(6666).start();
+		new ProxyServer(6666, 10).start();
 		Thread.sleep(1000);
 		System.out.println("LAUNCHING PROXY 7777");
-		new ProxyServer(7777).override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666))).start();
+		new ProxyServer(7777, 10).override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666))).start();
 		Thread.sleep(1000);
 		System.out.println("LAUNCHING PROXY 9999");
-		new ProxyServer(9999).override(Reproxy.DEFAULT_TYPE, Reproxy.server()).start();
+		new ProxyServer(9999, 10).override(Reproxy.DEFAULT_TYPE, Reproxy.server()).start();
 		
 		Thread.sleep(1000);
 		System.out.println("LAUNCHING HTTP CLIENT");
