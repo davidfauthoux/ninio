@@ -162,7 +162,7 @@ public final class HttpClient implements AutoCloseable {
 
 				if (oldRecyclers != null) {
 					while (!oldRecyclers.isEmpty()) {
-						LOGGER.debug("Recycling connection to {}", request.getAddress());
+						LOGGER.trace("Recycling connection to {}", request.getAddress());
 						Recycler oldRecycler = oldRecyclers.removeFirst();
 						if (oldRecyclers.isEmpty()) {
 							recyclers.remove(request.getAddress());

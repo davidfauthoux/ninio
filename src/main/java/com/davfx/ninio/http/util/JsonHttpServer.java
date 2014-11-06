@@ -141,12 +141,12 @@ public final class JsonHttpServer {
 					
 					@Override
 					public void failed(IOException e) {
-						LOGGER.debug("Client connection failed", e);
+						LOGGER.trace("Client connection failed, probably closed by peer during transfer", e);
 					}
 					
 					@Override
 					public void close() {
-						LOGGER.debug("Connection closed by peer");
+						LOGGER.trace("Connection closed by peer");
 					}
 				};
 			}

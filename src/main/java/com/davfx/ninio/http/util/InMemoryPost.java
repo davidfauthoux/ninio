@@ -16,9 +16,7 @@ public final class InMemoryPost {
 		if (!buffer.hasRemaining()) {
 			return;
 		}
-		byte[] b = new byte[buffer.remaining()];
-		buffer.get(b);
-		buffers.addLast(ByteBuffer.wrap(b));
+		buffers.addLast(buffer);
 	}
 	
 	public int getBytes(byte[] destination, int off, int len) {

@@ -6,9 +6,7 @@ import java.nio.charset.Charset;
 import java.util.concurrent.Executors;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueReady;
 import com.davfx.ninio.common.ReadyConnection;
@@ -17,7 +15,7 @@ import com.davfx.ninio.common.SocketReady;
 public final class SocketReadyTest {
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();
-		new QueueReady(queue, new SocketReady(queue.getSelector(), new OnceByteBufferAllocator())).connect(new Address("localhost", 8080), new ReadyConnection() {
+		new QueueReady(queue, new SocketReady(queue.getSelector(), queue.allocator())).connect(new Address("localhost", 8080), new ReadyConnection() {
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
 				byte[] b = new byte[buffer.remaining()];

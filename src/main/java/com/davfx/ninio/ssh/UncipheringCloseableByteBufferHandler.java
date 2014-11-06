@@ -25,7 +25,7 @@ final class UncipheringCloseableByteBufferHandler implements CloseableByteBuffer
 	private Mac mac = null;
 	private int sequence = 0;
 
-	private ByteBuffer lengthBuffer = ByteBuffer.wrap(new byte[Ints.BYTES]);
+	private ByteBuffer lengthBuffer = ByteBuffer.allocate(Ints.BYTES);
 	private int count = 0;
 
 	private ByteBuffer firstBuffer = null;
@@ -80,8 +80,8 @@ final class UncipheringCloseableByteBufferHandler implements CloseableByteBuffer
 
 			mac.init(new SecretKeySpec(macKey, macAlgorithm));
 			
-			firstBuffer = ByteBuffer.wrap(new byte[cipher.getBlockSize()]);
-			macBuffer = ByteBuffer.wrap(new byte[mac.getMacLength()]);
+			firstBuffer = ByteBuffer.allocate(cipher.getBlockSize());
+			macBuffer = ByteBuffer.allocate(mac.getMacLength());
 		} catch (GeneralSecurityException e) {
 			cipher = null;
 			mac = null;
@@ -134,7 +134,7 @@ final class UncipheringCloseableByteBufferHandler implements CloseableByteBuffer
 					uncipheredFirstBuffer.flip();
 					firstBuffer.rewind();
 					int firstLength = uncipheredFirstBuffer.getInt() + 4;
-					remainingBuffer = ByteBuffer.wrap(new byte[firstLength - uncipheredFirstBuffer.capacity()]);
+					remainingBuffer = ByteBuffer.allocate(firstLength - uncipheredFirstBuffer.capacity());
 					uncipheredFirstBuffer.rewind();
 					state = 1;
 				}

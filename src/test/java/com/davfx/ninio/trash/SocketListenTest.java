@@ -6,7 +6,6 @@ import java.nio.charset.Charset;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
-import com.davfx.ninio.common.OnceByteBufferAllocator;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueListen;
 import com.davfx.ninio.common.SocketListen;
@@ -15,7 +14,7 @@ import com.davfx.ninio.common.SocketListening;
 public final class SocketListenTest {
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();
-		new QueueListen(queue, new SocketListen(queue.getSelector(), new OnceByteBufferAllocator())).listen(new Address("localhost", 8080), new SocketListening() {
+		new QueueListen(queue, new SocketListen(queue.getSelector(), queue.allocator())).listen(new Address("localhost", 8080), new SocketListening() {
 			@Override
 			public void failed(IOException e) {
 				e.printStackTrace();

@@ -7,8 +7,6 @@ import java.util.LinkedList;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSession;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,47 +15,72 @@ public final class SslReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SslReady.class);
 
 	private final Ready wrappee;
-	private final SSLEngine engine;
-	private final int applicationBufferSize;
-	private final int packetBufferSize;
+	private SSLEngine engine;
+	private final ByteBufferAllocator allocator;
+	//%% private final int applicationBufferSize;
+	//%% private final int packetBufferSize;
 
-	public SslReady(Trust trust, Ready wrappee) {
+	public SslReady(Trust trust, ByteBufferAllocator allocator, Ready wrappee) {
 		this.wrappee = wrappee;
+		this.allocator = allocator;
 		engine = trust.createEngine(true);
 
-		SSLSession session = engine.getSession();
-		packetBufferSize = session.getPacketBufferSize();
-		applicationBufferSize = session.getApplicationBufferSize();
+		//%% SSLSession session = engine.getSession();
+		//%% packetBufferSize = session.getPacketBufferSize();
+		//%% applicationBufferSize = session.getApplicationBufferSize();
+		
+		try {
+			engine.beginHandshake();
+		} catch (IOException e) {
+			closeEngine();
+			LOGGER.error("Could not begin handshake", e);
+		}
 	}
 	
 	private void closeEngine() {
+		if (engine == null) {
+			return;
+		}
 		try {
 			engine.closeInbound();
-		} catch (SSLException e) {
+		} catch (IOException e) {
 		}
 		engine.closeOutbound();
+		engine = null;
 	}
 	
 	@Override
 	public void connect(final Address address, final ReadyConnection connection) {
+		if (engine == null) {
+			connection.failed(new IOException("Invalid engine"));
+			return;
+		}
+		
 		wrappee.connect(address, new ReadyConnection() {
 			private CloseableByteBufferHandler write;
-			private final Deque<ByteBuffer> toSend = new LinkedList<ByteBuffer>();
-			private final Deque<ByteBuffer> toReceive = new LinkedList<ByteBuffer>();
-			private ByteBuffer underflow = null;
+			private final Deque<ByteBuffer> sent = new LinkedList<ByteBuffer>();
+			private final Deque<ByteBuffer> received = new LinkedList<ByteBuffer>();
+			
+			private void clear() {
+				sent.clear();
+				received.clear();
+			}
 			
 			@Override
 			public void failed(IOException e) {
+				clear();
 				closeEngine();
 				connection.failed(e);
 			}
 			@Override
 			public void close() {
+				clear();
 				closeEngine();
 				connection.close();
 			}
 			
 			private void closeAll() {
+				clear();
 				closeEngine();
 				if (write != null) {
 					write.close();
@@ -65,8 +88,92 @@ public final class SslReady implements Ready {
 				}
 			}
 			
-			private void doContinue(SSLEngineResult r) {
+			private boolean receive() {
+				if (received.isEmpty()) {
+					return false;
+				}
+
+				boolean underflow = false;
+				
+				ByteBuffer b = received.getFirst();
+				ByteBuffer unwrapBuffer = allocator.allocate();
+				try {
+					SSLEngineResult r = engine.unwrap(b, unwrapBuffer);
+					if (!b.hasRemaining()) {
+						received.removeFirst();
+					}
+					
+					if (r.getStatus() == SSLEngineResult.Status.BUFFER_OVERFLOW) {
+						throw new IOException("Buffer overflow, allocator should allocate bigger buffers");
+					}
+
+					if (r.getStatus() == SSLEngineResult.Status.BUFFER_UNDERFLOW) {
+						if (received.size() <= 1) {
+							underflow = true;
+						} else {
+							ByteBuffer b0 = received.removeFirst();
+							ByteBuffer b1 = received.removeFirst();
+							ByteBuffer b01 = ByteBuffer.allocate(b0.remaining() + b1.remaining());
+							int l0 = b0.remaining();
+							int l1 = b1.remaining();
+							b0.get(b01.array(), 0, l0);
+							b1.get(b01.array(), l0, l1);
+							b01.limit(l0 + l1);
+							received.addFirst(b01);
+						}
+					}
+				} catch (IOException e) {
+					LOGGER.error("SSL error", e);
+					closeAll();
+					return false;
+				}
+				
+				unwrapBuffer.flip();
+				if (unwrapBuffer.hasRemaining()) {
+					connection.handle(address, unwrapBuffer);
+				}
+				return !underflow;
+			}
+			
+			private boolean send() {
+				if (sent.isEmpty()) {
+					return false;
+				}
+				
+				ByteBuffer b = sent.getFirst();
+				ByteBuffer wrapBuffer = allocator.allocate();
+				try {
+					SSLEngineResult r = engine.wrap(b, wrapBuffer);
+					if (!b.hasRemaining()) {
+						sent.removeFirst();
+					}
+
+					if (r.getStatus() == SSLEngineResult.Status.BUFFER_OVERFLOW) {
+						throw new IOException("Buffer overflow, allocator should allocate bigger buffers");
+					}
+					
+					if (r.getStatus() == SSLEngineResult.Status.BUFFER_UNDERFLOW) {
+						throw new IOException("Buffer underflow should not happen");
+					}
+				} catch (IOException e) {
+					LOGGER.error("SSL error", e);
+					closeAll();
+					return false;
+				}
+				
+				wrapBuffer.flip();
+				if (wrapBuffer.hasRemaining()) {
+					write.handle(address, wrapBuffer);
+				}
+				return true;
+			}
+			
+			private void doContinue() {
 				while (true) {
+					if (engine == null) {
+						return;
+					}
+					
 					switch (engine.getHandshakeStatus()) {
 					case NEED_TASK:
 					    while (true) {
@@ -78,139 +185,57 @@ public final class SslReady implements Ready {
 					    }
 					    break;
 					case NEED_WRAP:
-						doSend();
-						return;
-					case NEED_UNWRAP:
-						doReceive();
-						return;
-					case FINISHED:
-						doSend();
-						doReceive();
-						return;
-					case NOT_HANDSHAKING:
-						doSend(); // This is a difference with the SSL server
-						doReceive();
-						return;
-					}
-				}
-			}
-
-			private void doSend() {
-				if (write == null) {
-					return;
-				}
-				if (toSend.isEmpty()) {
-					return;
-				}
-
-				ByteBuffer b = toSend.getFirst();
-				ByteBuffer wrapBuffer = ByteBuffer.allocate(packetBufferSize);
-				SSLEngineResult r;
-				try {
-					r = engine.wrap(b, wrapBuffer);
-					if (!b.hasRemaining()) {
-						toSend.removeFirst();
-					}
-					
-					switch (r.getStatus()) {
-					case BUFFER_UNDERFLOW:
-					case BUFFER_OVERFLOW:
-						throw new IOException("Should not happen: " + r.getStatus());
-					case CLOSED:
-					case OK:
-						break;
-					}
-				} catch (SSLException e) {
-					LOGGER.error("SSL error", e);
-					closeAll();
-					return;
-				} catch (IOException e) {
-					LOGGER.error("SSL error", e);
-					closeAll();
-					return;
-				}
-				
-				wrapBuffer.flip();
-				if (wrapBuffer.hasRemaining()) {
-					write.handle(address, wrapBuffer);
-				}
-				doContinue(r);
-			}
-			private void doReceive() {
-				if (toReceive.isEmpty()) {
-					return;
-				}
-				ByteBuffer b = toReceive.getFirst();
-				if (underflow != null) {
-					LOGGER.debug("SSL client underflows, it may be slow");
-					int ur = underflow.remaining();
-					byte[] bb = new byte[ur + b.remaining()];
-					underflow.get(bb, 0, ur);
-					b.get(bb, ur, b.remaining());
-					b = ByteBuffer.wrap(bb);
-					underflow = null;
-					toReceive.removeFirst();
-					toReceive.addFirst(b);
-				}
-				ByteBuffer unwrapBuffer = ByteBuffer.allocate(applicationBufferSize);
-				SSLEngineResult r;
-				try {
-					r = engine.unwrap(b, unwrapBuffer);
-					if (!b.hasRemaining()) {
-						toReceive.removeFirst();
-					}
-					
-					switch (r.getStatus()) {
-					case BUFFER_UNDERFLOW:
-						if (underflow == null) {
-							underflow = b;
-							toReceive.removeFirst();
-							doReceive();
+						if (!send()) {
+							return;
 						}
 						break;
-					case BUFFER_OVERFLOW:
-						throw new IOException("Should not happen: " + r.getStatus());
-					case CLOSED:
-					case OK:
+					case NEED_UNWRAP:
+						if (!receive()) {
+							return;
+						}
+						break;
+					case FINISHED:
+						break;
+					case NOT_HANDSHAKING:
+						if (!send() && !receive()) {
+							return;
+						}
 						break;
 					}
-				} catch (SSLException e) {
-					LOGGER.error("SSL error", e);
-					closeAll();
-					return;
-				} catch (IOException e) {
-					LOGGER.error("SSL error", e);
-					closeAll();
-					return;
 				}
-				
-				unwrapBuffer.flip();
-				if (unwrapBuffer.hasRemaining()) {
-					connection.handle(address, unwrapBuffer);
-				}
-				doContinue(r);
 			}
 			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
-				toReceive.addLast(buffer);
-				doReceive();
+				if (engine == null) {
+					return;
+				}
+				
+				received.add(buffer);
+				doContinue();
 			}
 			
 			@Override
 			public void connected(final FailableCloseableByteBufferHandler write) {
 				this.write = write;
+				
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void close() {
 						closeEngine();
 						write.close();
 					}
+					
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
-						toSend.addLast(buffer);
-						doSend();
+						if (engine == null) {
+							return;
+						}
+
+						sent.add(buffer);
+						doContinue();
 					}
+					
 					@Override
 					public void failed(IOException e) {
 						close();

@@ -7,6 +7,6 @@ public final class SslReadyFactory implements ReadyFactory {
 	}
 	@Override
 	public Ready create(Queue queue) {
-		return new QueueReady(queue, new SslReady(trust, new SocketReady(queue.getSelector(), queue)));
+		return new QueueReady(queue, new SslReady(trust, queue.allocator(), new SocketReady(queue.getSelector(), queue.allocator())));
 	}
 }

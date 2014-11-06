@@ -415,7 +415,7 @@ public final class FtpClient {
 					String file = path.get(path.size() - 1);
 
 					if (file.isEmpty()) {
-						new SocketReady(queue.getSelector(), queue).connect(dataAddress, new ReadyConnection() {
+						new SocketReady(queue.getSelector(), queue.allocator()).connect(dataAddress, new ReadyConnection() {
 							private final LineReader lineReader = new LineReader();
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
@@ -478,7 +478,7 @@ public final class FtpClient {
 						writeLine("TYPE A");
 						state = State.TYPE_A;
 					} else {
-						new SocketReady(queue.getSelector(), queue).connect(dataAddress, new ReadyConnection() {
+						new SocketReady(queue.getSelector(), queue.allocator()).connect(dataAddress, new ReadyConnection() {
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
 								if (closed) {

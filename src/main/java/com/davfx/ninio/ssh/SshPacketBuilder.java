@@ -6,7 +6,7 @@ import com.google.common.base.Charsets;
 
 public final class SshPacketBuilder {
 	private static final int MAX_PACKET_SIZE = 64 * 1024;
-	private ByteBuffer buffer = ByteBuffer.wrap(new byte[MAX_PACKET_SIZE]); // Transferable
+	private ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE); // Transferable
 
 	public SshPacketBuilder() {
 		buffer.position(SshPacketOuputHandler.PLEASE_AVOID_COPY_OFFSET);

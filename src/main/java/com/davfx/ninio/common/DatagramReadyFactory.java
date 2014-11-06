@@ -5,6 +5,6 @@ public final class DatagramReadyFactory implements ReadyFactory {
 	}
 	@Override
 	public Ready create(Queue queue) {
-		return new QueueReady(queue, new DatagramReady(queue.getSelector(), queue));
+		return new QueueReady(queue, new DatagramReady(queue.getSelector(), queue.allocator()));
 	}
 }

@@ -59,7 +59,7 @@ public final class HttpServer {
 			listening = new SslSocketListening(trust, listening);
 		}
 		
-		Listen listen = new SocketListen(queue.getSelector(), queue);
+		Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
 		listen = new QueueListen(queue, listen);
 		listen.listen(serverAddress, listening);
 	}

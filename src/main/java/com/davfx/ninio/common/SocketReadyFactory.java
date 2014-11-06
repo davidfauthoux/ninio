@@ -5,6 +5,6 @@ public final class SocketReadyFactory implements ReadyFactory {
 	}
 	@Override
 	public Ready create(Queue queue) {
-		return new QueueReady(queue, new SocketReady(queue.getSelector(), queue));
+		return new QueueReady(queue, new SocketReady(queue.getSelector(), queue.allocator()));
 	}
 }

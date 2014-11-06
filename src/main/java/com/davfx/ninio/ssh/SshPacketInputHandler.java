@@ -9,7 +9,7 @@ import com.google.common.primitives.Ints;
 final class SshPacketInputHandler implements CloseableByteBufferHandler {
 	private ByteBuffer buffer = null;
 	private ByteBuffer paddingBuffer = null;
-	private ByteBuffer lengthBuffer = ByteBuffer.wrap(new byte[Ints.BYTES]);
+	private ByteBuffer lengthBuffer = ByteBuffer.allocate(Ints.BYTES);
 	private int state = 0;
 	private int length = -1;
 	private final CloseableByteBufferHandler wrappee;
@@ -38,8 +38,8 @@ final class SshPacketInputHandler implements CloseableByteBufferHandler {
 			
 			if (state == 1) {
 				int padding = b.get() & 0xFF;
-				buffer = ByteBuffer.wrap(new byte[length - 1 - padding]);
-				paddingBuffer = ByteBuffer.wrap(new byte[padding]);
+				buffer = ByteBuffer.allocate(length - 1 - padding);
+				paddingBuffer = ByteBuffer.allocate(padding);
 				length = -1;
 				state = 2;
 			}

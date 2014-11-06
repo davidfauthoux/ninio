@@ -206,12 +206,19 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 		private long writeContentLength = -1;
 		private boolean chunked = false;
 		private GzipWriter gzipWriter;
+		private boolean innerClosed = false;
 		
 		public InnerWrite() {
 		}
 		
 		@Override
 		public void close() {
+			if (innerClosed) {
+				return;
+			}
+			
+			innerClosed = true;
+			
 			if (gzipWriter != null) {
 				gzipWriter.close();
 			}
@@ -239,12 +246,20 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 		
 		@Override
 		public void failed(IOException error) {
+			if (innerClosed) {
+				return;
+			}
+			
 			closed = true;
 			write.close();
 		}
 
 		@Override
 		public void write(HttpResponse response) {
+			if (innerClosed) {
+				return;
+			}
+			
 			if (http11) {
 				if (enableGzip && Http.GZIP.equalsIgnoreCase(response.getHeaders().get(Http.CONTENT_ENCODING))) {
 					gzipWriter = new GzipWriter(new ByteBufferHandler() {
@@ -297,6 +312,10 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 		
 		@Override
 		public void handle(Address address, ByteBuffer buffer) {
+			if (innerClosed) {
+				return;
+			}
+			
 			if (gzipWriter != null) {
 				gzipWriter.handle(buffer);
 			} else {

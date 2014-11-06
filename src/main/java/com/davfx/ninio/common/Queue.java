@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-public final class Queue implements AutoCloseable, ByteBufferAllocator {
+public final class Queue implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Queue.class);
 
 	private static final Config CONFIG = ConfigUtils.load(Queue.class);
@@ -24,8 +24,6 @@ public final class Queue implements AutoCloseable, ByteBufferAllocator {
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 	
-	private final ByteBuffer buffer = ByteBuffer.wrap(new byte[BUFFER_SIZE]); // In the whole package, ByteBuffer is ALWAYS assumed to implement array(), so to be sure we wrap() instead of allocate()
-
 	public static Selector selector() throws IOException {
 		return SelectorProvider.provider().openSelector();
 	}
@@ -104,10 +102,13 @@ public final class Queue implements AutoCloseable, ByteBufferAllocator {
 		selector.wakeup();
 	}
 	
-	@Override
-	public ByteBuffer allocate() {
-		buffer.rewind();
-		return buffer;
+	public ByteBufferAllocator allocator() {
+		return new ByteBufferAllocator() {
+			@Override
+			public ByteBuffer allocate() {
+				return ByteBuffer.allocate(BUFFER_SIZE);
+			}
+		};
 	}
 	
 	@Override
