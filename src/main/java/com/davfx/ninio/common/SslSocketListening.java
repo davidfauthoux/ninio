@@ -13,7 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class SslSocketListening implements SocketListening {
-	private static final Logger LOGGER = LoggerFactory.getLogger(CopyOfSslSocketListening.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SslSocketListening.class);
 
 	private final ByteBufferAllocator allocator;
 	private final SocketListening wrappee;
