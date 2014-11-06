@@ -88,9 +88,12 @@ public final class SslReady implements Ready {
 				}
 			}
 			
-			private boolean receive() {
+			private boolean receive(boolean force) {
 				if (received.isEmpty()) {
-					return false;
+					if (!force) {
+						return false;
+					}
+					received.addFirst(ByteBuffer.allocate(0));
 				}
 
 				boolean underflow = false;
@@ -190,14 +193,14 @@ public final class SslReady implements Ready {
 						}
 						break;
 					case NEED_UNWRAP:
-						if (!receive()) {
+						if (!receive(true)) {
 							return;
 						}
 						break;
 					case FINISHED:
 						break;
 					case NOT_HANDSHAKING:
-						if (!send() && !receive()) {
+						if (!send() && !receive(false)) {
 							return;
 						}
 						break;
@@ -211,7 +214,7 @@ public final class SslReady implements Ready {
 					return;
 				}
 				
-				received.add(buffer);
+				received.addLast(buffer);
 				doContinue();
 			}
 			
@@ -232,7 +235,7 @@ public final class SslReady implements Ready {
 							return;
 						}
 
-						sent.add(buffer);
+						sent.addLast(buffer);
 						doContinue();
 					}
 					

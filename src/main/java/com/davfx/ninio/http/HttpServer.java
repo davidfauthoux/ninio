@@ -56,7 +56,7 @@ public final class HttpServer {
 		};
 		
 		if (trust != null) {
-			listening = new SslSocketListening(trust, listening);
+			listening = new SslSocketListening(trust, queue.allocator(), listening);
 		}
 		
 		Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
