@@ -6,14 +6,14 @@ import java.io.InputStreamReader;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.ninio.ssh.SshClient;
+import com.davfx.ninio.ssh.SshClientConfigurator;
 
 public class TestSshClient {
 	public static void main(String[] args) throws Exception {
-		new SshClient().withHost("172.17.10.31").withLogin("louser").withPassword("pass").connect(new ReadyConnection() {
+		new SshClient(new SshClientConfigurator().withHost("172.17.10.31").withLogin("louser").withPassword("pass")).connect(new ReadyConnection() {
 			@Override
 			public void failed(IOException e) {
 				System.out.println("FAILED");

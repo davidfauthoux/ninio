@@ -8,11 +8,12 @@ import java.nio.channels.FileChannel;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.ftp.FtpClient;
+import com.davfx.ninio.ftp.FtpClientConfigurator;
 import com.davfx.ninio.ftp.FtpClientHandler;
 
 public class TestFtpClient {
 	public static void main(String[] args) throws Exception {
-		new FtpClient().withHost("ftpperso.free.fr").withLogin("david.fauthoux").withPassword("orod,ove").connect(new FtpClientHandler() {
+		new FtpClient(new FtpClientConfigurator().withHost("ftpperso.free.fr").withLogin("david.fauthoux").withPassword("orod,ove")).connect(new FtpClientHandler() {
 			@Override
 			public void close() {
 				System.out.println("CLOSE");

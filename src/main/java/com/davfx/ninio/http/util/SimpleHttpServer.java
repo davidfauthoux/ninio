@@ -29,8 +29,8 @@ public final class SimpleHttpServer implements Closeable {
 		this(new HttpServerConfigurator(), true);
 	}
 	
-	public SimpleHttpServer(int port) throws IOException {
-		this(new HttpServerConfigurator().withPort(port), true);
+	public static SimpleHttpServer bind(int port) throws IOException {
+		return new SimpleHttpServer(new HttpServerConfigurator().withPort(port), true);
 	}
 	
 	@Override

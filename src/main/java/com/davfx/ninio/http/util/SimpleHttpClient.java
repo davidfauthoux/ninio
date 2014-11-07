@@ -62,6 +62,7 @@ public final class SimpleHttpClient implements Closeable {
 		return this;
 	}
 	public SimpleHttpClient secure(boolean secure) {
+		this.secure = secure;
 		if (secure) {
 			address = new Address(address.getHost(), Http.DEFAULT_SECURE_PORT);
 		} else {
@@ -78,6 +79,42 @@ public final class SimpleHttpClient implements Closeable {
 		this.path = path;
 		return this;
 	}
+	
+	public SimpleHttpClient withUrl(String url) {
+		String u;
+		int defaultPort;
+		if (url.startsWith(Http.PROTOCOL)) {
+			u = url.substring(Http.PROTOCOL.length());
+			defaultPort = Http.DEFAULT_PORT;
+			secure = false;
+		} else if (url.startsWith(Http.SECURE_PROTOCOL)) {
+			u = url.substring(Http.SECURE_PROTOCOL.length());
+			defaultPort = Http.DEFAULT_SECURE_PORT;
+			secure = true;
+		} else {
+			throw new IllegalArgumentException("Invalid protocol: " + url);
+		}
+
+		int i = u.indexOf(Http.PATH_SEPARATOR);
+		if (i < 0) {
+			i = u.length();
+		}
+		String hostPort = u.substring(0, i);
+		int j = hostPort.indexOf(Http.PORT_SEPARATOR);
+		if (j < 0) {
+			address = new Address(hostPort, defaultPort);
+		} else {
+			address = new Address(hostPort.substring(0, j), Integer.parseInt(hostPort.substring(j + 1)));
+		}
+		
+		path = u.substring(i);
+		if (path.isEmpty()) {
+			path = String.valueOf(Http.PATH_SEPARATOR);
+		}
+		
+		return this;
+	}
+	
 	public SimpleHttpClient withMethod(HttpRequest.Method method) {
 		this.method = method;
 		return this;

@@ -7,7 +7,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.regex.Pattern;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferAllocator;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
@@ -15,13 +14,16 @@ import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpClientConfigurator;
 import com.davfx.ninio.http.HttpServer;
+import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.util.PatternDispatchHttpServerHandler;
 import com.davfx.ninio.http.websocket.WebsocketHttpServerHandler;
 import com.davfx.ninio.http.websocket.WebsocketReady;
 import com.davfx.ninio.telnet.TelnetClient;
+import com.davfx.ninio.telnet.TelnetClientConfigurator;
 import com.davfx.ninio.telnet.TelnetClientHandler;
 import com.google.common.base.Charsets;
 
@@ -42,8 +44,9 @@ Sec-WebSocket-Protocol: chat
 public class CopyOfTestWsServer {
 	public static void main(String[] args) throws Exception {
 		final ScheduledExecutorService eee = Executors.newSingleThreadScheduledExecutor(); 
-		try (Queue queue = new Queue(); HttpClient ccc = new HttpClient(queue, null)) {
-			new HttpServer(queue, new Address(8080), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue()) {
+			final HttpClient ccc = new HttpClient(new HttpClientConfigurator(queue));
+			new HttpServer(new HttpServerConfigurator(queue).withPort(8080), new HttpServerHandlerFactory() {
 				@Override
 				public void failed(IOException e) {
 				}
@@ -84,12 +87,12 @@ public class CopyOfTestWsServer {
 				}
 			});
 
-			new TelnetClient().withQueue(queue).withAddress(new Address("localhost", 8080)).override(new ReadyFactory() {
+			new TelnetClient(new TelnetClientConfigurator(queue).withAddress(new Address("localhost", 8080)).override(new ReadyFactory() {
 				@Override
 				public Ready create(Queue queue) {
 					return new WebsocketReady(ccc);
 				}
-			}).connect(new TelnetClientHandler() {
+			})).connect(new TelnetClientHandler() {
 				@Override
 				public void failed(IOException e) {
 					System.out.println("@ FAILED");

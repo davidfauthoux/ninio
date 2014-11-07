@@ -25,7 +25,7 @@ import com.davfx.ninio.proxy.Reproxy;
 public class TestClient {
 	public static void main(String[] args) throws Exception {
 		System.out.println("LAUNCHING HTTP SERVER");
-		new SimpleHttpServer(8080).start(new DefaultSimpleHttpServerHandler() {
+		SimpleHttpServer.bind(8080).start(new DefaultSimpleHttpServerHandler() {
 			@Override
 			public String get(String path, Parameters parameters) {
 				return "ECHO GET " + path + " " + parameters;

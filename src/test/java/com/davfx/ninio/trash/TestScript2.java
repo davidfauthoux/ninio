@@ -9,15 +9,9 @@ import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
 import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.script.BasicScript;
-import com.davfx.ninio.script.Script;
-import com.davfx.ninio.script.SimpleScriptRunner;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.script.util.AllAvailableScriptRunner;
-import com.davfx.ninio.script.util.CallingEndScriptRunner;
-import com.davfx.util.PrependIterable;
-import com.google.common.base.Function;
-import com.google.common.collect.Iterables;
 import com.google.gson.JsonElement;
 
 public class TestScript2 {
@@ -45,10 +39,9 @@ public class TestScript2 {
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
-			r
-			.telnetSocketOverride(proxy.socket())
-			.snmpDatagramOverride(proxy.datagram())
-			.pingDatagramOverride(proxy.of("ping"));
+			r.telnetConfigurator.override(proxy.socket());
+			r.snmpConfigurator.override(proxy.datagram());
+			r.pingConfigurator.override(proxy.of("ping"));
 			}
 
 			A aa = new A("outside");

@@ -4,13 +4,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 
-import com.davfx.ninio.telnet.TelnetClient;
-import com.davfx.ninio.telnet.util.WaitingTelnetClient;
-import com.davfx.ninio.telnet.util.WaitingTelnetClientHandler;
+import com.davfx.ninio.remote.WaitingRemoteClient;
+import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
+import com.davfx.ninio.remote.WaitingRemoteClientHandler;
+import com.davfx.ninio.remote.telnet.TelnetRemoteConnector;
+import com.davfx.ninio.telnet.TelnetClientConfigurator;
 
 public class TestTelnetClient {
 	public static void main(String[] args) throws Exception {
-		new WaitingTelnetClient(new TelnetClient()).withTimeout(1d).connect(new WaitingTelnetClientHandler() {
+		new WaitingRemoteClient(new WaitingRemoteClientConfigurator().withTimeout(1d), new TelnetRemoteConnector(new TelnetClientConfigurator())).connect(new WaitingRemoteClientHandler() {
 			@Override
 			public void failed(IOException e) {
 				System.out.println("FAILED");
@@ -33,7 +35,7 @@ public class TestTelnetClient {
 								if (line.equals("^C")) {
 									break;
 								}
-								callback.send(line, new WaitingTelnetClientHandler.Callback.SendCallback() {
+								callback.send(line, new WaitingRemoteClientHandler.Callback.SendCallback() {
 									@Override
 									public void failed(IOException e) {
 										System.out.println("# FAILED");

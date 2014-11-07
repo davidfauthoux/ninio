@@ -14,6 +14,7 @@ import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpServer;
+import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.util.JsonDirectoryHttpServerHandler;
@@ -40,7 +41,7 @@ Sec-WebSocket-Protocol: chat
 public class TestWsServer {
 	public static void main(String[] args) throws Exception {
 		try (Queue queue = new Queue()) {
-			new HttpServer(queue, new Address(8080), new HttpServerHandlerFactory() {
+			new HttpServer(new HttpServerConfigurator(queue).withAddress(new Address(8080)), new HttpServerHandlerFactory() {
 				@Override
 				public void failed(IOException e) {
 				}

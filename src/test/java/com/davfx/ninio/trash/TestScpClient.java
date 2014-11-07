@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 
 import com.davfx.ninio.common.Failable;
+import com.davfx.ninio.ssh.SshClientConfigurator;
 import com.davfx.ninio.ssh.util.ScpClient;
 
 public class TestScpClient {
@@ -15,7 +16,7 @@ public class TestScpClient {
 			}
 		}));
 		*/
-		new ScpClient().withHost("172.17.10.31").withLogin("louser").withPassword("pass").put("/home/louser/jsonFile141ubacupibindumrn2at4asg a.json_", new File("jsonFile141ubacupibindumrn2at4asga.json_"), new Failable() {
+		new ScpClient(new SshClientConfigurator().withHost("172.17.10.31").withLogin("louser").withPassword("pass")).put("/home/louser/jsonFile141ubacupibindumrn2at4asg a.json_", new File("jsonFile141ubacupibindumrn2at4asga.json_"), new Failable() {
 			@Override
 			public void failed(IOException e) {
 				System.out.println(e);

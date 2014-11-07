@@ -6,17 +6,20 @@ import java.io.InputStreamReader;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Queue;
+import com.davfx.ninio.remote.WaitingRemoteClientCache;
+import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
+import com.davfx.ninio.remote.WaitingRemoteClientHandler;
+import com.davfx.ninio.remote.telnet.TelnetRemoteConnectorFactory;
 import com.davfx.ninio.telnet.TelnetClient;
-import com.davfx.ninio.telnet.util.WaitingTelnetClientCache;
-import com.davfx.ninio.telnet.util.WaitingTelnetClientHandler;
+import com.davfx.ninio.telnet.TelnetClientConfigurator;
 
 public class TestClientCache {
 	public static void main(String[] args) throws Exception {
-		try (Queue q = new Queue(); WaitingTelnetClientCache ccc = new WaitingTelnetClientCache(q)) {
+		try (Queue q = new Queue(); WaitingRemoteClientCache ccc = new WaitingRemoteClientCache(new WaitingRemoteClientConfigurator(), q, new TelnetRemoteConnectorFactory(new TelnetClientConfigurator(q)))) {
 			q.post(new Runnable() {
 				@Override
 				public void run() {
-					ccc.get(new Address("localhost", TelnetClient.DEFAULT_PORT)).init("davidfauthoux").init("orod,ove").connect(new WaitingTelnetClientHandler() {
+					ccc.get(new Address("localhost", TelnetClient.DEFAULT_PORT)).init("davidfauthoux").init("orod,ove").connect(new WaitingRemoteClientHandler() {
 						@Override
 						public void failed(IOException e) {
 							System.out.println("FAILED");
@@ -32,7 +35,7 @@ public class TestClientCache {
 								@Override
 								public void run() {
 									for (String line : new String[] { "ls" }) {
-										callback.send(line, new WaitingTelnetClientHandler.Callback.SendCallback() {
+										callback.send(line, new WaitingRemoteClientHandler.Callback.SendCallback() {
 											@Override
 											public void failed(IOException e) {
 												System.out.println("#@ FAILED");
@@ -53,7 +56,7 @@ public class TestClientCache {
 			q.post(new Runnable() {
 				@Override
 				public void run() {
-					ccc.get(new Address("localhost", TelnetClient.DEFAULT_PORT)).connect(new WaitingTelnetClientHandler() {
+					ccc.get(new Address("localhost", TelnetClient.DEFAULT_PORT)).connect(new WaitingRemoteClientHandler() {
 						@Override
 						public void failed(IOException e) {
 							System.out.println("2 FAILED");
@@ -77,7 +80,7 @@ public class TestClientCache {
 											if (line.equals("^C")) {
 												break;
 											}
-											callback.send(line, new WaitingTelnetClientHandler.Callback.SendCallback() {
+											callback.send(line, new WaitingRemoteClientHandler.Callback.SendCallback() {
 												@Override
 												public void failed(IOException e) {
 													System.out.println("2 #@ FAILED");

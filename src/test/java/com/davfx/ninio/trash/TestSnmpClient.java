@@ -5,6 +5,7 @@ import java.io.IOException;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.SnmpClient;
+import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 
 public class TestSnmpClient {
@@ -26,10 +27,10 @@ public class TestSnmpClient {
 	// http://www.frameip.com/snmp/
 	// http://msdn.microsoft.com/en-us/library/windows/desktop/aa378974(v=vs.85).aspx
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException {
 		int test = 0x7;
 		if ((test & 0x1) != 0) {
-			new SnmpClient().withCommunity("public").withLoginPassword("priv2", "mypassword", "SHA", "priv2", "mypassword", "AES").connect(new SnmpClientHandler() {
+			new SnmpClient(new SnmpClientConfigurator().withCommunity("public").withLoginPassword("priv2", "mypassword", "SHA", "priv2", "mypassword", "AES")).connect(new SnmpClientHandler() {
 			//new SnmpClient().withCommunity("public").withLoginPassword("priv", "mypassword", "MD5", "priv", "mypassword", "DES").connect(new SnmpClientHandler() {
 				
 				@Override
@@ -95,7 +96,7 @@ public class TestSnmpClient {
 			});
 		}
 		if ((test & 0x2) != 0) {
-			new SnmpClient().withCommunity("public").withLoginPassword("priv", "mypassword", "MD5", "priv", "mypassword", "DES").connect(new SnmpClientHandler() {
+			new SnmpClient(new SnmpClientConfigurator().withCommunity("public").withLoginPassword("priv", "mypassword", "MD5", "priv", "mypassword", "DES")).connect(new SnmpClientHandler() {
 				
 				@Override
 				public void failed(IOException e) {
@@ -133,7 +134,7 @@ public class TestSnmpClient {
 			});
 		}
 		if ((test & 0x4) != 0) {
-			new SnmpClient().withCommunity("public").connect(new SnmpClientHandler() {
+			new SnmpClient(new SnmpClientConfigurator().withCommunity("public")).connect(new SnmpClientHandler() {
 				
 				@Override
 				public void failed(IOException e) {

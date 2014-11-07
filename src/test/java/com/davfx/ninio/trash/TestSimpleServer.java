@@ -7,7 +7,7 @@ import com.davfx.ninio.http.util.SimpleHttpServer;
 
 public class TestSimpleServer {
 	public static void main(String[] args) throws Exception {
-		new SimpleHttpServer().withPort(8080).start(new DefaultSimpleHttpServerHandler() {
+		SimpleHttpServer.bind(8080).start(new DefaultSimpleHttpServerHandler() {
 			@Override
 			public String get(String path, Parameters parameters) {
 				return "ECHO GET " + path + " " + parameters;
