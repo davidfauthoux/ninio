@@ -1,7 +1,6 @@
 package com.davfx.ninio.ping;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -23,11 +22,13 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 
 	private static final int ERROR_CODE = 1;
 
+	private final SyncPing syncPing;
 	private final int maxNumberOfSimultaneousClients;
 	private ExecutorService clientExecutor;
 
-	public InternalPingServerReadyFactory(int maxNumberOfSimultaneousClients) {
+	public InternalPingServerReadyFactory(int maxNumberOfSimultaneousClients, SyncPing syncPing) {
 		this.maxNumberOfSimultaneousClients = maxNumberOfSimultaneousClients;
+		this.syncPing = syncPing;
 	}
 	
 	@Override
@@ -90,25 +91,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 								int k = 0;
 								for (int i = 0; i < numberOfRetries; i++) {
 									long t = System.currentTimeMillis();
-									boolean reachable;
-									InetAddress toReach;
-									try {
-										toReach = InetAddress.getByAddress(ip);
-									} catch (IOException ioe) {
-										toReach = null;
-										reachable = false;
-									}
-									if (toReach != null) {
-										try {
-											reachable = toReach.isReachable((int) (retryTimeout * 1000d));
-										} catch (IOException ioe) {
-											LOGGER.debug("Unreachable", ioe);
-											reachable = false;
-										}
-										LOGGER.trace("{} reachable? {}", toReach, reachable);
-									} else {
-										reachable = false;
-									}
+									boolean reachable = syncPing.isReachable(ip, retryTimeout);
 									double elapsed = (System.currentTimeMillis() - t) / 1000d;
 									times[k] = elapsed;
 									if (reachable) {

@@ -26,13 +26,15 @@ public final class PingClientConfigurator implements Closeable {
 	public double repeatTime = ConfigUtils.getDuration(CONFIG, "ping.repeatTime");
 	public double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ping.timeoutFromBeginning");
 	public int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
+	
+	private final SyncPing syncPing = new PureJavaSyncPing(); //TODO Implement differently and init according to conf
 
 	private PingClientConfigurator(Queue queue, boolean queueToClose, ScheduledExecutorService repeatExecutor, boolean repeatExecutorToShutdown) {
 		this.queue = queue;
 		this.queueToClose = queueToClose;
 		this.repeatExecutor = repeatExecutor;
 		this.repeatExecutorToShutdown = repeatExecutorToShutdown;
-		readyFactory = new InternalPingServerReadyFactory(maxSimultaneousClients);
+		readyFactory = new InternalPingServerReadyFactory(maxSimultaneousClients, syncPing);
 	}
 	
 	public PingClientConfigurator() throws IOException {

@@ -22,16 +22,19 @@ public final class PingServer {
 	private static final Config CONFIG = ConfigUtils.load(PingServer.class);
 
 	public static void main(String[] args) {
-		new PingServer(CONFIG.getInt("ping.port"), CONFIG.getInt("ping.maxSimultaneousClients"));
+		new PingServer(CONFIG.getInt("ping.port"), CONFIG.getInt("ping.maxSimultaneousClients"), new PureJavaSyncPing());
 	}
 	
 	private static final int ERROR_CODE = 1;
 	private static final int BUFFER_SIZE = 1024;
+	
+	private final SyncPing syncPing;
 	private final int port;
 	private final ExecutorService clientExecutor;
 	
-	public PingServer(int port, int maxNumberOfSimultaneousClients) {
+	public PingServer(int port, int maxNumberOfSimultaneousClients, SyncPing syncPing) {
 		this.port = port;
+		this.syncPing = syncPing;
 		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients);
 	}
 	
@@ -79,25 +82,7 @@ public final class PingServer {
 								int k = 0;
 								for (int i = 0; i < numberOfRetries; i++) {
 									long t = System.currentTimeMillis();
-									boolean reachable;
-									InetAddress toReach;
-									try {
-										toReach = InetAddress.getByAddress(ip);
-									} catch (IOException ioe) {
-										toReach = null;
-										reachable = false;
-									}
-									if (toReach != null) {
-										try {
-											reachable = toReach.isReachable((int) (retryTimeout * 1000d));
-										} catch (IOException ioe) {
-											LOGGER.debug("Unreachable", ioe);
-											reachable = false;
-										}
-										LOGGER.trace("{} reachable? {}", toReach, reachable);
-									} else {
-										reachable = false;
-									}
+									boolean reachable = syncPing.isReachable(ip, retryTimeout);
 									double elapsed = (System.currentTimeMillis() - t) / 1000d;
 									times[k] = elapsed;
 									if (reachable) {
