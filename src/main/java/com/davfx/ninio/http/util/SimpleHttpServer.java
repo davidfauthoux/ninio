@@ -5,64 +5,43 @@ import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.Queue;
-import com.davfx.ninio.common.Trust;
-import com.davfx.ninio.http.Http;
+import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.http.HttpServer;
+import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 
-public final class SimpleHttpServer {
+public final class SimpleHttpServer implements Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SimpleHttpServer.class);
 
-	private Queue queue = null;
-	private Trust trust = null;
-	private Address address = new Address("localhost", Http.DEFAULT_PORT);
-	private int port = -1;
+	private final HttpServerConfigurator configurator;
+	private final boolean configuratorToClose;
 	
-	public SimpleHttpServer() {
-	}
-	
-	public SimpleHttpServer withTrust(Trust trust) {
-		this.trust = trust;
-		return this;
-	}
-	public SimpleHttpServer withQueue(Queue queue) {
-		this.queue = queue;
-		return this;
-	}
-	public SimpleHttpServer withAddress(Address address) {
-		this.address = address;
-		return this;
-	}
-	public SimpleHttpServer withPort(int port) {
-		this.port = port;
-		return this;
+	private SimpleHttpServer(HttpServerConfigurator configurator, boolean configuratorToClose) {
+		this.configurator = configurator;
+		this.configuratorToClose = configuratorToClose;
 	}
 	
-	public AutoCloseable start(final SimpleHttpServerHandler handler) {
-		final Queue q;
-		final boolean shouldCloseQueue;
-		if (queue == null) {
-			try {
-				q = new Queue();
-			} catch (IOException e) {
-				LOGGER.error("Queue could not be created", e);
-				return null;
-			}
-			shouldCloseQueue = true;
-		} else {
-			q = queue;
-			shouldCloseQueue = false;
+	public SimpleHttpServer(HttpServerConfigurator configurator) {
+		this(configurator, false);
+	}
+	public SimpleHttpServer() throws IOException {
+		this(new HttpServerConfigurator(), true);
+	}
+	
+	public SimpleHttpServer(int port) throws IOException {
+		this(new HttpServerConfigurator().withPort(port), true);
+	}
+	
+	@Override
+	public void close() {
+		if (configuratorToClose) {
+			configurator.close();
 		}
-
-		Address a = address;
-		if (port >= 0) {
-			a = new Address(port);
-		}
-		
-		new HttpServer(q, trust, a, new HttpServerHandlerFactory() {
+	}
+	
+	public void start(final SimpleHttpServerHandler handler) {
+		new HttpServer(configurator, new HttpServerHandlerFactory() {
 			@Override
 			public HttpServerHandler create() {
 				return new HttpServerHandlerToSimpleHttpServerHandler(handler);
@@ -70,28 +49,13 @@ public final class SimpleHttpServer {
 			
 			@Override
 			public void closed() {
-				if (shouldCloseQueue) {
-					q.close();
-				}
 				LOGGER.debug("Server closed");
 			}
 
 			@Override
 			public void failed(IOException e) {
-				if (shouldCloseQueue) {
-					q.close();
-				}
 				LOGGER.error("Server could not be launched", e);
 			}
 		});
-		
-		return new AutoCloseable() {
-			@Override
-			public void close() {
-				if (shouldCloseQueue) {
-					q.close();
-				}
-			}
-		};
 	}
 }

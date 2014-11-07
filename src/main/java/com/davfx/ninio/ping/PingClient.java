@@ -10,155 +10,62 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.util.ConfigUtils;
 import com.davfx.util.CrcUtils;
 import com.davfx.util.DateUtils;
-import com.typesafe.config.Config;
 
-public final class PingClient {
+public final class PingClient implements Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingClient.class);
 
-	private static final Config CONFIG = ConfigUtils.load(PingClient.class);
-	public static final int DEFAULT_PORT = CONFIG.getInt("ping.port");
+	private final PingClientConfigurator configurator;
+	private final Set<InstanceMapper> instanceMappers = new HashSet<>();
+	private volatile boolean closed = false;
 
-	private Queue queue = null;
-	private Address address = new Address("localhost", DEFAULT_PORT);
-	private String host = null;
-	private int port = -1;
-	private double minTimeToRepeat = ConfigUtils.getDuration(CONFIG, "ping.minTimeToRepeat");
-
-	private double repeatTime = ConfigUtils.getDuration(CONFIG, "ping.repeatTime");
-	private ScheduledExecutorService repeatExecutor = null;
-
-	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ping.timeoutFromBeginning");
-
-	private int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
-
-	private ReadyFactory readyFactory = null;
-
-	public PingClient() {
-	}
-	
-	public PingClient withMinTimeToRepeat(double minTimeToRepeat) {
-		this.minTimeToRepeat = minTimeToRepeat;
-		return this;
-	}
-	public PingClient withRepeatTime(double repeatTime) {
-		this.repeatTime = repeatTime;
-		return this;
-	}
-
-	public PingClient withTimeoutFromBeginning(double timeoutFromBeginning) {
-		this.timeoutFromBeginning = timeoutFromBeginning;
-		return this;
-	}
-
-	public PingClient withMaxSimultaneousClients(int maxSimultaneousClients) {
-		this.maxSimultaneousClients = maxSimultaneousClients;
-		return this;
-	}
-
-	public PingClient withQueue(Queue queue, ScheduledExecutorService repeatExecutor) {
-		this.queue = queue;
-		this.repeatExecutor = repeatExecutor;
-		return this;
-	}
-	
-	public PingClient withHost(String host) {
-		this.host = host;
-		return this;
-	}
-	public PingClient withPort(int port) {
-		this.port = port;
-		return this;
-	}
-	public PingClient withAddress(Address address) {
-		this.address = address;
-		return this;
-	}
-
-	public PingClient override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
-	}
-	
-	public void connect(final PingClientHandler clientHandler) {
-		final Queue q;
-		final ScheduledExecutorService re;
-		final boolean shouldCloseQueue;
+	public PingClient(final PingClientConfigurator configurator) {
+		this.configurator = configurator;
 		
-		final ReadyFactory rf;
-		final InternalPingServerReadyFactory readyFactoryToClose;
-		if (readyFactory == null) {
-			readyFactoryToClose = new InternalPingServerReadyFactory(maxSimultaneousClients);
-			rf = readyFactoryToClose;
-		} else {
-			rf = readyFactory;
-			readyFactoryToClose = null;
-		}
-		
-		if (queue == null) {
-			try {
-				q = new Queue();
-			} catch (IOException e) {
-				clientHandler.failed(e);
-				return;
-			}
-			re = Executors.newSingleThreadScheduledExecutor();
-			shouldCloseQueue = true;
-		} else {
-			q = queue;
-			re = repeatExecutor;
-			shouldCloseQueue = false;
-		}
-
-		final Address a;
-		if (host != null) {
-			if (port < 0) {
-				a = new Address(host, address.getPort());
-			} else {
-				a = new Address(host, port);
-			}
-		} else {
-			a = address;
-		}
-		
-		final Set<InstanceMapper> instanceMappers = new HashSet<>();
-		re.scheduleAtFixedRate(new Runnable() {
+		configurator.repeatExecutor.scheduleAtFixedRate(new Runnable() {
 			@Override
 			public void run() {
-				q.post(new Runnable() {
+				if (closed) {
+					throw new RuntimeException("Normal closed");
+				}
+				
+				configurator.queue.post(new Runnable() {
 					@Override
 					public void run() {
 						Date now = new Date();
 						for (InstanceMapper i : instanceMappers) {
-							i.repeat(now, minTimeToRepeat, timeoutFromBeginning);
+							i.repeat(now, configurator.minTimeToRepeat, configurator.timeoutFromBeginning);
 						}
 					}
 				});
 			}
-		}, 0, (long) (repeatTime * 1000d), TimeUnit.MILLISECONDS);
-
-		q.post(new Runnable() {
+		}, 0, (long) (configurator.repeatTime * 1000d), TimeUnit.MILLISECONDS);
+	}
+	
+	@Override
+	public void close() {
+		closed = true;
+	}
+	
+	public void connect(final PingClientHandler clientHandler) {
+		configurator.queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = rf.create(q);
+				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
-				ready.connect(a, new ReadyConnection() {
+				ready.connect(configurator.address, new ReadyConnection() {
 					private final InstanceMapper instanceMapper = new InstanceMapper();
 
 					@Override
@@ -204,13 +111,6 @@ public final class PingClient {
 					
 					@Override
 					public void failed(IOException e) {
-						if (shouldCloseQueue) {
-							re.shutdown();
-							q.close();
-						}
-						if (readyFactoryToClose != null) {
-							readyFactoryToClose.close();
-						}
 						if (instanceMappers.remove(instanceMapper)) {
 							clientHandler.failed(e);
 						}
@@ -230,14 +130,6 @@ public final class PingClient {
 								}
 								
 								write.close();
-
-								if (shouldCloseQueue) {
-									re.shutdown();
-									q.close();
-								}
-								if (readyFactoryToClose != null) {
-									readyFactoryToClose.close();
-								}
 							}
 							@Override
 							public void ping(PingableAddress address, int numberOfRetries, double timeBetweenRetries, double retryTimeout, PingCallback callback) {
@@ -250,13 +142,6 @@ public final class PingClient {
 					
 					@Override
 					public void close() {
-						if (shouldCloseQueue) {
-							re.shutdown();
-							q.close();
-						}
-						if (readyFactoryToClose != null) {
-							readyFactoryToClose.close();
-						}
 						if (instanceMappers.remove(instanceMapper)) {
 							instanceMapper.closedByPeer();
 						}

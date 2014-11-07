@@ -3,11 +3,11 @@ package com.davfx.ninio.script.util;
 import java.io.IOException;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.remote.WaitingRemoteClientCache;
+import com.davfx.ninio.remote.WaitingRemoteClientHandler;
 import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
-import com.davfx.ninio.ssh.SshClient;
-import com.davfx.ninio.telnet.util.WaitingTelnetClientCache;
-import com.davfx.ninio.telnet.util.WaitingTelnetClientHandler;
+import com.davfx.ninio.ssh.SshClientConfigurator;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -16,9 +16,9 @@ import com.google.gson.JsonPrimitive;
 public final class WaitingSshAvailable {
 	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(WaitingSshAvailable.class).getString("script.functions.ssh");
 
-	private final WaitingTelnetClientCache client;
+	private final WaitingRemoteClientCache client;
 
-	public WaitingSshAvailable(WaitingTelnetClientCache client) {
+	public WaitingSshAvailable(WaitingRemoteClientCache client) {
 		this.client = client;
 	}
 	
@@ -28,8 +28,8 @@ public final class WaitingSshAvailable {
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
-				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SshClient.DEFAULT_PORT));
-				WaitingTelnetClientCache.Connectable c = client.get(address);
+				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SshClientConfigurator.DEFAULT_PORT));
+				WaitingRemoteClientCache.Connectable c = client.get(address);
 
 				final String command = JsonUtils.getString(r, "command", "");
 				JsonElement init = r.get("init");
@@ -39,7 +39,7 @@ public final class WaitingSshAvailable {
 					}
 				}
 
-				c.connect(new WaitingTelnetClientHandler() {
+				c.connect(new WaitingRemoteClientHandler() {
 					@Override
 					public void failed(IOException e) {
 						JsonObject r = new JsonObject();
@@ -51,7 +51,7 @@ public final class WaitingSshAvailable {
 					}
 					@Override
 					public void launched(final String init, Callback callback) {
-						callback.send(command, new WaitingTelnetClientHandler.Callback.SendCallback() {
+						callback.send(command, new WaitingRemoteClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {
 								JsonObject r = new JsonObject();

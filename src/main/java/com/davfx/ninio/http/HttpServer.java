@@ -6,18 +6,13 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.Listen;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueListen;
 import com.davfx.ninio.common.SocketListen;
 import com.davfx.ninio.common.SocketListening;
 import com.davfx.ninio.common.SslSocketListening;
-import com.davfx.ninio.common.Trust;
 
 public final class HttpServer {
-	public HttpServer(Queue queue, Address serverAddress, HttpServerHandlerFactory factory) {
-		this(queue, null, serverAddress, factory);
-	}
-	public HttpServer(Queue queue, final Trust trust, Address serverAddress, final HttpServerHandlerFactory factory) {
+	public HttpServer(final HttpServerConfigurator configurator, final HttpServerHandlerFactory factory) {
 		SocketListening listening = new SocketListening() {
 			@Override
 			public CloseableByteBufferHandler connected(Address address, CloseableByteBufferHandler connection) {
@@ -41,7 +36,7 @@ public final class HttpServer {
 						}
 					};
 				}
-				return new HttpRequestReader(address, trust != null, h, connection);
+				return new HttpRequestReader(address, configurator.trust != null, h, connection);
 			}
 			
 			@Override
@@ -55,12 +50,12 @@ public final class HttpServer {
 			}
 		};
 		
-		if (trust != null) {
-			listening = new SslSocketListening(trust, queue.allocator(), listening);
+		if (configurator.trust != null) {
+			listening = new SslSocketListening(configurator.trust, configurator.queue.allocator(), listening);
 		}
 		
-		Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
-		listen = new QueueListen(queue, listen);
-		listen.listen(serverAddress, listening);
+		Listen listen = new SocketListen(configurator.queue.getSelector(), configurator.queue.allocator());
+		listen = new QueueListen(configurator.queue, listen);
+		listen.listen(configurator.address, listening);
 	}
 }

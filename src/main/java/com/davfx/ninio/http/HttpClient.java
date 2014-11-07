@@ -8,8 +8,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -17,20 +15,14 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.ByteBufferHandler;
+import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.ninio.common.SocketReadyFactory;
-import com.davfx.ninio.common.SslReadyFactory;
-import com.davfx.ninio.common.Trust;
-import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
-import com.typesafe.config.Config;
 
-public final class HttpClient implements AutoCloseable {
+public final class HttpClient implements Closeable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.Recycler.class);
 	
@@ -42,41 +34,21 @@ public final class HttpClient implements AutoCloseable {
 		public boolean closed = false;
 	}
 
-	private static final Config CONFIG = ConfigUtils.load(HttpClient.class);
-	
+	private final HttpClientConfigurator configurator;
 	private final Map<Address, Deque<Recycler>> recyclers = new HashMap<Address, Deque<Recycler>>();
-	private final Queue queue;
-	private ScheduledExecutorService recyclersCloserExecutorToClose;
+	private volatile boolean closed = false;
 
-	private final int defaultMaxRedirectLevels;
-	private final double recyclersTimeToLive;
-
-	private ReadyFactory readyFactory;
-	private ReadyFactory secureReadyFactory;
-
-	public HttpClient(Queue queue, Trust trust) {
-		this(queue, trust, null);
-	}
-	public HttpClient(final Queue queue, Trust trust, ScheduledExecutorService recyclersCloserExecutor) {
-		this.queue = queue;
+	public HttpClient(final HttpClientConfigurator configurator) {
+		this.configurator = configurator;
 		
-		readyFactory = new SocketReadyFactory();
-		secureReadyFactory = new SslReadyFactory(trust);
-		
-		defaultMaxRedirectLevels = CONFIG.getInt("http.redirect.max.default");
-		recyclersTimeToLive = ConfigUtils.getDuration(CONFIG, "http.recyclers.ttl");
-		
-		if (recyclersCloserExecutor == null) {
-			recyclersCloserExecutor = Executors.newSingleThreadScheduledExecutor();
-			recyclersCloserExecutorToClose = recyclersCloserExecutor;
-		} else {
-			recyclersCloserExecutorToClose = null;
-		}
-		
-		recyclersCloserExecutor.scheduleAtFixedRate(new Runnable() {
+		configurator.recyclersCloserExecutor.scheduleAtFixedRate(new Runnable() {
 			@Override
 			public void run() {
-				queue.post(new Runnable() {
+				if (closed) {
+					throw new RuntimeException("Normal closed");
+				}
+				
+				configurator.queue.post(new Runnable() {
 					@Override
 					public void run() {
 						Date now = new Date();
@@ -98,40 +70,30 @@ public final class HttpClient implements AutoCloseable {
 					}
 				});
 			}
-		}, 0, (long) (ConfigUtils.getDuration(CONFIG, "http.recyclers.check") * 1000d), TimeUnit.MILLISECONDS);
-	}
-	
-	public HttpClient override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
-	}
-	public HttpClient overrideSecure(ReadyFactory readyFactory) {
-		secureReadyFactory = readyFactory;
-		return this;
+		}, 0, (long) (configurator.recyclersCheckTime * 1000d), TimeUnit.MILLISECONDS);
 	}
 	
 	@Override
 	public void close() {
-		if (recyclersCloserExecutorToClose != null) {
-			recyclersCloserExecutorToClose.shutdown();
-		}
+		closed = true;
 	}
 	
 	public void send(HttpRequest request, HttpClientHandler clientHandler) {
-		send(request, defaultMaxRedirectLevels, clientHandler);
+		send(request, configurator.maxRedirectLevels, clientHandler);
 	}
+
 	public void send(final HttpRequest request, int maxRedirectLevels, HttpClientHandler clientHandler) {
 		final HttpClientHandler handler = new RedirectHandler(maxRedirectLevels, 0, this, request, clientHandler);
-		queue.post(new Runnable() {
+		configurator.queue.post(new Runnable() {
 			@Override
 			public void run() {
 				final HttpResponseReader reader = new HttpResponseReader(handler);
 				if (request.getMethod() != HttpRequest.Method.GET) {
 					Ready ready;
 					if (request.isSecure()) {
-						ready = secureReadyFactory.create(queue);
+						ready = configurator.secureReadyFactory.create(configurator.queue);
 					} else {
-						ready = readyFactory.create(queue);
+						ready = configurator.readyFactory.create(configurator.queue);
 					}
 					ready.connect(request.getAddress(), new ReadyConnection() {
 						@Override
@@ -184,9 +146,9 @@ public final class HttpClient implements AutoCloseable {
 				newRecycler.closeDate = null;
 				Ready ready;
 				if (request.isSecure()) {
-					ready = secureReadyFactory.create(queue);
+					ready = configurator.secureReadyFactory.create(configurator.queue);
 				} else {
-					ready = readyFactory.create(queue);
+					ready = configurator.readyFactory.create(configurator.queue);
 				}
 				ready.connect(request.getAddress(), new ReadyConnection() {
 					private HttpResponseReader.RecyclingHandler recyclingHandler;
@@ -219,7 +181,7 @@ public final class HttpClient implements AutoCloseable {
 							public void recycle() {
 								newRecycler.reader = null;
 								newRecycler.handler = null;
-								newRecycler.closeDate = DateUtils.from(DateUtils.from(new Date()) + recyclersTimeToLive);
+								newRecycler.closeDate = DateUtils.from(DateUtils.from(new Date()) + configurator.recyclersTimeToLive);
 								Deque<Recycler> oldRecyclers = recyclers.get(request.getAddress());
 								if (oldRecyclers == null) {
 									oldRecyclers = new LinkedList<Recycler>();

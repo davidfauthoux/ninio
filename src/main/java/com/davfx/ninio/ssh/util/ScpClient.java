@@ -10,49 +10,17 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.ssh.SshClient;
+import com.davfx.ninio.ssh.SshClientConfigurator;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 
 public final class ScpClient {
-	private final SshClient client = new SshClient();
+	private final SshClient client;
 	
-	public ScpClient() {
-	}
-	
-	public ScpClient withQueue(Queue queue) {
-		client.withQueue(queue);
-		return this;
-	}
-	
-	public ScpClient withLogin(String login) {
-		client.withLogin(login);
-		return this;
-	}
-	public ScpClient withPassword(String password) {
-		client.withPassword(password);
-		return this;
-	}
-
-	public ScpClient withHost(String host) {
-		client.withHost(host);
-		return this;
-	}
-	public ScpClient withPort(int port) {
-		client.withPort(port);
-		return this;
-	}
-	public ScpClient withAddress(Address address) {
-		client.withAddress(address);
-		return this;
-	}
-	
-	public ScpClient override(ReadyFactory readyFactory) {
-		client.override(readyFactory);
-		return this;
+	public ScpClient(SshClientConfigurator configurator) {
+		client = new SshClient(configurator);
 	}
 	
 	public void get(String filePath, final FailableCloseableByteBufferHandler handler) {

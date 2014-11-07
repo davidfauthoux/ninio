@@ -13,11 +13,8 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.ninio.common.SocketReadyFactory;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
@@ -26,116 +23,34 @@ public final class SshClient {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshClient.class);
 
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
-
-	public static final int DEFAULT_PORT = 22;
 	public static final String EOL = "\n";
 
-	private Queue queue = null;
-	private Address address = new Address("localhost", DEFAULT_PORT);
-	private String host = null;
-	private int port = -1;
-	private String login = null;
-	private String password = null;
-	private SshPublicKey publicKey = null;
-
-	private ReadyFactory readyFactory = new SocketReadyFactory();
-	
+	private final SshClientConfigurator configurator;
 	private String exec = null;
 	
-	public SshClient() {
-	}
-	
-	public SshClient withQueue(Queue queue) {
-		this.queue = queue;
-		return this;
-	}
-	
-	public SshClient withLogin(String login) {
-		this.login = login;
-		return this;
-	}
-	public SshClient withPassword(String password) {
-		this.password = password;
-		return this;
-	}
-	
-	// TODO Test with PublicKeyLoader
-	public SshClient withPublicKey(SshPublicKey publicKey) {
-		this.publicKey = publicKey;
-		return this;
-	}
-
-	public SshClient withHost(String host) {
-		this.host = host;
-		return this;
-	}
-	public SshClient withPort(int port) {
-		this.port = port;
-		return this;
-	}
-	public SshClient withAddress(Address address) {
-		this.address = address;
-		return this;
-	}
-	
-	public SshClient override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
+	public SshClient(SshClientConfigurator configurator) {
+		this.configurator = configurator;
 	}
 	
 	public SshClient exec(String exec) {
 		this.exec = exec;
 		return this;
 	}
-	
+
 	public void connect(final ReadyConnection clientHandler) {
-		final Queue q;
-		final boolean shouldCloseQueue;
-		if (queue == null) {
-			try {
-				q = new Queue();
-			} catch (IOException e) {
-				clientHandler.failed(e);
-				return;
-			}
-			shouldCloseQueue = true;
-		} else {
-			q = queue;
-			shouldCloseQueue = false;
-		}
-
-		final Address a;
-		if (host != null) {
-			if (port < 0) {
-				a = new Address(host, address.getPort());
-			} else {
-				a = new Address(host, port);
-			}
-		} else {
-			a = address;
-		}
-
-		q.post(new Runnable() {
+		configurator.queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(q);
-				ready.connect(a, new ReadyConnection() {
-					private void closeAll() {
-						if (shouldCloseQueue) {
-							q.close();
-						}
-					}
-
+				Ready ready = configurator.readyFactory.create(configurator.queue);
+				ready.connect(configurator.address, new ReadyConnection() {
 					@Override
 					public void failed(IOException e) {
-						closeAll();
 						clientHandler.failed(e);
 					}
 
 					@Override
 					public void close() {
 						read.close();
-						closeAll();
 					}
 
 					private CloseableByteBufferHandler write;
@@ -196,7 +111,6 @@ public final class SshClient {
 							@Override
 							public void close() {
 								write.close();
-								closeAll();
 							}
 
 							@Override
@@ -372,7 +286,7 @@ public final class SshClient {
 										write.handle(null, b.finish());
 									} else if (command == SshUtils.SSH_MSG_SERVICE_ACCEPT) {
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_USERAUTH_REQUEST);
-										b.writeString(login);
+										b.writeString(configurator.login);
 										b.writeString("ssh-connection");
 										b.writeString("none");
 										write.handle(null, b.finish());
@@ -384,26 +298,26 @@ public final class SshClient {
 										List<String> methods = Splitter.on(',').splitToList(packet.readString());
 	
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_USERAUTH_REQUEST);
-										b.writeString(login);
+										b.writeString(configurator.login);
 										b.writeString("ssh-connection");
-										if (password != null) {
+										if (configurator.password != null) {
 											if (!methods.contains("password")) {
 												throw new IOException("Paswword authentication method not accepted by server");
 											}
 											
 											b.writeString("password");
 											b.writeByte(0);
-											b.writeString(password);
+											b.writeString(configurator.password);
 										// } else if ((publicKey != null) && (publicKeyAlgorithm != null)) {
-										} else if (publicKey != null) {
+										} else if (configurator.publicKey != null) {
 											if (!methods.contains("publickey")) {
 												throw new IOException("Public key authentication method not accepted by server");
 											}
 											
 											b.writeString("publickey");
 											b.writeByte(0);
-											b.writeString(publicKey.getAlgorithm());
-											b.writeBlob(publicKey.getBlob());
+											b.writeString(configurator.publicKey.getAlgorithm());
+											b.writeBlob(configurator.publicKey.getBlob());
 										} else {
 											throw new IOException("No password/public key provide");
 										}
@@ -464,7 +378,6 @@ public final class SshClient {
 											@Override
 											public void close() {
 												write.close();
-												closeAll();
 											}
 											@Override
 											public void failed(IOException e) {
@@ -495,7 +408,6 @@ public final class SshClient {
 										// Ignored
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_CLOSE) {
 										write.close();
-										closeAll();
 										clientHandler.close();
 									} else if (command == SshUtils.SSH_MSG_DISCONNECT) {
 										packet.readInt();
@@ -509,7 +421,6 @@ public final class SshClient {
 								} catch (Exception eee) {
 									LOGGER.error("Fatal error", eee);
 									write.close();
-									closeAll();
 									clientHandler.failed(new IOException("Fatal error", eee));
 								}
 							}

@@ -6,22 +6,18 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.Queue;
-import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.SnmpClient;
+import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 import com.davfx.util.ConfigUtils;
 
 public final class SnmpClientCache implements AutoCloseable {
 	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(SnmpClientCache.class).getInt("snmp.cache.expire.threshold");
 	
-	private final Queue queue;
-	private final ScheduledExecutorService repeatExecutor = Executors.newSingleThreadScheduledExecutor();
+	private final SnmpClientConfigurator configurator;
 	
 	private static final class Hold {
 		public final SnmpClient client;
@@ -34,50 +30,10 @@ public final class SnmpClientCache implements AutoCloseable {
 	
 	private final Map<Address, Hold> clients = new HashMap<>();
 
-	private double minTimeToRepeat = Double.NaN;
-	private double repeatTime = Double.NaN;
-	private double timeoutFromBeginning = Double.NaN;
-	private double timeoutFromLastReception = Double.NaN;
-	private ReadyFactory readyFactory = null;
-	private int bulkSize = -1;
-	private int getLimit = -1;
-
-	public SnmpClientCache(Queue queue) {
-		this.queue = queue;
+	public SnmpClientCache(SnmpClientConfigurator configurator) {
+		this.configurator = configurator;
 	}
 
-	public SnmpClientCache withMinTimeToRepeat(double minTimeToRepeat) {
-		this.minTimeToRepeat = minTimeToRepeat;
-		return this;
-	}
-	public SnmpClientCache withRepeatTime(double repeatTime) {
-		this.repeatTime = repeatTime;
-		return this;
-	}
-
-	public SnmpClientCache withTimeoutFromBeginning(double timeoutFromBeginning) {
-		this.timeoutFromBeginning = timeoutFromBeginning;
-		return this;
-	}
-	public SnmpClientCache withTimeoutFromLastReception(double timeoutFromLastReception) {
-		this.timeoutFromLastReception = timeoutFromLastReception;
-		return this;
-	}
-
-	public SnmpClientCache withBulkSize(int bulkSize) {
-		this.bulkSize = bulkSize;
-		return this;
-	}
-	public SnmpClientCache withGetLimit(int getLimit) {
-		this.getLimit = getLimit;
-		return this;
-	}
-	
-	public SnmpClientCache override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
-	}
-	
 	public static interface Connectable {
 		Connectable withCommunity(String community);
 		Connectable withLoginPassword(String authLogin, String authPassword, String authDigestAlgorithm, String privLogin, String privPassword, String privEncryptionAlgorithm);
@@ -119,42 +75,22 @@ public final class SnmpClientCache implements AutoCloseable {
 								c.launchedCallback.close();
 							}
 							i.remove();
+							c.client.close();
 						}
 					}
 				}
 				
 				Hold c = clients.get(address);
 				if (c == null) {
-					SnmpClient snmpClient = new SnmpClient();
+					SnmpClientConfigurator clientConfigurator = new SnmpClientConfigurator(configurator);
 					if (community != null) {
-						snmpClient.withCommunity(community);
+						clientConfigurator.withCommunity(community);
 					}
 					if ((authLogin != null) && (authPassword != null) && (authDigestAlgorithm != null) && (privLogin != null) && (privPassword != null) && (privEncryptionAlgorithm != null)) {
-						snmpClient.withLoginPassword(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
+						clientConfigurator.withLoginPassword(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
 					}
 
-					if (bulkSize >= 0) {
-						snmpClient.withBulkSize(bulkSize);
-					}
-					if (getLimit >= 0) {
-						snmpClient.withBulkSize(getLimit);
-					}
-					if (!Double.isNaN(minTimeToRepeat)) {
-						snmpClient.withMinTimeToRepeat(minTimeToRepeat);
-					}
-					if (!Double.isNaN(repeatTime)) {
-						snmpClient.withRepeatTime(repeatTime);
-					}
-					if (!Double.isNaN(timeoutFromBeginning)) {
-						snmpClient.withTimeoutFromBeginning(timeoutFromBeginning);
-					}
-					if (!Double.isNaN(timeoutFromLastReception)) {
-						snmpClient.withTimeoutFromLastReception(timeoutFromLastReception);
-					}
-					if (readyFactory != null) {
-						snmpClient.override(readyFactory);
-					}
-					c = new Hold(snmpClient.withAddress(address).withQueue(queue, repeatExecutor));
+					c = new Hold(new SnmpClient(clientConfigurator.withAddress(address)));
 					
 					final Hold cc = c;
 					clients.put(address, cc);
@@ -167,6 +103,7 @@ public final class SnmpClientCache implements AutoCloseable {
 							for (SnmpClientHandler h : cc.handlers) {
 								h.failed(e);
 							}
+							cc.client.close();
 						}
 						@Override
 						public void close() {
@@ -174,6 +111,7 @@ public final class SnmpClientCache implements AutoCloseable {
 							for (SnmpClientHandler h : cc.handlers) {
 								h.close();
 							}
+							cc.client.close();
 						}
 						@Override
 						public void launched(final Callback callback) {
@@ -217,13 +155,11 @@ public final class SnmpClientCache implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		repeatExecutor.shutdown();
-		// Queue not closed here but by caller
-		
 		for(Hold c : clients.values()) {
 			if (c.launchedCallback != null) {
 				c.launchedCallback.close();
 			}
+			c.client.close();
 		}
 		clients.clear();
 	}

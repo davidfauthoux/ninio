@@ -5,13 +5,14 @@ import java.io.IOException;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.SnmpClient;
+import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 
 public final class Snmp {
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		final Oid oid = new Oid(System.getProperty("oid"));
 		final int n = Integer.parseInt(System.getProperty("n", "1"));
-		new SnmpClient().withHost(System.getProperty("host")).withCommunity(System.getProperty("community")).connect(new SnmpClientHandler() {
+		new SnmpClient(new SnmpClientConfigurator().withHost(System.getProperty("host")).withCommunity(System.getProperty("community"))).connect(new SnmpClientHandler() {
 			
 			@Override
 			public void failed(IOException e) {

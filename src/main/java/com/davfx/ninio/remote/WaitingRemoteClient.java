@@ -1,45 +1,37 @@
-package com.davfx.ninio.telnet.util;
+package com.davfx.ninio.remote;
 
 import java.io.IOException;
 import java.util.Date;
 
-import com.davfx.ninio.telnet.TelnetClientHandler;
-import com.davfx.ninio.telnet.TelnetConnector;
-import com.davfx.util.ConfigUtils;
+import com.davfx.ninio.common.Closeable;
 import com.davfx.util.DateUtils;
-import com.typesafe.config.Config;
 
-public final class WaitingTelnetClient {
-	private static final Config CONFIG = ConfigUtils.load(WaitingTelnetClient.class);
-	private final TelnetConnector client;
-	private double endOfCommandTime = ConfigUtils.getDuration(CONFIG, "telnet.endOfCommandTime");
-	private double timeout = ConfigUtils.getDuration(CONFIG, "telnet.timeout");
+public final class WaitingRemoteClient implements Closeable {
+	private final RemoteConnector client;
+	private final WaitingRemoteClientConfigurator configurator;
 	private final String eol;
 	
-	public WaitingTelnetClient(TelnetConnector client) {
+	public WaitingRemoteClient(WaitingRemoteClientConfigurator configurator, RemoteConnector client) {
 		this.client = client;
+		this.configurator = configurator;
 		eol = client.getEol();
 	}
 	
-	public WaitingTelnetClient withEndOfCommandTime(double endOfCommandTime) {
-		this.endOfCommandTime = endOfCommandTime;
-		return this;
+	@Override
+	public void close() {
+		client.close();
 	}
-	public WaitingTelnetClient withTimeout(double timeout) {
-		this.timeout = timeout;
-		return this;
-	}
-
-	public void connect(final WaitingTelnetClientHandler clientHandler) {
-		client.connect(new TelnetClientHandler() {
+	
+	public void connect(final WaitingRemoteClientHandler clientHandler) {
+		client.connect(new RemoteClientHandler() {
 			private Callback clientCallback = null;
-			private WaitingTelnetClientHandler.Callback.SendCallback currentCallback = null;
+			private WaitingRemoteClientHandler.Callback.SendCallback currentCallback = null;
 			private final StringBuilder text = new StringBuilder();
 			
 			private Date timeoutDate = null;
 			private Date dateToSend = null;
 			private void setDateToSend(Date now) {
-				dateToSend = DateUtils.from(DateUtils.from(now) + endOfCommandTime);
+				dateToSend = DateUtils.from(DateUtils.from(now) + configurator.endOfCommandTime);
 			}
 			
 			@Override
@@ -94,7 +86,7 @@ public final class WaitingTelnetClient {
 			@Override
 			public void launched(final Callback callback) {
 				clientCallback = callback;
-				clientHandler.launched("", new WaitingTelnetClientHandler.Callback() {
+				clientHandler.launched("", new WaitingRemoteClientHandler.Callback() {
 					@Override
 					public void close() {
 						clientCallback = null;
@@ -114,7 +106,7 @@ public final class WaitingTelnetClient {
 
 						Date now = new Date();
 						setDateToSend(now);
-						timeoutDate = (timeout == 0d) ? null : DateUtils.from(DateUtils.from(now) + timeout);
+						timeoutDate = (configurator.timeout == 0d) ? null : DateUtils.from(DateUtils.from(now) + configurator.timeout);
 						callback.send(line + eol);
 						
 						if (r != null) {

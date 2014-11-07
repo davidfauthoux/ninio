@@ -16,63 +16,22 @@ import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReady;
-import com.davfx.ninio.common.SocketReadyFactory;
 import com.google.common.base.Splitter;
 
 public final class FtpClient {
 	private static final Logger LOGGER = LoggerFactory.getLogger(FtpClient.class);
 
-	public static final int DEFAULT_PORT = 21;
+	private final FtpClientConfigurator configurator;
 
-	private Queue queue = null;
-	private String login = "user";
-	private String password = "pass";
-	private Address address = new Address("localhost", DEFAULT_PORT);
-	private String host = null;
-	private int port = -1;
+	public FtpClient(FtpClientConfigurator configurator) {
+		this.configurator = configurator;
+	}
 
-	private ReadyFactory readyFactory = new SocketReadyFactory();
-
-	public FtpClient() {
-	}
-	
-	public FtpClient withQueue(Queue queue) {
-		this.queue = queue;
-		return this;
-	}
-	public FtpClient withLogin(String login) {
-		this.login = login;
-		return this;
-	}
-	public FtpClient withPassword(String password) {
-		this.password = password;
-		return this;
-	}
-	
-	public FtpClient withHost(String host) {
-		this.host = host;
-		return this;
-	}
-	public FtpClient withPort(int port) {
-		this.port = port;
-		return this;
-	}
-	public FtpClient withAddress(Address address) {
-		this.address = address;
-		return this;
-	}
-	
-	public FtpClient override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
-	}
-	
 	public void connect(final FtpClientHandler clientHandler) {
 		final Queue q;
 		final boolean shouldCloseQueue;
-		if (queue == null) {
+		if (configurator.queue == null) {
 			try {
 				q = new Queue();
 			} catch (IOException e) {
@@ -81,25 +40,25 @@ public final class FtpClient {
 			}
 			shouldCloseQueue = true;
 		} else {
-			q = queue;
+			q = configurator.queue;
 			shouldCloseQueue = false;
 		}
 
 		final Address a;
-		if (host != null) {
-			if (port < 0) {
-				a = new Address(host, address.getPort());
+		if (configurator.host != null) {
+			if (configurator.port < 0) {
+				a = new Address(configurator.host, configurator.address.getPort());
 			} else {
-				a = new Address(host, port);
+				a = new Address(configurator.host, configurator.port);
 			}
 		} else {
-			a = address;
+			a = configurator.address;
 		}
 		
 		q.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(q);
+				Ready ready = configurator.readyFactory.create(q);
 				ready.connect(a, new ReadyConnection() {
 					private FtpResponseReader reader = null;
 					@Override
@@ -117,7 +76,7 @@ public final class FtpClient {
 					
 					@Override
 					public void connected(FailableCloseableByteBufferHandler write) {
-						reader = new FtpResponseReader(q, login, password, clientHandler, write);
+						reader = new FtpResponseReader(q, configurator.login, configurator.password, clientHandler, write);
 						clientHandler.launched(new FtpClientHandler.Callback() {
 							@Override
 							public void close() {

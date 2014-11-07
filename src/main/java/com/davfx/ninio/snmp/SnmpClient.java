@@ -9,8 +9,6 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -18,108 +16,47 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
-import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
-import com.typesafe.config.Config;
 
-public final class SnmpClient {
+public final class SnmpClient implements Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
-	private static final Config CONFIG = ConfigUtils.load(SnmpClient.class);
-	public static final int DEFAULT_PORT = 161;
+	private final SnmpClientConfigurator configurator;
+	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
+	private final Set<InstanceMapper> instanceMappers = new HashSet<>();
+	private volatile boolean closed = false;
 
-	private Queue queue = null;
-	private String community = "community";
-	private AuthRemoteEngine authEngine = null;
-	private Address address = new Address("localhost", DEFAULT_PORT);
-	private String host = null;
-	private int port = -1;
-	private int bulkSize = CONFIG.getInt("snmp.bulkSize");
-	private double minTimeToRepeat = ConfigUtils.getDuration(CONFIG, "snmp.minTimeToRepeat");
-	private int getLimit = CONFIG.getInt("snmp.getLimit");;
+	public SnmpClient(final SnmpClientConfigurator configurator) {
+		this.configurator = configurator;
+		
+		configurator.repeatExecutor.scheduleAtFixedRate(new Runnable() {
+			@Override
+			public void run() {
+				if (closed) {
+					throw new RuntimeException("Normal closed");
+				}
 
-	private double repeatTime = ConfigUtils.getDuration(CONFIG, "snmp.repeatTime");
-	private ScheduledExecutorService repeatExecutor = null;
-
-	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromBeginning");
-	private double timeoutFromLastReception = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromLastReception");
-	
-	private double repeatRandomization = ConfigUtils.getDuration(CONFIG, "snmp.repeatRandomization");
-	
-	private ReadyFactory readyFactory = new DatagramReadyFactory();
-
-	public SnmpClient() {
-	}
-	
-	public SnmpClient withMinTimeToRepeat(double minTimeToRepeat) {
-		this.minTimeToRepeat = minTimeToRepeat;
-		return this;
-	}
-	public SnmpClient withRepeatTime(double repeatTime) {
-		this.repeatTime = repeatTime;
-		return this;
-	}
-
-	public SnmpClient withTimeoutFromBeginning(double timeoutFromBeginning) {
-		this.timeoutFromBeginning = timeoutFromBeginning;
-		return this;
-	}
-	public SnmpClient withTimeoutFromLastReception(double timeoutFromLastReception) {
-		this.timeoutFromLastReception = timeoutFromLastReception;
-		return this;
-	}
-
-	public SnmpClient withRepeatRandomization(double repeatRandomization) {
-		this.repeatRandomization = repeatRandomization;
-		return this;
-	}
-
-	public SnmpClient withQueue(Queue queue, ScheduledExecutorService repeatExecutor) {
-		this.queue = queue;
-		this.repeatExecutor = repeatExecutor;
-		return this;
-	}
-	public SnmpClient withCommunity(String community) {
-		this.community = community;
-		return this;
-	}
-	public SnmpClient withLoginPassword(String authLogin, String authPassword, String authDigestAlgorithm, String privLogin, String privPassword, String privEncryptionAlgorithm) {
-		authEngine = new AuthRemoteEngine(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
-		return this;
+				configurator.queue.post(new Runnable() {
+					@Override
+					public void run() {
+						Date now = new Date();
+						for (InstanceMapper i : instanceMappers) {
+							i.repeat(now);
+						}
+					}
+				});
+			}
+		}, 0, (long) (configurator.repeatTime * 1000d), TimeUnit.MILLISECONDS);
 	}
 	
-	public SnmpClient withHost(String host) {
-		this.host = host;
-		return this;
-	}
-	public SnmpClient withPort(int port) {
-		this.port = port;
-		return this;
-	}
-	public SnmpClient withAddress(Address address) {
-		this.address = address;
-		return this;
-	}
-	
-	public SnmpClient withBulkSize(int bulkSize) {
-		this.bulkSize = bulkSize;
-		return this;
-	}
-	public SnmpClient withGetLimit(int getLimit) {
-		this.getLimit = getLimit;
-		return this;
-	}
-	
-	public SnmpClient override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
+	@Override
+	public void close() {
+		closed = true;
 	}
 	
 	private static final Random RANDOM = new Random(System.currentTimeMillis());
@@ -145,59 +82,12 @@ public final class SnmpClient {
 	}
 	
 	public void connect(final SnmpClientHandler clientHandler) {
-		final Queue q;
-		final ScheduledExecutorService re;
-		final boolean shouldCloseQueue;
-		if (queue == null) {
-			try {
-				q = new Queue();
-			} catch (IOException e) {
-				clientHandler.failed(e);
-				return;
-			}
-			re = Executors.newSingleThreadScheduledExecutor();
-			shouldCloseQueue = true;
-		} else {
-			q = queue;
-			re = repeatExecutor;
-			shouldCloseQueue = false;
-		}
-
-		final Address a;
-		if (host != null) {
-			if (port < 0) {
-				a = new Address(host, address.getPort());
-			} else {
-				a = new Address(host, port);
-			}
-		} else {
-			a = address;
-		}
-		
-		final RequestIdProvider requestIdProvider = new RequestIdProvider();
-		
-		final Set<InstanceMapper> instanceMappers = new HashSet<>();
-		re.scheduleAtFixedRate(new Runnable() {
+		configurator.queue.post(new Runnable() {
 			@Override
 			public void run() {
-				q.post(new Runnable() {
-					@Override
-					public void run() {
-						Date now = new Date();
-						for (InstanceMapper i : instanceMappers) {
-							i.repeat(now);
-						}
-					}
-				});
-			}
-		}, 0, (long) (repeatTime * 1000d), TimeUnit.MILLISECONDS);
-
-		q.post(new Runnable() {
-			@Override
-			public void run() {
-				Ready ready = readyFactory.create(q);
+				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
-				ready.connect(a, new ReadyConnection() {
+				ready.connect(configurator.address, new ReadyConnection() {
 					private final InstanceMapper instanceMapper = new InstanceMapper(requestIdProvider);
 
 					@Override
@@ -207,14 +97,14 @@ public final class SnmpClient {
 						int errorIndex;
 						Iterable<Result> results;
 						try {
-							if (authEngine == null) {
+							if (configurator.authEngine == null) {
 								Version2cPacketParser parser = new Version2cPacketParser(buffer);
 								instanceId = parser.getRequestId();
 								errorStatus = parser.getErrorStatus();
 								errorIndex = parser.getErrorIndex();
 								results = parser.getResults();
 							} else {
-								Version3PacketParser parser = new Version3PacketParser(authEngine, buffer);
+								Version3PacketParser parser = new Version3PacketParser(configurator.authEngine, buffer);
 								instanceId = parser.getRequestId();
 								errorStatus = parser.getErrorStatus();
 								errorIndex = parser.getErrorIndex();
@@ -230,10 +120,6 @@ public final class SnmpClient {
 					
 					@Override
 					public void failed(IOException e) {
-						if (shouldCloseQueue) {
-							re.shutdown();
-							q.close();
-						}
 						if (instanceMappers.remove(instanceMapper)) {
 							clientHandler.failed(e);
 						}
@@ -243,7 +129,7 @@ public final class SnmpClient {
 					public void connected(final FailableCloseableByteBufferHandler write) {
 						instanceMappers.add(instanceMapper);
 						
-						final SnmpWriter w = new SnmpWriter(write, community, authEngine);
+						final SnmpWriter w = new SnmpWriter(write, configurator.community, configurator.authEngine);
 						
 						clientHandler.launched(new SnmpClientHandler.Callback() {
 							@Override
@@ -253,15 +139,10 @@ public final class SnmpClient {
 								}
 								
 								write.close();
-
-								if (shouldCloseQueue) {
-									re.shutdown();
-									q.close();
-								}
 							}
 							@Override
 							public void get(Oid oid, GetCallback callback) {
-								Instance i = new Instance(instanceMapper, callback, w, oid, getLimit, bulkSize, minTimeToRepeat, timeoutFromBeginning, timeoutFromLastReception, repeatRandomization);
+								Instance i = new Instance(instanceMapper, callback, w, oid, configurator);
 								instanceMapper.map(i);
 								w.get(i.instanceId, oid);
 							}
@@ -270,10 +151,6 @@ public final class SnmpClient {
 					
 					@Override
 					public void close() {
-						if (shouldCloseQueue) {
-							re.shutdown();
-							q.close();
-						}
 						if (instanceMappers.remove(instanceMapper)) {
 							instanceMapper.closedByPeer();
 						}
@@ -387,33 +264,23 @@ public final class SnmpClient {
 		private Oid requestOid;
 		//%% private List<Result> allResults = null;
 		private int countResults = 0;
-		private final int getLimit;
-		private final int bulkSize;
+		private final SnmpClientConfigurator configurator;
 		private final Date beginningTimestamp = new Date();
 		private Date receptionTimestamp = null;
 		private Date sendTimestamp = new Date();
 		private int shouldRepeatWhat = 0;
 		public int instanceId;
-		private final double minTimeToRepeat;
-		private final double timeoutFromBeginning;
-		private final double timeoutFromLastReception;
 		private final double repeatRandomizationRandomized;
 
-		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid,
-				int getLimit, int bulkSize,
-				double minTimeToRepeat, double timeoutFromBeginning, double timeoutFromLastReception, double repeatRandomization) {
+		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, SnmpClientConfigurator configurator) {
 			this.instanceMapper = instanceMapper;
 			this.callback = callback;
 			this.write = write;
 			this.requestOid = requestOid;
-			this.getLimit = getLimit;
-			this.bulkSize = bulkSize;
 			initialRequestOid = requestOid;
+			this.configurator = configurator;
 			
-			this.minTimeToRepeat = minTimeToRepeat;
-			this.timeoutFromBeginning = timeoutFromBeginning;
-			this.timeoutFromLastReception = timeoutFromLastReception;
-			repeatRandomizationRandomized = (RANDOM.nextDouble() * repeatRandomization) - (1d / 2d); // [ -0.5, 0.5 [
+			repeatRandomizationRandomized = (RANDOM.nextDouble() * configurator.repeatRandomization) - (1d / 2d); // [ -0.5, 0.5 [
 		}
 		
 		public void closedByPeer() {
@@ -441,7 +308,7 @@ public final class SnmpClient {
 			
 			double n = DateUtils.from(now);
 			
-			if ((n - DateUtils.from(beginningTimestamp)) >= (timeoutFromBeginning)) {
+			if ((n - DateUtils.from(beginningTimestamp)) >= (configurator.timeoutFromBeginning)) {
 				shouldRepeatWhat = -1;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
@@ -452,7 +319,7 @@ public final class SnmpClient {
 			}
 
 			if (receptionTimestamp != null) {
-				if ((n - DateUtils.from(receptionTimestamp)) >= timeoutFromLastReception) {
+				if ((n - DateUtils.from(receptionTimestamp)) >= configurator.timeoutFromLastReception) {
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
 					//%% allResults = null;
@@ -461,7 +328,7 @@ public final class SnmpClient {
 				}
 			}
 
-			if ((n - DateUtils.from(sendTimestamp)) >= (minTimeToRepeat + repeatRandomizationRandomized)) {
+			if ((n - DateUtils.from(sendTimestamp)) >= (configurator.minTimeToRepeat + repeatRandomizationRandomized)) {
 				LOGGER.debug("Repeating {}", requestOid);
 				switch (shouldRepeatWhat) { 
 				case 0:
@@ -471,7 +338,7 @@ public final class SnmpClient {
 					write.getNext(instanceId, requestOid);
 					break;
 				case 2:
-					write.getBulk(instanceId, requestOid, bulkSize);
+					write.getBulk(instanceId, requestOid, configurator.bulkSize);
 					break;
 				default:
 					break;
@@ -571,7 +438,7 @@ public final class SnmpClient {
 							break;
 						}
 						LOGGER.trace("Addind to results: {}", r);
-						if ((getLimit > 0) && (countResults >= getLimit)) {
+						if ((configurator.getLimit > 0) && (countResults >= configurator.getLimit)) {
 						//%% if ((getLimit > 0) && (allResults.size() == getLimit)) {
 							LOGGER.warn("{} reached limit", requestOid);
 							lastOid = null;
@@ -590,7 +457,7 @@ public final class SnmpClient {
 						instanceMapper.map(this);
 						sendTimestamp = new Date();
 						shouldRepeatWhat = 2;
-						write.getBulk(instanceId, requestOid, bulkSize);
+						write.getBulk(instanceId, requestOid, configurator.bulkSize);
 					} else {
 						// Stop here
 						//%% shouldRepeatWhat = -1;

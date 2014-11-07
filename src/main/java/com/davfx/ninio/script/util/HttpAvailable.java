@@ -3,7 +3,6 @@ package com.davfx.ninio.script.util;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.http.Http;
-import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.util.InMemoryPost;
 import com.davfx.ninio.http.util.SimpleHttpClient;
@@ -18,9 +17,9 @@ import com.google.gson.JsonPrimitive;
 public final class HttpAvailable {
 	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(HttpAvailable.class).getString("script.functions.http");
 
-	private final HttpClient client;
+	private final SimpleHttpClient client;
 
-	public HttpAvailable(HttpClient client) {
+	public HttpAvailable(SimpleHttpClient client) {
 		this.client = client;
 	}
 	
@@ -50,31 +49,28 @@ public final class HttpAvailable {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> callback) {
 				JsonObject r = request.getAsJsonObject();
-				SimpleHttpClient c = new SimpleHttpClient().on(client);
-				c.withMethod(HttpRequest.Method.valueOf(getString(r, "method", "GET").toUpperCase()));
+				client.withMethod(HttpRequest.Method.valueOf(getString(r, "method", "GET").toUpperCase()));
 				JsonElement post = r.get("post");
 				if (post != null) {
 					JsonObject postObject = post.getAsJsonObject();
 					String postBody = getString(postObject, "body", null);
 					String postContentTyString = getString(postObject, "type", Http.ContentType.JSON);
 					if (postBody != null) {
-						c.post(postContentTyString, ByteBuffer.wrap(postBody.getBytes(Http.UTF8_CHARSET)));
+						client.post(postContentTyString, ByteBuffer.wrap(postBody.getBytes(Http.UTF8_CHARSET)));
 					}
 				}
 				
-				String path = getString(r, "path", null);
-				String host = getString(r, "host", "localhost");
 				Integer port = getInt(r, "port", null);
 				Boolean secure = getBoolean(r, "secure", null);
-				c.on(path).withHost(host);
-				if (port != null) {
-					c.withPort(port);
-				}
+				client.on(getString(r, "path", null)).withHost(getString(r, "host", "localhost"));
 				if (secure != null) {
-					c.secure(secure);
+					client.secure(secure);
+				}
+				if (port != null) {
+					client.withPort(port);
 				}
 				
-				c.send(new SimpleHttpClientHandler() {
+				client.send(new SimpleHttpClientHandler() {
 					@Override
 					public void handle(int status, String reason, InMemoryPost body) {
 						JsonObject r = new JsonObject();

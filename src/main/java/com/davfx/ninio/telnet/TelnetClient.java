@@ -7,92 +7,25 @@ import java.nio.charset.Charset;
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
-import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.ninio.common.SocketReadyFactory;
 
-public final class TelnetClient implements TelnetConnector {
+public final class TelnetClient {
 	public static final int DEFAULT_PORT = 23;
 	public static final String EOL = "\r\n";
 
-	private Queue queue = null;
-	private Address address = new Address("localhost", DEFAULT_PORT);
-	private String host = null;
-	private int port = -1;
+	private final TelnetClientConfigurator configurator;
 
-	private ReadyFactory readyFactory = new SocketReadyFactory();
-
-	public TelnetClient() {
+	public TelnetClient(TelnetClientConfigurator configurator) {
+		this.configurator = configurator;
 	}
 	
-	@Override
-	public String getEol() {
-		return EOL;
-	}
-	
-	@Override
-	public TelnetClient withQueue(Queue queue) {
-		this.queue = queue;
-		return this;
-	}
-	
-	@Override
-	public TelnetClient withHost(String host) {
-		this.host = host;
-		return this;
-	}
-	@Override
-	public TelnetClient withPort(int port) {
-		this.port = port;
-		return this;
-	}
-	@Override
-	public TelnetClient withAddress(Address address) {
-		this.address = address;
-		return this;
-	}
-	
-	@Override
-	public TelnetClient override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
-	}
-	
-	@Override
 	public void connect(final TelnetClientHandler clientHandler) {
-		final Queue q;
-		final boolean shouldCloseQueue;
-		if (queue == null) {
-			try {
-				q = new Queue();
-			} catch (IOException e) {
-				clientHandler.failed(e);
-				return;
-			}
-			shouldCloseQueue = true;
-		} else {
-			q = queue;
-			shouldCloseQueue = false;
-		}
-
-		final Address a;
-		if (host != null) {
-			if (port < 0) {
-				a = new Address(host, address.getPort());
-			} else {
-				a = new Address(host, port);
-			}
-		} else {
-			a = address;
-		}
-
-		q.post(new Runnable() {
+		configurator.queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(q);
-				ready.connect(a, new ReadyConnection() {
+				Ready ready = configurator.readyFactory.create(configurator.queue);
+				ready.connect(configurator.address, new ReadyConnection() {
 					private TelnetResponseReader reader = null;
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -101,9 +34,6 @@ public final class TelnetClient implements TelnetConnector {
 					
 					@Override
 					public void failed(IOException e) {
-						if (shouldCloseQueue) {
-							q.close();
-						}
 						clientHandler.failed(e);
 					}
 					
@@ -114,9 +44,6 @@ public final class TelnetClient implements TelnetConnector {
 							@Override
 							public void close() {
 								reader.close();
-								if (shouldCloseQueue) {
-									q.close();
-								}
 							}
 							
 							@Override
@@ -128,9 +55,6 @@ public final class TelnetClient implements TelnetConnector {
 					
 					@Override
 					public void close() {
-						if (shouldCloseQueue) {
-							q.close();
-						}
 						reader.close();
 					}
 				});

@@ -6,13 +6,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.Queue;
-import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.ping.PingClient;
+import com.davfx.ninio.ping.PingClientConfigurator;
 import com.davfx.ninio.ping.PingClientHandler;
 import com.davfx.ninio.ping.PingableAddress;
 import com.davfx.util.ConfigUtils;
@@ -20,8 +17,7 @@ import com.davfx.util.ConfigUtils;
 public final class PingClientCache implements AutoCloseable {
 	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(PingClientCache.class).getInt("ping.cache.expire.threshold");
 
-	private final Queue queue;
-	private final ScheduledExecutorService repeatExecutor = Executors.newSingleThreadScheduledExecutor();
+	private final PingClientConfigurator configurator;
 	
 	private static final class Hold {
 		public final PingClient client;
@@ -34,40 +30,16 @@ public final class PingClientCache implements AutoCloseable {
 	
 	private final Map<Address, Hold> clients = new HashMap<>();
 
-	private double minTimeToRepeat = Double.NaN;
-	private double repeatTime = Double.NaN;
-	private double timeoutFromBeginning = Double.NaN;
-	private ReadyFactory readyFactory = null;
-	
-	public PingClientCache(Queue queue) {
-		this.queue = queue;
+	public PingClientCache(PingClientConfigurator configurator) {
+		this.configurator = configurator;
 	}
 
-	public PingClientCache withMinTimeToRepeat(double minTimeToRepeat) {
-		this.minTimeToRepeat = minTimeToRepeat;
-		return this;
-	}
-	public PingClientCache withRepeatTime(double repeatTime) {
-		this.repeatTime = repeatTime;
-		return this;
-	}
-
-	public PingClientCache withTimeoutFromBeginning(double timeoutFromBeginning) {
-		this.timeoutFromBeginning = timeoutFromBeginning;
-		return this;
-	}
-
-	public PingClientCache override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
-	}
-	
 	public static interface Connectable {
 		void connect(PingClientHandler clientHandler);
 	}
 	
 	public Connectable get(String host) {
-		return get(new Address(host, PingClient.DEFAULT_PORT));
+		return get(new Address(host, PingClientConfigurator.DEFAULT_PORT));
 		
 	}
 	public Connectable get(final Address address) {
@@ -83,26 +55,14 @@ public final class PingClientCache implements AutoCloseable {
 								c.launchedCallback.close();
 							}
 							i.remove();
+							c.client.close();
 						}
 					}
 				}
 				
 				Hold c = clients.get(address);
 				if (c == null) {
-					PingClient pingClient = new PingClient();
-					if (!Double.isNaN(minTimeToRepeat)) {
-						pingClient.withMinTimeToRepeat(minTimeToRepeat);
-					}
-					if (!Double.isNaN(repeatTime)) {
-						pingClient.withRepeatTime(repeatTime);
-					}
-					if (!Double.isNaN(timeoutFromBeginning)) {
-						pingClient.withTimeoutFromBeginning(timeoutFromBeginning);
-					}
-					if (readyFactory != null) {
-						pingClient.override(readyFactory);
-					}
-					c = new Hold(pingClient.withAddress(address).withQueue(queue, repeatExecutor));
+					c = new Hold(new PingClient(new PingClientConfigurator(configurator).withAddress(address)));
 					
 					final Hold cc = c;
 					clients.put(address, cc);
@@ -115,6 +75,7 @@ public final class PingClientCache implements AutoCloseable {
 							for (PingClientHandler h : cc.handlers) {
 								h.failed(e);
 							}
+							cc.client.close();
 						}
 						@Override
 						public void close() {
@@ -122,6 +83,7 @@ public final class PingClientCache implements AutoCloseable {
 							for (PingClientHandler h : cc.handlers) {
 								h.close();
 							}
+							cc.client.close();
 						}
 						@Override
 						public void launched(final Callback callback) {
@@ -165,13 +127,11 @@ public final class PingClientCache implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		repeatExecutor.shutdown();
-		// Queue not closed here but by caller
-		
 		for(Hold c : clients.values()) {
 			if (c.launchedCallback != null) {
 				c.launchedCallback.close();
 			}
+			c.client.close();
 		}
 		clients.clear();
 	}

@@ -1,20 +1,28 @@
 package com.davfx.ninio.script.util;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.Queue;
-import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpClientConfigurator;
+import com.davfx.ninio.http.util.SimpleHttpClient;
+import com.davfx.ninio.ping.PingClientConfigurator;
 import com.davfx.ninio.ping.util.PingClientCache;
+import com.davfx.ninio.remote.WaitingRemoteClientCache;
+import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
+import com.davfx.ninio.remote.ssh.SshRemoteConnectorFactory;
+import com.davfx.ninio.remote.telnet.TelnetRemoteConnectorFactory;
 import com.davfx.ninio.script.ExecutorScriptRunner;
 import com.davfx.ninio.script.JsonScriptRunner;
 import com.davfx.ninio.script.QueueScriptRunner;
 import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.ninio.script.RoundRobinScriptRunner;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
+import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.util.SnmpClientCache;
-import com.davfx.ninio.ssh.util.SshTelnetConnectorFactory;
-import com.davfx.ninio.telnet.util.WaitingTelnetClientCache;
+import com.davfx.ninio.ssh.SshClientConfigurator;
+import com.davfx.ninio.telnet.TelnetClientConfigurator;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 
@@ -24,104 +32,44 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 
 	private final RoundRobinScriptRunner<String> scriptRunner;
 	private final Queue queue;
-	private final HttpClient http;
-	private final WaitingTelnetClientCache telnet;
-	private final WaitingTelnetClientCache ssh;
+	
+	private final SimpleHttpClient http;
+	private final WaitingRemoteClientCache telnet;
+	private final WaitingRemoteClientCache ssh;
 	private final SnmpClientCache snmp;
 	private final PingClientCache ping;
+	
+	private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor();
+	
+	public final HttpClientConfigurator httpConfigurator;
+	public final WaitingRemoteClientConfigurator remoteConfigurator;
+	public final TelnetClientConfigurator telnetConfigurator;
+	public final SshClientConfigurator sshConfigurator;
+	public final SnmpClientConfigurator snmpConfigurator;
+	public final PingClientConfigurator pingConfigurator;
 
 	public AllAvailableScriptRunner(Queue queue) throws IOException {
 		this.queue = queue;
 		
+		httpConfigurator = new HttpClientConfigurator(queue, scheduledExecutor);
+		remoteConfigurator = new WaitingRemoteClientConfigurator(scheduledExecutor);
+		telnetConfigurator = new TelnetClientConfigurator(queue);
+		sshConfigurator = new SshClientConfigurator(queue);
+		snmpConfigurator = new SnmpClientConfigurator(queue, scheduledExecutor);
+		pingConfigurator = new PingClientConfigurator(queue, scheduledExecutor);
+
 		scriptRunner = new RoundRobinScriptRunner<>();
 		for (int i = 0; i < THREADING; i++) {
 			scriptRunner.add(new ExecutorScriptRunner());
 		}
 
-		http = new HttpClient(queue, null);
-		
-		telnet = new WaitingTelnetClientCache(queue);
-		
-		ssh = new WaitingTelnetClientCache(queue);
-		ssh.override(new SshTelnetConnectorFactory());
-		
-		snmp = new SnmpClientCache(queue);
-		
-		ping = new PingClientCache(queue);
+		http = new SimpleHttpClient(httpConfigurator);
+		telnet = new WaitingRemoteClientCache(remoteConfigurator, queue, new TelnetRemoteConnectorFactory(telnetConfigurator));
+		ssh = new WaitingRemoteClientCache(remoteConfigurator, queue, new SshRemoteConnectorFactory(sshConfigurator));
+		snmp = new SnmpClientCache(snmpConfigurator);
+		ping = new PingClientCache(pingConfigurator);
 	}
 
-	public AllAvailableScriptRunner withTelnetCallWithEmptyTime(double callWithEmptyTime) {
-		telnet.withCallWithEmptyTime(callWithEmptyTime);
-		return this;
-	}
-	public AllAvailableScriptRunner withTelnetEndOfCommandTime(double endOfCommandTime) {
-		telnet.withEndOfCommandTime(endOfCommandTime);
-		return this;
-	}
-	public AllAvailableScriptRunner withTelnetTimeout(double timeout) {
-		telnet.withTimeout(timeout);
-		return this;
-	}
-
-	public AllAvailableScriptRunner withSnmpMinTimeToRepeat(double minTimeToRepeat) {
-		snmp.withMinTimeToRepeat(minTimeToRepeat);
-		return this;
-	}
-	public AllAvailableScriptRunner withSnmpRepeatTime(double repeatTime) {
-		snmp.withRepeatTime(repeatTime);
-		return this;
-	}
-	public AllAvailableScriptRunner withSnmpTimeoutFromBeginning(double timeoutFromBeginning) {
-		snmp.withTimeoutFromBeginning(timeoutFromBeginning);
-		return this;
-	}
-	public AllAvailableScriptRunner withSnmpTimeoutFromLastReception(double timeoutFromLastReception) {
-		snmp.withTimeoutFromLastReception(timeoutFromLastReception);
-		return this;
-	}
-	public AllAvailableScriptRunner withSnmpBulkSize(int bulkSize) {
-		snmp.withBulkSize(bulkSize);
-		return this;
-	}
-	public AllAvailableScriptRunner withSnmpGetLimit(int getLimit) {
-		snmp.withGetLimit(getLimit);
-		return this;
-	}
-
-	public AllAvailableScriptRunner withPingMinTimeToRepeat(double minTimeToRepeat) {
-		ping.withMinTimeToRepeat(minTimeToRepeat);
-		return this;
-	}
-	public AllAvailableScriptRunner withPingRepeatTime(double repeatTime) {
-		ping.withRepeatTime(repeatTime);
-		return this;
-	}
-	public AllAvailableScriptRunner withPingTimeoutFromBeginning(double timeoutFromBeginning) {
-		ping.withTimeoutFromBeginning(timeoutFromBeginning);
-		return this;
-	}
-
-	public AllAvailableScriptRunner httpSecureSocketOverride(ReadyFactory readyFactory) {
-		http.overrideSecure(readyFactory);
-		return this;
-	}
-	public AllAvailableScriptRunner httpSocketOverride(ReadyFactory readyFactory) {
-		http.override(readyFactory);
-		return this;
-	}
-	public AllAvailableScriptRunner telnetSocketOverride(ReadyFactory readyFactory) {
-		telnet.override(readyFactory);
-		return this;
-	}
-	public AllAvailableScriptRunner snmpDatagramOverride(ReadyFactory readyFactory) {
-		snmp.override(readyFactory);
-		return this;
-	}
-	public AllAvailableScriptRunner pingDatagramOverride(ReadyFactory readyFactory) {
-		ping.override(readyFactory);
-		return this;
-	}
-	
 	public SimpleScriptRunnerScriptRegister runner() {
 		RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner)));
 		new PingAvailable(ping).registerOn(runner);
@@ -139,6 +87,16 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		ssh.close();
 		snmp.close();
 		ping.close();
+
 		scriptRunner.close();
+		
+		httpConfigurator.close();
+		remoteConfigurator.close();
+		telnetConfigurator.close();
+		sshConfigurator.close();
+		snmpConfigurator.close();
+		pingConfigurator.close();
+		
+		scheduledExecutor.shutdown();
 	}
 }

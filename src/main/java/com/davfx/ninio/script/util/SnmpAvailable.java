@@ -7,7 +7,7 @@ import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
-import com.davfx.ninio.snmp.SnmpClient;
+import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 import com.davfx.ninio.snmp.util.SnmpClientCache;
 import com.davfx.util.ConfigUtils;
@@ -30,7 +30,7 @@ public final class SnmpAvailable {
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
-				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClient.DEFAULT_PORT));
+				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClientConfigurator.DEFAULT_PORT));
 				SnmpClientCache.Connectable c = client.get(address);
 				c.withCommunity(JsonUtils.getString(r, "community", null));
 				

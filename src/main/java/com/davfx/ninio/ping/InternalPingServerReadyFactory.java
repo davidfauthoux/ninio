@@ -22,19 +22,27 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	private static final Logger LOGGER = LoggerFactory.getLogger(InternalPingServerReadyFactory.class);
 
 	private static final int ERROR_CODE = 1;
-	private final ExecutorService clientExecutor;
+
+	private final int maxNumberOfSimultaneousClients;
+	private ExecutorService clientExecutor;
 
 	public InternalPingServerReadyFactory(int maxNumberOfSimultaneousClients) {
-		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients);
+		this.maxNumberOfSimultaneousClients = maxNumberOfSimultaneousClients;
 	}
 	
 	@Override
 	public void close() {
-		clientExecutor.shutdown();
+		if (clientExecutor != null) {
+			clientExecutor.shutdown();
+		}
 	}
 	
 	@Override
 	public Ready create(Queue queue) {
+		if (clientExecutor == null) {
+			clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients);
+		}
+		
 		return new Ready() {
 			@Override
 			public void connect(Address address, final ReadyConnection connection) {
