@@ -163,16 +163,26 @@ public final class SimpleHttpClient implements Closeable {
 			public void close() {
 				if (response == null) {
 					LOGGER.error("Closed before any response received");
-					handler.handle(-1, null, null);
+					handler.handle(-1, null, null, null);
 					return;
 				}
-				handler.handle(response.getStatus(), response.getReason(), body);
+				handler.handle(response.getStatus(), response.getReason(), new Parameters() {
+					@Override
+					public Iterable<String> keys() {
+						return response.getHeaders().keySet();
+					}
+					
+					@Override
+					public String getValue(String key) {
+						return response.getHeaders().get(key);
+					}
+				}, body);
 			}
 			
 			@Override
 			public void failed(IOException e) {
 				LOGGER.error("Failed to connect to: {}", configurator.address, e);
-				handler.handle(-1, null, null);
+				handler.handle(-1, null, null, null);
 			}
 		});
 	}

@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.util.InMemoryPost;
+import com.davfx.ninio.http.util.Parameters;
 import com.davfx.ninio.http.util.SimpleHttpClient;
 import com.davfx.ninio.http.util.SimpleHttpClientHandler;
 import com.davfx.ninio.script.AsyncScriptFunction;
@@ -72,7 +73,7 @@ public final class HttpAvailable {
 				
 				client.send(new SimpleHttpClientHandler() {
 					@Override
-					public void handle(int status, String reason, InMemoryPost body) {
+					public void handle(int status, String reason, Parameters parameters, InMemoryPost body) {
 						JsonObject r = new JsonObject();
 						r.add("status", new JsonPrimitive(status));
 						r.add("reason", new JsonPrimitive(reason));

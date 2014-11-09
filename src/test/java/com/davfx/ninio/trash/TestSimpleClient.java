@@ -1,6 +1,7 @@
 package com.davfx.ninio.trash;
 
 import com.davfx.ninio.http.util.InMemoryPost;
+import com.davfx.ninio.http.util.Parameters;
 import com.davfx.ninio.http.util.SimpleHttpClient;
 import com.davfx.ninio.http.util.SimpleHttpClientHandler;
 
@@ -8,7 +9,7 @@ public class TestSimpleClient {
 	public static void main(String[] args) throws Exception {
 		new SimpleHttpClient().withHost("localhost").withPort(8080).on("/path?foo=bar").send(new SimpleHttpClientHandler() {
 			@Override
-			public void handle(int status, String reason, InMemoryPost body) {
+			public void handle(int status, String reason, Parameters parameters, InMemoryPost body) {
 				System.out.println("[" + status + "] " + reason + " / " + body);
 			}
 		});
