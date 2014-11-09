@@ -12,7 +12,7 @@ public final class HttpServerConfigurator implements Closeable {
 	private final boolean queueToClose;
 
 	public Trust trust = null;
-	public Address address = new Address("localhost", Http.DEFAULT_PORT);
+	public Address address = new Address("0.0.0.0", Http.DEFAULT_PORT);
 	
 	private HttpServerConfigurator(Queue queue, boolean queueToClose) {
 		this.queue = queue;
