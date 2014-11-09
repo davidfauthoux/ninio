@@ -65,10 +65,14 @@ public interface Http {
 	interface Status {
 		int OK = 200;
 		int INTERNAL_SERVER_ERROR = 500;
+		int NOT_FOUND = 404;
+		int FORBIDDEN = 403;
 	}
 	interface Message {
 		String OK = "OK";
 		String INTERNAL_SERVER_ERROR = "Internal Server Error";
+		String NOT_FOUND = "Not found";
+		String FORBIDDEN = "Forbidden";
 	}
 	
 	public static final class Url {
