@@ -234,8 +234,15 @@ public final class HttpClient implements Closeable {
 		if (!headers.containsKey(Http.CONNECTION)) {
 			appendHeader(header, Http.CONNECTION, Http.KEEP_ALIVE);
 		}
+		if (!headers.containsKey(Http.USER_AGENT)) {
+			appendHeader(header, Http.USER_AGENT, Http.DEFAULT_USER_AGENT);
+		}
+		if (!headers.containsKey(Http.ACCEPT)) {
+			appendHeader(header, Http.ACCEPT, Http.DEFAULT_ACCEPT);
+		}
 		
 		header.append(Http.CR).append(Http.LF);
+		LOGGER.trace("Header: {}", header);
 		return ByteBuffer.wrap(header.toString().getBytes(Http.USASCII_CHARSET));
 	}
 	
