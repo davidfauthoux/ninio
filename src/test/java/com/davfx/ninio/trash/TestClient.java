@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferHandler;
+import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpClientConfigurator;
@@ -56,7 +56,7 @@ public class TestClient {
 			r.getHeaders().put(Http.ACCEPT_ENCODING, Http.GZIP);
 			client.send(r, new HttpClientHandler() {
 				@Override
-				public void ready(ByteBufferHandler write) {
+				public void ready(CloseableByteBufferHandler write) {
 				}
 				@Override
 				public void handle(Address address, ByteBuffer buffer) {
@@ -83,7 +83,7 @@ public class TestClient {
 			Thread.sleep(1000);
 			client.send(r, new HttpClientHandler() {
 				@Override
-				public void ready(ByteBufferHandler write) {
+				public void ready(CloseableByteBufferHandler write) {
 				}
 				@Override
 				public void handle(Address address, ByteBuffer buffer) {

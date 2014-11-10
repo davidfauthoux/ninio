@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferHandler;
+import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -67,7 +67,7 @@ public final class WebsocketReady implements Ready {
 			}
 			
 			@Override
-			public void ready(final ByteBufferHandler write) {
+			public void ready(final CloseableByteBufferHandler write) {
 				websocketFrameReader = new WebsocketFrameReader(new WebsocketFrameReader.Handler() {
 					@Override
 					public void failed(IOException e) {

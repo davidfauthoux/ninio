@@ -30,7 +30,7 @@ public final class HttpRequest {
 	private final String path;
 	private final Map<String, String> headers;
 	
-	HttpRequest(Address address, boolean secure, Method method, String path, Map<String, String> headers) {
+	public HttpRequest(Address address, boolean secure, Method method, String path, Map<String, String> headers) {
 		this.address = address;
 		this.secure = secure;
 		this.method = method;

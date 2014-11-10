@@ -7,8 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferHandler;
 import com.davfx.ninio.common.Closeable;
+import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpClientConfigurator;
@@ -141,7 +141,7 @@ public final class SimpleHttpClient implements Closeable {
 			private InMemoryPost body = null;
 			
 			@Override
-			public void ready(ByteBufferHandler write) {
+			public void ready(CloseableByteBufferHandler write) {
 				if (post == null) {
 					return;
 				}

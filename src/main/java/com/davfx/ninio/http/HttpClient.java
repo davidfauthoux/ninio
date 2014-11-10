@@ -14,7 +14,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByteBufferHandler;
 import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
@@ -31,7 +30,7 @@ public final class HttpClient implements Closeable {
 		public HttpClientHandler handler;
 		public CloseableByteBufferHandler write;
 		public Date closeDate = null;
-		public boolean closed = false;
+		public boolean closed = true;//TODO false;
 	}
 
 	private final HttpClientConfigurator configurator;
@@ -195,9 +194,23 @@ public final class HttpClient implements Closeable {
 							}
 						};
 
-						newRecycler.write = write;
+						newRecycler.write = new CloseableByteBufferHandler() {
+							@Override
+							public void handle(Address address, ByteBuffer buffer) {
+								write.handle(address, buffer);
+							}
+							@Override
+							public void close() {
+								write.close();
+								newRecycler.closed = true;
+								if (newRecycler.reader == null) {
+									return;
+								}
+								newRecycler.reader.close();
+							}
+						};
 						write.handle(null, createRequest(request));
-						newRecycler.handler.ready(write);
+						newRecycler.handler.ready(newRecycler.write);
 					}
 					
 					@Override
@@ -346,7 +359,7 @@ public final class HttpClient implements Closeable {
 		}
 		
 		@Override
-		public void ready(ByteBufferHandler write) {
+		public void ready(CloseableByteBufferHandler write) {
 			if (redirected) {
 				return;
 			}
