@@ -19,6 +19,7 @@ public final class FileHttpServer {
 
 	public static void main(String[] args) throws Exception {
 		final File root = new File(CONFIG.getString("http.file.path"));
+		final String index = CONFIG.getString("http.file.index");
 		final Map<String, String> mime = new HashMap<>();
 		for (Config c : CONFIG.getConfigList("http.file.mime")) {
 			String type = c.getString("type");
@@ -33,7 +34,7 @@ public final class FileHttpServer {
 			}
 			@Override
 			public HttpServerHandler create() {
-				FileHttpServerHandler h = new FileHttpServerHandler(root);
+				FileHttpServerHandler h = new FileHttpServerHandler(root).setIndex(index);
 				for (Map.Entry<String, String> e : mime.entrySet()) {
 					h.setContentType(e.getKey(), e.getValue());
 				}

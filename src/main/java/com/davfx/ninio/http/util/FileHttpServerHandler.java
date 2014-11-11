@@ -18,6 +18,7 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	private final File dir;
 	private HttpRequest request;
 	private final Map<String, String> contentTypes = new LinkedHashMap<>();
+	private String index = null;
 	
 	public FileHttpServerHandler(File dir) {
 		this.dir = dir;
@@ -25,6 +26,10 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	
 	public FileHttpServerHandler setContentType(String extension, String contentType) {
 		contentTypes.put(extension, contentType);
+		return this;
+	}
+	public FileHttpServerHandler setIndex(String index) {
+		this.index = index;
 		return this;
 	}
 	
@@ -46,7 +51,13 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 		try {
 			String root = dir.getCanonicalPath();
 			String path = request.getPath();
-			File d = new File(root + Http.Url.decode(path));
+			
+			File d;
+			if ((index != null) && path.equals(String.valueOf(Http.PATH_SEPARATOR))) {
+				d = new File(root + index);
+			} else {
+				d = new File(root + Http.Url.decode(path));
+			}
 			if (d.isFile()) {
 				if (!d.getCanonicalPath().startsWith(root)) {
 					write.write(new HttpResponse(Http.Status.FORBIDDEN, Http.Message.FORBIDDEN));
