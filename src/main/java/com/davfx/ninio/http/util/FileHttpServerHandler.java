@@ -51,13 +51,17 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 		try {
 			String root = dir.getCanonicalPath();
 			String path = request.getPath();
-			
-			File d;
-			if ((index != null) && path.equals(String.valueOf(Http.PATH_SEPARATOR))) {
-				d = new File(root + index);
-			} else {
-				d = new File(root + Http.Url.decode(path));
+			if (path.isEmpty()) {
+				path = String.valueOf(Http.PATH_SEPARATOR);
 			}
+
+			path = Http.Url.decode(path);
+			
+			if ((index != null) && (path.charAt(path.length() - 1) == Http.PATH_SEPARATOR)) {
+				path = path + index;
+			}
+
+			File d = new File(root + path);
 			if (d.isFile()) {
 				if (!d.getCanonicalPath().startsWith(root)) {
 					write.write(new HttpResponse(Http.Status.FORBIDDEN, Http.Message.FORBIDDEN));
