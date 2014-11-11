@@ -2,14 +2,20 @@ package com.davfx.ninio.http.util;
 
 import java.nio.ByteBuffer;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedList;
 
 import com.davfx.ninio.http.Http;
 
-public final class InMemoryPost {
-	private final Deque<ByteBuffer> buffers = new LinkedList<ByteBuffer>();
+public final class InMemoryPost implements Iterable<ByteBuffer> {
+	private final Deque<ByteBuffer> buffers = new LinkedList<>();
 	
 	public InMemoryPost() {
+	}
+	
+	@Override
+	public Iterator<ByteBuffer> iterator() {
+		return buffers.iterator();
 	}
 	
 	public void add(ByteBuffer buffer) {
