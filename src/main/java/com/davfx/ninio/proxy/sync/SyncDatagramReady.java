@@ -1,4 +1,4 @@
-package com.davfx.ninio.common;
+package com.davfx.ninio.proxy.sync;
 
 import java.io.IOException;
 import java.net.DatagramPacket;
@@ -13,6 +13,10 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
+import com.davfx.ninio.common.Ready;
+import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 

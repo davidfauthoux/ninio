@@ -12,8 +12,10 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
-import com.davfx.ninio.common.SyncDatagramReady;
-import com.davfx.ninio.common.SyncDatagramReadyFactory;
+import com.davfx.ninio.proxy.sync.SyncDatagramReady;
+import com.davfx.ninio.proxy.sync.SyncDatagramReadyFactory;
+import com.davfx.ninio.proxy.sync.TcpdumpSyncDatagramReady;
+import com.davfx.ninio.proxy.sync.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -75,7 +77,6 @@ public final class ProxyUtils {
 	}
 	
 	public static ServerSide server() {
-		final SyncDatagramReady.Receiver syncDatagramReceiver = new SyncDatagramReady.Receiver();
 		final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 		configurators.put(SOCKET_TYPE, new ServerSideConfigurator() {
 			@Override
@@ -83,12 +84,25 @@ public final class ProxyUtils {
 				return new SocketReadyFactory();
 			}
 		});
-		configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
-			@Override
-			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-				return new SyncDatagramReadyFactory(syncDatagramReceiver);
-			}
-		});
+
+		if (CONFIG.hasPath("proxy.tcpdump")) {
+			final TcpdumpSyncDatagramReady.Receiver syncDatagramReceiver = new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), CONFIG.getInt("proxy.tcpdump.port"));
+			configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
+				@Override
+				public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
+					return new TcpdumpSyncDatagramReadyFactory(syncDatagramReceiver);
+				}
+			});
+		} else {
+			final SyncDatagramReady.Receiver syncDatagramReceiver = new SyncDatagramReady.Receiver();
+			configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
+				@Override
+				public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
+					return new SyncDatagramReadyFactory(syncDatagramReceiver);
+				}
+			});
+		}
+		
 		return new ServerSide() {
 			@Override
 			public void override(String connecterType, ServerSideConfigurator configurator) {

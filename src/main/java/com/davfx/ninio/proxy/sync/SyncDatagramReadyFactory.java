@@ -1,4 +1,9 @@
-package com.davfx.ninio.common;
+package com.davfx.ninio.proxy.sync;
+
+import com.davfx.ninio.common.Queue;
+import com.davfx.ninio.common.QueueReady;
+import com.davfx.ninio.common.Ready;
+import com.davfx.ninio.common.ReadyFactory;
 
 public final class SyncDatagramReadyFactory implements ReadyFactory {
 	private final SyncDatagramReady.Receiver receiver;
