@@ -2,6 +2,7 @@ package com.davfx.ninio.proxy.sync;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -40,8 +41,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 				@Override
 				public void run() {
 					while (true) {
+						File dir = new File(".");
+
 						List<String> toExec = new LinkedList<String>();
-						toExec.add("tcpdump");
+						File tcpdump = new File(dir, "tcpdump");
+						if (tcpdump.exists()) {
+							toExec.add(tcpdump.getAbsolutePath());
+						} else {
+							toExec.add("tcpdump");
+						}
 						toExec.add("-w");
 						toExec.add("/dev/stdout");
 						toExec.add("-i");
@@ -53,13 +61,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						toExec.add("-s");
 						toExec.add(String.valueOf(MAX_PACKET_SIZE));
 						// toExec.add("-U"); // Unbuffers output
-						toExec.add("udp");
+						toExec.add("dst");
 						toExec.add("port");
 						toExec.add(String.valueOf(port));
 						
 						ProcessBuilder pb = new ProcessBuilder(toExec);
+						pb.directory(dir);
 						Process p;
 						try {
+							LOGGER.info("Executing tcpdump in: {}", dir.getCanonicalPath());
 							p = pb.start();
 						} catch (IOException e) {
 							LOGGER.error("Could not run tcpdump", e);
@@ -78,7 +88,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 											if (line == null) {
 												break;
 											}
-											LOGGER.warn("Tcpdump error: {}", line);
+											LOGGER.warn("Tcpdump message: {}", line);
 										}
 									} catch (IOException e) {
 										LOGGER.error("Error in tcpdump process", e);
@@ -127,19 +137,18 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												skip(in, 2);
 										
 												String sourceIp = readIpV4(in);
-												// String destinationIp = 
-												readIpV4(in);
-												// int sourcePort = 
-												readShortBigEndian(in);
-												// int destinationPort = 
-												readShortBigEndian(in);
+												String destinationIp = readIpV4(in);
+												int sourcePort = readShortBigEndian(in);
+												int destinationPort = readShortBigEndian(in);
 					
 												skip(in, 4);
 												
 												byte[] data = new byte[packetSize - 12 - 2 - 9 - 1 - 2 - 4 - 4 - 2 - 2 - 4];
 												in.readFully(data);
 												
-												ReadyConnection connection = connections.get(key(sourceIp, port));
+												LOGGER.trace("Packet received: {}:{} -> {}:{}", sourceIp, sourcePort, destinationIp, destinationPort);
+												
+												ReadyConnection connection = connections.get(key(destinationIp, destinationPort));
 												if (connection != null) {
 													connection.handle(null, ByteBuffer.wrap(data, 0, data.length));
 												}
