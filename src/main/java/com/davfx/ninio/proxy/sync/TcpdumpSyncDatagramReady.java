@@ -105,7 +105,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 										try {
 											long header = readIntLittleEndian(in);
 											if (header != 0xA1B2C3D4) {
-												throw new IOException("Bad header");
+												throw new IOException("Bad header: 0x" + Long.toHexString(header));
 											}
 											skip(in, 20);
 					
