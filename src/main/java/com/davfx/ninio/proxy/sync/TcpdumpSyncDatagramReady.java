@@ -2,7 +2,9 @@ package com.davfx.ninio.proxy.sync;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -34,11 +36,30 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
 	private static final Config CONFIG = ConfigUtils.load(SyncDatagramReady.class);
 	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("proxy.tcpdump.packet.size").intValue();
+	private static final String DO_OUTPUT = CONFIG.hasPath("proxy.tcpdump.output") ? CONFIG.getString("proxy.tcpdump.output") : null;
 
 	public static final class Receiver {
+		private final File outputFile;
+		private final DataOutputStream output;
+		
 		private final DatagramSocket socket;
 		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
 		public Receiver(final String interfaceId, final int port) {
+			if (DO_OUTPUT != null) {
+				outputFile = new File(DO_OUTPUT);
+				DataOutputStream o;
+				try {
+					o = new DataOutputStream(new FileOutputStream(outputFile));
+				} catch (IOException ioe) {
+					LOGGER.error("Could not create output stream", ioe);
+					o = null;
+				}
+				output = o;
+			} else {
+				outputFile = null;
+				output = null;
+			}
+
 			DatagramSocket s;
 			try {
 				s = new DatagramSocket();
@@ -131,6 +152,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 					
 												int ipHeader = readShortBigEndian(in);
 												if (ipHeader != 0x800) {
+													LOGGER.trace("Non IP packet received: {}", ipHeader);
 													// Not IP
 													skip(in, packetSize - 12 - 2);
 													continue;
@@ -140,6 +162,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												
 												int type = readByte(in);
 												if (type != 17) {
+													LOGGER.trace("Non UDP packet received: {}", type);
 													// 17 UDP, 6 TCP
 													skip(in, packetSize - 12 - 2 - 9 - 1);
 													continue;
@@ -158,6 +181,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												in.readFully(data);
 												
 												LOGGER.trace("Packet received: {}:{} -> {}:{}", sourceIp, sourcePort, destinationIp, destinationPort);
+												
+												if (output != null) {
+													output.writeInt(data.length);
+													output.write(data);
+													output.flush();
+												}
 												
 												ReadyConnection connection = connections.get(key(sourceIp, sourcePort));
 												if (connection != null) {
