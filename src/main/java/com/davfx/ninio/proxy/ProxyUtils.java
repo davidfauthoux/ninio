@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
 import com.davfx.ninio.proxy.sync.SyncDatagramReady;
@@ -85,20 +86,29 @@ public final class ProxyUtils {
 			}
 		});
 
-		if (CONFIG.hasPath("proxy.tcpdump")) {
-			final TcpdumpSyncDatagramReady.Receiver syncDatagramReceiver = new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), CONFIG.getInt("proxy.tcpdump.port"));
-			configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
-				@Override
-				public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-					return new TcpdumpSyncDatagramReadyFactory(syncDatagramReceiver);
-				}
-			});
+		if (CONFIG.getBoolean("proxy.sync")) {
+			if (CONFIG.hasPath("proxy.tcpdump")) {
+				final TcpdumpSyncDatagramReady.Receiver syncDatagramReceiver = new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), CONFIG.getInt("proxy.tcpdump.port"));
+				configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
+					@Override
+					public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
+						return new TcpdumpSyncDatagramReadyFactory(syncDatagramReceiver);
+					}
+				});
+			} else {
+				final SyncDatagramReady.Receiver syncDatagramReceiver = new SyncDatagramReady.Receiver();
+				configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
+					@Override
+					public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
+						return new SyncDatagramReadyFactory(syncDatagramReceiver);
+					}
+				});
+			}
 		} else {
-			final SyncDatagramReady.Receiver syncDatagramReceiver = new SyncDatagramReady.Receiver();
 			configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
 				@Override
 				public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-					return new SyncDatagramReadyFactory(syncDatagramReceiver);
+					return new DatagramReadyFactory();
 				}
 			});
 		}
