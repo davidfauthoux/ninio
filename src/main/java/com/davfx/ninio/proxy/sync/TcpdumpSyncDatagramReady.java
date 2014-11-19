@@ -152,7 +152,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 					
 												int ipHeader = readShortBigEndian(in);
 												if (ipHeader != 0x800) {
-													LOGGER.trace("Non IP packet received: {}", ipHeader);
+													LOGGER.error("Non IP packet received: {}", ipHeader);
 													// Not IP
 													skip(in, packetSize - 12 - 2);
 													continue;
@@ -162,7 +162,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												
 												int type = readByte(in);
 												if (type != 17) {
-													LOGGER.trace("Non UDP packet received: {}", type);
+													LOGGER.error("Non UDP packet received: {}", type);
 													// 17 UDP, 6 TCP
 													skip(in, packetSize - 12 - 2 - 9 - 1);
 													continue;
