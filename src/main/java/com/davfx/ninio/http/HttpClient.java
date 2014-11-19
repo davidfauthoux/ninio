@@ -44,7 +44,7 @@ public final class HttpClient implements Closeable {
 			@Override
 			public void run() {
 				if (closed) {
-					throw new RuntimeException("Normal closed");
+					throw new RuntimeException("Stop requested");
 				}
 				
 				configurator.queue.post(new Runnable() {

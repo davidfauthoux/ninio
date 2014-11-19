@@ -38,7 +38,7 @@ public final class CallingEmptyScheduledRemoteConnector implements RemoteConnect
 				@Override
 				public void run() {
 					if (closed) {
-						throw new RuntimeException("Normal closed");
+						throw new RuntimeException("Stop requested");
 					}
 					
 					queue.post(new Runnable() {
