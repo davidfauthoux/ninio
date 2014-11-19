@@ -23,7 +23,7 @@ import com.typesafe.config.Config;
 public final class SyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SyncDatagramReady.class);
 	private static final Config CONFIG = ConfigUtils.load(SyncDatagramReady.class);
-	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.sync.buffer.size").intValue();
+	private static final int BUFFER_SIZE = CONFIG.getBytes("proxy.sync.buffer.size").intValue();
 
 	public static final class Receiver {
 		private DatagramSocket socket = null;

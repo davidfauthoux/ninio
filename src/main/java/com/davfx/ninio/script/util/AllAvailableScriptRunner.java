@@ -97,6 +97,6 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		snmpConfigurator.close();
 		pingConfigurator.close();
 		
-		scheduledExecutor.shutdown();
+		//TODO scheduledExecutor.shutdown();
 	}
 }

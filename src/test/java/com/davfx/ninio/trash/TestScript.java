@@ -3,8 +3,11 @@ package com.davfx.ninio.trash;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
+import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunner;
@@ -46,7 +49,7 @@ public class TestScript {
 			}
 		});*/
 
-		//new ProxyServer(6666).start();
+		new ProxyServer(6666, 2).start();
 		/*new ProxyServer(7777)
 		.override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666)))
 		.override(ProxyUtils.DATAGRAM_TYPE, Forward.forward(new Address("localhost", 6666)))
@@ -58,16 +61,14 @@ public class TestScript {
 		.start();
 		ProxyClient proxy = new ProxyClient(new Address("localhost", 8888));
 		*/
-		//ProxyClient proxy = new ProxyClient(new Address("localhost", 6666));
+		ProxyClient proxy = new ProxyClient(new Address("localhost", 6666));
 
 		if ("a".equals("a" + "")) {
 		try (AllAvailableScriptRunner r = new AllAvailableScriptRunner(new Queue())) {
-			/*
-			r
-			.telnetSocketOverride(proxy.socket())
-			.snmpDatagramOverride(proxy.datagram())
-			.pingDatagramOverride(proxy.of("ping"));
-*/
+			r.telnetConfigurator.override(proxy.socket());
+			r.snmpConfigurator.override(proxy.datagram());
+			r.pingConfigurator.override(proxy.of("ping"));
+			
 			for (int i = 0; i < 1; i++) {
 				System.out.println("-------------------------");
 				System.out.println("-------------------------");
@@ -124,7 +125,7 @@ public class TestScript {
 			*/
 			
 			//rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { myfunc(JSON.stringify(r), function(rr) { log(rr); }); });"), new Failable() {
-			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { log(r); });"), new Failable() {
+			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { log('1.3.6.1.2.1.2.2.1.2'); log(r); });"), new Failable() {
 				@Override
 				public void failed(IOException e) {
 					e.printStackTrace();
@@ -162,7 +163,7 @@ public class TestScript {
 			System.out.println("------ END----------");
 			System.out.println("------ END----------");
 			System.out.println("------ END----------");
-			for (int i = 0; i < 10; i++) {
+			for (int i = 0; i < 100; i++) {
 				System.gc();
 				Thread.sleep(1000);
 				}

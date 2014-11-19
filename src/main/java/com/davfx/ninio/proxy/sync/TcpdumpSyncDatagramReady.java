@@ -25,18 +25,29 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
 
 public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSyncDatagramReady.class);
 
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
-	private static final int MAX_PACKET_SIZE = 2048;
+	private static final Config CONFIG = ConfigUtils.load(SyncDatagramReady.class);
+	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("proxy.tcpdump.packet.size").intValue();
 
 	public static final class Receiver {
-		private DatagramSocket socket = null;
-		private final Object lock = new Object();
+		private final DatagramSocket socket;
 		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
 		public Receiver(final String interfaceId, final int port) {
+			DatagramSocket s;
+			try {
+				s = new DatagramSocket();
+			} catch (IOException ioe) {
+				LOGGER.error("Could not open UDP socket", ioe);
+				s = null;
+			}
+			socket = s;
+			
 			Executors.newSingleThreadExecutor().execute(new Runnable() {
 				@Override
 				public void run() {
@@ -60,8 +71,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						toExec.add("-q");
 						toExec.add("-s");
 						toExec.add(String.valueOf(MAX_PACKET_SIZE));
-						// toExec.add("-U"); // Unbuffers output
-						toExec.add("dst");
+						toExec.add("-U"); // Unbuffers output
+						toExec.add("src");
 						toExec.add("port");
 						toExec.add(String.valueOf(port));
 						
@@ -69,7 +80,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						pb.directory(dir);
 						Process p;
 						try {
-							LOGGER.info("Executing tcpdump in: {}", dir.getCanonicalPath());
+							LOGGER.info("Executing {} in: {}", toExec, dir.getCanonicalPath());
 							p = pb.start();
 						} catch (IOException e) {
 							LOGGER.error("Could not run tcpdump", e);
@@ -148,7 +159,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												
 												LOGGER.trace("Packet received: {}:{} -> {}:{}", sourceIp, sourcePort, destinationIp, destinationPort);
 												
-												ReadyConnection connection = connections.get(key(destinationIp, destinationPort));
+												ReadyConnection connection = connections.get(key(sourceIp, sourcePort));
 												if (connection != null) {
 													connection.handle(null, ByteBuffer.wrap(data, 0, data.length));
 												}
@@ -192,15 +203,6 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		}
 		
 		private boolean add(Address address, ReadyConnection connection) {
-			synchronized (lock) {
-				while (socket == null) {
-					try {
-						lock.wait();
-					} catch (InterruptedException ie) {
-					}
-				}
-			}
-
 			String key = key(address.getHost(), address.getPort());
 			
 			if (connections.containsKey(key)) {
@@ -217,6 +219,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		}
 		
 		private boolean send(Address address, ByteBuffer buffer) {
+			if (socket == null) {
+				 return false;
+			}
 			try {
 				DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(address.getHost()), address.getPort());
 				socket.send(packet);

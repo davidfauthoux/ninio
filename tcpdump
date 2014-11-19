@@ -1,1 +1,1 @@
-sudo tcpdump $*
+sudo /usr/sbin/tcpdump $*
