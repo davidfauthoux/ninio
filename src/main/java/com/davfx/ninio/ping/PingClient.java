@@ -65,8 +65,10 @@ public final class PingClient implements Closeable {
 			public void run() {
 				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
+				final InstanceMapper instanceMapper = new InstanceMapper();
+				instanceMappers.add(instanceMapper);
+
 				ready.connect(configurator.address, new ReadyConnection() {
-					private final InstanceMapper instanceMapper = new InstanceMapper();
 
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -118,8 +120,6 @@ public final class PingClient implements Closeable {
 					
 					@Override
 					public void connected(final FailableCloseableByteBufferHandler write) {
-						instanceMappers.add(instanceMapper);
-						
 						final PingWriter w = new PingWriter(write);
 						
 						clientHandler.launched(new PingClientHandler.Callback() {

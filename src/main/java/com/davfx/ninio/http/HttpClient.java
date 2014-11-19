@@ -30,7 +30,7 @@ public final class HttpClient implements Closeable {
 		public HttpClientHandler handler;
 		public CloseableByteBufferHandler write;
 		public Date closeDate = null;
-		public boolean closed = true;//TODO false;
+		public boolean closed = false;
 	}
 
 	private final HttpClientConfigurator configurator;

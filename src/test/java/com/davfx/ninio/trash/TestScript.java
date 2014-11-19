@@ -49,7 +49,7 @@ public class TestScript {
 			}
 		});*/
 
-		new ProxyServer(6666, 2).start();
+		//new ProxyServer(6666, 2).start();
 		/*new ProxyServer(7777)
 		.override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666)))
 		.override(ProxyUtils.DATAGRAM_TYPE, Forward.forward(new Address("localhost", 6666)))
@@ -69,7 +69,7 @@ public class TestScript {
 			r.snmpConfigurator.override(proxy.datagram());
 			r.pingConfigurator.override(proxy.of("ping"));
 			
-			for (int i = 0; i < 1; i++) {
+			for (int i = 0; i < 10; i++) {
 				System.out.println("-------------------------");
 				System.out.println("-------------------------");
 				System.out.println("-------------------------");
@@ -156,7 +156,9 @@ public class TestScript {
 				System.out.println(Runtime.getRuntime().freeMemory());
 				Thread.sleep(1000);
 				*/
-			Thread.sleep(1000);
+			System.out.println("------ WAITING----------");
+			Thread.sleep(10000);
+			System.out.println("------ WAITED----------");
 				}
 			}
 			System.out.println("------ END----------");

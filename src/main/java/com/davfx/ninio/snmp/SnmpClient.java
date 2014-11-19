@@ -87,9 +87,10 @@ public final class SnmpClient implements Closeable {
 			public void run() {
 				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
-				ready.connect(configurator.address, new ReadyConnection() {
-					private final InstanceMapper instanceMapper = new InstanceMapper(requestIdProvider);
+				final InstanceMapper instanceMapper = new InstanceMapper(requestIdProvider);
+				instanceMappers.add(instanceMapper);
 
+				ready.connect(configurator.address, new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
 						int instanceId;
@@ -127,8 +128,6 @@ public final class SnmpClient implements Closeable {
 					
 					@Override
 					public void connected(final FailableCloseableByteBufferHandler write) {
-						instanceMappers.add(instanceMapper);
-						
 						final SnmpWriter w = new SnmpWriter(write, configurator.community, configurator.authEngine);
 						
 						clientHandler.launched(new SnmpClientHandler.Callback() {
