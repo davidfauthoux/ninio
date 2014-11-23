@@ -25,7 +25,11 @@ public final class HttpQuery {
 					continue;
 				}
 				Iterator<String> j = split(kv, '=').iterator();
-				parameters.put(j.next(), Http.Url.decode(j.next()));
+				if (j.hasNext()) {
+					parameters.put(j.next(), Http.Url.decode(j.next()));
+				} else {
+					parameters.put(kv, null);
+				}
 			}
 		}
 
