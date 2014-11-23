@@ -15,19 +15,24 @@ public final class HttpQuery {
 
 	public HttpQuery(String httpPath) {
 		int i = httpPath.indexOf('?');
+		String p;
 		if (i < 0) {
-			path = httpPath;
+			p = httpPath;
 		} else {
-			path = httpPath.substring(0, i);
-			if (!path.isEmpty()) {
-				for (String kv : split(httpPath.substring(i + 1), '&')) {
-					if (kv.isEmpty()) {
-						continue;
-					}
-					Iterator<String> j = split(kv, '=').iterator();
-					parameters.put(j.next(), Http.Url.decode(j.next()));
+			p = httpPath.substring(0, i);
+			for (String kv : split(httpPath.substring(i + 1), '&')) {
+				if (kv.isEmpty()) {
+					continue;
 				}
+				Iterator<String> j = split(kv, '=').iterator();
+				parameters.put(j.next(), Http.Url.decode(j.next()));
 			}
+		}
+
+		if (p.isEmpty()) {
+			path = String.valueOf(Http.PATH_SEPARATOR);
+		} else {
+			path = Http.Url.decode(p);
 		}
 	}
 	

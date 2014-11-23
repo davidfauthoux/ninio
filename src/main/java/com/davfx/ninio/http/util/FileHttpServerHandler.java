@@ -50,12 +50,7 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	public void ready(Write write) {
 		try {
 			String root = dir.getCanonicalPath();
-			String path = request.getPath();
-			if (path.isEmpty()) {
-				path = String.valueOf(Http.PATH_SEPARATOR);
-			}
-
-			path = Http.Url.decode(path);
+			String path = new HttpQuery(request.getPath()).getPath();
 			
 			if ((index != null) && (path.charAt(path.length() - 1) == Http.PATH_SEPARATOR)) {
 				path = path + index;
