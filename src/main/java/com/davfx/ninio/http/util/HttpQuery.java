@@ -1,12 +1,11 @@
 package com.davfx.ninio.http.util;
 
-import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
 import com.davfx.ninio.http.Http;
+import com.google.common.base.Splitter;
 
 
 public final class HttpQuery {
@@ -20,13 +19,13 @@ public final class HttpQuery {
 			p = httpPath;
 		} else {
 			p = httpPath.substring(0, i);
-			for (String kv : split(httpPath.substring(i + 1), '&')) {
+			for (String kv : Splitter.on('&').split(httpPath.substring(i + 1))) {
 				if (kv.isEmpty()) {
 					continue;
 				}
-				Iterator<String> j = split(kv, '=').iterator();
-				if (j.hasNext()) {
-					parameters.put(j.next(), Http.Url.decode(j.next()));
+				List<String> j = Splitter.on('=').splitToList(kv);
+				if (j.size() == 2) {
+					parameters.put(j.get(0), Http.Url.decode(j.get(1)));
 				} else {
 					parameters.put(kv, null);
 				}
@@ -61,20 +60,5 @@ public final class HttpQuery {
 				return parameters.toString();
 			}
 		};
-	}
-	
-	private static Iterable<String> split(String s, char c) {
-		List<String> l = new LinkedList<String>();
-		int j = 0;
-		while (true) {
-			int i = s.indexOf(c, j);
-			if (i < 0) {
-				l.add(s.substring(j));
-				break;
-			}
-			l.add(s.substring(j, i));
-			j = i + 1;
-		}
-		return l;
 	}
 }
