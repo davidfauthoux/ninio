@@ -38,12 +38,17 @@ public final class HtmlDirectoryHttpServerHandler implements HttpServerHandler {
 		HttpResponse r = new HttpResponse(Http.Status.OK, Http.Message.OK);
 		r.getHeaders().put("Cache-Control", "private, max-age=0, no-cache");
 		try {
-			String path = request.getPath();
-			if (path.endsWith("/")) {
-				path = path.substring(0, path.length() - "/".length());
+			HttpQuery q = new HttpQuery(request.getPath());
+			String path = q.getPath();
+			File file = q.getFile(dir, null);
+
+			if (file == null) {
+				write.write(new HttpResponse(Http.Status.FORBIDDEN, Http.Message.FORBIDDEN));
+				write.close();
+				return;
 			}
-			File d = new File(dir.getCanonicalPath() + Http.Url.decode(path));
-			if (d.isDirectory()) {
+
+			if (file.isDirectory()) {
 				StringBuilder b = new StringBuilder();
 				b.append("<!doctype html>");
 				b.append("<html>");
@@ -52,7 +57,7 @@ public final class HtmlDirectoryHttpServerHandler implements HttpServerHandler {
 				b.append("</head>");
 				b.append("<body>");
 
-				File[] files = d.listFiles();
+				File[] files = file.listFiles();
 				if (files != null) {
 					b.append("<ul>");
 					if (!path.isEmpty()) {
@@ -87,9 +92,9 @@ public final class HtmlDirectoryHttpServerHandler implements HttpServerHandler {
 				write.handle(null, bb);
 				write.close();
 			} else {
-				r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(d.length()));
+				r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(file.length()));
 				write.write(r);
-				try (InputStream in = new FileInputStream(d)) {
+				try (InputStream in = new FileInputStream(file)) {
 					while (true) {
 						byte[] b = new byte[10 * 1024];
 						int l = in.read(b);
