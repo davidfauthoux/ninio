@@ -1,14 +1,22 @@
 package com.davfx.ninio.http.util;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.http.Http;
 import com.google.common.base.Splitter;
 
 
 public final class HttpQuery {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(HttpQuery.class);
+	
 	private final String path;
 	private final Map<String, String> parameters = new LinkedHashMap<String, String>();
 
@@ -41,6 +49,24 @@ public final class HttpQuery {
 	
 	public String getPath() {
 		return path;
+	}
+	
+	public File getFile(File root, String index) {
+		File d = new File(root + Http.Url.decode(path).replace(Http.PATH_SEPARATOR, File.separatorChar));
+
+		try {
+			if (!d.getCanonicalPath().startsWith(root.getCanonicalPath())) {
+				return null;
+			}
+		} catch (IOException ioe) {
+			LOGGER.error("Could not check file request", ioe);
+			return null;
+		}
+
+		if ((index != null) && d.isDirectory()) {
+			d = new File(d, index);
+		}
+		return d;
 	}
 	
 	public Parameters getParameters() {

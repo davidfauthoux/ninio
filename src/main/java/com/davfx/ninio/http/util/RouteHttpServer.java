@@ -25,6 +25,7 @@ import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.util.ConfigUtils;
+import com.davfx.util.Pair;
 import com.typesafe.config.Config;
 
 public final class RouteHttpServer {
@@ -40,7 +41,7 @@ public final class RouteHttpServer {
 		);
 		for (Config c : CONFIG.getConfigList("http.route.map")) {
 			Address to = new Address(c.getString("to.host"), c.getInt("to.port"));
-			server.route(c.getString("host"), to);
+			server.route(c.getString("host"), to, c.getString("path"));
 		}
 		server.start();
 	}
@@ -48,7 +49,7 @@ public final class RouteHttpServer {
 	
 	private final HttpServerConfigurator serverConfigurator;
 	private final HttpClient client;
-	private final Map<String, Address> routing = new HashMap<>();
+	private final Map<String, Pair<Address, String>> routing = new HashMap<>();
 	
 	public RouteHttpServer(HttpServerConfigurator serverConfigurator, HttpClientConfigurator clientConfigurator) {
 		LOGGER.debug("Running router: {}", serverConfigurator.address);
@@ -108,14 +109,14 @@ public final class RouteHttpServer {
 					public void handle(HttpRequest request) {
 						String host = request.getHeaders().get(Http.HOST);
 						LOGGER.debug("Received request: {}, host = {}", request.getPath(), host);
-						Address to = routing.get(host);
+						Pair<Address, String> to = routing.get(host);
 						if (to == null) {
 							closed = true;
 							return;
 						}
 
 						LOGGER.debug("Routed to: {}", to);
-						HttpRequest routedRequest = new HttpRequest(to, request.isSecure(), request.getMethod(), request.getPath(), request.getHeaders());
+						HttpRequest routedRequest = new HttpRequest(to.first, request.isSecure(), request.getMethod(), to.second + request.getPath(), request.getHeaders());
 						routedRequest.getHeaders().put(Http.HOST, to.toString());
 						client.send(routedRequest, new HttpClientHandler() {
 							@Override
@@ -163,8 +164,8 @@ public final class RouteHttpServer {
 		});
 	}
 	
-	public RouteHttpServer route(String host, Address to) {
-		routing.put(host, to);
+	public RouteHttpServer route(String host, Address to, String path) {
+		routing.put(host, new Pair<Address, String>(to, path));
 		return this;
 	}
 }

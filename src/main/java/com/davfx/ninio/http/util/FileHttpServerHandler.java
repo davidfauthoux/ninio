@@ -49,21 +49,16 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	@Override
 	public void ready(Write write) {
 		try {
-			String root = dir.getCanonicalPath();
-			String path = new HttpQuery(request.getPath()).getPath();
-			
-			if ((index != null) && (path.charAt(path.length() - 1) == Http.PATH_SEPARATOR)) {
-				path = path + index;
+			File file = new HttpQuery(request.getPath()).getFile(dir, index);
+
+			if (file == null) {
+				write.write(new HttpResponse(Http.Status.FORBIDDEN, Http.Message.FORBIDDEN));
+				write.close();
+				return;
 			}
 
-			File d = new File(root + path);
-			if (d.isFile()) {
-				if (!d.getCanonicalPath().startsWith(root)) {
-					write.write(new HttpResponse(Http.Status.FORBIDDEN, Http.Message.FORBIDDEN));
-					write.close();
-					return;
-				}
-				String name = d.getName();
+			if (file.isFile()) {
+				String name = file.getName();
 				String contentType = null;
 				for (Map.Entry<String, String> e : contentTypes.entrySet()) {
 					if (name.endsWith(e.getKey())) {
@@ -74,12 +69,12 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 				
 				HttpResponse r = new HttpResponse(Http.Status.OK, Http.Message.OK);
 				// r.getHeaders().put("Cache-Control", "private, max-age=0, no-cache");
-				r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(d.length()));
+				r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(file.length()));
 				if (contentType != null) {
 					r.getHeaders().put(Http.CONTENT_TYPE, contentType);
 				}
 				write.write(r);
-				try (InputStream in = new FileInputStream(d)) {
+				try (InputStream in = new FileInputStream(file)) {
 					while (true) {
 						byte[] b = new byte[10 * 1024];
 						int l = in.read(b);
