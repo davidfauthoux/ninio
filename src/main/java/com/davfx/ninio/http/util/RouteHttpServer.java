@@ -40,8 +40,7 @@ public final class RouteHttpServer {
 			new HttpClientConfigurator(queue).withTrust(new Trust())
 		);
 		for (Config c : CONFIG.getConfigList("http.route.map")) {
-			Address to = new Address(c.getString("to.host"), c.getInt("to.port"));
-			server.route(c.getString("host"), to, c.getString("path"));
+			server.route(c.getString("host"), new Address(c.getString("to.host"), c.getInt("to.port")), c.getString("to.path"));
 		}
 		server.start();
 	}
