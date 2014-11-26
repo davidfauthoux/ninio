@@ -30,12 +30,13 @@ public class TestScript2 {
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();
 		
-		new ProxyServer(6666, 10).start();
+		//new ProxyServer(6666, 10).start();
 		ProxyClient proxy = new ProxyClient(new Address("localhost", 6666));
 		
-		//proxy =null;
+		proxy =null;
 
 		if ("0".equals(String.valueOf(0))) {
+			for (int iii = 0; iii < 100; iii++) {
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -55,6 +56,14 @@ public class TestScript2 {
 					return null;
 				}
 			});
+			
+			rrr.eval(new BasicScript().append("telnet({'host':'172.17.10.184', 'init':['cisco', 'celm2pdcdm'], command:'show version'}, function(r) { logg('.2:' + JSON.stringify(r)); });"), new Failable() {
+				@Override
+				public void failed(IOException e) {
+					e.printStackTrace();
+				}
+			});
+			/*
 			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { logg('.2:' + JSON.stringify(r)); });"), new Failable() {
 				@Override
 				public void failed(IOException e) {
@@ -75,6 +84,7 @@ public class TestScript2 {
 					e.printStackTrace();
 				}
 			});
+			*/
 /*			Iterable<String> sss = new BasicScript().append("var fff = function() { log('titi'); fff(); };fff();\n// while (true) { log('toto'); }\n");
 			final long timeoutInJavascript = (long) (5d * 1000d);
 
@@ -106,17 +116,17 @@ public class TestScript2 {
 
 
 			System.out.println("------ END----------");
-			for (int i = 0; i < 3000; i++) {
-				System.gc();
-				Thread.sleep(1000);
-			}
+			//for (int i = 0; i < 3000; i++) {
+				//System.gc();
+				Thread.sleep(20000);
+			//}
 		} finally {
 			r.close();
 		}
 		}
 
 		System.out.println("----------!!!!!--------");
-		
+		}
 		for (int i = 0; i < 100; i++) {
 			System.gc();
 			System.out.println(Runtime.getRuntime().freeMemory());

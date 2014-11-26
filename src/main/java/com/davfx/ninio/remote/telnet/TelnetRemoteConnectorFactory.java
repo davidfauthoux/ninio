@@ -19,7 +19,7 @@ public final class TelnetRemoteConnectorFactory implements RemoteConnectorFactor
 	
 	@Override
 	public RemoteConnector create(Address address) {
-		final TelnetClient client = new TelnetClient(configurator);
+		final TelnetClient client = new TelnetClient(new TelnetClientConfigurator(configurator).withAddress(address));
 
 		return new RemoteConnector() {
 			@Override

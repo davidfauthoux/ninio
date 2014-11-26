@@ -15,6 +15,6 @@ public final class SshRemoteConnectorFactory implements RemoteConnectorFactory {
 	
 	@Override
 	public RemoteConnector create(Address address) {
-		return new SshRemoteConnector(configurator);
+		return new SshRemoteConnector(new SshClientConfigurator(configurator).withAddress(address));
 	}
 }

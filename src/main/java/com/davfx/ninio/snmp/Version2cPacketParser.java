@@ -6,6 +6,23 @@ import java.util.LinkedList;
 import java.util.List;
 
 final class Version2cPacketParser {
+	/*%%%
+	public static void main(String[] args) throws Exception {
+		try (DataInputStream in = new DataInputStream(new FileInputStream(new File("tcpdump.output.bin")))) {
+			while (true) {
+				int l = in.readInt();
+				System.out.println("l=" +l);
+				byte[] d = new byte[l];
+				in.readFully(d);
+				try {
+					new Version2cPacketParser(ByteBuffer.wrap(d));
+				} catch (Exception e) {
+					e.printStackTrace(System.out);
+				}
+			}
+		}
+	}
+	*/
 
 	private final int requestId;
 	private final int errorStatus;

@@ -3,10 +3,11 @@ package com.davfx.ninio.proxy;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -26,9 +27,11 @@ final class ProxyReady {
 
 	private final Address proxyServerAddress;
 
+	private final Object lock = new Object();
 	private DataOutputStream currentOut = null;
 	private Map<Integer, Pair<Address, ReadyConnection>> currentConnections;
 	private int nextConnectionId;
+	private double connectionTimeout = 10d;
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
@@ -54,6 +57,11 @@ final class ProxyReady {
 		return this;
 	}
 	
+	public ProxyReady withConnectionTimeout(double connectionTimeout) {
+		this.connectionTimeout = connectionTimeout;
+		return this;
+	}
+	
 	public ProxyReady listen(ProxyListener listener) {
 		this.listener = listener;
 		return this;
@@ -71,104 +79,112 @@ final class ProxyReady {
 				queue.check();
 				final DataOutputStream out;
 				final Map<Integer, Pair<Address, ReadyConnection>> connections;
-		
-				if (currentOut == null) {
-					final DataInputStream in;
-					final Socket socket;
-		
-					try {
-						socket = new Socket(proxyServerAddress.getHost(), proxyServerAddress.getPort());
+				final int connectionId;
+				
+				synchronized (lock) {
+					if (currentOut == null) {
+						final DataInputStream in;
+						final Socket socket;
+			
 						try {
-							out = new DataOutputStream(socket.getOutputStream());
-							in = new DataInputStream(socket.getInputStream());
-						} catch (IOException ee) {
+							socket = new Socket();
+							socket.connect(new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort()), (int) (connectionTimeout * 1000d));
 							try {
-								socket.close();
-							} catch (IOException se) {
+								out = new DataOutputStream(socket.getOutputStream());
+								in = new DataInputStream(socket.getInputStream());
+							} catch (IOException ee) {
+								try {
+									socket.close();
+								} catch (IOException se) {
+								}
+								throw ee;
 							}
-							throw ee;
+						} catch (final IOException ioe) {
+							connection.failed(new IOException("Connection to proxy cannot be established", ioe));
+							executor.execute(new Runnable() {
+								@Override
+								public void run() {
+									listener.failed(ioe);
+								}
+							});
+							return;
 						}
-					} catch (final IOException ioe) {
-						connection.failed(new IOException("Connection to proxy cannot be established", ioe));
+			
+						connections = new HashMap<>();
+			
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
-								listener.failed(ioe);
-							}
-						});
-						return;
-					}
-		
-					connections = new ConcurrentHashMap<>();
-		
-					executor.execute(new Runnable() {
-						@Override
-						public void run() {
-							listener.connected();
-
-							while (true) {
-								try {
-									LOGGER.trace("Client waiting for connection ID");
-									int connectionId = in.readInt();
-									Pair<Address, ReadyConnection> currentConnection = connections.get(connectionId);
-									int len = in.readInt();
-									if (len < 0) {
-										connections.remove(connectionId);
-										if (currentConnection != null) {
-											currentConnection.second.failed(new IOException("Failed"));
+								listener.connected();
+	
+								while (true) {
+									try {
+										LOGGER.trace("Client waiting for connection ID");
+										int connectionId = in.readInt();
+										Pair<Address, ReadyConnection> currentConnection;
+										synchronized (lock) {
+											currentConnection = connections.get(connectionId);
 										}
-									} else if (len == 0) {
-										connections.remove(connectionId);
-										if (currentConnection != null) {
-											currentConnection.second.close();
+										int len = in.readInt();
+										if (len < 0) {
+											synchronized (lock) {
+												connections.remove(connectionId);
+											}
+											if (currentConnection != null) {
+												currentConnection.second.failed(new IOException("Failed"));
+											}
+										} else if (len == 0) {
+											synchronized (lock) {
+												connections.remove(connectionId);
+											}
+											if (currentConnection != null) {
+												currentConnection.second.close();
+											}
+										} else {
+											final byte[] b = new byte[len];
+											in.readFully(b);
+											if (currentConnection != null) {
+												currentConnection.second.handle(address, ByteBuffer.wrap(b));
+											}
 										}
-									} else {
-										final byte[] b = new byte[len];
-										in.readFully(b);
-										if (currentConnection != null) {
-											currentConnection.second.handle(address, ByteBuffer.wrap(b));
-										}
+									} catch (IOException ioe) {
+										LOGGER.warn("Connection lost with server");
+										break;
 									}
-								} catch (IOException ioe) {
-									LOGGER.warn("Connection lost");
-									break;
 								}
-							}
-		
-							try {
-								socket.close();
-							} catch (IOException e) {
-							}
-		
-							queue.post(new Runnable() {
-								@Override
-								public void run() {
+			
+								try {
+									socket.close();
+								} catch (IOException e) {
+								}
+			
+								synchronized (lock) {
 									currentOut = null;
 									currentConnections = null;
 								}
-							});
-		
-							for (Pair<Address, ReadyConnection> c : connections.values()) {
-								c.second.close();
+
+								for (Pair<Address, ReadyConnection> c : connections.values()) {
+									c.second.close();
+								}
+								
+								listener.disconnected();
 							}
-							
-							listener.disconnected();
-						}
-					});
+						});
+						
+						currentOut = out;
+						currentConnections = connections;
+						nextConnectionId = 0;
+					} else {
+						out = currentOut;
+						connections = currentConnections;
+					}
 					
-					currentOut = out;
-					currentConnections = connections;
-					nextConnectionId = 0;
-				} else {
-					out = currentOut;
-					connections = currentConnections;
+					connectionId = nextConnectionId;
+					nextConnectionId++;
+					
+					connections.put(connectionId, new Pair<>(address, connection));
 				}
 				
-				final int connectionId = nextConnectionId;
-				nextConnectionId++;
-				
-				connections.put(connectionId, new Pair<>(address, connection));
-
 				try {
 					out.writeInt(connectionId);
 					out.writeInt(0);
@@ -184,7 +200,9 @@ final class ProxyReady {
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void close() {
-						connections.remove(connectionId);
+						synchronized (lock) {
+							connections.remove(connectionId);
+						}
 						try {
 							out.writeInt(connectionId);
 							out.writeInt(-1);
