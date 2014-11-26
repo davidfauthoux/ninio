@@ -62,7 +62,7 @@ public final class SnmpClient implements Closeable {
 	private static final Random RANDOM = new Random(System.currentTimeMillis());
 
 	private static final class RequestIdProvider {
-		private static final int LOOP_REQUEST_ID = 2 ^ 16;
+		private static final int LOOP_REQUEST_ID = 1 << 16; // 2^16
 		private static final AtomicInteger PREFIX = new AtomicInteger(RANDOM.nextInt());
 		
 		private final int prefix = PREFIX.getAndIncrement();
@@ -87,7 +87,7 @@ public final class SnmpClient implements Closeable {
 			public void run() {
 				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
-				final InstanceMapper instanceMapper = new InstanceMapper(requestIdProvider);
+				final InstanceMapper instanceMapper = new InstanceMapper(configurator.address, requestIdProvider);
 				instanceMappers.add(instanceMapper);
 
 				ready.connect(configurator.address, new ReadyConnection() {
@@ -160,10 +160,12 @@ public final class SnmpClient implements Closeable {
 	}
 	
 	private static final class InstanceMapper {
+		private final Address address;
 		private final Map<Integer, Instance> instances = new HashMap<>();
 		private RequestIdProvider requestIdProvider;
 		
-		public InstanceMapper(RequestIdProvider requestIdProvider) {
+		public InstanceMapper(Address address, RequestIdProvider requestIdProvider) {
+			this.address = address;
 			this.requestIdProvider = requestIdProvider;
 		}
 		
@@ -171,7 +173,7 @@ public final class SnmpClient implements Closeable {
 			int instanceId = requestIdProvider.get();
 
 			if (instances.containsKey(instanceId)) {
-				LOGGER.warn("The maximum number of simultaneous request has been reached");
+				LOGGER.warn("The maximum number of simultaneous request has been reached [{}]", address);
 				return;
 			}
 			
@@ -328,7 +330,7 @@ public final class SnmpClient implements Closeable {
 			}
 
 			if ((n - DateUtils.from(sendTimestamp)) >= (configurator.minTimeToRepeat + repeatRandomizationRandomized)) {
-				LOGGER.debug("Repeating {}", requestOid);
+				LOGGER.debug("Repeating {} {}", instanceMapper.address, requestOid);
 				switch (shouldRepeatWhat) { 
 				case 0:
 					write.get(instanceId, requestOid);
