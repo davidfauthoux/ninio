@@ -7,7 +7,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -34,8 +36,11 @@ public final class ProxyServer {
 		ProxyServer server = new ProxyServer(CONFIG.getInt("proxy.port"), CONFIG.getInt("proxy.maxSimultaneousClients"));
 		if (CONFIG.hasPath("proxy.forward")) {
 			for (Config c : CONFIG.getConfigList("proxy.forward")) {
-				server.override(c.getString("type"), Forward.forward(new Address(c.getString("host"), c.getInt("port")))).start();
+				server.override(c.getString("type"), Forward.forward(new Address(c.getString("host"), c.getInt("port"))));
 			}
+		}
+		for (String host : CONFIG.getStringList("proxy.filter")) {
+			server.filter(host);
 		}
 		server.start();
 	}
@@ -44,6 +49,7 @@ public final class ProxyServer {
 	
 	private final ProxyUtils.ServerSide proxyUtils = ProxyUtils.server();
 	private final ExecutorService clientExecutor;
+	private final Set<String> hostsToFilter = new HashSet<>();
 	
 	public ProxyServer(int port, int maxNumberOfSimultaneousClients) {
 		this.port = port;
@@ -52,6 +58,12 @@ public final class ProxyServer {
 
 	public ProxyServer override(String type, ProxyUtils.ServerSideConfigurator configurator) {
 		proxyUtils.override(type, configurator);
+		return this;
+	}
+	
+	public ProxyServer filter(String host) {
+		LOGGER.debug("Will filter out: {}", host);
+		hostsToFilter.add(host);
 		return this;
 	}
 	
@@ -177,8 +189,10 @@ public final class ProxyServer {
 											in.readFully(b);
 											MutablePair<Address, CloseableByteBufferHandler> connection = connections.get(connectionId);
 											if (connection != null) {
-												if (connection.second != null) {
-													connection.second.handle(null, ByteBuffer.wrap(b));
+												if (!hostsToFilter.contains(connection.first.getHost())) {
+													if (connection.second != null) {
+														connection.second.handle(null, ByteBuffer.wrap(b));
+													}
 												}
 											}
 										}

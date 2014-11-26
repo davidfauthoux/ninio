@@ -22,7 +22,7 @@ public final class PingServer {
 	private static final Config CONFIG = ConfigUtils.load(PingServer.class);
 
 	public static void main(String[] args) {
-		new PingServer(CONFIG.getInt("ping.port"), CONFIG.getInt("ping.maxSimultaneousClients"), new PureJavaSyncPing());
+		new PingServer(CONFIG.getInt("ping.port"), CONFIG.getInt("ping.maxSimultaneousClients"), new PureJavaSyncPing()).start();
 	}
 	
 	private static final int ERROR_CODE = 1;
