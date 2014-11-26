@@ -20,7 +20,6 @@ import com.davfx.ninio.proxy.Forward;
 import com.davfx.ninio.proxy.ProxyClient;
 import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.proxy.ProxyUtils;
-import com.davfx.ninio.proxy.Reproxy;
 
 public class TestClient {
 	public static void main(String[] args) throws Exception {
@@ -44,13 +43,13 @@ public class TestClient {
 		new ProxyServer(7777, 10).override(ProxyUtils.SOCKET_TYPE, Forward.forward(new Address("localhost", 6666))).start();
 		Thread.sleep(1000);
 		System.out.println("LAUNCHING PROXY 9999");
-		new ProxyServer(9999, 10).override(Reproxy.DEFAULT_TYPE, Reproxy.server()).start();
+		new ProxyServer(9999, 10).start();
 		
 		Thread.sleep(1000);
 		System.out.println("LAUNCHING HTTP CLIENT");
 		HttpClient client = new HttpClient(new HttpClientConfigurator()
 			//client.override(new ProxyClient(new Address("localhost", 7777)).socket());
-			.override(new ProxyClient(new Address("localhost", 9999)).override(Reproxy.DEFAULT_TYPE, Reproxy.client(new Address("localhost", 7777), ProxyUtils.SOCKET_TYPE)).of(Reproxy.DEFAULT_TYPE))
+			.override(new ProxyClient(new Address("localhost", 9999)).reproxy(new Address("localhost", 7777)).reproxy())
 			);
 			HttpRequest r = new HttpRequest(new Address("localhost", 8080), false, HttpRequest.Method.GET, "/");
 			r.getHeaders().put(Http.ACCEPT_ENCODING, Http.GZIP);

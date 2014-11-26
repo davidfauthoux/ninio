@@ -18,6 +18,12 @@ public final class ProxyClient {
 	public ReadyFactory datagram() {
 		return new ProxyReadyFactory(proxyReady, ProxyUtils.DATAGRAM_TYPE);
 	}
+	public ReadyFactory ping() {
+		return new ProxyReadyFactory(proxyReady, ProxyUtils.PING_TYPE);
+	}
+	public ReadyFactory reproxy() {
+		return new ProxyReadyFactory(proxyReady, ProxyUtils.REPROXY_TYPE);
+	}
 
 	public ProxyClient withExecutor(Executor executor) {
 		proxyReady.withExecutor(executor);
@@ -37,5 +43,10 @@ public final class ProxyClient {
 	}
 	public ReadyFactory of(String type) {
 		return new ProxyReadyFactory(proxyReady, type);
+	}
+	
+	public ProxyClient reproxy(Address address) {
+		override(ProxyUtils.REPROXY_TYPE, Reproxy.client(address, ProxyUtils.SOCKET_TYPE));
+		return this;
 	}
 }

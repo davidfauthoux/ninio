@@ -8,13 +8,10 @@ import java.util.Map;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.util.ConfigUtils;
-import com.typesafe.config.Config;
 
-public class Reproxy {
-	private static final Config CONFIG = ConfigUtils.load(Reproxy.class);
-
-	public static final String DEFAULT_TYPE = CONFIG.getString("proxy.reproxy");
+public final class Reproxy {
+	//%% private static final Config CONFIG = ConfigUtils.load(Reproxy.class);
+	//%% public static final String DEFAULT_TYPE = CONFIG.getString("proxy.reproxy");
 
 	private Reproxy() {
 	}

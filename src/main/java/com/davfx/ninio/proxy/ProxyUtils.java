@@ -13,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
+import com.davfx.ninio.ping.InternalPingServerReadyFactory;
+import com.davfx.ninio.ping.PureJavaSyncPing;
 import com.davfx.ninio.proxy.sync.SyncDatagramReady;
 import com.davfx.ninio.proxy.sync.SyncDatagramReadyFactory;
 import com.davfx.ninio.proxy.sync.TcpdumpSyncDatagramReady;
@@ -27,6 +29,9 @@ public final class ProxyUtils {
 
 	public static final String SOCKET_TYPE = CONFIG.getString("proxy.socket");
 	public static final String DATAGRAM_TYPE = CONFIG.getString("proxy.datagram");
+	public static final String PING_TYPE = CONFIG.getString("proxy.ping");
+	public static final String REPROXY_TYPE = CONFIG.getString("proxy.reproxy");
+	private static final int PING_MAX_SIMULTANEOUS_CLIENTS = CONFIG.getInt("ping.maxSimultaneousClients");
 	
 	private ProxyUtils() {
 	}
@@ -51,6 +56,9 @@ public final class ProxyUtils {
 		final Map<String, ClientSideConfigurator> configurators = new HashMap<>(); // ConcurrentHashMap not necessary here because write() is always called from Queue
 		configurators.put(SOCKET_TYPE, new EmptyClientSideConfiguration());
 		configurators.put(DATAGRAM_TYPE, new EmptyClientSideConfiguration());
+		configurators.put(PING_TYPE, new EmptyClientSideConfiguration());
+		configurators.put(REPROXY_TYPE, new EmptyClientSideConfiguration());
+		
 		return new ClientSide() {
 			@Override
 			public void override(String type, ClientSideConfigurator configurator) {
@@ -113,6 +121,15 @@ public final class ProxyUtils {
 			});
 		}
 		
+		configurators.put(PING_TYPE, new ServerSideConfigurator() {
+			@Override
+			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
+				return new InternalPingServerReadyFactory(PING_MAX_SIMULTANEOUS_CLIENTS, new PureJavaSyncPing());
+			}
+		});
+
+		configurators.put(REPROXY_TYPE, Reproxy.server());
+
 		return new ServerSide() {
 			@Override
 			public void override(String connecterType, ServerSideConfigurator configurator) {

@@ -7,6 +7,7 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyUtils.EmptyClientSideConfiguration;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.script.SyncScriptFunction;
@@ -19,7 +20,7 @@ public class TestScript3 {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(6666, 10).start();
-		ProxyClient proxy = new ProxyClient(new Address("10.4.243.240", 9993));
+		ProxyClient proxy = new ProxyClient(new Address("10.4.243.240", 9993)).override("ping", new EmptyClientSideConfiguration());
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -59,12 +60,27 @@ public class TestScript3 {
 					}
 				});
 
+				rrr.register("log_ping", new SyncScriptFunction<JsonElement>() {
+					@Override
+					public JsonElement call(JsonElement request) {
+						JsonElement error = request.getAsJsonObject().get("error");
+						if (error != null) {
+							System.out.println("ERROR " + error.getAsString());
+							return null;
+						}
+						System.out.println(request.toString());
+						return null;
+					}
+				});
+
+				/*
 				rrr.eval(new BasicScript().append("telnet({'host':'81.185.206.53', 'init':['isadmin', '7360@SFR'], command:'show equipment ont optics-history'}, log_telnet);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
+				*/
 				/*
 				rrr.eval(new BasicScript().append("snmp({'host':'86.64.234.33', 'community':'rledacd', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
 					@Override
@@ -73,6 +89,12 @@ public class TestScript3 {
 					}
 				});
 				*/
+				rrr.eval(new BasicScript().append("ping({'host':'86.64.234.33'}, log_snmp);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
 
 				
 				Thread.sleep(5000);
