@@ -31,7 +31,7 @@ public final class ProxyUtils {
 	public static final String DATAGRAM_TYPE = CONFIG.getString("proxy.datagram");
 	public static final String PING_TYPE = CONFIG.getString("proxy.ping");
 	public static final String REPROXY_TYPE = CONFIG.getString("proxy.reproxy");
-	private static final int PING_MAX_SIMULTANEOUS_CLIENTS = CONFIG.getInt("ping.maxSimultaneousClients");
+	private static final int PING_MAX_SIMULTANEOUS_CLIENTS = ConfigUtils.load(InternalPingServerReadyFactory.class).getInt("ping.maxSimultaneousClients");
 	
 	private ProxyUtils() {
 	}

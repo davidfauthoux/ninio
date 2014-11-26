@@ -7,7 +7,6 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyUtils.EmptyClientSideConfiguration;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.script.SyncScriptFunction;
@@ -20,13 +19,13 @@ public class TestScript3 {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(6666, 10).start();
-		ProxyClient proxy = new ProxyClient(new Address("10.4.243.240", 9993)).override("ping", new EmptyClientSideConfiguration());
+		ProxyClient proxy = new ProxyClient(new Address("10.4.243.240", 9993));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
 				r.telnetConfigurator.override(proxy.socket());
 				r.snmpConfigurator.override(proxy.datagram());
-				r.pingConfigurator.override(proxy.of("ping"));
+				r.pingConfigurator.override(proxy.ping());
 			}
 			
 			for (int i = 0; i < 10; i++) {
@@ -63,11 +62,6 @@ public class TestScript3 {
 				rrr.register("log_ping", new SyncScriptFunction<JsonElement>() {
 					@Override
 					public JsonElement call(JsonElement request) {
-						JsonElement error = request.getAsJsonObject().get("error");
-						if (error != null) {
-							System.out.println("ERROR " + error.getAsString());
-							return null;
-						}
 						System.out.println(request.toString());
 						return null;
 					}
