@@ -40,7 +40,7 @@ public final class RouteHttpServer {
 			new HttpClientConfigurator(queue).withTrust(new Trust())
 		);
 		for (Config c : CONFIG.getConfigList("http.route.map")) {
-			server.route(c.getString("host"), new Address(c.getString("to.host"), c.getInt("to.port")), c.getString("to.path"));
+			server.route(c.getStringList("hosts"), new Address(c.getString("to.host"), c.getInt("to.port")), c.getString("to.path"));
 		}
 		server.start();
 	}
@@ -163,8 +163,10 @@ public final class RouteHttpServer {
 		});
 	}
 	
-	public RouteHttpServer route(String host, Address to, String path) {
-		routing.put(host, new Pair<Address, String>(to, path));
+	public RouteHttpServer route(Iterable<String> hosts, Address to, String path) {
+		for (String host : hosts) {
+			routing.put(host, new Pair<Address, String>(to, path));
+		}
 		return this;
 	}
 }
