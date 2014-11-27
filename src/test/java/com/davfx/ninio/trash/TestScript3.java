@@ -80,20 +80,20 @@ public class TestScript3 {
 					}
 				});
 				*/
-				/*
 				rrr.eval(new BasicScript().append("snmp({'host':'86.64.234.33', 'community':'rledacd', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
-				*/
+				/*
 				rrr.eval(new BasicScript().append("ping({'host':'86.64.234.33'}, log_ping);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
+				*/
 
 				
 				Thread.sleep(5000);

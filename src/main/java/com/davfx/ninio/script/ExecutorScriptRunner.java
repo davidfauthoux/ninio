@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Failable;
 import com.davfx.util.ConfigUtils;
+import com.davfx.util.Mutable;
 import com.google.gson.JsonPrimitive;
 
 public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoCloseable {
@@ -31,6 +32,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 			return new Thread(r, ExecutorScriptRunner.class.getSimpleName());
 		}
 	});
+	private final Mutable<Long> nextCallbackFunctionSuffix = new Mutable<Long>(0L);
 
 	public ExecutorScriptRunner() {
 	}
@@ -44,13 +46,16 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 	public static final class FromScript {
 		private final ScriptEngine scriptEngine;
 		private final ExecutorService executorService;
+		private final Mutable<Long> nextCallbackFunctionSuffix;
 		private final Failable fail;
 		private final AsyncScriptFunction<String> asyncFunction;
 		private final SyncScriptFunction<String> syncFunction;
-		private FromScript(ScriptEngine scriptEngine, ExecutorService executorService, Failable fail, AsyncScriptFunction<String> asyncFunction, SyncScriptFunction<String> syncFunction) {
+		
+		private FromScript(ScriptEngine scriptEngine, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<String> asyncFunction, SyncScriptFunction<String> syncFunction) {
 			this.scriptEngine = scriptEngine;
 			this.fail = fail;
 			this.executorService = executorService;
+			this.nextCallbackFunctionSuffix = nextCallbackFunctionSuffix;
 			this.asyncFunction = asyncFunction;
 			this.syncFunction = syncFunction;
 		}
@@ -67,7 +72,9 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 						public void run() {
 							Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 							
-							String callbackVar = UNICITY_PREFIX + "callback";
+							long suffix = nextCallbackFunctionSuffix.get();
+							String callbackVar = UNICITY_PREFIX + "callback" + suffix;
+							nextCallbackFunctionSuffix.set(suffix + 1);
 							
 							bindings.put(callbackVar, callback);
 							
@@ -101,7 +108,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 				Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				
 				String callVar = UNICITY_PREFIX + "call";
-				bindings.put(callVar, new FromScript(scriptEngine, executorService, fail, asyncFunction, syncFunction));
+				bindings.put(callVar, new FromScript(scriptEngine, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
 				String callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + callVar + ".call(parameter, callback || null); }; ";
 				
 				try {
