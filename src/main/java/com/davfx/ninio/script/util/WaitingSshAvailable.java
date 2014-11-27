@@ -60,9 +60,13 @@ public final class WaitingSshAvailable {
 							}
 							@Override
 							public void received(String text) {
+								JsonObject t = new JsonObject();
+								t.add("init", new JsonPrimitive(init));
+								t.add("response", new JsonPrimitive(text));
+
 								JsonObject r = new JsonObject();
-								r.add("init", new JsonPrimitive(init));
-								r.add("response", new JsonPrimitive(text));
+								r.add("result", t);
+								
 								userCallback.handle(r);
 							}
 						});

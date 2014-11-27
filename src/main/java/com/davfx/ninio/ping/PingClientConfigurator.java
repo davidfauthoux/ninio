@@ -1,8 +1,6 @@
 package com.davfx.ninio.ping;
 
 import java.io.IOException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Closeable;
@@ -17,36 +15,26 @@ public final class PingClientConfigurator implements Closeable {
 
 	public final Queue queue;
 	private final boolean queueToClose;
-	public final ScheduledExecutorService repeatExecutor;
-	private final boolean repeatExecutorToShutdown;
 	public ReadyFactory readyFactory;
 	
 	public Address address = new Address("localhost", DEFAULT_PORT);
-	public double minTimeToRepeat = ConfigUtils.getDuration(CONFIG, "ping.minTimeToRepeat");
-	public double repeatTime = ConfigUtils.getDuration(CONFIG, "ping.repeatTime");
-	public double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ping.timeoutFromBeginning");
-	public int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
+	//%% public double timeout = ConfigUtils.getDuration(CONFIG, "ping.timeout");
+	//%% public int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
 	
 	private final SyncPing syncPing = new PureJavaSyncPing(); //TODO Implement differently and init according to conf
 
-	private PingClientConfigurator(Queue queue, boolean queueToClose, ScheduledExecutorService repeatExecutor, boolean repeatExecutorToShutdown) {
+	private PingClientConfigurator(Queue queue, boolean queueToClose) {
 		this.queue = queue;
 		this.queueToClose = queueToClose;
-		this.repeatExecutor = repeatExecutor;
-		this.repeatExecutorToShutdown = repeatExecutorToShutdown;
-		readyFactory = new InternalPingServerReadyFactory(maxSimultaneousClients, syncPing);
+		readyFactory = new InternalPingServerReadyFactory(syncPing);
 	}
 	
 	public PingClientConfigurator() throws IOException {
-		this(new Queue(), true, Executors.newSingleThreadScheduledExecutor(), true);
+		this(new Queue(), true);
 	}
 
 	public PingClientConfigurator(Queue queue) {
-		this(queue, false, Executors.newSingleThreadScheduledExecutor(), true);
-	}
-
-	public PingClientConfigurator(Queue queue, ScheduledExecutorService repeatExecutor) {
-		this(queue, false, repeatExecutor, false);
+		this(queue, false);
 	}
 
 	@Override
@@ -54,35 +42,20 @@ public final class PingClientConfigurator implements Closeable {
 		if (queueToClose) {
 			queue.close();
 		}
-		if (repeatExecutorToShutdown) {
-			repeatExecutor.shutdown();
-		}
 	}
 	
 	public PingClientConfigurator(PingClientConfigurator configurator) {
 		queueToClose = false;
-		repeatExecutorToShutdown = false;
 		queue = configurator.queue;
 		address = configurator.address;
-		minTimeToRepeat = configurator.minTimeToRepeat;
-		repeatTime = configurator.repeatTime;
-		repeatExecutor = configurator.repeatExecutor;
-		timeoutFromBeginning = configurator.timeoutFromBeginning;
-		maxSimultaneousClients = configurator.maxSimultaneousClients;
+		//%% timeout = configurator.timeout;
+		//%% maxSimultaneousClients = configurator.maxSimultaneousClients;
 		readyFactory = configurator.readyFactory;
 	}
 	
-	public PingClientConfigurator withMinTimeToRepeat(double minTimeToRepeat) {
-		this.minTimeToRepeat = minTimeToRepeat;
-		return this;
-	}
-	public PingClientConfigurator withRepeatTime(double repeatTime) {
-		this.repeatTime = repeatTime;
-		return this;
-	}
-
-	public PingClientConfigurator withTimeoutFromBeginning(double timeoutFromBeginning) {
-		this.timeoutFromBeginning = timeoutFromBeginning;
+	/*%%%%%
+	public PingClientConfigurator withTimeout(double timeout) {
+		this.timeout = timeout;
 		return this;
 	}
 
@@ -90,6 +63,7 @@ public final class PingClientConfigurator implements Closeable {
 		this.maxSimultaneousClients = maxSimultaneousClients;
 		return this;
 	}
+	*/
 
 	public PingClientConfigurator withHost(String host) {
 		address = new Address(host, address.getPort());

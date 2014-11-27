@@ -1,7 +1,5 @@
 package com.davfx.ninio.ping;
 
-import java.net.InetAddress;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -13,12 +11,12 @@ public class ShellCommandSyncPing implements SyncPing {
 	}
 	
 	@Override
-	public boolean isReachable(byte[] address, double timeout) {
+	public boolean isReachable(String host, double timeout) {
 		try {
 			ProcessBuilder b = new ProcessBuilder("ping",
 					"-c", String.valueOf(1),
 					"-W", String.valueOf((int) timeout
-				), InetAddress.getByAddress(address).getHostAddress());
+				), host);
 			Process p = b.start();
 			return (p.waitFor() == 0);
 		} catch (Exception e) {
@@ -28,6 +26,6 @@ public class ShellCommandSyncPing implements SyncPing {
 	}
 	
 	public static void main(String[] args) {
-		System.out.println(new ShellCommandSyncPing().isReachable(new byte[] { 8, 8, 8, 88 }, 1d));
+		System.out.println(new ShellCommandSyncPing().isReachable("8.8.8.8", 1d));
 	}
 }

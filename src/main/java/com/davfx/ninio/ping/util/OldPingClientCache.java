@@ -8,33 +8,36 @@ import java.util.List;
 import java.util.Map;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.ping.PingClient;
+import com.davfx.ninio.ping.OldPingClient;
+import com.davfx.ninio.ping.OldPingClientConfigurator;
+import com.davfx.ninio.ping.OldPingClientHandler;
 import com.davfx.ninio.ping.PingClientConfigurator;
-import com.davfx.ninio.ping.PingClientHandler;
+import com.davfx.ninio.ping.PingableAddress;
 import com.davfx.util.ConfigUtils;
 
-public final class PingClientCache implements AutoCloseable {
-	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(PingClientCache.class).getInt("ping.cache.expire.threshold");
+@Deprecated
+public final class OldPingClientCache implements AutoCloseable {
+	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(OldPingClientCache.class).getInt("ping.cache.expire.threshold");
 
-	private final PingClientConfigurator configurator;
+	private final OldPingClientConfigurator configurator;
 	
 	private static final class Hold {
-		public final PingClient client;
-		public final List<PingClientHandler> handlers = new LinkedList<>();
-		public PingClientHandler.Callback launchedCallback;
-		public Hold(PingClient client) {
+		public final OldPingClient client;
+		public final List<OldPingClientHandler> handlers = new LinkedList<>();
+		public OldPingClientHandler.Callback launchedCallback;
+		public Hold(OldPingClient client) {
 			this.client = client;
 		}		
 	}
 	
 	private final Map<Address, Hold> clients = new HashMap<>();
 
-	public PingClientCache(PingClientConfigurator configurator) {
+	public OldPingClientCache(OldPingClientConfigurator configurator) {
 		this.configurator = configurator;
 	}
 
 	public static interface Connectable {
-		void connect(PingClientHandler clientHandler);
+		void connect(OldPingClientHandler clientHandler);
 	}
 	
 	public Connectable get(String host) {
@@ -44,7 +47,7 @@ public final class PingClientCache implements AutoCloseable {
 	public Connectable get(final Address address) {
 		return new Connectable() {
 			@Override
-			public void connect(final PingClientHandler clientHandler) {
+			public void connect(final OldPingClientHandler clientHandler) {
 				if ((CACHE_EXPIRE_THRESHOLD > 0) && (clients.size() >= CACHE_EXPIRE_THRESHOLD)) {
 					Iterator<Hold> i = clients.values().iterator();
 					while (i.hasNext()) {
@@ -54,40 +57,40 @@ public final class PingClientCache implements AutoCloseable {
 								c.launchedCallback.close();
 							}
 							i.remove();
-							//%% c.client.close();
+							c.client.close();
 						}
 					}
 				}
 				
 				Hold c = clients.get(address);
 				if (c == null) {
-					c = new Hold(new PingClient(new PingClientConfigurator(configurator).withAddress(address)));
+					c = new Hold(new OldPingClient(new OldPingClientConfigurator(configurator).withAddress(address)));
 					
 					final Hold cc = c;
 					clients.put(address, cc);
 					c.handlers.add(clientHandler);
 					
-					c.client.connect(new PingClientHandler() {
+					c.client.connect(new OldPingClientHandler() {
 						@Override
 						public void failed(IOException e) {
 							clients.remove(address);
-							for (PingClientHandler h : cc.handlers) {
+							for (OldPingClientHandler h : cc.handlers) {
 								h.failed(e);
 							}
-							//%% cc.client.close();
+							cc.client.close();
 						}
 						@Override
 						public void close() {
 							clients.remove(address);
-							for (PingClientHandler h : cc.handlers) {
+							for (OldPingClientHandler h : cc.handlers) {
 								h.close();
 							}
-							//%% cc.client.close();
+							cc.client.close();
 						}
 						@Override
 						public void launched(final Callback callback) {
 							cc.launchedCallback = callback;
-							for (PingClientHandler h : cc.handlers) {
+							for (OldPingClientHandler h : cc.handlers) {
 								h.launched(new Callback() {
 									@Override
 									public void close() {
@@ -95,8 +98,8 @@ public final class PingClientCache implements AutoCloseable {
 										cc.handlers.remove(clientHandler);
 									}
 									@Override
-									public void ping(String host, PingCallback pingCallback) {
-										callback.ping(host, pingCallback);
+									public void ping(PingableAddress address, int numberOfRetries, double timeBetweenRetries, double retryTimeout, PingCallback pingCallback) {
+										callback.ping(address, numberOfRetries, timeBetweenRetries, retryTimeout, pingCallback);
 									}
 								});
 							}
@@ -107,15 +110,15 @@ public final class PingClientCache implements AutoCloseable {
 					
 					cc.handlers.add(clientHandler);
 					if (cc.launchedCallback != null) {
-						clientHandler.launched(new PingClientHandler.Callback() {
+						clientHandler.launched(new OldPingClientHandler.Callback() {
 							@Override
 							public void close() {
 								// Connection never actually closed
 								cc.handlers.remove(clientHandler);
 							}
 							@Override
-							public void ping(String host, PingCallback pingCallback) {
-								cc.launchedCallback.ping(host, pingCallback);
+							public void ping(PingableAddress address, int numberOfRetries, double timeBetweenRetries, double retryTimeout, PingCallback pingCallback) {
+								cc.launchedCallback.ping(address, numberOfRetries, timeBetweenRetries, retryTimeout, pingCallback);
 							}
 						});
 					}
@@ -130,7 +133,7 @@ public final class PingClientCache implements AutoCloseable {
 			if (c.launchedCallback != null) {
 				c.launchedCallback.close();
 			}
-			//%% c.client.close();
+			c.client.close();
 		}
 		clients.clear();
 	}

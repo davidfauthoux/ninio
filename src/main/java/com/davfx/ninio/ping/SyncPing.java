@@ -1,6 +1,5 @@
 package com.davfx.ninio.ping;
 
-
 interface SyncPing {
-	boolean isReachable(byte[] address, double timeout);
+	boolean isReachable(String host, double timeout);
 }

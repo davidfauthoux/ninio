@@ -17,22 +17,23 @@ import com.typesafe.config.Config;
 
 // Start as sudo if you want to make it work with ICMP
 // Use PingClient.override(new DatagramReadyFactory())
-public final class PingServer {
-	private static final Logger LOGGER = LoggerFactory.getLogger(PingServer.class);
-	private static final Config CONFIG = ConfigUtils.load(PingServer.class);
+@Deprecated
+public final class OldPingServer {
+	private static final Logger LOGGER = LoggerFactory.getLogger(OldPingServer.class);
+	private static final Config CONFIG = ConfigUtils.load(OldPingServer.class);
 
 	public static void main(String[] args) {
-		new PingServer(CONFIG.getInt("ping.port"), CONFIG.getInt("ping.maxSimultaneousClients"), new PureJavaSyncPing()).start();
+		new OldPingServer(CONFIG.getInt("ping.port"), CONFIG.getInt("ping.maxSimultaneousClients"), new OldPureJavaSyncPing()).start();
 	}
 	
 	private static final int ERROR_CODE = 1;
 	private static final int BUFFER_SIZE = 1024;
 	
-	private final SyncPing syncPing;
+	private final OldSyncPing syncPing;
 	private final int port;
 	private final ExecutorService clientExecutor;
 	
-	public PingServer(int port, int maxNumberOfSimultaneousClients, SyncPing syncPing) {
+	public OldPingServer(int port, int maxNumberOfSimultaneousClients, OldSyncPing syncPing) {
 		this.port = port;
 		this.syncPing = syncPing;
 		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients);

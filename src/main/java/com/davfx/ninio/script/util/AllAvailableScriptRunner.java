@@ -56,7 +56,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		telnetConfigurator = new TelnetClientConfigurator(queue);
 		sshConfigurator = new SshClientConfigurator(queue);
 		snmpConfigurator = new SnmpClientConfigurator(queue, scheduledExecutor);
-		pingConfigurator = new PingClientConfigurator(queue, scheduledExecutor);
+		pingConfigurator = new PingClientConfigurator(queue); //%%%, scheduledExecutor);
 
 		scriptRunner = new RoundRobinScriptRunner<>();
 		for (int i = 0; i < THREADING; i++) {

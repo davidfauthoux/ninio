@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.google.common.base.Splitter;
 
+@Deprecated
 public final class PingableAddress {
 	public static PingableAddress from(String host) throws IOException {
 		return new PingableAddress(InetAddress.getByName(host).getHostAddress());

@@ -6,18 +6,19 @@ import java.net.InetAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PureJavaSyncPing implements SyncPing {
+@Deprecated
+public class OldPureJavaSyncPing implements OldSyncPing {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(PureJavaSyncPing.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(OldPureJavaSyncPing.class);
 	
-	public PureJavaSyncPing() {
+	public OldPureJavaSyncPing() {
 	}
 	
 	@Override
-	public boolean isReachable(String host, double timeout) {
+	public boolean isReachable(byte[] address, double timeout) {
 		InetAddress toReach;
 		try {
-			toReach = InetAddress.getByName(host);
+			toReach = InetAddress.getByAddress(address);
 		} catch (IOException ioe) {
 			return false;
 		}

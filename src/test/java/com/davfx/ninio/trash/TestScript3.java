@@ -39,7 +39,7 @@ public class TestScript3 {
 							System.out.println("ERROR " + error.getAsString());
 							return null;
 						}
-						System.out.println(request.getAsJsonObject().get("response").getAsString());
+						System.out.println(request.getAsJsonObject().get("result").getAsJsonObject().get("response").getAsString());
 						return null;
 					}
 				});
@@ -52,7 +52,7 @@ public class TestScript3 {
 							System.out.println("ERROR " + error.getAsString());
 							return null;
 						}
-						for (Map.Entry<String, JsonElement> e : request.getAsJsonObject().entrySet()) {
+						for (Map.Entry<String, JsonElement> e : request.getAsJsonObject().get("result").getAsJsonObject().entrySet()) {
 							System.out.println(e.getKey() + " = " + e.getValue().getAsString());
 						}
 						return null;
@@ -62,7 +62,12 @@ public class TestScript3 {
 				rrr.register("log_ping", new SyncScriptFunction<JsonElement>() {
 					@Override
 					public JsonElement call(JsonElement request) {
-						System.out.println(request.toString());
+						JsonElement error = request.getAsJsonObject().get("error");
+						if (error != null) {
+							System.out.println("ERROR " + error.getAsString());
+							return null;
+						}
+						System.out.println("time = " + request.getAsJsonObject().get("result").getAsDouble());
 						return null;
 					}
 				});
