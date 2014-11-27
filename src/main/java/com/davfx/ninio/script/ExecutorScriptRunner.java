@@ -84,7 +84,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 								LOGGER.trace("Executing callback: {}", callbackScript);
 								scriptEngine.eval(callbackScript);
 							} catch (Exception e) {
-								LOGGER.error("Script error in: {}, using callback: {}", callbackScript, callback, e);
+								LOGGER.error("Script error in: {}", callbackScript, e);
 								if (fail != null) {
 									fail.failed(new IOException(e));
 								}

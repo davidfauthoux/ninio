@@ -330,7 +330,7 @@ public final class SnmpClient implements Closeable {
 			}
 
 			if ((n - DateUtils.from(sendTimestamp)) >= (configurator.minTimeToRepeat + repeatRandomizationRandomized)) {
-				LOGGER.trace("Repeating {} {}", instanceMapper.address, requestOid);
+				LOGGER.debug("Repeating {} {}", instanceMapper.address, requestOid);
 				switch (shouldRepeatWhat) { 
 				case 0:
 					write.get(instanceId, requestOid);
