@@ -3,6 +3,7 @@ package com.davfx.ninio.snmp;
 import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Closeable;
@@ -45,11 +46,21 @@ public final class SnmpClientConfigurator implements Closeable {
 	}
 	
 	public SnmpClientConfigurator() throws IOException {
-		this(new Queue(), true, Executors.newSingleThreadScheduledExecutor(), true);
+		this(new Queue(), true, Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable r) {
+				return new Thread(r, SnmpClientConfigurator.class.getSimpleName());
+			}
+		}), true);
 	}
 
 	public SnmpClientConfigurator(Queue queue) {
-		this(queue, false, Executors.newSingleThreadScheduledExecutor(), true);
+		this(queue, false, Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable r) {
+				return new Thread(r, SnmpClientConfigurator.class.getSimpleName());
+			}
+		}), true);
 	}
 
 	public SnmpClientConfigurator(Queue queue, ScheduledExecutorService repeatExecutor) {

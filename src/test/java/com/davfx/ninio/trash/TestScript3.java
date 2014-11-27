@@ -88,7 +88,7 @@ public class TestScript3 {
 					}
 				});
 				*/
-				rrr.eval(new BasicScript().append("ping({'host':'86.64.234.33'}, log_snmp);"), new Failable() {
+				rrr.eval(new BasicScript().append("ping({'host':'86.64.234.33'}, log_ping);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();

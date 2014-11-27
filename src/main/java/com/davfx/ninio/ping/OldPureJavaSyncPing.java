@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @Deprecated
-public class OldPureJavaSyncPing implements OldSyncPing {
+public final class OldPureJavaSyncPing implements OldSyncPing {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(OldPureJavaSyncPing.class);
 	

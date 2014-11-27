@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
@@ -14,6 +15,7 @@ import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Doubles;
+import com.google.common.primitives.Longs;
 import com.typesafe.config.Config;
 
 public final class InternalPingServerReadyFactory implements ReadyFactory, AutoCloseable {
@@ -38,7 +40,12 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	@Override
 	public Ready create(Queue queue) {
 		if (clientExecutor == null) {
-			clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS);
+			clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ThreadFactory() {
+				@Override
+				public Thread newThread(Runnable r) {
+					return new Thread(r, InternalPingServerReadyFactory.class.getSimpleName());
+				}
+			});
 		}
 		
 		return new Ready() {
@@ -68,7 +75,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 						clientExecutor.execute(new Runnable() {
 							@Override
 							public void run() {
-								final ByteBuffer s = ByteBuffer.allocate(Doubles.BYTES);
+								final ByteBuffer s = ByteBuffer.allocate(Longs.BYTES + Doubles.BYTES);
 								s.putLong(id);
 
 								long t = System.currentTimeMillis();

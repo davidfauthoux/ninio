@@ -3,7 +3,7 @@ package com.davfx.ninio.ping;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ShellCommandSyncPing implements SyncPing {
+public final class ShellCommandSyncPing implements SyncPing {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ShellCommandSyncPing.class);
 	

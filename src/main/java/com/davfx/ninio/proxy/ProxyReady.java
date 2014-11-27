@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,7 +36,12 @@ final class ProxyReady {
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
-	private Executor executor = Executors.newSingleThreadExecutor();
+	private Executor executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
+		@Override
+		public Thread newThread(Runnable r) {
+			return new Thread(r, ProxyReady.class.getSimpleName());
+		}
+	});
 	private ProxyListener listener = new ProxyListener() {
 		@Override
 		public void failed(IOException e) {

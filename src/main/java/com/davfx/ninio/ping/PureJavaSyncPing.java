@@ -6,7 +6,7 @@ import java.net.InetAddress;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PureJavaSyncPing implements SyncPing {
+public final class PureJavaSyncPing implements SyncPing {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(PureJavaSyncPing.class);
 	

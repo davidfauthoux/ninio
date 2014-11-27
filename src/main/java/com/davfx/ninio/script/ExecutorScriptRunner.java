@@ -3,6 +3,7 @@ package com.davfx.ninio.script;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import javax.script.Bindings;
 import javax.script.ScriptContext;
@@ -24,7 +25,12 @@ public final class ExecutorScriptRunner implements ScriptRunner<String>, AutoClo
 	public static final String UNICITY_PREFIX = ConfigUtils.load(ExecutorScriptRunner.class).getString("script.functions.unicity.prefix");
 	
 	private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
-	private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ThreadFactory() {
+		@Override
+		public Thread newThread(Runnable r) {
+			return new Thread(r, ExecutorScriptRunner.class.getSimpleName());
+		}
+	});
 
 	public ExecutorScriptRunner() {
 	}

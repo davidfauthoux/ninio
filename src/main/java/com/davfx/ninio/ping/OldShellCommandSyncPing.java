@@ -2,13 +2,10 @@ package com.davfx.ninio.ping;
 
 import java.net.InetAddress;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 @Deprecated
-public class OldShellCommandSyncPing implements OldSyncPing {
+public final class OldShellCommandSyncPing implements OldSyncPing {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(OldShellCommandSyncPing.class);
+	// private static final Logger LOGGER = LoggerFactory.getLogger(OldShellCommandSyncPing.class);
 	
 	public OldShellCommandSyncPing() {
 	}
@@ -23,12 +20,8 @@ public class OldShellCommandSyncPing implements OldSyncPing {
 			Process p = b.start();
 			return (p.waitFor() == 0);
 		} catch (Exception e) {
-			LOGGER.error("Could not ping", e);
+			// LOGGER.error("Could not ping", e);
 			return false;
 		}
-	}
-	
-	public static void main(String[] args) {
-		System.out.println(new OldShellCommandSyncPing().isReachable(new byte[] { 8, 8, 8, 88 }, 1d));
 	}
 }
