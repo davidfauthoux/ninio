@@ -48,7 +48,7 @@ public final class HttpAvailable {
 				return e.getAsBoolean();
 			}
 			@Override
-			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> callback) {
+			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				client.withMethod(HttpRequest.Method.valueOf(getString(r, "method", "GET").toUpperCase()));
 				JsonElement post = r.get("post");
@@ -71,6 +71,7 @@ public final class HttpAvailable {
 					client.withPort(port);
 				}
 				
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 				client.send(new SimpleHttpClientHandler() {
 					@Override
 					public void handle(int status, String reason, Parameters parameters, InMemoryPost body) {
@@ -80,7 +81,7 @@ public final class HttpAvailable {
 						if (body != null) {
 							r.add("body", new JsonPrimitive(body.toString()));
 						}
-						callback.handle(r);
+						m.done(r);
 					}
 				});
 			}

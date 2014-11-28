@@ -49,31 +49,29 @@ public final class SnmpAvailable {
 					);
 				}
 
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
+
 				String oidAsString = JsonUtils.getString(r, "oid", null);
 				if (oidAsString == null) {
-					JsonObject rr = new JsonObject();
-					rr.add("error", new JsonPrimitive(new IOException("OID cannot be null").getMessage()));
-					userCallback.handle(rr);
+					m.failed(new IOException("OID cannot be null"));
 					return;
 				}
 				final Oid oid;
 				try {
 					oid = new Oid(oidAsString);
 				} catch (Exception e) {
-					JsonObject rr = new JsonObject();
-					rr.add("error", new JsonPrimitive(new IOException("Invalid OID", e).getMessage()));
-					userCallback.handle(rr);
+					m.failed(new IOException("Invalid OID: " + oidAsString, e));
 					return;
 				}
+
 				c.connect(new SnmpClientHandler() {
 					@Override
 					public void failed(IOException e) {
-						JsonObject r = new JsonObject();
-						r.add("error", new JsonPrimitive(e.getMessage()));
-						userCallback.handle(r);
+						m.failed(e);
 					}
 					@Override
 					public void close() {
+						m.close();
 					}
 					@Override
 					public void launched(final Callback callback) {
@@ -82,30 +80,21 @@ public final class SnmpAvailable {
 							public void result(Result result) {
 								JsonObject o = new JsonObject();
 								o.add(result.getOid().toString(), new JsonPrimitive(result.getValue().asString()));
-
-								JsonObject r = new JsonObject();
-								r.add("result", o);
-								
-								userCallback.handle(r);
+								m.partially(o);
 							}
 							
 							@Override
 							public void close() {
-								callback.close();
+								m.done();
 
-								JsonObject r = new JsonObject();
-								r.add("result", new JsonObject()); // Empty object on finish
-								
-								userCallback.handle(r);
+								//%% JsonObject r = new JsonObject();
+								//%%r.add("result", new JsonObject()); // Empty object on finish
+								//%% userCallback.handle(r);
 							}
 							
 							@Override
 							public void failed(IOException e) {
-								JsonObject r = new JsonObject();
-								r.add("error", new JsonPrimitive(e.getMessage()));
-
-								callback.close();
-								userCallback.handle(r);
+								m.failed(e);
 							}
 							/*%%%
 							private void add(JsonObject r, Result result) {

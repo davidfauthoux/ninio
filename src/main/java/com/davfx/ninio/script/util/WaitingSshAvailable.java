@@ -39,35 +39,29 @@ public final class WaitingSshAvailable {
 					}
 				}
 
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 				c.connect(new WaitingRemoteClientHandler() {
 					@Override
 					public void failed(IOException e) {
-						JsonObject r = new JsonObject();
-						r.add("error", new JsonPrimitive(e.getMessage()));
-						userCallback.handle(r);
+						m.failed(e);
 					}
 					@Override
 					public void close() {
+						m.close();
 					}
 					@Override
 					public void launched(final String init, Callback callback) {
 						callback.send(command, new WaitingRemoteClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {
-								JsonObject r = new JsonObject();
-								r.add("error", new JsonPrimitive(e.getMessage()));
-								userCallback.handle(r);
+								m.failed(e);
 							}
 							@Override
 							public void received(String text) {
 								JsonObject t = new JsonObject();
 								t.add("init", new JsonPrimitive(init));
 								t.add("response", new JsonPrimitive(text));
-
-								JsonObject r = new JsonObject();
-								r.add("result", t);
-								
-								userCallback.handle(r);
+								m.done(t);
 							}
 						});
 					}

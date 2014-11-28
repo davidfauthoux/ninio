@@ -72,14 +72,179 @@ public class TestScript3 {
 					}
 				});
 
-				/*
-				rrr.eval(new BasicScript().append("telnet({'host':'81.185.206.53', 'init':['isadmin', '7360@SFR'], command:'show equipment ont optics-history'}, log_telnet);"), new Failable() {
+				rrr.register("outln", new SyncScriptFunction<JsonElement>() {
+					@Override
+					public JsonElement call(JsonElement request) {
+						if (request == null) {
+							System.out.println("--------> NULL");
+							return null;
+						}
+						System.out.println("------> " + request.toString());
+						return null;
+					}
+				});
+
+				rrr.register("errln", new SyncScriptFunction<JsonElement>() {
+					@Override
+					public JsonElement call(JsonElement request) {
+						if (request == null) {
+							System.out.println("ERR --------> NULL");
+							return null;
+						}
+						System.out.println("ERR ------> " + request.toString());
+						return null;
+					}
+				});
+
+				rrr.register("fire", new SyncScriptFunction<JsonElement>() {
+					@Override
+					public JsonElement call(JsonElement request) {
+						if (request == null) {
+							System.out.println("FIRE --------> NULL");
+							return null;
+						}
+						System.out.println("FIRE ------> " + request.toString());
+						return null;
+					}
+				});
+
+				String OLD_WRAPPING = 
+						"var __ip = 'localhost';" +
+						"var __telnetcallback = function(e, r) {};" +
+						"var __snmpcallback = function(e, r) {};" +
+						"var __pingcallback = function(e, r) {};" +
+
+						"var _telnet = telnet;" +
+						"var _snmp = snmp;" +
+						"var _ping = ping;" +
+						"var _telnet_init_map = {};" +
+
+						"var _host = function(address) {" +
+							"var n = address.indexOf(':');" +
+							"if (n < 0) { return address; }" +
+							"return address.substring(0, n);" +
+						"};" +
+						"var _port = function(address) {" +
+							"var n = address.indexOf(':');" +
+							"if (n < 0) { return null; }" +
+							"return 0 + address.substring(n + 1);" +
+						"};" +
+						"telnet = function(address) {" +
+							"address = address || __ip;" +
+							"if (!_telnet_init_map[address]) _telnet_init_map[address] = [];" +
+							"var t = {" +
+								"session:" +
+									"function(callback) {" +
+										"callback = callback || __telnetcallback;" +
+										"callback();" +
+										"return t;" +
+									"}," +
+								"init:" +
+									"function(line, callback) {" +
+										"if (line && (line.length > 0)) _telnet_init_map[address].push(line);" +
+										"callback = callback || __telnetcallback;" +
+										"callback();" +
+										"return t;" +
+									"}," +
+								"ready:" +
+									"function() {" +
+										"return t;" +
+									"}," +
+								"command:" +
+									"function(line, callback) {" +
+										"callback = callback || __telnetcallback;" +
+										"_telnet({host:_host(address),port:_port(address),init:_telnet_init_map[address],command:line}, function(r) {" +
+											"if (!r) return;" +
+											"if (r['error']) {" +
+												"callback('Error [' + r['error'] + ']');" +
+											"} else {" +
+												"var rr = r['result'];" +
+												"callback(null, rr['init'] + rr['response']);" +
+											"}" +
+										"});" +
+										"return t;" +
+									"}" +
+							"};" +
+							"return t;" +
+						"};" +
+							
+						"snmp = function(community, address) {" +
+							"address = address || __ip;" +
+							"var t = {" +
+								"oid:" +
+									"function(oid, callback) {" +
+										"callback = callback || __snmpcallback;" +
+										"_snmp({host:_host(address),port:_port(address),community:community,oid:oid}, function(r) {" +
+											"if (!r) return;" +
+											"if (r['error']) {" +
+												"callback('Error [' + r['error'] + ']');" +
+											"} else {" +
+												"var rr = r['result'];" +
+												"callback(null, rr);" +
+											"}" +
+										"});" +
+										"return t;" +
+									"}" +
+							"};" +
+							"return t;" +
+						"};" +
+							
+						"ping = function(address) {" +
+							"address = address || __ip;" +
+							"var t = {" +
+								"ping:" +
+									"function(callback) {" +
+										"callback = callback || __pingcallback;" +
+										"_ping({host:_host(address),port:_port(address)}, function(r) {" +
+											"if (!r) return;" +
+											"if (r['error']) {" +
+												"callback('Error [' + r['error'] + ']');" +
+											"} else {" +
+												"var rr = r['result'];" +
+												"var m = {}; m[address] = {'time': rr}; callback(null, m);" +
+											"}" +
+										"});" +
+										"return t;" +
+									"}" +
+							"};" +
+							"return t;" +
+						"};";
+				rrr.eval(new BasicScript().append(OLD_WRAPPING + "__ip = '77.154.78.93'; "
+						+ "var autoraise = function(severity, cause) { fire('autoraise	' + severity + '	' + cause); }; "
+						+ "var autoraise_unreachable = function() { autoraise('UNREACHABLE', 'No cause available'); }; "
+						+ "var autoraise_unavailable = function() { autoraise('UNAVAILABLE', 'No cause available'); }; "
+						+ "var check_autoraise = function(ip) { autoraise_unreachable(); }; "
+						
+						+ "var telnetoutln = outln; "
+						+ "__telnetcallback = function(err, r, ip) { "
+						+ "if (err == null) { telnetoutln(r); } "
+						+ "else { errln(err); check_autoraise(ip); }; }; "
+						
+						+ "__telnetidentifier = \"isadmin\" + __ip;"
+						+ "telnet(null, __telnetidentifier).session().init(\"isadmin\").init(\"7360@SFR\"); "
+						//+ "telnet(null, __telnetidentifier).init(\"\"); "
+						//+ "telnet(null, __telnetidentifier).ready(); "
+						+ "telnet(null, __telnetidentifier).command(\"show equipment ont optics-history\");"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
-				*/
+
+				/*
+				rrr.eval(new BasicScript().append("telnet({'host':'77.154.78.93', 'init':['isadmin', '7360@SFR'], command:'show equipment ont optics-history'}, log_telnet);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				rrr.eval(new BasicScript().append("telnet({'host':'81.185.206.29', 'init':['isadmin', '7360@SFR'], command:'show equipment ont optics-history'}, log_telnet);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				/*
 				rrr.eval(new BasicScript().append("snmp({'host':'86.64.234.33', 'community':'rledacd', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {

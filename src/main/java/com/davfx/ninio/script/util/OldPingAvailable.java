@@ -40,35 +40,32 @@ public final class OldPingAvailable {
 				final int numberOfRetries = JsonUtils.getInt(r, "retry", DEFAULT_NUMBER_OF_RETRIES);
 				final double timeBetweenRetries = JsonUtils.getDouble(r, "between", DEFAULT_TIME_BETWEEN_RETRIES);
 				final double retryTimeout = JsonUtils.getDouble(r, "timeout", RETRY_TIMEOUT);
-				
+
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
+
 				final PingableAddress address;
 				try {
 					address = PingableAddress.from(host);
 				} catch (IOException e) {
-					JsonObject rr = new JsonObject();
-					rr.add("error", new JsonPrimitive(e.getMessage()));
-					userCallback.handle(rr);
+					m.failed(e);
 					return;
 				}
 				
 				c.connect(new OldPingClientHandler() {
 					@Override
 					public void failed(IOException e) {
-						JsonObject r = new JsonObject();
-						r.add("error", new JsonPrimitive(e.getMessage()));
-						userCallback.handle(r);
+						m.failed(e);
 					}
 					@Override
 					public void close() {
+						m.close();
 					}
 					@Override
 					public void launched(Callback callback) {
 						callback.ping(address, numberOfRetries, timeBetweenRetries, retryTimeout, new OldPingClientHandler.Callback.PingCallback() {
 							@Override
 							public void failed(IOException e) {
-								JsonObject r = new JsonObject();
-								r.add("error", new JsonPrimitive(e.getMessage()));
-								userCallback.handle(r);
+								m.failed(e);
 							}
 							
 							@Override
@@ -83,11 +80,7 @@ public final class OldPingAvailable {
 									}
 									a.add(r);
 								}
-
-								JsonObject r = new JsonObject();
-								r.add("result", a);
-								
-								userCallback.handle(r);
+								m.done(a);
 							}
 						});
 					}

@@ -6,16 +6,17 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonParser;
 
-public final class JsonScriptRunner implements ScriptRunner<JsonElement> {
+@Deprecated
+public final class OldJsonScriptRunner implements ScriptRunner<JsonElement> {
 	private final ScriptRunner<String> wrappee;
 
-	public JsonScriptRunner(ScriptRunner<String> wrappee) {
+	public OldJsonScriptRunner(ScriptRunner<String> wrappee) {
 		this.wrappee = wrappee;
 	}
 
 	@Override
 	public void eval(Iterable<String> script, Failable fail, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
-		String underlyingFunctionVar = '\'' + JsonScriptRunner.class.getCanonicalName() + '\'';
+		String underlyingFunctionVar = '\'' + OldJsonScriptRunner.class.getCanonicalName() + '\'';
 		script = new PrependIterable<String>("this[" + underlyingFunctionVar + "] = " + ExecutorScriptRunner.CALL_FUNCTION_NAME + ";"
 				+ ExecutorScriptRunner.CALL_FUNCTION_NAME + " = function(parameter, callback) {"
 					+ "return JSON.parse(this[" + underlyingFunctionVar + "](JSON.stringify(parameter), (callback == undefined) ? undefined : function(p) { callback(JSON.parse(p)); }));"
@@ -35,6 +36,10 @@ public final class JsonScriptRunner implements ScriptRunner<JsonElement> {
 							return;
 						}
 						callback.handle(response.toString());
+					}
+					@Override
+					public void close() {
+						callback.close();
 					}
 				});
 			}

@@ -29,11 +29,14 @@ public final class CallingEndScriptRunner implements SimpleScriptRunner {
 						+ "} else {"
 							+ "this[" + underlyingCountVar + "]++;"
 							+ "this[" + underlyingFunctionVar + "](parameter, function(p) {"
+								+ "if (p == undefined) {" // This algorithm does not check that callback() is called multiple times erroneously
 									+ "this[" + underlyingCountVar + "]--;"
-									+ "callback(p);"
 									+ "if (this[" + underlyingCountVar + "] == 0) {"
 											+ END_FUNCTION_NAME + "();"
 									+ "}"
+								+ "} else {"
+									+ "callback(p);"
+								+ "};"
 							+ "});"
 						+ "}"
 					+ "};", script);

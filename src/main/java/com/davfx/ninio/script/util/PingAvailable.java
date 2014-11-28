@@ -31,30 +31,26 @@ public final class PingAvailable {
 				final String host = JsonUtils.getString(r, "host", "localhost");
 				PingClientCache.Connectable c = client.get(host);
 
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 				c.connect(new PingClientHandler() {
 					@Override
 					public void failed(IOException e) {
-						JsonObject r = new JsonObject();
-						r.add("error", new JsonPrimitive(e.getMessage()));
-						userCallback.handle(r);
+						m.failed(e);
 					}
 					@Override
 					public void close() {
+						m.close();
 					}
 					@Override
 					public void launched(Callback callback) {
 						callback.ping(host, new PingClientHandler.Callback.PingCallback() {
 							@Override
 							public void failed(IOException e) {
-								JsonObject r = new JsonObject();
-								r.add("error", new JsonPrimitive(e.getMessage()));
-								userCallback.handle(r);
+								m.failed(e);
 							}
 							@Override
 							public void pong(double time) {
-								JsonObject r = new JsonObject();
-								r.add("result", new JsonPrimitive(time));
-								userCallback.handle(r);
+								m.done(new JsonPrimitive(time));
 							}
 						});
 					}

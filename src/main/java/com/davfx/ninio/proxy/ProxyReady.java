@@ -21,10 +21,16 @@ import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueReady;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
+import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
+import com.typesafe.config.Config;
 
 final class ProxyReady {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyReady.class);
+	private static final Config CONFIG = ConfigUtils.load(ProxyReady.class);
+
+	public static final double DEFAULT_CONNECTION_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.connection");
+	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
 
 	private final Address proxyServerAddress;
 
@@ -32,7 +38,8 @@ final class ProxyReady {
 	private DataOutputStream currentOut = null;
 	private Map<Integer, Pair<Address, ReadyConnection>> currentConnections;
 	private int nextConnectionId;
-	private double connectionTimeout = 10d;
+	private double connectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
+	private double readTimeout = DEFAULT_READ_TIMEOUT;
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
@@ -67,6 +74,10 @@ final class ProxyReady {
 		this.connectionTimeout = connectionTimeout;
 		return this;
 	}
+	public ProxyReady withReadTimeout(double readTimeout) {
+		this.readTimeout = readTimeout;
+		return this;
+	}
 	
 	public ProxyReady listen(ProxyListener listener) {
 		this.listener = listener;
@@ -95,6 +106,7 @@ final class ProxyReady {
 						try {
 							socket = new Socket();
 							socket.connect(new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort()), (int) (connectionTimeout * 1000d));
+							socket.setSoTimeout((int) (readTimeout * 1000d));
 							try {
 								out = new DataOutputStream(socket.getOutputStream());
 								in = new DataInputStream(socket.getInputStream());

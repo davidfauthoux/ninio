@@ -37,6 +37,10 @@ public final class ProxyClient {
 		proxyReady.withConnectionTimeout(connectionTimeout);
 		return this;
 	}
+	public ProxyClient withReadTimeout(double readTimeout) {
+		proxyReady.withReadTimeout(readTimeout);
+		return this;
+	}
 	public ProxyClient override(String type, ProxyUtils.ClientSideConfigurator configurator) {
 		proxyReady.override(type, configurator);
 		return this;

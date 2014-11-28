@@ -1,18 +1,10 @@
 package com.davfx.ninio.trash;
 
-import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
-import javax.script.Bindings;
-import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
 
-import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.ExecutorScriptRunner;
-import com.davfx.ninio.script.AsyncScriptFunction.Callback;
 
 public class TestScriptEngine {
 	private static final class A {
@@ -68,6 +60,7 @@ public class TestScriptEngine {
 		
 		final ExecutorScriptRunner ss = new ExecutorScriptRunner();
 		while (true) {
+			/*Deprecated
 			ss.eval(Arrays.asList("call('toto', function(r) { java.lang.System.out.println('---> ' + r); });"), null, new AsyncScriptFunction<String>() {
 				private final A a = new A("111", null, null);
 				@Override
@@ -81,6 +74,7 @@ public class TestScriptEngine {
 					}, null);
 				}
 			}, null);
+			*/
 			for (int i = 0; i < 1; i++) {
 				//System.gc();
 				Thread.sleep(1000);

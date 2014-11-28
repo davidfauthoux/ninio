@@ -17,25 +17,25 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.Failable;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 
-public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, AutoCloseable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
+@Deprecated
+public final class OldExecutorScriptRunner implements ScriptRunner<String>, AutoCloseable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(OldExecutorScriptRunner.class);
 	
-	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(ExecutorScriptRunner.class).getString("script.functions.call");
-	public static final String UNICITY_PREFIX = ConfigUtils.load(ExecutorScriptRunner.class).getString("script.functions.unicity.prefix");
+	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(OldExecutorScriptRunner.class).getString("script.functions.call");
+	public static final String UNICITY_PREFIX = ConfigUtils.load(OldExecutorScriptRunner.class).getString("script.functions.unicity.prefix");
 	
 	private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ThreadFactory() {
 		@Override
 		public Thread newThread(Runnable r) {
-			return new Thread(r, ExecutorScriptRunner.class.getSimpleName());
+			return new Thread(r, OldExecutorScriptRunner.class.getSimpleName());
 		}
 	});
-	private final Mutable<Long> nextCallbackFunctionSuffix = new Mutable<Long>(0L);
+	private final Mutable<Long> nextUnicitySuffix = new Mutable<Long>(0L);
 
-	public ExecutorScriptRunner() {
+	public OldExecutorScriptRunner() {
 	}
 	
 	@Override
@@ -47,94 +47,40 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	public static final class FromScript {
 		private final ScriptEngine scriptEngine;
 		private final ExecutorService executorService;
-		private final Mutable<Long> nextUnicitySuffix;
+		private final Mutable<Long> nextCallbackFunctionSuffix;
 		private final Failable fail;
-		private final AsyncScriptFunction<JsonElement> asyncFunction;
-		private final SyncScriptFunction<JsonElement> syncFunction;
+		private final AsyncScriptFunction<String> asyncFunction;
+		private final SyncScriptFunction<String> syncFunction;
 		
-		private FromScript(ScriptEngine scriptEngine, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScript(ScriptEngine scriptEngine, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<String> asyncFunction, SyncScriptFunction<String> syncFunction) {
 			this.scriptEngine = scriptEngine;
 			this.fail = fail;
 			this.executorService = executorService;
-			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
+			this.nextCallbackFunctionSuffix = nextCallbackFunctionSuffix;
 			this.asyncFunction = asyncFunction;
 			this.syncFunction = syncFunction;
 		}
 
-		private JsonElement toJson(Object javascriptObject) {
-			if (javascriptObject == null) {
-				return null;
-			}
-
-			Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-			
-			long suffix = nextUnicitySuffix.get();
-			String parameterVar = UNICITY_PREFIX + "parameter" + suffix;
-			nextUnicitySuffix.set(suffix + 1);
-			
-			bindings.put(parameterVar, javascriptObject);
-			String r;
-			try {
-				r = (String) scriptEngine.eval("JSON.stringify(" + parameterVar + ")");
-			} catch (Exception e) {
-				LOGGER.error("Script error", e);
-				r = null;
-			}
-			
-			bindings.remove(parameterVar);
-			if (r == null) {
-				return null;
-			}
-			return new JsonParser().parse(r);
-		}
-		private Object fromJson(JsonElement jsonObject) {
-			if (jsonObject == null) {
-				return null;
-			}
-			
-			long suffix = nextUnicitySuffix.get();
-			String returnVar = UNICITY_PREFIX + "return" + suffix;
-			nextUnicitySuffix.set(suffix + 1);
-			
-			String s = jsonObject.toString();
-			Object r;
-			try {
-				r = scriptEngine.eval(returnVar + " = " + s + ";");
-			} catch (Exception e) {
-				LOGGER.error("Script error", e);
-				r = null;
-			}
-			return r;
-		}
-		
-		public Object call(Object fromScriptParameter, final Object callback) throws ScriptException {
-			JsonElement fromScriptParameterAsJson = toJson(fromScriptParameter);
+		public String call(String fromScriptParameter, final Object callback) throws ScriptException {
 			if (callback == null) {
-				return fromJson(syncFunction.call(fromScriptParameterAsJson));
+				return syncFunction.call(fromScriptParameter);
 			}
-			asyncFunction.call(fromScriptParameterAsJson, new AsyncScriptFunction.Callback<JsonElement>() {
+			asyncFunction.call(fromScriptParameter, new AsyncScriptFunction.Callback<String>() {
 				@Override
-				public void handle(final JsonElement response) {
+				public void handle(final String response) {
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
 							Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 							
-							long suffix;
-							
-							suffix = nextUnicitySuffix.get();
+							long suffix = nextCallbackFunctionSuffix.get();
 							String callbackVar = UNICITY_PREFIX + "callback" + suffix;
-							nextUnicitySuffix.set(suffix + 1);
+							nextCallbackFunctionSuffix.set(suffix + 1);
 							
 							bindings.put(callbackVar, callback);
-
-							suffix = nextUnicitySuffix.get();
-							String parameterVar = UNICITY_PREFIX + "parameter" + suffix;
-							nextUnicitySuffix.set(suffix + 1);
 							
-							bindings.put(parameterVar, fromJson(response));
-
-							String callbackScript = callbackVar + "(" + parameterVar + ");";
+							String fromFunctionParameter = new JsonPrimitive(response).toString();
+							String callbackScript = callbackVar + "(" + fromFunctionParameter + ");";
 							try {
 								LOGGER.trace("Executing callback: {}", callbackScript);
 								scriptEngine.eval(callbackScript);
@@ -156,14 +102,12 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						public void run() {
 							Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 							
-							long suffix;
-							
-							suffix = nextUnicitySuffix.get();
+							long suffix = nextCallbackFunctionSuffix.get();
 							String callbackVar = UNICITY_PREFIX + "callback" + suffix;
-							nextUnicitySuffix.set(suffix + 1);
+							nextCallbackFunctionSuffix.set(suffix + 1);
 							
 							bindings.put(callbackVar, callback);
-
+							
 							String callbackScript = callbackVar + "();";
 							try {
 								LOGGER.trace("Executing callback: {}", callbackScript);
@@ -185,7 +129,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	}
 	
 	@Override
-	public void eval(final Iterable<String> script, final Failable fail, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
+	public void eval(final Iterable<String> script, final Failable fail, final AsyncScriptFunction<String> asyncFunction, final SyncScriptFunction<String> syncFunction) {
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -193,7 +137,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				
 				String callVar = UNICITY_PREFIX + "call";
-				bindings.put(callVar, new FromScript(scriptEngine, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
+				bindings.put(callVar, new FromScript(scriptEngine, executorService, nextUnicitySuffix, fail, asyncFunction, syncFunction));
 				String callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + callVar + ".call(parameter, callback || null); }; ";
 				
 				try {

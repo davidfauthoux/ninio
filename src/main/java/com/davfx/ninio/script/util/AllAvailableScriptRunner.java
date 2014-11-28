@@ -15,7 +15,6 @@ import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
 import com.davfx.ninio.remote.ssh.SshRemoteConnectorFactory;
 import com.davfx.ninio.remote.telnet.TelnetRemoteConnectorFactory;
 import com.davfx.ninio.script.ExecutorScriptRunner;
-import com.davfx.ninio.script.JsonScriptRunner;
 import com.davfx.ninio.script.QueueScriptRunner;
 import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.ninio.script.RoundRobinScriptRunner;
@@ -31,7 +30,8 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 
 	private static final int THREADING = ConfigUtils.load(AllAvailableScriptRunner.class).getInt("script.threading");
 
-	private final RoundRobinScriptRunner<String> scriptRunner;
+	private final RoundRobinScriptRunner<JsonElement> scriptRunner;
+	//%% private final RoundRobinScriptRunner<String> scriptRunner;
 	private final Queue queue;
 	
 	private final SimpleHttpClient http;
@@ -77,7 +77,8 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	}
 
 	public SimpleScriptRunnerScriptRegister runner() {
-		RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner)));
+		RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, scriptRunner));
+		//%% RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner)));
 		new PingAvailable(ping).registerOn(runner);
 		new SnmpAvailable(snmp).registerOn(runner);
 		new WaitingTelnetAvailable(telnet).registerOn(runner);
