@@ -61,11 +61,12 @@ public final class OldPingAvailable {
 						m.close();
 					}
 					@Override
-					public void launched(Callback callback) {
+					public void launched(final Callback callback) {
 						callback.ping(address, numberOfRetries, timeBetweenRetries, retryTimeout, new OldPingClientHandler.Callback.PingCallback() {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								callback.close();
 							}
 							
 							@Override
@@ -81,6 +82,7 @@ public final class OldPingAvailable {
 									a.add(r);
 								}
 								m.done(a);
+								callback.close();
 							}
 						});
 					}

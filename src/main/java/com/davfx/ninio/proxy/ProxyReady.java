@@ -230,7 +230,7 @@ final class ProxyReady {
 								out.close();
 							} catch (IOException e) {
 							}
-							LOGGER.warn("Connection lost", ioe);
+							LOGGER.trace("Connection lost", ioe);
 						}
 					}
 					
@@ -258,7 +258,7 @@ final class ProxyReady {
 								out.close();
 							} catch (IOException e) {
 							}
-							LOGGER.warn("Connection lost", ioe);
+							LOGGER.trace("Connection lost", ioe);
 						}
 					}
 				});

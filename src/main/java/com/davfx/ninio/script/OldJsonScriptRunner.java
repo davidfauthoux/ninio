@@ -37,10 +37,12 @@ public final class OldJsonScriptRunner implements ScriptRunner<JsonElement> {
 						}
 						callback.handle(response.toString());
 					}
+					/*
 					@Override
 					public void close() {
 						callback.close();
 					}
+					*/
 				});
 			}
 		}, new SyncScriptFunction<String>() {

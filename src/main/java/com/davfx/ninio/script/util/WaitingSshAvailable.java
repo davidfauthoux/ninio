@@ -50,11 +50,12 @@ public final class WaitingSshAvailable {
 						m.close();
 					}
 					@Override
-					public void launched(final String init, Callback callback) {
+					public void launched(final String init, final Callback callback) {
 						callback.send(command, new WaitingRemoteClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								callback.close();
 							}
 							@Override
 							public void received(String text) {
@@ -62,6 +63,7 @@ public final class WaitingSshAvailable {
 								t.add("init", new JsonPrimitive(init));
 								t.add("response", new JsonPrimitive(text));
 								m.done(t);
+								callback.close();
 							}
 						});
 					}

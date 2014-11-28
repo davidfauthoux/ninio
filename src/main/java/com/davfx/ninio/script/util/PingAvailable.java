@@ -42,15 +42,17 @@ public final class PingAvailable {
 						m.close();
 					}
 					@Override
-					public void launched(Callback callback) {
+					public void launched(final Callback callback) {
 						callback.ping(host, new PingClientHandler.Callback.PingCallback() {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								callback.close();
 							}
 							@Override
 							public void pong(double time) {
 								m.done(new JsonPrimitive(time));
+								callback.close();
 							}
 						});
 					}

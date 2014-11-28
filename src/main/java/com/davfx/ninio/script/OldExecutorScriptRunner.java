@@ -95,6 +95,7 @@ public final class OldExecutorScriptRunner implements ScriptRunner<String>, Auto
 						}
 					});
 				}
+				/*
 				@Override
 				public void close() {
 					executorService.execute(new Runnable() {
@@ -123,6 +124,7 @@ public final class OldExecutorScriptRunner implements ScriptRunner<String>, Auto
 						}
 					});
 				}
+				*/
 			});
 			return null;
 		}

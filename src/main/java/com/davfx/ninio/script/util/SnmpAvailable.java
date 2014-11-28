@@ -76,25 +76,25 @@ public final class SnmpAvailable {
 					@Override
 					public void launched(final Callback callback) {
 						callback.get(oid, new SnmpClientHandler.Callback.GetCallback() {
+							private final JsonObject o = new JsonObject();
 							@Override
 							public void result(Result result) {
-								JsonObject o = new JsonObject();
+								// JsonObject o = new JsonObject();
 								o.add(result.getOid().toString(), new JsonPrimitive(result.getValue().asString()));
-								m.partially(o);
+								// m.partially(o);
 							}
 							
 							@Override
 							public void close() {
-								m.done();
-
-								//%% JsonObject r = new JsonObject();
-								//%%r.add("result", new JsonObject()); // Empty object on finish
-								//%% userCallback.handle(r);
+								m.done(o);
+								// m.done(new JsonObject());
+								callback.close();
 							}
 							
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								callback.close();
 							}
 							/*%%%
 							private void add(JsonObject r, Result result) {

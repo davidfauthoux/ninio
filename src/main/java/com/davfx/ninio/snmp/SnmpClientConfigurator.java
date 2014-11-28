@@ -32,7 +32,7 @@ public final class SnmpClientConfigurator implements Closeable {
 	public double repeatTime = ConfigUtils.getDuration(CONFIG, "snmp.repeatTime");
 
 	public double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromBeginning");
-	public double timeoutFromLastReception = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromLastReception");
+	//%% public double timeoutFromLastReception = ConfigUtils.getDuration(CONFIG, "snmp.timeoutFromLastReception");
 	
 	public double repeatRandomization = ConfigUtils.getDuration(CONFIG, "snmp.repeatRandomization");
 	
@@ -90,7 +90,7 @@ public final class SnmpClientConfigurator implements Closeable {
 		repeatTime = configurator.repeatTime;
 		repeatExecutor = configurator.repeatExecutor;
 		timeoutFromBeginning = configurator.timeoutFromBeginning;
-		timeoutFromLastReception = configurator.timeoutFromLastReception;
+		//%% timeoutFromLastReception = configurator.timeoutFromLastReception;
 		repeatRandomization = configurator.repeatRandomization;
 		readyFactory = configurator.readyFactory;
 	}
@@ -108,10 +108,10 @@ public final class SnmpClientConfigurator implements Closeable {
 		this.timeoutFromBeginning = timeoutFromBeginning;
 		return this;
 	}
-	public SnmpClientConfigurator withTimeoutFromLastReception(double timeoutFromLastReception) {
-		this.timeoutFromLastReception = timeoutFromLastReception;
-		return this;
-	}
+	//%% public SnmpClientConfigurator withTimeoutFromLastReception(double timeoutFromLastReception) {
+	//%% this.timeoutFromLastReception = timeoutFromLastReception;
+	//%% return this;
+	//%% }
 
 	public SnmpClientConfigurator withRepeatRandomization(double repeatRandomization) {
 		this.repeatRandomization = repeatRandomization;

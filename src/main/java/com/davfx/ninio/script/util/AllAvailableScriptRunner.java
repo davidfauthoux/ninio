@@ -89,11 +89,16 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		http.close();
-		telnet.close();
-		ssh.close();
-		snmp.close();
-		ping.close();
+		queue.post(new Runnable() {
+			@Override
+			public void run() {
+				http.close();
+				telnet.close();
+				ssh.close();
+				snmp.close();
+				ping.close();
+			}
+		});
 
 		scriptRunner.close();
 		

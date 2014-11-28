@@ -28,7 +28,7 @@ final class AsyncScriptFunctionCallbackManager implements Closeable, Failable {
 		r.add("error", new JsonPrimitive(e.getMessage()));
 		callback.handle(r);
 		
-		callback.close();
+		// callback.close();
 	}
 	
 	@Override
@@ -42,9 +42,10 @@ final class AsyncScriptFunctionCallbackManager implements Closeable, Failable {
 		r.add("error", new JsonPrimitive("Prematurely closed"));
 		callback.handle(r);
 		
-		callback.close();
+		// callback.close();
 	}
 	
+	/*
 	public void partially(JsonElement result) {
 		if (closed) {
 			return;
@@ -54,14 +55,7 @@ final class AsyncScriptFunctionCallbackManager implements Closeable, Failable {
 		r.add("result", result);
 		callback.handle(r);
 	}
-	public void done() {
-		if (closed) {
-			return;
-		}
-		closed = true;
-
-		callback.close();
-	}
+	*/
 
 	public void done(JsonElement result) {
 		if (closed) {
@@ -73,6 +67,6 @@ final class AsyncScriptFunctionCallbackManager implements Closeable, Failable {
 		r.add("result", result);
 		callback.handle(r);
 		
-		callback.close();
+		// callback.close();
 	}
 }

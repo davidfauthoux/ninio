@@ -230,6 +230,28 @@ public class TestScript3 {
 						e.printStackTrace();
 					}
 				});
+				Thread.sleep(2000);
+				rrr.eval(new BasicScript().append(OLD_WRAPPING + "__ip = '77.154.78.93'; "
+						+ "var autoraise = function(severity, cause) { fire('autoraise	' + severity + '	' + cause); }; "
+						+ "var autoraise_unreachable = function() { autoraise('UNREACHABLE', 'No cause available'); }; "
+						+ "var autoraise_unavailable = function() { autoraise('UNAVAILABLE', 'No cause available'); }; "
+						+ "var check_autoraise = function(ip) { autoraise_unreachable(); }; "
+						
+						+ "var telnetoutln = outln; "
+						+ "__telnetcallback = function(err, r, ip) { "
+						+ "if (err == null) { telnetoutln(r); } "
+						+ "else { errln(err); check_autoraise(ip); }; }; "
+						
+						+ "__telnetidentifier = \"isadmin\" + __ip;"
+						+ "telnet(null, __telnetidentifier).session().init(\"isadmin\").init(\"7360@SFR\"); "
+						//+ "telnet(null, __telnetidentifier).init(\"\"); "
+						//+ "telnet(null, __telnetidentifier).ready(); "
+						+ "telnet(null, __telnetidentifier).command(\"show equipment ont optics-history\");"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
 
 				/*
 				rrr.eval(new BasicScript().append("telnet({'host':'77.154.78.93', 'init':['isadmin', '7360@SFR'], command:'show equipment ont optics-history'}, log_telnet);"), new Failable() {

@@ -87,7 +87,7 @@ public final class SnmpClient implements Closeable {
 			public void run() {
 				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
-				final InstanceMapper instanceMapper = new InstanceMapper(configurator.address, requestIdProvider);
+				final InstanceMapper instanceMapper = new InstanceMapper(configurator, requestIdProvider);
 				instanceMappers.add(instanceMapper);
 
 				ready.connect(configurator.address, new ReadyConnection() {
@@ -160,12 +160,12 @@ public final class SnmpClient implements Closeable {
 	}
 	
 	private static final class InstanceMapper {
-		private final Address address;
+		private final SnmpClientConfigurator configurator;
 		private final Map<Integer, Instance> instances = new HashMap<>();
 		private RequestIdProvider requestIdProvider;
 		
-		public InstanceMapper(Address address, RequestIdProvider requestIdProvider) {
-			this.address = address;
+		public InstanceMapper(SnmpClientConfigurator configurator, RequestIdProvider requestIdProvider) {
+			this.configurator = configurator;
 			this.requestIdProvider = requestIdProvider;
 		}
 		
@@ -173,7 +173,7 @@ public final class SnmpClient implements Closeable {
 			int instanceId = requestIdProvider.get();
 
 			if (instances.containsKey(instanceId)) {
-				LOGGER.warn("The maximum number of simultaneous request has been reached [{}]", address);
+				LOGGER.warn("The maximum number of simultaneous request has been reached [{}]", configurator.address);
 				return;
 			}
 			
@@ -194,6 +194,7 @@ public final class SnmpClient implements Closeable {
 		
 		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
 			Instance i = instances.remove(instanceId);
+			//%% LOGGER.debug("Instances in MEM = {}", instances.size());
 			if (i == null) {
 				return;
 			}
@@ -267,7 +268,7 @@ public final class SnmpClient implements Closeable {
 		private int countResults = 0;
 		private final SnmpClientConfigurator configurator;
 		private final Date beginningTimestamp = new Date();
-		private Date receptionTimestamp = null;
+		//%% private Date receptionTimestamp = null;
 		private Date sendTimestamp = new Date();
 		private int shouldRepeatWhat = 0;
 		public int instanceId;
@@ -309,28 +310,33 @@ public final class SnmpClient implements Closeable {
 			
 			double n = DateUtils.from(now);
 			
-			if ((n - DateUtils.from(beginningTimestamp)) >= (configurator.timeoutFromBeginning)) {
+			double t = n - DateUtils.from(beginningTimestamp);
+			if (t >= (configurator.timeoutFromBeginning)) {
 				shouldRepeatWhat = -1;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
 				//%% allResults = null;
-				c.failed(new IOException("Timeout from beginning"));
+				c.failed(new IOException("Timeout from beginning [" + t + " seconds] requesting: " + instanceMapper.configurator.address + " (" + instanceMapper.configurator.community + ") " + initialRequestOid));
 				return;
 			}
 
+			/*%%%%%%%
 			if (receptionTimestamp != null) {
-				if ((n - DateUtils.from(receptionTimestamp)) >= configurator.timeoutFromLastReception) {
+				double t = n - DateUtils.from(receptionTimestamp);
+				if (t >= configurator.timeoutFromLastReception) {
+					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
 					//%% allResults = null;
-					c.failed(new IOException("Timeout from last reception"));
+					c.failed(new IOException("Timeout [" + t + " seconds] from last reception requesting: " + initialRequestOid));
 					return;
 				}
 			}
-
+			*/
+			
 			if ((n - DateUtils.from(sendTimestamp)) >= (configurator.minTimeToRepeat + repeatRandomizationRandomized)) {
-				LOGGER.trace("Repeating {} {}", instanceMapper.address, requestOid);
+				LOGGER.trace("Repeating {} {}", instanceMapper.configurator.address, requestOid);
 				switch (shouldRepeatWhat) { 
 				case 0:
 					write.get(instanceId, requestOid);
@@ -357,7 +363,7 @@ public final class SnmpClient implements Closeable {
 				return;
 			}
 
-			receptionTimestamp = new Date();
+			//%% receptionTimestamp = new Date();
 			
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED) {
 				//%% shouldRepeatWhat = -1;

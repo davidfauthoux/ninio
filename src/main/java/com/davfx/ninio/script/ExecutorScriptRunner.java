@@ -19,6 +19,7 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 
 public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
@@ -61,6 +62,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			this.syncFunction = syncFunction;
 		}
 
+		/*
 		private JsonElement toJson(Object javascriptObject) {
 			if (javascriptObject == null) {
 				return null;
@@ -92,9 +94,11 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				return null;
 			}
 			
-			long suffix = nextUnicitySuffix.get();
-			String returnVar = UNICITY_PREFIX + "return" + suffix;
-			nextUnicitySuffix.set(suffix + 1);
+			Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+
+			//%% long suffix = nextUnicitySuffix.get();
+			String returnVar = UNICITY_PREFIX + "return"; //%% + suffix;
+			//%% nextUnicitySuffix.set(suffix + 1);
 			
 			String s = jsonObject.toString();
 			Object r;
@@ -104,13 +108,19 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				LOGGER.error("Script error", e);
 				r = null;
 			}
+			bindings.remove(returnVar);
 			return r;
 		}
+		*/
 		
-		public Object call(Object fromScriptParameter, final Object callback) throws ScriptException {
-			JsonElement fromScriptParameterAsJson = toJson(fromScriptParameter);
+		public String call(String fromScriptParameter, final Object callback) throws ScriptException {
+			JsonElement fromScriptParameterAsJson = new JsonParser().parse(fromScriptParameter); //%% toJson(fromScriptParameter);
 			if (callback == null) {
-				return fromJson(syncFunction.call(fromScriptParameterAsJson));
+				JsonElement r = syncFunction.call(fromScriptParameterAsJson);
+				if (r == null) {
+					return null;
+				}
+				return r.toString();
 			}
 			asyncFunction.call(fromScriptParameterAsJson, new AsyncScriptFunction.Callback<JsonElement>() {
 				@Override
@@ -128,13 +138,16 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 							
 							bindings.put(callbackVar, callback);
 
+							/*
 							suffix = nextUnicitySuffix.get();
 							String parameterVar = UNICITY_PREFIX + "parameter" + suffix;
 							nextUnicitySuffix.set(suffix + 1);
 							
-							bindings.put(parameterVar, fromJson(response));
+							bindings.put(parameterVar, response.toString());
+							*/
 
-							String callbackScript = callbackVar + "(" + parameterVar + ");";
+							String callbackScript = callbackVar + "(JSON.parse(" + new JsonPrimitive(response.toString()).toString() + "));";
+							// String callbackScript = callbackVar + "(JSON.parse(" + parameterVar + "));";
 							try {
 								LOGGER.trace("Executing callback: {}", callbackScript);
 								scriptEngine.eval(callbackScript);
@@ -146,9 +159,11 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 							}
 							
 							bindings.remove(callbackVar);
+							// bindings.remove(parameterVar);
 						}
 					});
 				}
+				/*
 				@Override
 				public void close() {
 					executorService.execute(new Runnable() {
@@ -179,6 +194,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						}
 					});
 				}
+				*/
 			});
 			return null;
 		}
@@ -194,7 +210,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				
 				String callVar = UNICITY_PREFIX + "call";
 				bindings.put(callVar, new FromScript(scriptEngine, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
-				String callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + callVar + ".call(parameter, callback || null); }; ";
+				String callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return JSON.parse(" + callVar + ".call(JSON.stringify(parameter), callback || null)); }; ";
 				
 				try {
 					scriptEngine.eval(ScriptUtils.functions());
