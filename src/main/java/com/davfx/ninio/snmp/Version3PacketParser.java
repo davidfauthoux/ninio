@@ -94,7 +94,8 @@ final class Version3PacketParser {
 							pdu.beginReadSequence();
 							{
 								pdu.readOid();
-								pdu.readOidValue();
+								pdu.readValue();
+								// pdu.readOidValue();
 							}
 							pdu.endReadSequence();
 						}
@@ -121,7 +122,8 @@ final class Version3PacketParser {
 									errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;
 									errorIndex = 0;
 								}
-								OidValue value = pdu.readOidValue();
+								String value = pdu.readValue();
+								// OidValue value = pdu.readOidValue();
 								results.add(new Result(oid, value));
 							}
 							pdu.endReadSequence();
@@ -145,7 +147,8 @@ final class Version3PacketParser {
 							pdu.beginReadSequence();
 							{
 								Oid oid = pdu.readOid();
-								OidValue value = pdu.readOidValue();
+								String value = pdu.readValue();
+								// OidValue value = pdu.readOidValue();
 								results.add(new Result(oid, value));
 							}
 							pdu.endReadSequence();

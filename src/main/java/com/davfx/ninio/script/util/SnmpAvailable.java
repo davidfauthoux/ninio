@@ -80,7 +80,7 @@ public final class SnmpAvailable {
 							@Override
 							public void result(Result result) {
 								// JsonObject o = new JsonObject();
-								o.add(result.getOid().toString(), new JsonPrimitive(result.getValue().asString()));
+								o.add(result.getOid().toString(), new JsonPrimitive(result.getValue())); // result.getValue().asString()));
 								// m.partially(o);
 							}
 							

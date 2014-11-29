@@ -28,11 +28,17 @@ public final class BerConstants {
 	public static final int COUNTER32 = ASN_APPLICATION | 0x01;
 	public static final int GAUGE32 = ASN_APPLICATION | 0x02;
 	public static final int TIMETICKS = ASN_APPLICATION | 0x03;
-	// public static final int OPAQUE = ASN_APPLICATION | 0x04;
+	public static final int OPAQUE = ASN_APPLICATION | 0x04;
 	// public static final int NSAPADDRESS = ASN_APPLICATION | 0x05;
 	public static final int COUNTER64 = ASN_APPLICATION | 0x06;
 	public static final int UNSIGNEDINTEGER32 = ASN_APPLICATION | 0x07;
 	public static final int SEQUENCE = ASN_CONSTRUCTOR | 0x10;
+
+	private static final int OPAQUE_TAG = 0x30;
+	public static final int OPAQUE_FLOAT = (ASN_APPLICATION | 0x08) + OPAQUE_TAG;
+	public static final int OPAQUE_DOUBLE = (ASN_APPLICATION | 0x09) + OPAQUE_TAG;
+	public static final int OPAQUE_INTEGER64 = (ASN_APPLICATION | 0x0A) + OPAQUE_TAG;
+	public static final int OPAQUE_UNSIGNEDINTEGER64 = (ASN_APPLICATION | 0x0B) + OPAQUE_TAG;
 
 	public static final int GET = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x0);
 	public static final int GETNEXT = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x1);

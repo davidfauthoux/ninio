@@ -52,7 +52,8 @@ final class Version2cPacketParser {
 						ber.beginReadSequence();
 						{
 							Oid oid = ber.readOid();
-							OidValue value = ber.readOidValue();
+							String value = ber.readValue();
+							// OidValue value = ber.readOidValue();
 							results.add(new Result(oid, value));
 						}
 						ber.endReadSequence();
