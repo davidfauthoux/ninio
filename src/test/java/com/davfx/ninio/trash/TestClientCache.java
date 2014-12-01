@@ -19,7 +19,7 @@ public class TestClientCache {
 			q.post(new Runnable() {
 				@Override
 				public void run() {
-					ccc.get(new Address("localhost", TelnetClient.DEFAULT_PORT)).init("davidfauthoux").init("orod,ove").connect(new WaitingRemoteClientHandler() {
+					ccc.get(new Address("localhost", TelnetClient.DEFAULT_PORT)).init("davidfauthoux", 2d).init("pass", 2d).connect(new WaitingRemoteClientHandler() {
 						@Override
 						public void failed(IOException e) {
 							System.out.println("FAILED");
@@ -35,7 +35,7 @@ public class TestClientCache {
 								@Override
 								public void run() {
 									for (String line : new String[] { "ls" }) {
-										callback.send(line, new WaitingRemoteClientHandler.Callback.SendCallback() {
+										callback.send(line, 2d, new WaitingRemoteClientHandler.Callback.SendCallback() {
 											@Override
 											public void failed(IOException e) {
 												System.out.println("#@ FAILED");
@@ -80,7 +80,7 @@ public class TestClientCache {
 											if (line.equals("^C")) {
 												break;
 											}
-											callback.send(line, new WaitingRemoteClientHandler.Callback.SendCallback() {
+											callback.send(line, 2d, new WaitingRemoteClientHandler.Callback.SendCallback() {
 												@Override
 												public void failed(IOException e) {
 													System.out.println("2 #@ FAILED");

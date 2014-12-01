@@ -5,6 +5,9 @@ import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 
 final class JsonUtils {
+	private JsonUtils() {
+	}
+	
 	public static String getString(JsonObject r, String key, String defaultValue) {
 		JsonElement e = r.get(key);
 		if (e == null) {
@@ -34,5 +37,15 @@ final class JsonUtils {
 			return defaultValue;
 		}
 		return e.getAsDouble();
+	}
+
+	public static String getString(JsonObject r, String key) {
+		return r.get(key).getAsString();
+	}
+	public static Integer getInt(JsonObject r, String key) {
+		return r.get(key).getAsInt();
+	}
+	public static Double getDouble(JsonObject r, String key) {
+		return r.get(key).getAsDouble();
 	}
 }

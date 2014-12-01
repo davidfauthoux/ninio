@@ -8,7 +8,7 @@ public interface WaitingRemoteClientHandler extends Closeable, Failable {
 		interface SendCallback extends Failable {
 			void received(String text);
 		}
-		void send(String line, SendCallback callback);
+		void send(String line, double timeToResponse, SendCallback callback);
 	}
 	void launched(String init, Callback callback);
 }

@@ -31,11 +31,13 @@ public final class WaitingSshAvailable {
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SshClientConfigurator.DEFAULT_PORT));
 				WaitingRemoteClientCache.Connectable c = client.get(address);
 
-				final String command = JsonUtils.getString(r, "command", "");
+				final String command = JsonUtils.getString(r, "command");
+				final double time = JsonUtils.getDouble(r, "time");
 				JsonElement init = r.get("init");
 				if (init != null) {
 					for (JsonElement e : init.getAsJsonArray()) {
-						c.init(e.getAsString());
+						JsonObject o = e.getAsJsonObject();
+						c.init(JsonUtils.getString(o, "command"), JsonUtils.getDouble(o, "time"));
 					}
 				}
 
@@ -51,7 +53,7 @@ public final class WaitingSshAvailable {
 					}
 					@Override
 					public void launched(final String init, final Callback callback) {
-						callback.send(command, new WaitingRemoteClientHandler.Callback.SendCallback() {
+						callback.send(command, time, new WaitingRemoteClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);

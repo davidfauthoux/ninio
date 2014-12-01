@@ -34,12 +34,14 @@ public final class WaitingRemoteClient implements Closeable {
 			private WaitingRemoteClientHandler.Callback.SendCallback currentCallback = null;
 			private final StringBuilder text = new StringBuilder();
 			private String previous = null;
+			private Date sendTime = null;
 			
 			private Date timeoutDate = null;
 			private Date dateToSend = null;
-			private void setDateToSend(Date now) {
-				dateToSend = DateUtils.from(DateUtils.from(now) + configurator.endOfCommandTime);
-			}
+			/*%%%
+			private void setDateToSend(Date now, double time) {
+				dateToSend = DateUtils.from(DateUtils.from(now) + time);
+			}*/
 			
 			@Override
 			public void failed(IOException e) {
@@ -80,15 +82,15 @@ public final class WaitingRemoteClient implements Closeable {
 							cc.received(r);
 						} else {
 							if (!line.isEmpty()) {
-								LOGGER.warn("Received result too late (previous result has been cut), consider increasing 'endOfCommandTime'. Previous was: {}, current is: {}", previous, text);
+								LOGGER.warn("Received result too late (previous result has been cut), consider increasing response time ({} -> {}). Previous was: {}, current is: {}", sendTime, dateToSend, previous, text);
 							}
 						}
 					}
 				}
 				
-				if (!line.isEmpty()) {
+				/*%%% if (!line.isEmpty()) {
 					setDateToSend(now);
-				}
+				}*/
 			}
 			
 			@Override
@@ -101,7 +103,7 @@ public final class WaitingRemoteClient implements Closeable {
 						callback.close();
 					}
 					@Override
-					public void send(String line, SendCallback c) {
+					public void send(String line, double timeToResponse, SendCallback c) {
 						String r = null;
 						WaitingRemoteClientHandler.Callback.SendCallback cc = null;
 						if (currentCallback != null) {
@@ -115,7 +117,9 @@ public final class WaitingRemoteClient implements Closeable {
 						currentCallback = c;
 
 						Date now = new Date();
-						setDateToSend(now);
+						dateToSend = DateUtils.from(DateUtils.from(now) + timeToResponse);
+						sendTime = now;
+						//%% setDateToSend(now);
 						timeoutDate = (configurator.timeout == 0d) ? null : DateUtils.from(DateUtils.from(now) + configurator.timeout);
 						callback.send(line + eol);
 						

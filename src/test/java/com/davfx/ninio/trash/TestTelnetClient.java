@@ -35,7 +35,7 @@ public class TestTelnetClient {
 								if (line.equals("^C")) {
 									break;
 								}
-								callback.send(line, new WaitingRemoteClientHandler.Callback.SendCallback() {
+								callback.send(line, 2d, new WaitingRemoteClientHandler.Callback.SendCallback() {
 									@Override
 									public void failed(IOException e) {
 										System.out.println("# FAILED");

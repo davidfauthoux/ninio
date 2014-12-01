@@ -22,7 +22,7 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 	private static final class Hold {
 		public final WaitingRemoteClient client;
 		public final List<WaitingRemoteClientHandler> handlers = new LinkedList<>();
-		public final Deque<Pair<String, WaitingRemoteClientHandler.Callback.SendCallback>> toSend = new LinkedList<>();
+		public final Deque<Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>> toSend = new LinkedList<>();
 		public WaitingRemoteClientHandler.Callback launchedCallback;
 
 		public final StringBuilder initResponses = new StringBuilder();
@@ -43,16 +43,16 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 	}
 
 	public static interface Connectable {
-		Connectable init(String command);
+		Connectable init(String command, double time);
 		void connect(WaitingRemoteClientHandler clientHandler);
 	}
 	
 	public Connectable get(final Address address) {
 		return new Connectable() {
-			private final List<String> initCommands = new LinkedList<String>();
+			private final List<Pair<String, Double>> initCommands = new LinkedList<>();
 			@Override
-			public Connectable init(String command) {
-				initCommands.add(command);
+			public Connectable init(String command, double time) {
+				initCommands.add(new Pair<String, Double>(command, time));
 				return this;
 			}
 			
@@ -92,11 +92,11 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 						}
 						@Override
 						public void received(String text) {
-							Pair<String, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
+							Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
 							
 							if (!cc.toSend.isEmpty()) {
-								Pair<String, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
-								cc.launchedCallback.send(next.first, this);
+								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
+								cc.launchedCallback.send(next.first.first, next.first.second, this);
 							}
 							
 							current.second.received(text);
@@ -115,13 +115,13 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 										cc.handlers.remove(clientHandler);
 									}
 									@Override
-									public void send(String line, SendCallback sendCallback) {
+									public void send(String line, double time, SendCallback sendCallback) {
 										boolean send = cc.toSend.isEmpty();
 										
-										cc.toSend.add(new Pair<String, WaitingRemoteClientHandler.Callback.SendCallback>(line, sendCallback));
+										cc.toSend.add(new Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>(new Pair<String, Double>(line, time), sendCallback));
 										
 										if (send) {
-											cc.launchedCallback.send(line, continueToSendCallback);
+											cc.launchedCallback.send(line, time, continueToSendCallback);
 										}
 									}
 								});
@@ -137,8 +137,8 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							cc.toSend.removeFirst();
 							
 							if (!cc.toSend.isEmpty()) {
-								Pair<String, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
-								cc.launchedCallback.send(next.first, this);
+								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
+								cc.launchedCallback.send(next.first.first, next.first.second, this);
 							} else {
 								readyRunnable.run();
 							}
@@ -152,10 +152,10 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							cc.client.close();
 						}
 					};
-					Iterator<String> ii = initCommands.iterator();
+					Iterator<Pair<String, Double>> ii = initCommands.iterator();
 					while (ii.hasNext()) {
-						String initCommand = ii.next();
-						cc.toSend.add(new Pair<String, WaitingRemoteClientHandler.Callback.SendCallback>(initCommand, globalInitCallback));
+						Pair<String, Double> initCommand = ii.next();
+						cc.toSend.add(new Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>(initCommand, globalInitCallback));
 					}
 					
 					cc.client.connect(new WaitingRemoteClientHandler() {
@@ -183,8 +183,8 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							if (cc.toSend.isEmpty()) {
 								readyRunnable.run();
 							} else {
-								Pair<String, WaitingRemoteClientHandler.Callback.SendCallback> p = cc.toSend.getFirst();
-								cc.launchedCallback.send(p.first, p.second);
+								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> p = cc.toSend.getFirst();
+								cc.launchedCallback.send(p.first.first, p.first.second, p.second);
 							}
 						}
 					});
@@ -204,11 +204,11 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							}
 							@Override
 							public void received(String text) {
-								Pair<String, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
+								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
 								
 								if (!cc.toSend.isEmpty()) {
-									Pair<String, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
-									cc.launchedCallback.send(next.first, this);
+									Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
+									cc.launchedCallback.send(next.first.first, next.first.second, this);
 								}
 
 								current.second.received(text);
@@ -222,13 +222,13 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 								cc.handlers.remove(clientHandler);
 							}
 							@Override
-							public void send(String line, SendCallback sendCallback) {
+							public void send(String line, double time, SendCallback sendCallback) {
 								boolean send = cc.toSend.isEmpty();
 								
-								cc.toSend.add(new Pair<String, WaitingRemoteClientHandler.Callback.SendCallback>(line, sendCallback));
+								cc.toSend.add(new Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>(new Pair<String, Double>(line, time), sendCallback));
 								
 								if (send) {
-									cc.launchedCallback.send(line, continueToSendCallback);
+									cc.launchedCallback.send(line, time, continueToSendCallback);
 								}
 							}
 						});

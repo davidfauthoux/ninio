@@ -30,7 +30,7 @@ final class ProxyReady {
 	private static final Config CONFIG = ConfigUtils.load(ProxyReady.class);
 
 	public static final double DEFAULT_CONNECTION_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.connection");
-	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
+	//%% public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
 
 	private final Address proxyServerAddress;
 
@@ -39,7 +39,7 @@ final class ProxyReady {
 	private Map<Integer, Pair<Address, ReadyConnection>> currentConnections;
 	private int nextConnectionId;
 	private double connectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
-	private double readTimeout = DEFAULT_READ_TIMEOUT;
+	private double readTimeout = Double.NaN;
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
@@ -106,7 +106,9 @@ final class ProxyReady {
 						try {
 							socket = new Socket();
 							socket.connect(new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort()), (int) (connectionTimeout * 1000d));
-							socket.setSoTimeout((int) (readTimeout * 1000d));
+							if (!Double.isNaN(readTimeout)) {
+								socket.setSoTimeout((int) (readTimeout * 1000d));
+							}
 							try {
 								out = new DataOutputStream(socket.getOutputStream());
 								in = new DataInputStream(socket.getInputStream());
@@ -166,7 +168,7 @@ final class ProxyReady {
 											}
 										}
 									} catch (IOException ioe) {
-										LOGGER.warn("Connection lost with server");
+										LOGGER.warn("Connection lost with server", ioe);
 										break;
 									}
 								}

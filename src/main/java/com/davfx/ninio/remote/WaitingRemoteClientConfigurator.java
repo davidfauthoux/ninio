@@ -15,7 +15,7 @@ public final class WaitingRemoteClientConfigurator implements Closeable {
 	public final ScheduledExecutorService callWithEmptyExecutor;
 	private final boolean callWithEmptyExecutorToShutdown;
 	
-	public double endOfCommandTime = ConfigUtils.getDuration(CONFIG, "remote.waiting.endOfCommandTime");
+	//%% public double endOfCommandTime = ConfigUtils.getDuration(CONFIG, "remote.waiting.endOfCommandTime");
 	public double timeout = ConfigUtils.getDuration(CONFIG, "remote.waiting.timeout");
 	
 	public double callWithEmptyTime = ConfigUtils.getDuration(CONFIG, "remote.waiting.callWithEmptyTime");
@@ -48,15 +48,17 @@ public final class WaitingRemoteClientConfigurator implements Closeable {
 	public WaitingRemoteClientConfigurator(WaitingRemoteClientConfigurator configurator) {
 		callWithEmptyExecutorToShutdown = false;
 		callWithEmptyExecutor = configurator.callWithEmptyExecutor;
-		endOfCommandTime = configurator.endOfCommandTime;
+		//%% endOfCommandTime = configurator.endOfCommandTime;
 		timeout = configurator.timeout;
 		callWithEmptyTime = configurator.callWithEmptyTime;
 	}
 	
+	/*%%
 	public WaitingRemoteClientConfigurator withEndOfCommandTime(double endOfCommandTime) {
 		this.endOfCommandTime = endOfCommandTime;
 		return this;
 	}
+	*/
 	public WaitingRemoteClientConfigurator withTimeout(double timeout) {
 		this.timeout = timeout;
 		return this;
