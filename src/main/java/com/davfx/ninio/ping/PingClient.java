@@ -76,7 +76,8 @@ public final class PingClient { //%% implements Closeable {
 							@Override
 							public void close() {
 								if (instanceMappers.remove(instanceMapper)) {
-									instanceMapper.closedByUser();
+									//%% instanceMapper.closedByUser();
+									// Nothing to do
 								}
 								
 								write.close();
@@ -93,7 +94,8 @@ public final class PingClient { //%% implements Closeable {
 					@Override
 					public void close() {
 						if (instanceMappers.remove(instanceMapper)) {
-							instanceMapper.closedByPeer();
+							//%% instanceMapper.closedByPeer();
+							clientHandler.close();
 						}
 					}
 				});
@@ -124,6 +126,7 @@ public final class PingClient { //%% implements Closeable {
 			instance.instanceId = instanceId;
 		}
 
+		/*%%
 		public void closedByUser() {
 			instances.clear();
 		}
@@ -133,6 +136,7 @@ public final class PingClient { //%% implements Closeable {
 			}
 			instances.clear();
 		}
+		*/
 	
 		public void handle(long instanceId, double time) {
 			Instance i = instances.remove(instanceId);
@@ -167,6 +171,7 @@ public final class PingClient { //%% implements Closeable {
 			this.callback = callback;
 		}
 		
+		/*%%
 		public void closedByPeer() {
 			if (callback == null) {
 				return;
@@ -176,6 +181,7 @@ public final class PingClient { //%% implements Closeable {
 			callback = null;
 			c.failed(new IOException("Closed by peer"));
 		}
+		*/
 		
 		private void handle(double time) {
 			PingClientHandler.Callback.PingCallback c = callback;

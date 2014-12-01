@@ -134,7 +134,8 @@ public final class SnmpClient implements Closeable {
 							@Override
 							public void close() {
 								if (instanceMappers.remove(instanceMapper)) {
-									instanceMapper.closedByUser();
+									//%% instanceMapper.closedByUser();
+									// Nothing to do
 								}
 								
 								write.close();
@@ -151,7 +152,8 @@ public final class SnmpClient implements Closeable {
 					@Override
 					public void close() {
 						if (instanceMappers.remove(instanceMapper)) {
-							instanceMapper.closedByPeer();
+							clientHandler.close();
+							//%% instanceMapper.closedByPeer();
 						}
 					}
 				});
@@ -182,6 +184,7 @@ public final class SnmpClient implements Closeable {
 			instance.instanceId = instanceId;
 		}
 		
+		/*%%
 		public void closedByUser() {
 			instances.clear();
 		}
@@ -191,6 +194,7 @@ public final class SnmpClient implements Closeable {
 			}
 			instances.clear();
 		}
+		*/
 		
 		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
 			Instance i = instances.remove(instanceId);
@@ -285,6 +289,7 @@ public final class SnmpClient implements Closeable {
 			repeatRandomizationRandomized = (RANDOM.nextDouble() * configurator.repeatRandomization) - (1d / 2d); // [ -0.5, 0.5 [
 		}
 		
+		/*%%
 		public void closedByPeer() {
 			if (callback == null) {
 				return;
@@ -299,6 +304,7 @@ public final class SnmpClient implements Closeable {
 			callback = null;
 			c.failed(new IOException("Closed by peer"));
 		}
+		*/
 		
 		public void repeat(Date now) {
 			if (callback == null) {
