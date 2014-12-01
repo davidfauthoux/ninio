@@ -19,7 +19,6 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
-import com.google.gson.JsonPrimitive;
 
 public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
@@ -146,7 +145,8 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 							bindings.put(parameterVar, response.toString());
 							*/
 
-							String callbackScript = callbackVar + "(JSON.parse(" + new JsonPrimitive(response.toString()).toString() + "));";
+							//%%%%%%% String callbackScript = callbackVar + "(JSON.parse(" + new JsonPrimitive(response.toString()).toString() + "));";
+							String callbackScript = callbackVar + "(" + response.toString() + ");";
 							// String callbackScript = callbackVar + "(JSON.parse(" + parameterVar + "));";
 							try {
 								LOGGER.trace("Executing callback: {}", callbackScript);

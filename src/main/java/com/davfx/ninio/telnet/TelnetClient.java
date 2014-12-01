@@ -55,7 +55,7 @@ public final class TelnetClient {
 					
 					@Override
 					public void close() {
-						reader.close();
+						clientHandler.close();
 					}
 				});
 			}
@@ -103,7 +103,7 @@ public final class TelnetClient {
 			if (!closed) {
 				closed = true;
 				write.close();
-				handler.close();
+				//%%%%%%%% handler.close();
 			}
 		}
 		

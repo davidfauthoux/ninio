@@ -3,10 +3,16 @@ package com.davfx.ninio.remote;
 import java.io.IOException;
 import java.util.Date;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.common.Closeable;
 import com.davfx.util.DateUtils;
 
 public final class WaitingRemoteClient implements Closeable {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(WaitingRemoteClient.class);
+	
 	private final RemoteConnector client;
 	private final WaitingRemoteClientConfigurator configurator;
 	private final String eol;
@@ -27,6 +33,7 @@ public final class WaitingRemoteClient implements Closeable {
 			private Callback clientCallback = null;
 			private WaitingRemoteClientHandler.Callback.SendCallback currentCallback = null;
 			private final StringBuilder text = new StringBuilder();
+			private String previous = null;
 			
 			private Date timeoutDate = null;
 			private Date dateToSend = null;
@@ -46,40 +53,41 @@ public final class WaitingRemoteClient implements Closeable {
 			
 			@Override
 			public void received(String line) {
-				String r = null;
-				IOException f = null;
-				
-				text.append(line);
 				Date now = new Date();
-				if ((dateToSend != null) && now.after(dateToSend)) {
-					if (currentCallback != null) {
-						if (text.length() > 0) {
-							r = text.toString();
-							text.setLength(0);
-							timeoutDate = null;
-						}
-					}
-					setDateToSend(now);
-				} else if (dateToSend == null) {
-					setDateToSend(now);
-				}
 
-				if ((timeoutDate != null) && now.after(timeoutDate)) {
-					if (currentCallback != null) {
-						if (clientCallback != null) {
-							clientCallback.close();
-							clientCallback = null;
-						}
-						f = new IOException("Timeout");
+				if ((currentCallback != null) && (timeoutDate != null) && now.after(timeoutDate)) {
+					if (clientCallback != null) {
+						Callback c = clientCallback;
+						clientCallback = null;
+						c.close();
 					}
-					timeoutDate = null;
-				}
-
-				if (f != null) {
-					currentCallback.failed(f);
+					IOException f = new IOException("Timeout");
+					WaitingRemoteClientHandler.Callback.SendCallback cc = currentCallback;
 					currentCallback = null;
-				} else if (r != null) {
-					currentCallback.received(r);
+					cc.failed(f);
+				}
+
+				text.append(line);
+			
+				if ((dateToSend != null) && now.after(dateToSend)) {
+					if (text.length() > 0) {
+						if (currentCallback != null) {
+							String r = text.toString();
+							text.setLength(0);
+							WaitingRemoteClientHandler.Callback.SendCallback cc = currentCallback;
+							currentCallback = null;
+							previous = r;
+							cc.received(r);
+						} else {
+							if (!line.isEmpty()) {
+								LOGGER.warn("Received result too late (previous result has been cut), consider increasing 'endOfCommandTime'. Previous was: {}, current is: {}", previous, text);
+							}
+						}
+					}
+				}
+				
+				if (!line.isEmpty()) {
+					setDateToSend(now);
 				}
 			}
 			
@@ -95,7 +103,9 @@ public final class WaitingRemoteClient implements Closeable {
 					@Override
 					public void send(String line, SendCallback c) {
 						String r = null;
+						WaitingRemoteClientHandler.Callback.SendCallback cc = null;
 						if (currentCallback != null) {
+							cc = currentCallback;
 							if (text.length() > 0) {
 								r = text.toString();
 								text.setLength(0);
@@ -110,7 +120,7 @@ public final class WaitingRemoteClient implements Closeable {
 						callback.send(line + eol);
 						
 						if (r != null) {
-							currentCallback.received(r);
+							cc.received(r);
 						}
 					}
 				});

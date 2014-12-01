@@ -10,9 +10,12 @@ import java.util.Map;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Queue;
+import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
 
 public final class WaitingRemoteClientCache implements AutoCloseable {
+	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(WaitingRemoteClientCache.class).getInt("remote.cache.expire.threshold");
+
 	private final WaitingRemoteClientConfigurator configurator;
 	private final Queue queue;
 
@@ -54,7 +57,22 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 			}
 			
 			@Override
-			public void connect(WaitingRemoteClientHandler clientHandler) {
+			public void connect(final WaitingRemoteClientHandler clientHandler) {
+				if ((CACHE_EXPIRE_THRESHOLD > 0) && (clients.size() >= CACHE_EXPIRE_THRESHOLD)) {
+					Iterator<Hold> i = clients.values().iterator();
+					while (i.hasNext()) {
+						Hold c = i.next();
+						if (c.handlers.isEmpty()) {
+							if (c.launchedCallback != null) {
+								c.launchedCallback.close();
+							}
+							i.remove();
+							c.client.close();
+						}
+					}
+				}
+				
+				
 				Hold c = clients.get(address);
 				if (c == null) {
 					c = new Hold(new WaitingRemoteClient(configurator, new CallingEmptyScheduledRemoteConnector(configurator, queue, remoteConnectorFactory.create(address))));
@@ -93,7 +111,8 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 								h.launched(cc.ready, new WaitingRemoteClientHandler.Callback() {
 									@Override
 									public void close() {
-										// Never actually closed
+										// Connection never actually closed
+										cc.handlers.remove(clientHandler);
 									}
 									@Override
 									public void send(String line, SendCallback sendCallback) {
@@ -199,7 +218,8 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 						clientHandler.launched(cc.ready, new WaitingRemoteClientHandler.Callback() {
 							@Override
 							public void close() {
-								// Never actually closed
+								// Connection never actually closed
+								cc.handlers.remove(clientHandler);
 							}
 							@Override
 							public void send(String line, SendCallback sendCallback) {
