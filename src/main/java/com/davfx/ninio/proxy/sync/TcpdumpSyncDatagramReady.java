@@ -19,6 +19,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,7 +70,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			}
 			socket = s;
 			
-			Executors.newSingleThreadExecutor().execute(new Runnable() {
+			Executors.newSingleThreadExecutor(new ThreadFactory() {
+				@Override
+				public Thread newThread(Runnable r) {
+					return new Thread(r, TcpdumpSyncDatagramReady.class.getSimpleName());
+				}
+			}).execute(new Runnable() {
 				@Override
 				public void run() {
 					while (true) {
@@ -110,7 +116,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						
 						if (p != null) {
 							final InputStream error = p.getErrorStream();
-							Executors.newSingleThreadExecutor().execute(new Runnable() {
+							Executors.newSingleThreadExecutor(new ThreadFactory() {
+								@Override
+								public Thread newThread(Runnable r) {
+									return new Thread(r, TcpdumpSyncDatagramReady.class.getSimpleName() + "-err");
+								}
+							}).execute(new Runnable() {
 								@Override
 								public void run() {
 									try {
@@ -129,7 +140,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							});
 							
 							final InputStream input = p.getInputStream();
-							Executors.newSingleThreadExecutor().execute(new Runnable() {
+							Executors.newSingleThreadExecutor(new ThreadFactory() {
+								@Override
+								public Thread newThread(Runnable r) {
+									return new Thread(r, TcpdumpSyncDatagramReady.class.getSimpleName() + "-in");
+								}
+							}).execute(new Runnable() {
 								@Override
 								public void run() {
 									try {

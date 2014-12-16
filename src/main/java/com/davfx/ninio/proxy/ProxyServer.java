@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,7 +54,12 @@ public final class ProxyServer {
 	
 	public ProxyServer(int port, int maxNumberOfSimultaneousClients) {
 		this.port = port;
-		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients);
+		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable r) {
+				return new Thread(r, ProxyServer.class.getSimpleName() + "-read");
+			}
+		});
 	}
 
 	public ProxyServer override(String type, ProxyUtils.ServerSideConfigurator configurator) {
@@ -90,7 +96,12 @@ public final class ProxyServer {
 
 	public void start() throws IOException {
 		final Queue queue = new Queue();
-		Executors.newSingleThreadExecutor().execute(new Runnable() {
+		Executors.newSingleThreadExecutor(new ThreadFactory() {
+			@Override
+			public Thread newThread(Runnable r) {
+				return new Thread(r, ProxyServer.class.getSimpleName() + "-listen");
+			}
+		}).execute(new Runnable() {
 			@Override
 			public void run() {
 				try (ServerSocket ss = new ServerSocket(port)) {
