@@ -7,7 +7,7 @@ A Java NIO HTTP client/server as light as possible.
 The server:
 
 ```java
-new SimpleHttpServer().withPort(8080).start(new DefaultSimpleHttpServerHandler() {
+new SimpleHttpServer(new HttpServerConfigurator().withPort(8080)).start(new DefaultSimpleHttpServerHandler() {
 	@Override
 	public String get(String path, Parameters parameters) {
 		return "ECHO GET " + path + " " + parameters;
@@ -22,7 +22,7 @@ new SimpleHttpServer().withPort(8080).start(new DefaultSimpleHttpServerHandler()
 The client:
 
 ```java
-new SimpleHttpClient().withHost("localhost").withPort(8080).on("/path?foo=bar").send(new SimpleHttpClientHandler() {
+new SimpleHttpClient(new HttpClientConfigurator().withHost("localhost").withPort(8080)).on("/path?foo=bar").send(new SimpleHttpClientHandler() {
 	@Override
 	public void handle(int status, String reason, InMemoryPost body) {
 		System.out.println("[" + status + "] " + reason + " / " + body);
