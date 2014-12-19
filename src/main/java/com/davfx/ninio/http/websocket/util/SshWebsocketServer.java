@@ -1,9 +1,7 @@
 package com.davfx.ninio.http.websocket.util;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,8 +15,6 @@ import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
-import com.davfx.ninio.http.util.JsonDirectoryHttpServerHandler;
-import com.davfx.ninio.http.util.PatternDispatchHttpServerHandler;
 import com.davfx.ninio.http.websocket.WebsocketHttpServerHandler;
 import com.davfx.ninio.ssh.SshClient;
 import com.davfx.ninio.ssh.SshClientConfigurator;
@@ -36,13 +32,13 @@ public final class SshWebsocketServer {
 		Queue queue = new Queue();
 		new SshWebsocketServer(
 			new HttpServerConfigurator(queue).withPort(CONFIG.getInt("http.sshwebsocket.web.port")),
-			new SshClientConfigurator(queue).withAddress(new Address(CONFIG.getString("http.sshwebsocket.ssh.host"), CONFIG.getInt("http.sshwebsocket.ssh.port"))).withLogin(CONFIG.getString("http.sshwebsocket.ssh.login")).withPassword(CONFIG.getString("http.sshwebsocket.ssh.password")),
-			CONFIG.getString("http.sshwebsocket.path")
+			new SshClientConfigurator(queue).withAddress(new Address(CONFIG.getString("http.sshwebsocket.ssh.host"), CONFIG.getInt("http.sshwebsocket.ssh.port"))).withLogin(CONFIG.getString("http.sshwebsocket.ssh.login")).withPassword(CONFIG.getString("http.sshwebsocket.ssh.password"))
+			// CONFIG.getString("http.sshwebsocket.path")
 		);
 	}
 	
 	
-	public SshWebsocketServer(HttpServerConfigurator httpConfigurator, SshClientConfigurator sshConfigurator, final String websocketPath) throws IOException {
+	public SshWebsocketServer(HttpServerConfigurator httpConfigurator, SshClientConfigurator sshConfigurator) { // , final String websocketPath) {
 		final SshClient client = new SshClient(sshConfigurator);
 		new HttpServer(httpConfigurator, new HttpServerHandlerFactory() {
 			@Override
@@ -54,8 +50,9 @@ public final class SshWebsocketServer {
 			
 			@Override
 			public HttpServerHandler create() {
-				return new PatternDispatchHttpServerHandler()
-					.add(Pattern.compile(websocketPath), new WebsocketHttpServerHandler(new ReadyConnection() {
+				// return new PatternDispatchHttpServerHandler()
+				// .add(Pattern.compile(websocketPath), 
+				return new WebsocketHttpServerHandler(new ReadyConnection() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.debug("Failed from web", e);
@@ -113,8 +110,8 @@ public final class SshWebsocketServer {
 								}
 							});
 						}
-					}))
-					.add(Pattern.compile(".*"), new JsonDirectoryHttpServerHandler(new File(".")));
+					}); //)
+				// .add(Pattern.compile(".*"), new JsonDirectoryHttpServerHandler(new File(".")));
 			}
 		});
 	}
