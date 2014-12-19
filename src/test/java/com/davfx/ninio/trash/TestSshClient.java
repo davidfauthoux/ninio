@@ -13,7 +13,7 @@ import com.davfx.ninio.ssh.SshClientConfigurator;
 
 public class TestSshClient {
 	public static void main(String[] args) throws Exception {
-		new SshClient(new SshClientConfigurator().withHost("172.17.10.31").withLogin("louser").withPassword("pass")).connect(new ReadyConnection() {
+		new SshClient(new SshClientConfigurator().withHost("w.davfx.com").withLogin("dummy").withPassword("dummy")).connect(new ReadyConnection() {
 			@Override
 			public void failed(IOException e) {
 				System.out.println("FAILED");

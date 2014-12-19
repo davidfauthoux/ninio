@@ -400,6 +400,14 @@ public final class SshClient {
 										ByteBuffer b = buffer.duplicate();
 										b.limit(b.position() + length);
 										clientHandler.handle(null, b);
+									} else if (command == SshUtils.SSH_MSG_CHANNEL_EXTENDED_DATA) {
+										packet.readInt(); // Channel ID
+										long code = packet.readInt(); // Code
+										LOGGER.debug("Extended data code: {}", code);
+										int length = (int) packet.readInt();
+										ByteBuffer b = buffer.duplicate();
+										b.limit(b.position() + length);
+										clientHandler.handle(null, b);
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_REQUEST) {
 										packet.readInt();
 										String message = packet.readString();

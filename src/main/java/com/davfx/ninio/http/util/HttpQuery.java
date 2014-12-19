@@ -52,7 +52,13 @@ public final class HttpQuery {
 	}
 	
 	public File getFile(File root, String index) {
-		File d = new File(root + Http.Url.decode(path).replace(Http.PATH_SEPARATOR, File.separatorChar));
+		File d;
+		try {
+			d = new File(root + Http.Url.decode(path).replace(Http.PATH_SEPARATOR, File.separatorChar)).getCanonicalFile();
+		} catch (IOException ioe) {
+			LOGGER.error("Could not get canonical file", ioe);
+			return null;
+		}
 
 		try {
 			if (!d.getCanonicalPath().startsWith(root.getCanonicalPath())) {
