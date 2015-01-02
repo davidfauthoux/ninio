@@ -13,7 +13,7 @@ import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class ServiceHttpServer {
-	private static final Config CONFIG = ConfigUtils.load(RouteHttpServer.class);
+	private static final Config CONFIG = ConfigUtils.load(ServiceHttpServer.class);
 
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();

@@ -15,7 +15,7 @@ import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class FileHttpServer {
-	private static final Config CONFIG = ConfigUtils.load(RouteHttpServer.class);
+	private static final Config CONFIG = ConfigUtils.load(FileHttpServer.class);
 
 	public static void main(String[] args) throws Exception {
 		final File root = new File(CONFIG.getString("http.file.path"));

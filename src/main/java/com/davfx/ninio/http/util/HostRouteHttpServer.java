@@ -2,9 +2,10 @@ package com.davfx.ninio.http.util;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.regex.Pattern;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,6 +14,7 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Trust;
+import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpClientConfigurator;
 import com.davfx.ninio.http.HttpClientHandler;
@@ -26,39 +28,29 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
 import com.typesafe.config.Config;
 
-public final class RouteHttpServer {
-	private static final Logger LOGGER = LoggerFactory.getLogger(RouteHttpServer.class);
+public final class HostRouteHttpServer {
+	private static final Logger LOGGER = LoggerFactory.getLogger(HostRouteHttpServer.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(RouteHttpServer.class);
+	private static final Config CONFIG = ConfigUtils.load(HostRouteHttpServer.class);
 
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();
-		RouteHttpServer server = new RouteHttpServer(
+		HostRouteHttpServer server = new HostRouteHttpServer(
 			new HttpServerConfigurator(queue).withAddress(new Address(CONFIG.getString("http.route.bind.host"), CONFIG.getInt("http.route.bind.port"))),
 			new HttpClientConfigurator(queue).withTrust(new Trust())
 		);
 		for (Config c : CONFIG.getConfigList("http.route.map")) {
-			server.route(c.getString("header"), Pattern.compile(c.getString("match")), new Address(c.getString("to.host"), c.getInt("to.port")), c.getString("to.path"));
+			server.route(c.getStringList("hosts"), new Address(c.getString("to.host"), c.getInt("to.port")), c.getString("to.path"));
 		}
 		server.start();
 	}
 	
-	private static final class RouteElement {
-		final String header;
-		final Pattern pattern;
-		final Pair<Address, String> to;
-		public RouteElement(String header, Pattern pattern, Pair<Address, String> to) {
-			this.header = header;
-			this.pattern = pattern;
-			this.to = to;
-		}
-	}
 	
 	private final HttpServerConfigurator serverConfigurator;
 	private final HttpClient client;
-	private final List<RouteElement> routing = new LinkedList<>();
+	private final Map<String, Pair<Address, String>> routing = new HashMap<>();
 	
-	public RouteHttpServer(HttpServerConfigurator serverConfigurator, HttpClientConfigurator clientConfigurator) {
+	public HostRouteHttpServer(HttpServerConfigurator serverConfigurator, HttpClientConfigurator clientConfigurator) {
 		LOGGER.debug("Running router: {}", serverConfigurator.address);
 		this.serverConfigurator = serverConfigurator;
 		client = new HttpClient(clientConfigurator);
@@ -114,16 +106,9 @@ public final class RouteHttpServer {
 					
 					@Override
 					public void handle(HttpRequest request) {
-						Pair<Address, String> to = null;
-						for (RouteElement e : routing) {
-							String value = request.getHeaders().get(e.header);
-							if ((value != null) && e.pattern.matcher(value).matches()) {
-								LOGGER.debug("Received matching request: {}, header {} = {}, to: {}", request.getPath(), e.header, value, e.to);
-								to = e.to;
-								break;
-							}
-						}
-
+						String host = request.getHeaders().get(Http.HOST);
+						LOGGER.debug("Received request: {}, host = {}", request.getPath(), host);
+						Pair<Address, String> to = routing.get(host);
 						if (to == null) {
 							closed = true;
 							return;
@@ -131,7 +116,7 @@ public final class RouteHttpServer {
 
 						LOGGER.debug("Routed to: {}", to);
 						HttpRequest routedRequest = new HttpRequest(to.first, request.isSecure(), request.getMethod(), to.second + request.getPath(), request.getHeaders());
-						//%% routedRequest.getHeaders().put(Http.HOST, to.toString());
+						routedRequest.getHeaders().put(Http.HOST, to.toString());
 						client.send(routedRequest, new HttpClientHandler() {
 							@Override
 							public void failed(IOException e) {
@@ -178,8 +163,10 @@ public final class RouteHttpServer {
 		});
 	}
 	
-	public RouteHttpServer route(String header, Pattern pattern, Address toAddress, String toPath) {
-		routing.add(new RouteElement(header, pattern, new Pair<Address, String>(toAddress, toPath)));
+	public HostRouteHttpServer route(Iterable<String> hosts, Address to, String path) {
+		for (String host : hosts) {
+			routing.put(host, new Pair<Address, String>(to, path));
+		}
 		return this;
 	}
 }
