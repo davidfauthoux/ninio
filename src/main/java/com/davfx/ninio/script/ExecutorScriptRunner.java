@@ -3,7 +3,6 @@ package com.davfx.ninio.script;
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import javax.script.Bindings;
 import javax.script.ScriptContext;
@@ -14,6 +13,7 @@ import javax.script.ScriptException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Failable;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
@@ -27,12 +27,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	public static final String UNICITY_PREFIX = ConfigUtils.load(ExecutorScriptRunner.class).getString("script.functions.unicity.prefix");
 	
 	private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
-	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ThreadFactory() {
-		@Override
-		public Thread newThread(Runnable r) {
-			return new Thread(r, ExecutorScriptRunner.class.getSimpleName());
-		}
-	});
+	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ClassThreadFactory(ExecutorScriptRunner.class));
 	private final Mutable<Long> nextCallbackFunctionSuffix = new Mutable<Long>(0L);
 
 	public ExecutorScriptRunner() {

@@ -34,7 +34,7 @@ public final class Queue implements AutoCloseable {
 	public Queue(final Selector selector) {
 		this.selector = selector;
 
-		Thread t = new Thread(new Runnable() {
+		Thread t = new ClassThreadFactory(Queue.class).newThread(new Runnable() {
 			@Override
 			public void run() {
 				while (true) {
@@ -72,7 +72,6 @@ public final class Queue implements AutoCloseable {
 			}
 		});
 		
-		t.setName("Queue");
 		t.start();
 		
 		threadId = t.getId();

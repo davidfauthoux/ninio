@@ -3,8 +3,8 @@ package com.davfx.ninio.script.util;
 import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
 
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.http.HttpClientConfigurator;
 import com.davfx.ninio.http.util.SimpleHttpClient;
@@ -40,12 +40,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	private final SnmpClientCache snmp;
 	private final PingClientCache ping;
 	
-	private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-		@Override
-		public Thread newThread(Runnable r) {
-			return new Thread(r, AllAvailableScriptRunner.class.getSimpleName());
-		}
-	});
+	private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(AllAvailableScriptRunner.class));
 	
 	public final HttpClientConfigurator httpConfigurator;
 	public final WaitingRemoteClientConfigurator remoteConfigurator;

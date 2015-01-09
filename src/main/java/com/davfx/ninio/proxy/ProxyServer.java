@@ -12,12 +12,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
@@ -54,12 +54,7 @@ public final class ProxyServer {
 	
 	public ProxyServer(int port, int maxNumberOfSimultaneousClients) {
 		this.port = port;
-		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ThreadFactory() {
-			@Override
-			public Thread newThread(Runnable r) {
-				return new Thread(r, ProxyServer.class.getSimpleName() + "-read");
-			}
-		});
+		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ClassThreadFactory(ProxyServer.class, "read"));
 	}
 
 	public ProxyServer override(String type, ProxyUtils.ServerSideConfigurator configurator) {
@@ -75,12 +70,7 @@ public final class ProxyServer {
 	
 	public void start() throws IOException {
 		final Queue queue = new Queue();
-		Executors.newSingleThreadExecutor(new ThreadFactory() {
-			@Override
-			public Thread newThread(Runnable r) {
-				return new Thread(r, ProxyServer.class.getSimpleName() + "-listen");
-			}
-		}).execute(new Runnable() {
+		Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, "listen")).execute(new Runnable() {
 			@Override
 			public void run() {
 				try (ServerSocket ss = new ServerSocket(port)) {

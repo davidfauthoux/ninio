@@ -9,12 +9,12 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -31,12 +31,7 @@ public final class SyncDatagramReady implements Ready {
 		private final Object lock = new Object();
 		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
 		public Receiver() {
-			Executors.newSingleThreadExecutor(new ThreadFactory() {
-				@Override
-				public Thread newThread(Runnable r) {
-					return new Thread(r, SyncDatagramReady.class.getSimpleName());
-				}
-			}).execute(new Runnable() {
+			Executors.newSingleThreadExecutor(new ClassThreadFactory(SyncDatagramReady.class)).execute(new Runnable() {
 				@Override
 				public void run() {
 					try {

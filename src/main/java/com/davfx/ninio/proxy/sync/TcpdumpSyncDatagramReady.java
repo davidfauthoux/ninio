@@ -19,12 +19,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
@@ -70,12 +70,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			}
 			socket = s;
 			
-			Executors.newSingleThreadExecutor(new ThreadFactory() {
-				@Override
-				public Thread newThread(Runnable r) {
-					return new Thread(r, TcpdumpSyncDatagramReady.class.getSimpleName());
-				}
-			}).execute(new Runnable() {
+			Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class)).execute(new Runnable() {
 				@Override
 				public void run() {
 					while (true) {
@@ -116,12 +111,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						
 						if (p != null) {
 							final InputStream error = p.getErrorStream();
-							Executors.newSingleThreadExecutor(new ThreadFactory() {
-								@Override
-								public Thread newThread(Runnable r) {
-									return new Thread(r, TcpdumpSyncDatagramReady.class.getSimpleName() + "-err");
-								}
-							}).execute(new Runnable() {
+							Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class, "err")).execute(new Runnable() {
 								@Override
 								public void run() {
 									try {
@@ -140,12 +130,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							});
 							
 							final InputStream input = p.getInputStream();
-							Executors.newSingleThreadExecutor(new ThreadFactory() {
-								@Override
-								public Thread newThread(Runnable r) {
-									return new Thread(r, TcpdumpSyncDatagramReady.class.getSimpleName() + "-in");
-								}
-							}).execute(new Runnable() {
+							Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class, "in")).execute(new Runnable() {
 								@Override
 								public void run() {
 									try {

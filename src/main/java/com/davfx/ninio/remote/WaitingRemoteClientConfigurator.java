@@ -3,8 +3,8 @@ package com.davfx.ninio.remote;
 import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
 
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Closeable;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
@@ -26,12 +26,7 @@ public final class WaitingRemoteClientConfigurator implements Closeable {
 	}
 	
 	public WaitingRemoteClientConfigurator() throws IOException {
-		this(Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-			@Override
-			public Thread newThread(Runnable r) {
-				return new Thread(r, WaitingRemoteClientConfigurator.class.getSimpleName());
-			}
-		}), true);
+		this(Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(WaitingRemoteClientConfigurator.class)), true);
 	}
 
 	public WaitingRemoteClientConfigurator(ScheduledExecutorService callWithEmptyExecutor) {

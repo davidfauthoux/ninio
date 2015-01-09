@@ -10,12 +10,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.QueueReady;
@@ -36,19 +36,14 @@ final class ProxyReady {
 
 	private final Object lock = new Object();
 	private DataOutputStream currentOut = null;
-	private Map<Integer, Pair<Address, FailableCloseableByteBufferHandler>> currentEstablishedConnections;
+	private Map<Integer, Pair<Address, ReadyConnection>> currentConnections;
 	private int nextConnectionId;
 	private double connectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
 	private double readTimeout = Double.NaN;
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
-	private Executor executor = Executors.newSingleThreadExecutor(new ThreadFactory() {
-		@Override
-		public Thread newThread(Runnable r) {
-			return new Thread(r, ProxyReady.class.getSimpleName());
-		}
-	});
+	private Executor executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyReady.class));
 	private ProxyListener listener = new ProxyListener() {
 		@Override
 		public void failed(IOException e) {
@@ -92,11 +87,11 @@ final class ProxyReady {
 	public Ready get(final Queue queue, final String connecterType) {
 		return new QueueReady(queue, new Ready() {
 			@Override
-			public void connect(final Address address, final ReadyConnection connection) {
+			public void connect(final Address address, ReadyConnection connection) {
 				queue.check();
 				
 				final DataOutputStream out;
-				final Map<Integer, Pair<Address, FailableCloseableByteBufferHandler>> establishedConnections;
+				final Map<Integer, Pair<Address, ReadyConnection>> connections;
 				int connectionId;
 				
 				synchronized (lock) {
@@ -131,7 +126,7 @@ final class ProxyReady {
 							return;
 						}
 			
-						establishedConnections = new HashMap<>();
+						connections = new HashMap<>();
 			
 						executor.execute(new Runnable() {
 							@Override
@@ -145,70 +140,77 @@ final class ProxyReady {
 										int len = in.readInt();
 										if (len < 0) {
 											int command = -len;
+											Pair<Address, ReadyConnection> currentConnection;
+											synchronized (lock) {
+												currentConnection = connections.get(connectionId);
+											}
 											if (command == ProxyCommons.COMMAND_ESTABLISH_CONNECTION) {
-												establishedConnections.put(connectionId, new Pair<Address, FailableCloseableByteBufferHandler>(address, connection));
-												connection.connected(new FailableCloseableByteBufferHandler() {
-													@Override
-													public void close() {
-														synchronized (lock) {
-															establishedConnections.remove(connectionId);
+												if (currentConnection != null) {
+													currentConnection.second.connected(new FailableCloseableByteBufferHandler() {
+														@Override
+														public void close() {
+															synchronized (lock) {
+																connections.remove(connectionId);
+															}
+															try {
+																out.writeInt(connectionId);
+																out.writeInt(0);
+																out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException e) {
+																}
+																LOGGER.trace("Connection lost", ioe);
+															}
 														}
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(0);
-															out.flush();
-														} catch (IOException ioe) {
+														
+														@Override
+														public void failed(IOException e) {
 															try {
 																out.close();
-															} catch (IOException e) {
+															} catch (IOException ioe) {
 															}
-															LOGGER.trace("Connection lost", ioe);
+															LOGGER.warn("Connection cut", e);
 														}
-													}
-													
-													@Override
-													public void failed(IOException e) {
-														try {
-															out.close();
-														} catch (IOException ioe) {
-														}
-														LOGGER.warn("Connection cut", e);
-													}
-													
-													@Override
-													public void handle(Address address, ByteBuffer buffer) {
-														if (!buffer.hasRemaining()) {
-															return;
-														}
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(buffer.remaining());
-															out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
-															out.flush();
-														} catch (IOException ioe) {
+														
+														@Override
+														public void handle(Address address, ByteBuffer buffer) {
+															if (!buffer.hasRemaining()) {
+																return;
+															}
 															try {
-																out.close();
-															} catch (IOException e) {
+																out.writeInt(connectionId);
+																out.writeInt(buffer.remaining());
+																out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
+																out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException e) {
+																}
+																LOGGER.trace("Connection lost", ioe);
 															}
-															LOGGER.trace("Connection lost", ioe);
 														}
-													}
-												});
+													});
+												}
 											} else if (command == ProxyCommons.COMMAND_FAIL_CONNECTION) {
-												connection.failed(new IOException("Failed"));
+												if (currentConnection != null) {
+													currentConnection.second.failed(new IOException("Failed"));
+												}
 											}
 										} else if (len == 0) {
-											Pair<Address, FailableCloseableByteBufferHandler> currentConnection;
+											Pair<Address, ReadyConnection> currentConnection;
 											synchronized (lock) {
-												currentConnection = establishedConnections.remove(connectionId);
+												currentConnection = connections.remove(connectionId);
 											}
 											if (currentConnection != null) {
 												currentConnection.second.close();
 											}
 										} else {
-											Pair<Address, FailableCloseableByteBufferHandler> currentConnection;
+											Pair<Address, ReadyConnection> currentConnection;
 											synchronized (lock) {
-												currentConnection = establishedConnections.get(connectionId);
+												currentConnection = connections.get(connectionId);
 											}
 											final byte[] b = new byte[len];
 											in.readFully(b);
@@ -229,11 +231,11 @@ final class ProxyReady {
 			
 								synchronized (lock) {
 									currentOut = null;
-									currentEstablishedConnections = null;
+									currentConnections = null;
 								}
 
-								for (Pair<Address, FailableCloseableByteBufferHandler> c : establishedConnections.values()) {
-									c.second.close();
+								for (Pair<Address, ReadyConnection> c : connections.values()) {
+									c.second.failed(new IOException("Connection lost"));
 								}
 								
 								listener.disconnected();
@@ -241,17 +243,19 @@ final class ProxyReady {
 						});
 						
 						currentOut = out;
-						currentEstablishedConnections = establishedConnections;
+						currentConnections = connections;
 						nextConnectionId = 0;
 					} else {
 						out = currentOut;
-						establishedConnections = currentEstablishedConnections;
+						connections = currentConnections;
 					}
 					
 					connectionId = nextConnectionId;
 					nextConnectionId++;
 				}
 				
+				connections.put(connectionId, new Pair<>(address, connection));
+
 				try {
 					out.writeInt(connectionId);
 					out.writeInt(-ProxyCommons.COMMAND_ESTABLISH_CONNECTION);

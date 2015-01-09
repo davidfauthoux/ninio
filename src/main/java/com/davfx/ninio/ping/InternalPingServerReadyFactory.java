@@ -4,9 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.Ready;
@@ -40,12 +40,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	@Override
 	public Ready create(Queue queue) {
 		if (clientExecutor == null) {
-			clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ThreadFactory() {
-				@Override
-				public Thread newThread(Runnable r) {
-					return new Thread(r, InternalPingServerReadyFactory.class.getSimpleName());
-				}
-			});
+			clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ClassThreadFactory(InternalPingServerReadyFactory.class));
 		}
 		
 		return new Ready() {

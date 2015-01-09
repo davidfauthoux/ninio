@@ -7,6 +7,7 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.script.SyncScriptFunction;
@@ -18,7 +19,7 @@ public class TestScript4__testFloat {
 		System.out.println(System.getProperty("java.version"));
 		Queue queue = new Queue();
 		
-		//new ProxyServer(6666, 10).start();
+		new ProxyServer(9993, 10).start();
 		ProxyClient proxy =  new ProxyClient(new Address("10.4.243.246", 9993));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
@@ -49,12 +50,13 @@ public class TestScript4__testFloat {
 					public JsonElement call(JsonElement request) {
 						JsonElement error = request.getAsJsonObject().get("error");
 						if (error != null) {
-							System.out.println("ERROR " + error.getAsString());
+							System.out.println("ERROR SNMP " + error.getAsString());
 							return null;
 						}
 						for (Map.Entry<String, JsonElement> e : request.getAsJsonObject().get("result").getAsJsonObject().entrySet()) {
 							System.out.println(e.getKey() + " = " + e.getValue().getAsString());
 						}
+						System.out.println("DONE SNMP");
 						return null;
 					}
 				});
@@ -64,7 +66,7 @@ public class TestScript4__testFloat {
 					public JsonElement call(JsonElement request) {
 						JsonElement error = request.getAsJsonObject().get("error");
 						if (error != null) {
-							System.out.println("ERROR " + error.getAsString());
+							System.out.println("ERROR PING " + error.getAsString());
 							return null;
 						}
 						System.out.println("time = " + request.getAsJsonObject().get("result").getAsDouble());
@@ -115,8 +117,14 @@ public class TestScript4__testFloat {
 					}
 				});
 
+				rrr.eval(new BasicScript().append("ping({'host':'10.104.39.238'}, log_ping);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
 				
-				Thread.sleep(50000);
+				Thread.sleep(500000);
 			}
 			
 			Thread.sleep(15000);
