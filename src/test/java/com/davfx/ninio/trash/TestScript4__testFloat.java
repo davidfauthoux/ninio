@@ -19,7 +19,7 @@ public class TestScript4__testFloat {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(6666, 10).start();
-		ProxyClient proxy = new ProxyClient(new Address("10.4.243.246", 9993));
+		ProxyClient proxy =  new ProxyClient(new Address("10.4.243.246", 9993));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {

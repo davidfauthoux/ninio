@@ -7,6 +7,7 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.script.SyncScriptFunction;
@@ -19,7 +20,7 @@ public class TestScript3 {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(6666, 10).start();
-		ProxyClient proxy = new ProxyClient(new Address("10.4.243.240", 9993));
+		ProxyClient proxy = new ProxyClient(new Address("localhost", 6666));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -141,7 +142,7 @@ public class TestScript3 {
 									"}," +
 								"init:" +
 									"function(line, callback) {" +
-										"if (line && (line.length > 0)) _telnet_init_map[address].push(line);" +
+										"if (line && (line.length > 0)) _telnet_init_map[address].push({command:line,time:2});" +
 										"callback = callback || __telnetcallback;" +
 										"callback();" +
 										"return t;" +
@@ -153,7 +154,7 @@ public class TestScript3 {
 								"command:" +
 									"function(line, callback) {" +
 										"callback = callback || __telnetcallback;" +
-										"_telnet({host:_host(address),port:_port(address),init:_telnet_init_map[address],command:line}, function(r) {" +
+										"_telnet({host:_host(address),port:_port(address),init:_telnet_init_map[address],command:line,time:2}, function(r) {" +
 											"if (!r) return;" +
 											"if (r['error']) {" +
 												"callback('Error [' + r['error'] + ']');" +
