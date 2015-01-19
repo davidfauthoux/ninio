@@ -53,6 +53,9 @@ public final class RegisteredFunctionsScriptRunner implements SimpleScriptRunner
 					parameter = null;
 				}
 				AsyncScriptFunction<JsonElement> function = asyncFunctions.get(functionId);
+				if (function == null) {
+					throw new RuntimeException("Undefined function: " + functionId);
+				}
 				function.call(parameter, callback);
 			}
 		}, new SyncScriptFunction<JsonElement>() {
@@ -65,6 +68,9 @@ public final class RegisteredFunctionsScriptRunner implements SimpleScriptRunner
 					parameter = null;
 				}
 				SyncScriptFunction<JsonElement> function = syncFunctions.get(functionId);
+				if (function == null) {
+					throw new RuntimeException("Undefined function: " + functionId);
+				}
 				return function.call(parameter);
 			}
 		});

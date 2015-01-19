@@ -19,8 +19,8 @@ public class TestScript4__testFloat {
 		System.out.println(System.getProperty("java.version"));
 		Queue queue = new Queue();
 		
-		new ProxyServer(9993, 10).start();
-		ProxyClient proxy =  new ProxyClient(new Address("10.4.243.246", 9993));
+		//new ProxyServer(9993, 10).start();
+		ProxyClient proxy =  null; //new ProxyClient(new Address("10.92.115.81", 8888));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -110,14 +110,14 @@ public class TestScript4__testFloat {
 					}
 				});
 
-				rrr.eval(new BasicScript().append("snmp({'host':'10.104.39.238', 'community':'public', oid:'1.3.6.1.4.1.8521.4.20'}, log_snmp);"), new Failable() {
+				rrr.eval(new BasicScript().append("snmp({'host':'172.17.0.1', 'community':'public', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
 
-				rrr.eval(new BasicScript().append("ping({'host':'10.104.39.238'}, log_ping);"), new Failable() {
+				rrr.eval(new BasicScript().append("ping({'host':'172.17.0.1'}, log_ping);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
