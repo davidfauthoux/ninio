@@ -8,6 +8,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
@@ -15,6 +16,7 @@ import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
 import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.script.util.AllAvailableScriptRunner;
+import com.davfx.ninio.script.util.CallingEndScriptRunner;
 import com.davfx.util.PrependIterable;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -27,7 +29,8 @@ public class TestScriptExpert {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(9993, 10).start();
-		ProxyClient proxy =  null; //new ProxyClient(new Address("10.92.115.81", 8888));
+		ProxyClient proxy =  new ProxyClient(new Address("10.4.243.240", 9993));
+		//ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 6667));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -124,20 +127,28 @@ public class TestScriptExpert {
 					}
 				});
 
-				rrr.eval(new PrependIterable<String>(OLD_WRAPPING, new BasicScript().append(AUTORAISE_WRAPPING + "snmp('public', '172.17.0.1').oid('1.3.6.1.2.1.2.2.1.2');")), new Failable() {
+				rrr.register(CallingEndScriptRunner.END_FUNCTION_NAME, new SyncScriptFunction<JsonElement>() {
 					@Override
-					public void failed(IOException e) {
-						e.printStackTrace();
+					public JsonElement call(JsonElement request) {
+						System.out.println("END ***");
+						return null;
 					}
 				});
 
-				rrr.eval(new PrependIterable<String>(OLD_WRAPPING, new BasicScript().append(AUTORAISE_WRAPPING + "ping('172.17.0.1').ping();")), new Failable() {
+				new CallingEndScriptRunner(rrr).eval(new PrependIterable<String>(OLD_WRAPPING, new BasicScript().append(AUTORAISE_WRAPPING + "snmp('public', '172.17.0.1').oid('1.3.6.1.2.1.2.2.1.2');")), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
-				
+/*
+				new CallingEndScriptRunner(rrr).eval(new PrependIterable<String>(OLD_WRAPPING, new BasicScript().append(AUTORAISE_WRAPPING + "ping('172.17.0.1').ping();")), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+*/				
 				Thread.sleep(500000);
 			}
 			
@@ -220,7 +231,7 @@ public class TestScriptExpert {
 				"return function(error, result) {" +
 					"if (error) {" +
 						"__ping(__host(address)).ping(function(pingError, pingResult) {" +
-							"fire('autoraise\\t' + (pingError ? 'UNREACHABLE' : 'UNAVAILABLE') + '\\tNo cause available');" +
+							"fire('autoraise\\t' + (pingError ? 'UNREACHABLE' : 'UNAVAILABLE') + '\\tNo cause available (' + error + ')');" +
 						"});" +
 					"} else {" +
 						"callback(error, result);" +
@@ -278,6 +289,111 @@ public class TestScriptExpert {
 				"return t;" +
 			"};";
 
+	private static final double TELNET_INIT_RESPONSE_TIME = 2d;
+	private static final double TELNET_COMMAND_RESPONSE_TIME = 30d;
+	
+	public static final String OLD_WRAPPING = 
+		"var __ip = 'localhost';" +
+		"var __telnetcallback = function(e, r) {};" +
+		"var __snmpcallback = function(e, r) {};" +
+		"var __pingcallback = function(e, r) {};" +
+
+		"var _telnet = telnet;" +
+		"var _snmp = snmp;" +
+		"var _ping = ping;" +
+		"var _telnet_init_map = {};" +
+
+		"var _host = function(address) {" +
+			"var n = address.indexOf(':');" +
+			"if (n < 0) { return address; }" +
+			"return address.substring(0, n);" +
+		"};" +
+		"var _port = function(address) {" +
+			"var n = address.indexOf(':');" +
+			"if (n < 0) { return null; }" +
+			"return 0 + address.substring(n + 1);" +
+		"};" +
+		"telnet = function(address) {" +
+			"address = address || __ip;" +
+			"if (!_telnet_init_map[address]) _telnet_init_map[address] = [];" +
+			"var t = {" +
+				"session:" +
+					"function(callback) {" +
+						"callback = callback || __telnetcallback;" +
+						"callback();" +
+						"return t;" +
+					"}," +
+				"init:" +
+					"function(line, callback) {" +
+						"if (line && (line.length > 0)) _telnet_init_map[address].push({'command':line, 'time':" + TELNET_INIT_RESPONSE_TIME + "});" +
+						"callback = callback || __telnetcallback;" +
+						"callback();" +
+						"return t;" +
+					"}," +
+				"ready:" +
+					"function() {" +
+						"return t;" +
+					"}," +
+				"command:" +
+					"function(line, callback) {" +
+						"callback = callback || __telnetcallback;" +
+						"_telnet({host:_host(address),port:_port(address),init:_telnet_init_map[address],command:line,time:" + TELNET_COMMAND_RESPONSE_TIME + "}, function(r) {" +
+							"if (!r) return;" +
+							"if (r['error']) {" +
+								"callback('Error [' + r['error'] + ']');" +
+							"} else {" +
+								"var rr = r['result'];" +
+								"callback(null, rr['init'] + rr['response']);" +
+							"}" +
+						"});" +
+						"return t;" +
+					"}" +
+			"};" +
+			"return t;" +
+		"};" +
+			
+		"snmp = function(community, address) {" +
+			"address = address || __ip;" +
+			"var t = {" +
+				"oid:" +
+					"function(oid, callback) {" +
+						"callback = callback || __snmpcallback;" +
+						"_snmp({host:_host(address),port:_port(address),community:community,oid:oid}, function(r) {" +
+							"if (!r) return;" +
+							"if (r['error']) {" +
+								"callback('Error [' + r['error'] + ']');" +
+							"} else {" +
+								"var rr = r['result'];" +
+								"callback(null, rr);" +
+							"}" +
+						"});" +
+						"return t;" +
+					"}" +
+			"};" +
+			"return t;" +
+		"};" +
+			
+		"ping = function(address) {" +
+			"address = address || __ip;" +
+			"var t = {" +
+				"ping:" +
+					"function(callback) {" +
+						"callback = callback || __pingcallback;" +
+						"_ping({host:_host(address),port:_port(address)}, function(r) {" +
+							"if (!r) return;" +
+							"if (r['error']) {" +
+								"callback('Error [' + r['error'] + ']');" +
+							"} else {" +
+								"var rr = r['result'];" +
+								"var m = {}; m[address] = {'time': rr}; callback(null, m);" +
+							"}" +
+						"});" +
+						"return t;" +
+					"}" +
+			"};" +
+			"return t;" +
+		"};";
+/*
 	private static final double TELNET_INIT_RESPONSE_TIME = 1d;
 	private static final double TELNET_COMMAND_RESPONSE_TIME = 2d;
 	
@@ -382,6 +498,7 @@ public class TestScriptExpert {
 			"};" +
 			"return t;" +
 		"};";
+		*/
 }
 
 final class PollScriptUtil {

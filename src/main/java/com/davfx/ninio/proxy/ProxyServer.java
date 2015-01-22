@@ -8,6 +8,8 @@ import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -26,6 +28,7 @@ import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
+import com.davfx.util.Mutable;
 import com.davfx.util.Pair;
 import com.typesafe.config.Config;
 
@@ -54,6 +57,7 @@ public final class ProxyServer {
 	
 	public ProxyServer(int port, int maxNumberOfSimultaneousClients) {
 		this.port = port;
+		LOGGER.debug("Proxy server on port {}", port);
 		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ClassThreadFactory(ProxyServer.class, "read"));
 	}
 
@@ -81,6 +85,7 @@ public final class ProxyServer {
 							@Override
 							public void run() {
 								final Map<Integer, Pair<Address, CloseableByteBufferHandler>> establishedConnections = new HashMap<>();
+								final Mutable<Boolean> closed = new Mutable<>(false);
 
 								try {
 									final DataOutputStream out = new DataOutputStream(socket.getOutputStream());
@@ -100,6 +105,7 @@ public final class ProxyServer {
 												r.connect(address, new ReadyConnection() {
 													@Override
 													public void failed(IOException e) {
+														LOGGER.warn("Could not connect to {}", address, e);
 														try {
 															out.writeInt(connectionId);
 															out.writeInt(-ProxyCommons.COMMAND_FAIL_CONNECTION);
@@ -114,7 +120,13 @@ public final class ProxyServer {
 													
 													@Override
 													public void connected(FailableCloseableByteBufferHandler write) {
-														establishedConnections.put(connectionId, new Pair<Address, CloseableByteBufferHandler>(address, write));
+														synchronized (establishedConnections) {
+															if (closed.get()) {
+																write.close();
+																return;
+															}
+															establishedConnections.put(connectionId, new Pair<Address, CloseableByteBufferHandler>(address, write));
+														}
 
 														try {
 															out.writeInt(connectionId);
@@ -163,7 +175,10 @@ public final class ProxyServer {
 												});
 											}
 										} else if (len == 0) {
-											Pair<Address, CloseableByteBufferHandler> connection = establishedConnections.remove(connectionId);
+											Pair<Address, CloseableByteBufferHandler> connection;
+											synchronized (establishedConnections) {
+												connection = establishedConnections.remove(connectionId);
+											}
 											if (connection != null) {
 												if (connection.second != null) {
 													connection.second.close();
@@ -172,7 +187,10 @@ public final class ProxyServer {
 										} else {
 											byte[] b = new byte[len];
 											in.readFully(b);
-											Pair<Address, CloseableByteBufferHandler> connection = establishedConnections.get(connectionId);
+											Pair<Address, CloseableByteBufferHandler> connection;
+											synchronized (establishedConnections) {
+												connection = establishedConnections.get(connectionId);
+											}
 											if (connection != null) {
 												if (!hostsToFilter.contains(connection.first.getHost())) {
 													if (connection.second != null) {
@@ -190,10 +208,17 @@ public final class ProxyServer {
 									} catch (IOException ioe) {
 									}
 									
-									for (Pair<Address, CloseableByteBufferHandler> connection : establishedConnections.values()) {
-										if (connection.second != null) {
-											connection.second.close();
+									List<CloseableByteBufferHandler> toClose = new LinkedList<>();
+									synchronized (establishedConnections) {
+										closed.set(true);
+										for (Pair<Address, CloseableByteBufferHandler> connection : establishedConnections.values()) {
+											if (connection.second != null) {
+												toClose.add(connection.second);
+											}
 										}
+									}
+									for (CloseableByteBufferHandler c : toClose) {
+										c.close();
 									}
 								}
 							}
