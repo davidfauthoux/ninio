@@ -325,7 +325,7 @@ public final class BerReader {
 		ByteBuffer bytes = bb.duplicate();
 		while (bytes.hasRemaining()) {
 			int c = bytes.get() & 0xFF;
-			if ((c < 32) || (c >= 127)) {
+			if (((c < 32) && (c != 10) && (c != 13)) || (c >= 127)) {
 				String s = HexUtils.toHexString(bb);
 				return s;
 			}
