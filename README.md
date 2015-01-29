@@ -36,7 +36,7 @@ Available on Maven Central:
 <dependency>
 	<groupId>com.davfx</groupId>
 	<artifactId>ninio</artifactId>
-	<version>0.0.13</version>
+	<version>0.0.14</version>
 </dependency>
 ```
 
