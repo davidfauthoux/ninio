@@ -87,7 +87,7 @@ final class ProxyReady {
 	public Ready get(final Queue queue, final String connecterType) {
 		return new QueueReady(queue, new Ready() {
 			@Override
-			public void connect(final Address address, ReadyConnection connection) {
+			public void connect(Address address, ReadyConnection connection) {
 				queue.check();
 				
 				final DataOutputStream out;
@@ -215,7 +215,7 @@ final class ProxyReady {
 											final byte[] b = new byte[len];
 											in.readFully(b);
 											if (currentConnection != null) {
-												currentConnection.second.handle(address, ByteBuffer.wrap(b));
+												currentConnection.second.handle(currentConnection.first, ByteBuffer.wrap(b));
 											}
 										}
 									} catch (IOException ioe) {

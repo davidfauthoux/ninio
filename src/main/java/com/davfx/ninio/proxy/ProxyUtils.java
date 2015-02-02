@@ -85,49 +85,33 @@ public final class ProxyUtils {
 		ReadyFactory read(DataInputStream in) throws IOException;
 	}
 	
+	private static final class SimpleServerSideConfigurator implements ServerSideConfigurator {
+		private final ReadyFactory readyFactory;
+		public SimpleServerSideConfigurator(ReadyFactory readyFactory) {
+			this.readyFactory = readyFactory;
+		}
+		@Override
+		public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
+			return readyFactory;
+		}
+	}
+	
 	public static ServerSide server() {
 		final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
-		configurators.put(SOCKET_TYPE, new ServerSideConfigurator() {
-			@Override
-			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-				return new SocketReadyFactory();
-			}
-		});
+		
+		configurators.put(SOCKET_TYPE, new SimpleServerSideConfigurator(new SocketReadyFactory()));
 
 		if (CONFIG.getBoolean("proxy.sync")) {
 			if (CONFIG.hasPath("proxy.tcpdump")) {
-				final TcpdumpSyncDatagramReady.Receiver syncDatagramReceiver = new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), CONFIG.getInt("proxy.tcpdump.port"));
-				configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
-					@Override
-					public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-						return new TcpdumpSyncDatagramReadyFactory(syncDatagramReceiver);
-					}
-				});
+				configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), CONFIG.getInt("proxy.tcpdump.port")))));
 			} else {
-				final SyncDatagramReady.Receiver syncDatagramReceiver = new SyncDatagramReady.Receiver();
-				configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
-					@Override
-					public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-						return new SyncDatagramReadyFactory(syncDatagramReceiver);
-					}
-				});
+				configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 			}
 		} else {
-			configurators.put(DATAGRAM_TYPE, new ServerSideConfigurator() {
-				@Override
-				public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-					return new DatagramReadyFactory();
-				}
-			});
+			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new DatagramReadyFactory()));
 		}
 		
-		configurators.put(PING_TYPE, new ServerSideConfigurator() {
-			@Override
-			public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
-				//%% return new InternalPingServerReadyFactory(PING_MAX_SIMULTANEOUS_CLIENTS, new PureJavaSyncPing());
-				return new InternalPingServerReadyFactory(new PureJavaSyncPing());
-			}
-		});
+		configurators.put(PING_TYPE, new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(new PureJavaSyncPing())));
 
 		configurators.put(REPROXY_TYPE, Reproxy.server());
 

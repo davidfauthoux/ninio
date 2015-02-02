@@ -236,7 +236,6 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			String key = key(address.getHost(), address.getPort());
 			
 			if (connections.containsKey(key)) {
-				connection.failed(new IOException("Could not open simultaneous connections to: " + address));
 				return false;
 			}
 			
@@ -271,6 +270,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	@Override
 	public void connect(final Address address, final ReadyConnection connection) {
 		if (!receiver.add(address, connection)) {
+			connection.failed(new IOException("Could not open simultaneous connections to: " + address));
 			return;
 		}
 		
