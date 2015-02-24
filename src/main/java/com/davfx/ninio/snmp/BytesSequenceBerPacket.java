@@ -16,7 +16,7 @@ public final class BytesSequenceBerPacket implements BerPacket {
 	}
 	@Override
 	public int length() {
-			return BerPacketUtils.typeAndLengthBufferLength(packet.lengthBuffer()) + packet.length();
+		return BerPacketUtils.typeAndLengthBufferLength(packet.lengthBuffer()) + packet.length();
 	}
 
 	@Override

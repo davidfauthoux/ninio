@@ -52,7 +52,9 @@ public final class OidBerPacket implements BerPacket {
 	@Override
 	public void write(ByteBuffer buffer) {
 		BerPacketUtils.writeHeader(BerConstants.OID, lengthBuffer, buffer);
+		int p = bb.position();
 		buffer.put(bb);
+		bb.position(p);
 	}
 
 	@Override

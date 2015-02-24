@@ -16,7 +16,9 @@ public final class BytesBerPacket implements BerPacket {
 	@Override
 	public void write(ByteBuffer buffer) {
 		BerPacketUtils.writeHeader(BerConstants.OCTETSTRING, lengthBuffer, buffer);
+		int p = s.position();
 		buffer.put(s);
+		s.position(p);
 	}
 
 	@Override

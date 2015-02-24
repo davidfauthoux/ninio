@@ -12,7 +12,9 @@ public final class BerPacketUtils {
 	
 	public static void writeHeader(int type, ByteBuffer lengthBuffer, ByteBuffer buffer) {
 		buffer.put((byte) type);
+		int p = lengthBuffer.position();
 		buffer.put(lengthBuffer);
+		lengthBuffer.position(p);
 	}
 	
 	public static int typeAndLengthBufferLength(ByteBuffer lengthBuffer) {
