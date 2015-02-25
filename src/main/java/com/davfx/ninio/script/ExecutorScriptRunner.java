@@ -18,7 +18,6 @@ import com.davfx.ninio.common.Failable;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
 import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.typesafe.config.Config;
@@ -336,6 +335,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		return new JsonPrimitive(b);
 	}
 	
+	/*%%%
 	public static JsonElement fromScript(Object o) {
 		System.out.println(o);
 		return null;
@@ -417,17 +417,19 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 		
 		t = System.currentTimeMillis();
-		for (int i = 0; i < 1000; i++) {
+		for (int i = 0; i < 100; i++) {
 			JsonObject json = new JsonObject();
 			json.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
 			json.add("b", new JsonPrimitive("bb"));
 			json.add("c", new JsonPrimitive("cc"));
-			for (int ii = 0; ii < 1000; ii++) {
+			for (int ii = 0; ii < 500; ii++) {
 				JsonObject j = new JsonObject();
 				j.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
 				j.add("b", new JsonPrimitive("bb"));
 				j.add("c", new JsonPrimitive("cc"));
 				j.add("d", new JsonPrimitive(666.777));
+				j.add("e", new JsonPrimitive(true));
+				j.add("f", new JsonPrimitive(false));
 				json.add("ii" + ii, j);
 			}
 			scriptEngine.eval("JSON.parse(JSON.stringify(" + json.toString() + "))");
@@ -436,17 +438,19 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		System.out.println(t);
 		
 		t = System.currentTimeMillis();
-		for (int i = 0; i < 1000; i++) {
+		for (int i = 0; i < 100; i++) {
 			JsonObject json = new JsonObject();
 			json.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
 			json.add("b", new JsonPrimitive("bb"));
 			json.add("c", new JsonPrimitive("cc"));
-			for (int ii = 0; ii < 1000; ii++) {
+			for (int ii = 0; ii < 500; ii++) {
 				JsonObject j = new JsonObject();
 				j.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
 				j.add("b", new JsonPrimitive("bb"));
 				j.add("c", new JsonPrimitive("cc"));
 				j.add("d", new JsonPrimitive(666.777));
+				j.add("e", new JsonPrimitive(true));
+				j.add("f", new JsonPrimitive(false));
 				json.add("ii" + ii, j);
 			}
 			bindings.put("json", json);
@@ -465,4 +469,5 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		scriptEngine.eval("java.lang.System.out.println(JSON.stringify(foo2(foo({'a':'aa', 'b':{'c':'cc','d':'dd',e:4.5,f:true,g:500}}))));");
 		System.exit(0);
 	}
+	*/
 }
