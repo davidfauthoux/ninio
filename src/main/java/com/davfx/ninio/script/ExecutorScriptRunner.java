@@ -18,7 +18,9 @@ import com.davfx.ninio.common.Failable;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 
@@ -252,7 +254,15 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 									+ "}"
 									+ "return p;"
 								+ "}"
-								+ "return new com.google.gson.JsonPrimitive(o);"
+								+ "if (typeof o == \"string\") {"
+									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonString(o);"
+								+ "}"
+								+ "if (typeof o == \"number\") {"
+									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonNumber(o);"
+								+ "}"
+								+ "if (typeof o == \"boolean\") {"
+									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonBoolean(o);"
+								+ "}"
 							+ "};");
 						scriptEngine.eval("var " + UNICITY_PREFIX + "convertTo = function(o) {"
 								+ "if (o == null) {"
@@ -313,7 +323,19 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		});
 	}
 	
-	/*%%%%%%%%%%%%%%%%%%%%%%%%%%
+	// Must be be public to be called from javascript
+	public static JsonElement jsonString(String b) {
+		return new JsonPrimitive(b);
+	}
+	// Must be be public to be called from javascript
+	public static JsonElement jsonNumber(Number b) {
+		return new JsonPrimitive(b);
+	}
+	// Must be be public to be called from javascript
+	public static JsonElement jsonBoolean(boolean b) {
+		return new JsonPrimitive(b);
+	}
+	
 	public static JsonElement fromScript(Object o) {
 		System.out.println(o);
 		return null;
@@ -340,7 +362,16 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					+ "}"
 					+ "return p;"
 				+ "}"
-				+ "return new com.google.gson.JsonPrimitive(o);"
+				+ "if (typeof o == \"string\") {"
+					+ "return " + ExecutorScriptRunner.class.getName() + ".jsonString(o);"
+				+ "}"
+				+ "if (typeof o == \"number\") {"
+					+ "return " + ExecutorScriptRunner.class.getName() + ".jsonNumber(o);"
+				+ "}"
+				+ "if (typeof o == \"boolean\") {"
+					+ "return " + ExecutorScriptRunner.class.getName() + ".jsonBoolean(o);"
+				+ "}"
+				+ "return null;"
 			+ "};");
 		scriptEngine.eval("var foo2 = function(o) {"
 				+ "if (o.isJsonObject()) {"
@@ -355,10 +386,10 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				+ "if (o.isJsonPrimitive()) {"
 					+ "var oo = o.getAsJsonPrimitive();"
 					+ "if (oo.isString()) {"
-						+ "return oo.getAsString().toString();"
+						+ "return '' + oo.getAsString().toString();"
 					+ "}"
 					+ "if (oo.isNumber()) {"
-						+ "return oo.getAsDouble();"
+						+ "return oo.getAsNumber();"
 					+ "}"
 					+ "if (oo.isBoolean()) {"
 						+ "return oo.getAsBoolean();"
@@ -367,7 +398,63 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				+ "}"
 				+ "return null;"
 			+ "};");
-		String callFunctions = "Java.type(\"" + ExecutorScriptRunner.class.getName() + "\").fromScript({'a':'aa'});";
+		
+
+		long t = System.currentTimeMillis();
+		for (int i = 0; i < 1000; i++) {
+			scriptEngine.eval("foo2(foo({'a':'aa', 'b':{'c':'cc','d':'dd',e:4.5,f:true,g:500}}));");
+		}
+		t = System.currentTimeMillis() - t;
+		System.out.println(t);
+		
+		t = System.currentTimeMillis();
+		for (int i = 0; i < 1000; i++) {
+			scriptEngine.eval("JSON.parse(JSON.stringify({'a':'aa', 'b':{'c':'cc','d':'dd',e:4.5,f:true,g:500}}));");
+		}
+		t = System.currentTimeMillis() - t;
+		System.out.println(t);
+		
+		Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+		
+		t = System.currentTimeMillis();
+		for (int i = 0; i < 1000; i++) {
+			JsonObject json = new JsonObject();
+			json.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
+			json.add("b", new JsonPrimitive("bb"));
+			json.add("c", new JsonPrimitive("cc"));
+			for (int ii = 0; ii < 1000; ii++) {
+				JsonObject j = new JsonObject();
+				j.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
+				j.add("b", new JsonPrimitive("bb"));
+				j.add("c", new JsonPrimitive("cc"));
+				j.add("d", new JsonPrimitive(666.777));
+				json.add("ii" + ii, j);
+			}
+			scriptEngine.eval("JSON.parse(JSON.stringify(" + json.toString() + "))");
+		}
+		t = System.currentTimeMillis() - t;
+		System.out.println(t);
+		
+		t = System.currentTimeMillis();
+		for (int i = 0; i < 1000; i++) {
+			JsonObject json = new JsonObject();
+			json.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
+			json.add("b", new JsonPrimitive("bb"));
+			json.add("c", new JsonPrimitive("cc"));
+			for (int ii = 0; ii < 1000; ii++) {
+				JsonObject j = new JsonObject();
+				j.add("a", new JsonPrimitive("Uploa'ding: https://oss.sonatype.org:443/service'/local/staging/deplo\"yByRepositoryI'd/comdavfx-1039/com/davfx/ninio/0.0.17/ninio-0.0.17-sources.jar.asc"));
+				j.add("b", new JsonPrimitive("bb"));
+				j.add("c", new JsonPrimitive("cc"));
+				j.add("d", new JsonPrimitive(666.777));
+				json.add("ii" + ii, j);
+			}
+			bindings.put("json", json);
+			scriptEngine.eval("foo(foo2(json));");
+		}
+		t = System.currentTimeMillis() - t;
+		System.out.println(t);
+		
 		
 		scriptEngine.eval(ExecutorScriptRunner.class.getName() + ".print(foo({'a':'aa', 'b':{'c':'cc','d':'dd'}}));");
 		scriptEngine.eval(ExecutorScriptRunner.class.getName() + ".print(foo('abc'));");
@@ -376,6 +463,6 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		scriptEngine.eval(ExecutorScriptRunner.class.getName() + ".print(foo({'a':'aa', 'b':{'c':'cc','d':[ 'a1', 'a2' ]}}));");
 		scriptEngine.eval(ExecutorScriptRunner.class.getName() + ".print(foo({'a':'aa', 'b':{'c':'cc','d':[ 'a1', 123, 456 ]}}));");
 		scriptEngine.eval("java.lang.System.out.println(JSON.stringify(foo2(foo({'a':'aa', 'b':{'c':'cc','d':'dd',e:4.5,f:true,g:500}}))));");
+		System.exit(0);
 	}
-	*/
 }
