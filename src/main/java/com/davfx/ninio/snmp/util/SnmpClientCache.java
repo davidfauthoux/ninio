@@ -96,7 +96,7 @@ public final class SnmpClientCache implements AutoCloseable {
 					clients.put(address, cc);
 					c.handlers.add(clientHandler);
 					
-					c.client.connect(new SnmpClientHandler() {
+					c.client.connect(new CacheFailSnmpClientHandler(new SnmpClientHandler() {
 						@Override
 						public void failed(IOException e) {
 							clients.remove(address);
@@ -130,7 +130,7 @@ public final class SnmpClientCache implements AutoCloseable {
 								});
 							}
 						}
-					});
+					}));
 				} else {
 					final Hold cc = c;
 					
