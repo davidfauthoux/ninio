@@ -13,7 +13,7 @@ import com.davfx.ninio.ftp.FtpClientHandler;
 
 public class TestFtpClient {
 	public static void main(String[] args) throws Exception {
-		new FtpClient(new FtpClientConfigurator().withHost("ftpperso.free.fr").withLogin("david.fauthoux").withPassword("orod,ove")).connect(new FtpClientHandler() {
+		new FtpClient(new FtpClientConfigurator().withHost("ftpperso.free.fr").withLogin("david.fauthoux").withPassword("")).connect(new FtpClientHandler() {
 			@Override
 			public void close() {
 				System.out.println("CLOSE");

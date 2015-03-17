@@ -110,6 +110,7 @@ public class TestScript4__testFloat {
 					}
 				});
 
+				/*
 				rrr.eval(new BasicScript().append("snmp({'host':'172.17.0.1', 'community':'public', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -118,6 +119,28 @@ public class TestScript4__testFloat {
 				});
 
 				rrr.eval(new BasicScript().append("ping({'host':'172.17.0.1'}, log_ping);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				*/
+				
+				/*
+				rrr.eval(new BasicScript().append("telnet({'init':[{command:'davidfauthoux',time:0.25},{command:'',time:0.25}], 'command':'ls',time:0.25}, log_telnet);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				*/
+				rrr.eval(new BasicScript().append("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				rrr.eval(new BasicScript().append("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();

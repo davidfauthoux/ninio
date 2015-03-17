@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Queue;
@@ -19,10 +20,21 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 	private final WaitingRemoteClientConfigurator configurator;
 	private final Queue queue;
 
+	private static final class Sent {
+		public final String line;
+		public final double time;
+		public final Pattern cut;
+		public Sent(String line, double time, Pattern cut) {
+			this.line = line;
+			this.time = time;
+			this.cut = cut;
+		}
+	}
+	
 	private static final class Hold {
 		public final WaitingRemoteClient client;
 		public final List<WaitingRemoteClientHandler> handlers = new LinkedList<>();
-		public final Deque<Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>> toSend = new LinkedList<>();
+		public final Deque<Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback>> toSend = new LinkedList<>();
 		public WaitingRemoteClientHandler.Callback launchedCallback;
 
 		public final StringBuilder initResponses = new StringBuilder();
@@ -43,16 +55,16 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 	}
 
 	public static interface Connectable {
-		Connectable init(String command, double time);
+		Connectable init(String command, double time, Pattern cut);
 		void connect(WaitingRemoteClientHandler clientHandler);
 	}
 	
 	public Connectable get(final Address address) {
 		return new Connectable() {
-			private final List<Pair<String, Double>> initCommands = new LinkedList<>();
+			private final List<Sent> initCommands = new LinkedList<>();
 			@Override
-			public Connectable init(String command, double time) {
-				initCommands.add(new Pair<String, Double>(command, time));
+			public Connectable init(String command, double time, Pattern cut) {
+				initCommands.add(new Sent(command, time, cut));
 				return this;
 			}
 			
@@ -92,11 +104,11 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 						}
 						@Override
 						public void received(String text) {
-							Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
+							Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
 							
 							if (!cc.toSend.isEmpty()) {
-								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
-								cc.launchedCallback.send(next.first.first, next.first.second, this);
+								Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
+								cc.launchedCallback.send(next.first.line, next.first.time, next.first.cut, this);
 							}
 							
 							current.second.received(text);
@@ -115,13 +127,13 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 										cc.handlers.remove(clientHandler);
 									}
 									@Override
-									public void send(String line, double time, SendCallback sendCallback) {
+									public void send(String line, double time, Pattern cut, SendCallback sendCallback) {
 										boolean send = cc.toSend.isEmpty();
 										
-										cc.toSend.add(new Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>(new Pair<String, Double>(line, time), sendCallback));
+										cc.toSend.add(new Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback>(new Sent(line, time, cut), sendCallback));
 										
 										if (send) {
-											cc.launchedCallback.send(line, time, continueToSendCallback);
+											cc.launchedCallback.send(line, time, cut, continueToSendCallback);
 										}
 									}
 								});
@@ -137,8 +149,8 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							cc.toSend.removeFirst();
 							
 							if (!cc.toSend.isEmpty()) {
-								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
-								cc.launchedCallback.send(next.first.first, next.first.second, this);
+								Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
+								cc.launchedCallback.send(next.first.line, next.first.time, next.first.cut, this);
 							} else {
 								readyRunnable.run();
 							}
@@ -152,10 +164,10 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							cc.client.close();
 						}
 					};
-					Iterator<Pair<String, Double>> ii = initCommands.iterator();
+					Iterator<Sent> ii = initCommands.iterator();
 					while (ii.hasNext()) {
-						Pair<String, Double> initCommand = ii.next();
-						cc.toSend.add(new Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>(initCommand, globalInitCallback));
+						Sent initCommand = ii.next();
+						cc.toSend.add(new Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback>(initCommand, globalInitCallback));
 					}
 					
 					cc.client.connect(new WaitingRemoteClientHandler() {
@@ -183,8 +195,8 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							if (cc.toSend.isEmpty()) {
 								readyRunnable.run();
 							} else {
-								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> p = cc.toSend.getFirst();
-								cc.launchedCallback.send(p.first.first, p.first.second, p.second);
+								Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback> p = cc.toSend.getFirst();
+								cc.launchedCallback.send(p.first.line, p.first.time, p.first.cut, p.second);
 							}
 						}
 					});
@@ -204,11 +216,11 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 							}
 							@Override
 							public void received(String text) {
-								Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
+								Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback> current = cc.toSend.removeFirst();
 								
 								if (!cc.toSend.isEmpty()) {
-									Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
-									cc.launchedCallback.send(next.first.first, next.first.second, this);
+									Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback> next = cc.toSend.getFirst();
+									cc.launchedCallback.send(next.first.line, next.first.time, next.first.cut, this);
 								}
 
 								current.second.received(text);
@@ -222,13 +234,13 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 								cc.handlers.remove(clientHandler);
 							}
 							@Override
-							public void send(String line, double time, SendCallback sendCallback) {
+							public void send(String line, double time, Pattern cut, SendCallback sendCallback) {
 								boolean send = cc.toSend.isEmpty();
 								
-								cc.toSend.add(new Pair<Pair<String, Double>, WaitingRemoteClientHandler.Callback.SendCallback>(new Pair<String, Double>(line, time), sendCallback));
+								cc.toSend.add(new Pair<Sent, WaitingRemoteClientHandler.Callback.SendCallback>(new Sent(line, time, cut), sendCallback));
 								
 								if (send) {
-									cc.launchedCallback.send(line, time, continueToSendCallback);
+									cc.launchedCallback.send(line, time, cut, continueToSendCallback);
 								}
 							}
 						});

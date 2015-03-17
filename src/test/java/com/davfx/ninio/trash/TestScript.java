@@ -124,8 +124,8 @@ public class TestScript {
 			});
 			*/
 			
-			//rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { myfunc(JSON.stringify(r), function(rr) { log(rr); }); });"), new Failable() {
-			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'logway', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { log('1.3.6.1.2.1.2.2.1.2'); log(r); });"), new Failable() {
+			//rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { myfunc(JSON.stringify(r), function(rr) { log(rr); }); });"), new Failable() {
+			rrr.eval(new BasicScript().append("snmp({'host':'172.17.10.184', 'community':'', 'oid':'1.3.6.1.2.1.2.2.1.2'}, function(r) { log('1.3.6.1.2.1.2.2.1.2'); log(r); });"), new Failable() {
 				@Override
 				public void failed(IOException e) {
 					e.printStackTrace();
@@ -136,8 +136,8 @@ public class TestScript {
 			//rrr.eval(new BasicScript().append("log(ggg({'b':'bb'}));log(ggg({'b':'bb'}));"), null);
 			
 			//rr.eval(new BasicScript().append("http({'host':'google.com'}, function(r) { log(r['body']); });"));
-			//rr.eval(new BasicScript().append("telnet({'init':['davidfauthoux','orod,ove'], 'command':'ls'}, function(r) { log(r['response']); });"));
-			/*rr.eval(new BasicScript().append("telnet({'init':['davidfauthoux','orod,ove'], 'command':'ls'}, function(r) { log(r['init']); log(r['response']); });"), null);
+			//rr.eval(new BasicScript().append("telnet({'init':['davidfauthoux',''], 'command':'ls'}, function(r) { log(r['response']); });"));
+			/*rr.eval(new BasicScript().append("telnet({'init':['davidfauthoux',''], 'command':'ls'}, function(r) { log(r['init']); log(r['response']); });"), null);
 			rr.eval(new BasicScript().append("ssh({'host':'172.17.10.31', 'init':['louser','pass'], 'command':'ls'}, function(r) { log(r['init']); log(r['response']); });"), new Failable() {
 				@Override
 				public void failed(IOException e) {

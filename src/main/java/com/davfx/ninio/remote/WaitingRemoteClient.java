@@ -2,6 +2,7 @@ package com.davfx.ninio.remote;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,6 +39,7 @@ public final class WaitingRemoteClient implements Closeable {
 			
 			private Date timeoutDate = null;
 			private Date dateToSend = null;
+			private Pattern cutPattern = null;
 			/*%%%
 			private void setDateToSend(Date now, double time) {
 				dateToSend = DateUtils.from(DateUtils.from(now) + time);
@@ -66,18 +68,22 @@ public final class WaitingRemoteClient implements Closeable {
 					IOException f = new IOException("Timeout");
 					WaitingRemoteClientHandler.Callback.SendCallback cc = currentCallback;
 					currentCallback = null;
+					dateToSend = null;
+					cutPattern = null;
 					cc.failed(f);
 				}
 
 				text.append(line);
 			
-				if ((dateToSend != null) && now.after(dateToSend)) {
+				if (((dateToSend != null) && now.after(dateToSend)) || ((cutPattern != null) && cutPattern.matcher(text).matches())) {
 					if (text.length() > 0) {
 						if (currentCallback != null) {
 							String r = text.toString();
 							text.setLength(0);
 							WaitingRemoteClientHandler.Callback.SendCallback cc = currentCallback;
 							currentCallback = null;
+							dateToSend = null;
+							cutPattern = null;
 							previous = r;
 							cc.received(r);
 						} else {
@@ -103,7 +109,7 @@ public final class WaitingRemoteClient implements Closeable {
 						callback.close();
 					}
 					@Override
-					public void send(String line, double timeToResponse, SendCallback c) {
+					public void send(String line, double timeToResponse, Pattern cut, SendCallback c) {
 						String r = null;
 						WaitingRemoteClientHandler.Callback.SendCallback cc = null;
 						if (currentCallback != null) {
@@ -117,11 +123,14 @@ public final class WaitingRemoteClient implements Closeable {
 						currentCallback = c;
 
 						Date now = new Date();
-						dateToSend = DateUtils.from(DateUtils.from(now) + timeToResponse);
+						dateToSend = Double.isNaN(timeToResponse) ? null : DateUtils.from(DateUtils.from(now) + timeToResponse);
+						cutPattern = cut;
 						sendTime = now;
 						//%% setDateToSend(now);
 						timeoutDate = (configurator.timeout == 0d) ? null : DateUtils.from(DateUtils.from(now) + configurator.timeout);
-						callback.send(line + eol);
+						if (line != null) {
+							callback.send(line + eol);
+						}
 						
 						if (r != null) {
 							cc.received(r);

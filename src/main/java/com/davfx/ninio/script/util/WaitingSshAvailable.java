@@ -1,6 +1,7 @@
 package com.davfx.ninio.script.util;
 
 import java.io.IOException;
+import java.util.regex.Pattern;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.remote.WaitingRemoteClientCache;
@@ -13,6 +14,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
+//TODO Check if time&cut parameters are really useful (ssh compared to telnet)
 public final class WaitingSshAvailable {
 	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(WaitingSshAvailable.class).getString("script.functions.ssh");
 
@@ -32,12 +34,13 @@ public final class WaitingSshAvailable {
 				WaitingRemoteClientCache.Connectable c = client.get(address);
 
 				final String command = JsonUtils.getString(r, "command");
-				final double time = JsonUtils.getDouble(r, "time");
+				final double time = JsonUtils.getDouble(r, "time", Double.NaN);
+				final Pattern cut = JsonUtils.getPattern(r, "cut", null);
 				JsonElement init = r.get("init");
 				if (init != null) {
 					for (JsonElement e : init.getAsJsonArray()) {
 						JsonObject o = e.getAsJsonObject();
-						c.init(JsonUtils.getString(o, "command"), JsonUtils.getDouble(o, "time"));
+						c.init(JsonUtils.getString(o, "command"), JsonUtils.getDouble(o, "time", Double.NaN), JsonUtils.getPattern(o, "cut", null));
 					}
 				}
 
@@ -53,7 +56,7 @@ public final class WaitingSshAvailable {
 					}
 					@Override
 					public void launched(final String init, final Callback callback) {
-						callback.send(command, time, new WaitingRemoteClientHandler.Callback.SendCallback() {
+						callback.send(command, time, cut, new WaitingRemoteClientHandler.Callback.SendCallback() {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);

@@ -12,13 +12,16 @@ import com.typesafe.config.Config;
 public final class WaitingRemoteClientConfigurator implements Closeable {
 	private static final Config CONFIG = ConfigUtils.load(WaitingRemoteClientConfigurator.class);
 	
+	private static final double DEFAULT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "remote.waiting.timeout");
+	private static final double DEFAULT_CALL_WITH_EMPTY_TIME = ConfigUtils.getDuration(CONFIG, "remote.waiting.callWithEmptyTime");
+	
 	public final ScheduledExecutorService callWithEmptyExecutor;
 	private final boolean callWithEmptyExecutorToShutdown;
 	
 	//%% public double endOfCommandTime = ConfigUtils.getDuration(CONFIG, "remote.waiting.endOfCommandTime");
-	public double timeout = ConfigUtils.getDuration(CONFIG, "remote.waiting.timeout");
+	public double timeout = DEFAULT_TIMEOUT;
 	
-	public double callWithEmptyTime = ConfigUtils.getDuration(CONFIG, "remote.waiting.callWithEmptyTime");
+	public double callWithEmptyTime = DEFAULT_CALL_WITH_EMPTY_TIME;
 
 	private WaitingRemoteClientConfigurator(ScheduledExecutorService callWithEmptyExecutor, boolean callWithEmptyExecutorToShutdown) {
 		this.callWithEmptyExecutor = callWithEmptyExecutor;

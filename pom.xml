@@ -3,7 +3,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.davfx</groupId>
 	<artifactId>ninio</artifactId>
-	<version>0.0.19</version>
+	<version>0.0.20</version>
 	<name>${project.groupId}:${project.artifactId}</name>
 	<description>A Java NIO HTTP client/server as light as possible</description>
 	<url>https://github.com/davidfauthoux/ninio</url>
