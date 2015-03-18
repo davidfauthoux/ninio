@@ -8,10 +8,23 @@ import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigException;
 
 public final class PingClientConfigurator implements Closeable {
 	private static final Config CONFIG = ConfigUtils.load(PingClientConfigurator.class);
 	public static final int DEFAULT_PORT = CONFIG.getInt("ping.port");
+	
+	public static final boolean SHELL_MODE;
+	static {
+		String mode = CONFIG.getString("ping.mode");
+		if (mode.equals("java")) {
+			SHELL_MODE = false;
+		} else if (mode.equals("shell")) {
+			SHELL_MODE = true;
+		} else {
+			throw new ConfigException.BadValue("ping.mode", "Invalid mode, only allowed: java|shell");
+		}
+	}
 
 	public final Queue queue;
 	private final boolean queueToClose;
@@ -21,12 +34,10 @@ public final class PingClientConfigurator implements Closeable {
 	//%% public double timeout = ConfigUtils.getDuration(CONFIG, "ping.timeout");
 	//%% public int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
 	
-	private final SyncPing syncPing = new PureJavaSyncPing(); //TODO Implement differently and init according to conf
-
 	private PingClientConfigurator(Queue queue, boolean queueToClose) {
 		this.queue = queue;
 		this.queueToClose = queueToClose;
-		readyFactory = new InternalPingServerReadyFactory(syncPing);
+		readyFactory = new InternalPingServerReadyFactory(new CacheSyncPing(SHELL_MODE ? new ShellCommandSyncPing() : new PureJavaSyncPing()));
 	}
 	
 	public PingClientConfigurator() throws IOException {

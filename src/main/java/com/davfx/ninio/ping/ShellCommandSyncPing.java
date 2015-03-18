@@ -15,8 +15,8 @@ public final class ShellCommandSyncPing implements SyncPing {
 		try {
 			ProcessBuilder b = new ProcessBuilder("ping",
 					"-c", String.valueOf(1),
-					"-W", String.valueOf((int) timeout
-				), host);
+					"-W", String.valueOf(Math.ceil(timeout)),
+					host);
 			Process p = b.start();
 			return (p.waitFor() == 0);
 		} catch (Exception e) {
