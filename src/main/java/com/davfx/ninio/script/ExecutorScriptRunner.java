@@ -43,6 +43,9 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	}
 	
 	private static final String ENGINE_NAME = CONFIG.getString("script.engine");
+	{
+		LOGGER.debug("Engine: {}", ENGINE_NAME);
+	}
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.call");
 	public static final String UNICITY_PREFIX = CONFIG.getString("script.functions.unicity.prefix");
 	
