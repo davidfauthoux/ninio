@@ -337,16 +337,18 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					scriptEngine.eval(callFunctions);
 					for (String s : script) {
 						LOGGER.trace("Executing: {}", s);
+						/*%%%%%%%%%
 						int k0 = s.indexOf("\n\n");
 						int k1 = s.indexOf("\n_ip=");
 						if ((k0 >= 0) && (k1 >= 0)) {
-							LOGGER.trace("Executing with cut hack"); //TODO
+							LOGGER.trace("Executing with cut hack");
 							scriptEngine.eval(s.substring(0, k0));
 							scriptEngine.eval(s.substring(k0, k1));
 							scriptEngine.eval(s.substring(k1));
 						} else {
-							scriptEngine.eval(s);
-						}
+						*/
+						scriptEngine.eval(s);
+						//%%%%%%%% }
 					}
 				} catch (Exception e) {
 					LOGGER.error("Script error", e);
