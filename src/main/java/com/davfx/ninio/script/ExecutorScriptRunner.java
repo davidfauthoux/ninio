@@ -229,6 +229,13 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			@Override
 			public void run() {
 				ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+				if (scriptEngine == null) {
+					LOGGER.error("Bad engine: {}", ENGINE_NAME);
+					if (fail != null) {
+						fail.failed(new IOException("Bad engine"));
+					}
+					return;
+				}
 				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 				Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				
@@ -308,7 +315,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + callVar + ".call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
 				}
 
-				
+				long t = System.currentTimeMillis();
 				try {
 					scriptEngine.eval(ScriptUtils.functions());
 					LOGGER.trace("Executing functions: {}", callFunctions);
@@ -323,6 +330,9 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						fail.failed(new IOException(e));
 					}
 				}
+				t = System.currentTimeMillis() - t;
+
+				LOGGER.debug("Script executed in {} ms", t);
 			}
 		});
 	}
