@@ -340,7 +340,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						int k0 = s.indexOf("\n\n");
 						int k1 = s.indexOf("\n_ip=");
 						if ((k0 >= 0) && (k1 >= 0)) {
-							LOGGER.debug("Executing with cut hack");
+							LOGGER.trace("Executing with cut hack"); //TODO
 							scriptEngine.eval(s.substring(0, k0));
 							scriptEngine.eval(s.substring(k0, k1));
 							scriptEngine.eval(s.substring(k1));
@@ -356,7 +356,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				}
 				t = System.currentTimeMillis() - t;
 
-				LOGGER.debug("Script executed in {} ms", t);
+				LOGGER.trace("Script executed in {} ms", t);
 			}
 		});
 	}
