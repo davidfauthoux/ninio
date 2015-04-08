@@ -223,12 +223,14 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			return null;
 		}
 	}
+
+	ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+
 	@Override
 	public void eval(final Iterable<String> script, final Failable fail, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
 				if (scriptEngine == null) {
 					LOGGER.error("Bad engine: {}", ENGINE_NAME);
 					if (fail != null) {
