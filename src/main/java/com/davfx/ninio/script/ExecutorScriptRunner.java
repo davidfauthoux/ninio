@@ -57,6 +57,11 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	public ExecutorScriptRunner() {
 		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 		scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+		if (scriptEngine == null) {
+			LOGGER.error("Bad engine: {}", ENGINE_NAME);
+		} else {
+			LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
+		}
 	}
 	
 	@Override
@@ -239,13 +244,11 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			@Override
 			public void run() {
 				if (scriptEngine == null) {
-					LOGGER.error("Bad engine: {}", ENGINE_NAME);
 					if (fail != null) {
 						fail.failed(new IOException("Bad engine"));
 					}
 					return;
 				}
-				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 
 				//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				Bindings bindings = new SimpleBindings();
@@ -334,7 +337,16 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					scriptEngine.eval(callFunctions);
 					for (String s : script) {
 						LOGGER.trace("Executing: {}", s);
-						scriptEngine.eval(s);
+						int k0 = s.indexOf("\n\n");
+						int k1 = s.indexOf("\n_ip=");
+						if ((k0 >= 0) && (k1 >= 0)) {
+							LOGGER.debug("Executing with cut hack");
+							scriptEngine.eval(s.substring(0, k0));
+							scriptEngine.eval(s.substring(k0, k1));
+							scriptEngine.eval(s.substring(k1));
+						} else {
+							scriptEngine.eval(s);
+						}
 					}
 				} catch (Exception e) {
 					LOGGER.error("Script error", e);
