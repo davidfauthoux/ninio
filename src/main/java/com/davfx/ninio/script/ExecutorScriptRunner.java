@@ -9,6 +9,7 @@ import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
+import javax.script.SimpleBindings;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,11 +50,13 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.call");
 	public static final String UNICITY_PREFIX = CONFIG.getString("script.functions.unicity.prefix");
 	
-	private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
+	private final ScriptEngine scriptEngine;
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ClassThreadFactory(ExecutorScriptRunner.class));
 	private final Mutable<Long> nextCallbackFunctionSuffix = new Mutable<Long>(0L);
 
 	public ExecutorScriptRunner() {
+		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
+		scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
 	}
 	
 	@Override
@@ -164,14 +167,16 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	
 	public static final class FromScriptUsingToString {
 		private final ScriptEngine scriptEngine;
+		private final Bindings bindings;
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
 		private final Failable fail;
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 		
-		private FromScriptUsingToString(ScriptEngine scriptEngine, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			this.scriptEngine = scriptEngine;
+			this.bindings = bindings;
 			this.fail = fail;
 			this.executorService = executorService;
 			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
@@ -194,7 +199,8 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
-							Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+							//%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+							scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 							
 							long suffix;
 							
@@ -224,8 +230,6 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		}
 	}
 
-	ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
-
 	@Override
 	public void eval(final Iterable<String> script, final Failable fail, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
 		executorService.execute(new Runnable() {
@@ -239,13 +243,15 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					return;
 				}
 				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
-				Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+
+				//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+				Bindings bindings = new SimpleBindings();
 				
 				String callVar = UNICITY_PREFIX + "call";
 				String callFunctions;
 				
 				if (USE_TO_STRING) {
-					bindings.put(callVar, new FromScriptUsingToString(scriptEngine, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
+					bindings.put(callVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
 					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return JSON.parse(" + callVar + ".call(JSON.stringify(parameter), callback || null)); }; ";
 				} else {
 					try {
