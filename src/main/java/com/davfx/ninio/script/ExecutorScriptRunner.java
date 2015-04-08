@@ -43,7 +43,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	}
 	
 	private static final String ENGINE_NAME = CONFIG.getString("script.engine");
-	{
+	static {
 		LOGGER.debug("Engine: {}", ENGINE_NAME);
 	}
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.call");
@@ -229,6 +229,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			@Override
 			public void run() {
 				ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 				Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				
 				String callVar = UNICITY_PREFIX + "call";
