@@ -67,14 +67,16 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	// Must be be public to be called from javascript
 	public static final class FromScriptUsingConvert {
 		private final ScriptEngine scriptEngine;
+		private final Bindings bindings;
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
 		private final Failable fail;
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 		
-		private FromScriptUsingConvert(ScriptEngine scriptEngine, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			this.scriptEngine = scriptEngine;
+			this.bindings = bindings;
 			this.fail = fail;
 			this.executorService = executorService;
 			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
@@ -96,8 +98,9 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
-							Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-							
+							//%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+							scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+
 							long suffix;
 							
 							suffix = nextUnicitySuffix.get();
@@ -246,7 +249,8 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 
 				//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				Bindings bindings = new SimpleBindings();
-				
+				scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+
 				String callVar = UNICITY_PREFIX + "call";
 				String callFunctions;
 				
@@ -319,7 +323,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						return;
 					}
 
-					bindings.put(callVar, new FromScriptUsingConvert(scriptEngine, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
+					bindings.put(callVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
 					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + callVar + ".call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
 				}
 
