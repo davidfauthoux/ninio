@@ -38,10 +38,11 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			USE_TO_STRING = false;
 			LOGGER.debug("Mode: json");
 		} else {
-			throw new ConfigException.BadValue("script.mode", "Invalid mode, only allowed: json|script");
+			throw new ConfigException.BadValue("script.mode", "Invalid mode, only allowed: json|string");
 		}
 	}
 	
+	private static final String ENGINE_NAME = CONFIG.getString("script.engine");
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.call");
 	public static final String UNICITY_PREFIX = CONFIG.getString("script.functions.unicity.prefix");
 	
@@ -224,7 +225,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				ScriptEngine scriptEngine = scriptEngineManager.getEngineByName("JavaScript");
+				ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
 				Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				
 				String callVar = UNICITY_PREFIX + "call";
