@@ -16,10 +16,17 @@ public final class DatagramReady implements Ready {
 
 	private final Selector selector;
 	private final ByteBufferAllocator byteBufferAllocator;
+	
+	private boolean bind = false;
 
 	public DatagramReady(Selector selector, ByteBufferAllocator byteBufferAllocator) {
 		this.selector = selector;
 		this.byteBufferAllocator = byteBufferAllocator;
+	}
+	
+	public DatagramReady bind() {
+		bind = true;
+		return this;
 	}
 	
 	@Override
@@ -108,18 +115,17 @@ public final class DatagramReady implements Ready {
 				selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_READ);
 				
 				try {
-					boolean bind = false;
-					InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
-					if (a == null) {
-						a = AddressUtils.toBindableInetSocketAddress(address);
-						bind = true;
-					}
-					if (a == null) {
-						throw new IOException("Invalid address");
-					}
 					if (bind) {
+						InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
+						if (a == null) {
+							throw new IOException("Invalid address");
+						}
 						channel.socket().bind(a);
 					} else {
+						InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
+						if (a == null) {
+							throw new IOException("Invalid address");
+						}
 						channel.connect(a);
 					}
 				} catch (IOException e) {
