@@ -335,13 +335,13 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					scriptEngine.eval(ScriptUtils.functions());
 					LOGGER.trace("Executing functions: {}", callFunctions);
 					scriptEngine.eval(callFunctions);
-					// int k = 0;
+					int k = 0;
 					for (String s : script) {
-						// long t = System.currentTimeMillis();
+						long t = System.currentTimeMillis();
 						scriptEngine.eval(s);
-						// t = System.currentTimeMillis() - t;
-						// LOGGER.debug("Script #{} executed in {} ms\n{}", k, t, s);
-						// k++;
+						t = System.currentTimeMillis() - t;
+						LOGGER.trace("Prepare script #{} executed in {} ms\n{}", k, t, s);
+						k++;
 					}
 				} catch (Exception e) {
 					LOGGER.error("Script error", e);
@@ -387,7 +387,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						long t = System.currentTimeMillis();
 						scriptEngine.eval(s);
 						t = System.currentTimeMillis() - t;
-						LOGGER.debug("Script #{} executed in {} ms\n{}", k, t, s);
+						LOGGER.trace("Script #{} executed in {} ms\n{}", k, t, s);
 						k++;
 					}
 				} catch (Exception e) {
