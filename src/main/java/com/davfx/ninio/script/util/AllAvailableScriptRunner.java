@@ -1,10 +1,11 @@
 package com.davfx.ninio.script.util;
 
-import java.io.IOException;
+import java.util.Iterator;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.ClassThreadFactory;
+import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.http.HttpClientConfigurator;
 import com.davfx.ninio.http.util.SimpleHttpClient;
@@ -14,24 +15,25 @@ import com.davfx.ninio.remote.WaitingRemoteClientCache;
 import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
 import com.davfx.ninio.remote.ssh.SshRemoteConnectorFactory;
 import com.davfx.ninio.remote.telnet.TelnetRemoteConnectorFactory;
+import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.ExecutorScriptRunner;
 import com.davfx.ninio.script.QueueScriptRunner;
-import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
-import com.davfx.ninio.script.RoundRobinScriptRunner;
-import com.davfx.ninio.script.SimpleScriptRunnerScriptRegister;
+import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.util.SnmpClientCache;
 import com.davfx.ninio.ssh.SshClientConfigurator;
 import com.davfx.ninio.telnet.TelnetClientConfigurator;
 import com.davfx.util.ConfigUtils;
+import com.google.common.collect.Iterators;
 import com.google.gson.JsonElement;
 
 public class AllAvailableScriptRunner implements AutoCloseable {
 
 	private static final int THREADING = ConfigUtils.load(AllAvailableScriptRunner.class).getInt("script.threading");
 
-	private final RoundRobinScriptRunner<JsonElement> scriptRunner;
-	//%% private final RoundRobinScriptRunner<String> scriptRunner;
+	private final ExecutorScriptRunner[] runners;
+	private final AllAvailableRunner[] scriptRunners;
+	private int index = 0;
 	private final Queue queue;
 	
 	private final SimpleHttpClient http;
@@ -49,7 +51,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	public final SnmpClientConfigurator snmpConfigurator;
 	public final PingClientConfigurator pingConfigurator;
 
-	public AllAvailableScriptRunner(Queue queue) throws IOException {
+	public AllAvailableScriptRunner(Queue queue) {
 		this.queue = queue;
 		
 		httpConfigurator = new HttpClientConfigurator(queue, scheduledExecutor);
@@ -59,27 +61,68 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		snmpConfigurator = new SnmpClientConfigurator(queue, scheduledExecutor);
 		pingConfigurator = new PingClientConfigurator(queue); //%%%, scheduledExecutor);
 
-		scriptRunner = new RoundRobinScriptRunner<>();
-		for (int i = 0; i < THREADING; i++) {
-			scriptRunner.add(new ExecutorScriptRunner());
-		}
-
 		http = new SimpleHttpClient(httpConfigurator);
 		telnet = new WaitingRemoteClientCache(remoteConfigurator, queue, new TelnetRemoteConnectorFactory(telnetConfigurator));
 		ssh = new WaitingRemoteClientCache(remoteConfigurator, queue, new SshRemoteConnectorFactory(sshConfigurator));
 		snmp = new SnmpClientCache(snmpConfigurator);
 		ping = new PingClientCache(pingConfigurator);
+
+		runners = new ExecutorScriptRunner[THREADING];
+		for (int i = 0; i < THREADING; i++) {
+			runners[i] = new ExecutorScriptRunner();
+		}
+		scriptRunners = new AllAvailableRunner[THREADING];
+		for (int i = 0; i < THREADING; i++) {
+			final RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, runners[i]));
+			PingAvailable.link(runner, ping);
+			SnmpAvailable.link(runner, snmp);
+			WaitingTelnetAvailable.link(runner, telnet);
+			WaitingSshAvailable.link(runner, ssh);
+			HttpAvailable.link(runner, http);
+			
+			final CallingEndScriptRunner callingEnd = new CallingEndScriptRunner(runner);
+
+			scriptRunners[i] = new AllAvailableRunner() {
+				@Override
+				public void register(String functionId) {
+					runner.register(functionId);
+				}
+				@Override
+				public void prepare(Iterable<String> script, Failable fail) {
+					runner.prepare(script, fail);
+				}
+				@Override
+				public void link(Runnable onEnd) {
+					callingEnd.link(onEnd);
+				}
+				@Override
+				public void link(String functionId, AsyncScriptFunction<JsonElement> function) {
+					runner.link(functionId, function);
+				}
+				@Override
+				public void link(String functionId, SyncScriptFunction<JsonElement> function) {
+					runner.link(functionId, function);
+				}
+				@Override
+				public void eval(Iterable<String> script, Failable fail) {
+					callingEnd.eval(script, fail);
+				}
+			};
+		}
 	}
 
-	public SimpleScriptRunnerScriptRegister runner() {
-		RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, scriptRunner));
-		//%% RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, new JsonScriptRunner(scriptRunner)));
-		new PingAvailable(ping).registerOn(runner);
-		new SnmpAvailable(snmp).registerOn(runner);
-		new WaitingTelnetAvailable(telnet).registerOn(runner);
-		new WaitingSshAvailable(ssh).registerOn(runner);
-		new HttpAvailable(http).registerOn(runner);
-		return runner;
+	public Iterable<AllAvailableRunner> runners() {
+		return new Iterable<AllAvailableRunner>() {
+			public Iterator<AllAvailableRunner> iterator() {
+				return Iterators.forArray(scriptRunners);
+			}
+		};
+	}
+	
+	public AllAvailableRunner runner() {
+		int i = index;
+		index = (index + 1) % scriptRunners.length;
+		return scriptRunners[i];
 	}
 	
 	@Override
@@ -95,7 +138,9 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 			}
 		});
 
-		scriptRunner.close();
+		for (ExecutorScriptRunner r : runners) {
+			r.close();
+		}
 		
 		httpConfigurator.close();
 		remoteConfigurator.close();

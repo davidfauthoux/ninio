@@ -2,27 +2,38 @@ package com.davfx.ninio.script.util;
 
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.script.ExecutorScriptRunner;
-import com.davfx.ninio.script.SimpleScriptRunner;
+import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.util.AppendIterable;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.PrependIterable;
+import com.google.gson.JsonElement;
 
 
-public final class CallingEndScriptRunner implements SimpleScriptRunner {
-	public static final String END_FUNCTION_NAME = ConfigUtils.load(CallingEndScriptRunner.class).getString("script.functions.end");
+public final class CallingEndScriptRunner {
+	private static final String END_FUNCTION_NAME = ConfigUtils.load(CallingEndScriptRunner.class).getString("script.functions.end");
 
-	private final SimpleScriptRunner wrappee;
+	private final RegisteredFunctionsScriptRunner wrappee;
 
-	public CallingEndScriptRunner(SimpleScriptRunner wrappee) {
+	public CallingEndScriptRunner(RegisteredFunctionsScriptRunner wrappee) {
 		this.wrappee = wrappee;
+		wrappee.register(CallingEndScriptRunner.END_FUNCTION_NAME);
 	}
 
-	@Override
-	public void eval(Iterable<String> script, Failable fail) {
+	public void link(final Runnable onEnd) {
+		wrappee.link(CallingEndScriptRunner.END_FUNCTION_NAME, new SyncScriptFunction<JsonElement>() {
+			@Override
+			public JsonElement call(JsonElement request) {
+				onEnd.run();
+				return null;
+			}
+		});
+	}
+	
+	public void prepare(Iterable<String> script, Failable fail) {
 		String underlyingFunctionVar = '\'' + CallingEndScriptRunner.class.getCanonicalName() + '\'';
 		String underlyingCountVar = '\'' + CallingEndScriptRunner.class.getCanonicalName() + "_count'";
+		
 		script = new PrependIterable<String>("this[" + underlyingFunctionVar + "] = " + ExecutorScriptRunner.CALL_FUNCTION_NAME + ";"
-				+ "this[" + underlyingCountVar + "] = 0;"
 				+ ExecutorScriptRunner.CALL_FUNCTION_NAME + " = function(parameter, callback) { "
 						+ "if (callback == undefined) {"
 							+ "return this[" + underlyingFunctionVar + "](parameter);"
@@ -47,9 +58,17 @@ public final class CallingEndScriptRunner implements SimpleScriptRunner {
 							+ "});"
 						+ "}"
 					+ "};", script);
+		
+		wrappee.prepare(script, fail);
+	}
+	
+	public void eval(Iterable<String> script, Failable fail) {
+		String underlyingCountVar = '\'' + CallingEndScriptRunner.class.getCanonicalName() + "_count'";
+
+		script = new PrependIterable<String>("this[" + underlyingCountVar + "] = 0;", script);
 		script = new AppendIterable<String>(script, "if (this[" + underlyingCountVar + "] == 0) {"
-							+ END_FUNCTION_NAME + "();"
-					+ "}");
+														+ END_FUNCTION_NAME + "();"
+													+ "}");
 		
 		wrappee.eval(script, fail);
 	}

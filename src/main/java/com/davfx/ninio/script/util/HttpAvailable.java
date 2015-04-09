@@ -9,7 +9,6 @@ import com.davfx.ninio.http.util.Parameters;
 import com.davfx.ninio.http.util.SimpleHttpClient;
 import com.davfx.ninio.http.util.SimpleHttpClientHandler;
 import com.davfx.ninio.script.AsyncScriptFunction;
-import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -18,14 +17,11 @@ import com.google.gson.JsonPrimitive;
 public final class HttpAvailable {
 	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(HttpAvailable.class).getString("script.functions.http");
 
-	private final SimpleHttpClient client;
-
-	public HttpAvailable(SimpleHttpClient client) {
-		this.client = client;
+	private HttpAvailable() {
 	}
 	
-	public void registerOn(RegisteredFunctionsScriptRunner runner) {
-		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
+	public static void link(RegisteredFunctionsScriptRunner runner, final SimpleHttpClient client) {
+		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			private String getString(JsonObject r, String key, String defaultValue) {
 				JsonElement e = r.get(key);
 				if (e == null) {

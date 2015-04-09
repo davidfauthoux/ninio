@@ -5,7 +5,6 @@ import java.io.IOException;
 import com.davfx.ninio.ping.PingClientHandler;
 import com.davfx.ninio.ping.util.PingClientCache;
 import com.davfx.ninio.script.AsyncScriptFunction;
-import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -16,14 +15,11 @@ public final class PingAvailable {
 	private static final Config CONFIG = ConfigUtils.load(PingAvailable.class);
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.ping");
 
-	private final PingClientCache client;
-
-	public PingAvailable(PingClientCache client) {
-		this.client = client;
+	private PingAvailable() {
 	}
 	
-	public void registerOn(RegisteredFunctionsScriptRunner runner) {
-		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
+	public static void link(RegisteredFunctionsScriptRunner runner, final PingClientCache client) {
+		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();

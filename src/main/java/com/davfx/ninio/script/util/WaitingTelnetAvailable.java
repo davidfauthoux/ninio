@@ -7,7 +7,6 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.remote.WaitingRemoteClientCache;
 import com.davfx.ninio.remote.WaitingRemoteClientHandler;
 import com.davfx.ninio.script.AsyncScriptFunction;
-import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.ninio.telnet.TelnetClient;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
@@ -17,14 +16,11 @@ import com.google.gson.JsonPrimitive;
 public final class WaitingTelnetAvailable {
 	public static final String CALL_FUNCTION_NAME = ConfigUtils.load(WaitingTelnetAvailable.class).getString("script.functions.telnet");
 
-	private final WaitingRemoteClientCache client;
-
-	public WaitingTelnetAvailable(WaitingRemoteClientCache client) {
-		this.client = client;
+	private WaitingTelnetAvailable() {
 	}
 	
-	public void registerOn(RegisteredFunctionsScriptRunner runner) {
-		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
+	public static void link(RegisteredFunctionsScriptRunner runner, final WaitingRemoteClientCache client) {
+		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();

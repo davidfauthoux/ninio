@@ -12,6 +12,10 @@ public final class QueueScriptRunner<T> implements ScriptRunner<T> {
 		this.wrappee = wrappee;
 	}
 	
+	@Override
+	public void prepare(Iterable<String> script, Failable fail) {
+		wrappee.prepare(script, fail);
+	}
 	
 	@Override
 	public void eval(Iterable<String> script, Failable fail, final AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {

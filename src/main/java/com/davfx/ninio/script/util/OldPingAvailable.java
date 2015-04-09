@@ -6,7 +6,6 @@ import com.davfx.ninio.ping.OldPingClientHandler;
 import com.davfx.ninio.ping.PingableAddress;
 import com.davfx.ninio.ping.util.OldPingClientCache;
 import com.davfx.ninio.script.AsyncScriptFunction;
-import com.davfx.ninio.script.RegisteredFunctionsScriptRunner;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -22,14 +21,11 @@ public final class OldPingAvailable {
 	private static final double DEFAULT_TIME_BETWEEN_RETRIES = CONFIG.getInt("script.ping.default.timeBetweenRetries");
 	private static final double RETRY_TIMEOUT = CONFIG.getInt("script.ping.default.retryTimeout");
 
-	private final OldPingClientCache client;
-
-	public OldPingAvailable(OldPingClientCache client) {
-		this.client = client;
+	private OldPingAvailable() {
 	}
 	
-	public void registerOn(RegisteredFunctionsScriptRunner runner) {
-		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
+	public static void link(RegisteredFunctionsScriptRunner runner, final OldPingClientCache client) {
+		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();

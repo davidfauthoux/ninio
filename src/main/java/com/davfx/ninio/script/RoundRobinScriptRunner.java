@@ -18,6 +18,13 @@ public final class RoundRobinScriptRunner<T> implements ScriptRunner<T> {
 	}
 
 	@Override
+	public void prepare(Iterable<String> script, Failable fail) {
+		for (ScriptRunner<T> r : runners) {
+			r.prepare(script, fail);
+		}
+	}
+	
+	@Override
 	public void eval(Iterable<String> script, Failable fail, AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
 		int i = index;
 		index = (index + 1) % runners.size();
