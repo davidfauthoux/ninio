@@ -5,9 +5,11 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.script.util.AllAvailableRunner;
@@ -20,7 +22,7 @@ public class TestScript4__testFloat {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(9993, 10).start();
-		ProxyClient proxy =  null; //new ProxyClient(new Address("10.92.115.81", 8888));
+		ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -134,6 +136,13 @@ public class TestScript4__testFloat {
 					}
 				});
 
+				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				/*
 				rr.eval(new BasicScript().append("aaa = 666;log('aaa='+aaa);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -146,7 +155,6 @@ public class TestScript4__testFloat {
 						e.printStackTrace();
 					}
 				});
-				/*
 				rr.eval(new BasicScript().append("snmp({'host':'172.17.0.1', 'community':'public', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {

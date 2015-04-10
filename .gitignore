@@ -6,4 +6,5 @@ release.properties
 .settings
 .project
 .classpath
+*.class
 
