@@ -11,13 +11,12 @@ import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
@@ -29,6 +28,7 @@ import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.util.ConfigUtils;
+import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class TcpdumpSyncDatagramReady implements Ready {
@@ -39,12 +39,14 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("proxy.tcpdump.packet.size").intValue();
 	private static final String DO_OUTPUT = CONFIG.hasPath("proxy.tcpdump.output") ? CONFIG.getString("proxy.tcpdump.output") : null;
 
+	private static final int IP_HEADER_LENGTH = CONFIG.getBytes("proxy.tcpdump.packet.header").intValue();
+
 	public static final class Receiver {
 		private final File outputFile;
 		private final DataOutputStream output;
 		
-		private final DatagramSocket socket;
-		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
+		private final Map<Integer, ReadyConnection> connections = new HashMap<>();
+		
 		public Receiver(final String interfaceId, final int port) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
@@ -61,15 +63,6 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 				output = null;
 			}
 
-			DatagramSocket s;
-			try {
-				s = new DatagramSocket();
-			} catch (IOException ioe) {
-				LOGGER.error("Could not open UDP socket", ioe);
-				s = null;
-			}
-			socket = s;
-			
 			Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class)).execute(new Runnable() {
 				@Override
 				public void run() {
@@ -141,47 +134,90 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												throw new IOException("Bad header: 0x" + Long.toHexString(header));
 											}
 											skip(in, 20);
+											/*
+											https://wiki.wireshark.org/Development/LibpcapFileFormat
+											
+											typedef struct pcap_hdr_s {
+												guint32 magic_number;   /* magic number * /
+												guint16 version_major;  /* major version number * /
+												guint16 version_minor;  /* minor version number * /
+												gint32  thiszone;       /* GMT to local correction * /
+												guint32 sigfigs;        /* accuracy of timestamps * /
+												guint32 snaplen;        /* max length of captured packets, in octets * /
+												guint32 network;        /* data link type * /
+											} pcap_hdr_t;
+											*/
 					
 											while (true) {
+												/*
+												typedef struct pcaprec_hdr_s {
+													guint32 ts_sec;         /* timestamp seconds * /
+													guint32 ts_usec;        /* timestamp microseconds * /
+													guint32 incl_len;       /* number of octets of packet saved in file * /
+													guint32 orig_len;       /* actual length of packet * /
+												} pcaprec_hdr_t;
+												*/
+												double timestamp = ((double) readIntLittleEndian(in)) + (((double) readIntLittleEndian(in)) / 1000000d); // sec, usec
+												
+												int packetSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
+												//%%%% System.out.println("packetSize=" + packetSize);
+												int remaining = packetSize;
+
 												@SuppressWarnings("unused")
-												double timestamp = ((double) readIntLittleEndian(in)) + (((double) readIntLittleEndian(in)) / 1000d); // sec, usec
+												int actualPacketSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
+												//%%%% System.out.println("actualPacketSize=" + actualPacketSize);
 												
-												int packetSize = (int) readIntLittleEndian(in);
-												skip(in, 4);
-					
-												skip(in, 12);
-					
-												int ipHeader = readShortBigEndian(in);
-												if (ipHeader != 0x800) {
-													LOGGER.error("Non IP packet received: {}", ipHeader);
-													// Not IP
-													skip(in, packetSize - 12 - 2);
-													continue;
+												skip(in, IP_HEADER_LENGTH);
+												remaining -= IP_HEADER_LENGTH;
+
+												/*%%%%%%%%
+												for (int i = 0; i < Integer.parseInt(System.getProperty("l")); i++) { //16 on Mac //26 on linux
+													System.out.println("__ = " + Integer.toHexString(in.readByte() & 0xFF));
 												}
+												System.out.println("__ = " + Integer.toHexString(in.readInt()));
+												System.out.println("__ = " + Integer.toHexString(in.readInt()));
+
+												System.out.println("VERSION&HDR SHOULD BE 0x40 = " + Integer.toHexString(in.readByte()));
+												System.out.println("TYPE SHOULD BE 0x0 = " + in.readByte());
+												int lll = in.readShort();
+												System.out.println("LENGTH = " + lll);
+												System.out.println("IDENTIFICATION = " + in.readShort());
+												System.out.println("FLAGS = " + in.readShort());
 												
-												skip(in, 9);
+												System.out.println("TTL = " + in.readByte());
+												System.out.println("PROTOCOL SHOULD BE 0x1 = " + in.readByte());
+												System.out.println("CHECKSUM = " + in.readShort());
+												*/
 												
-												int type = readByte(in);
-												if (type != 17) {
-													LOGGER.error("Non UDP packet received: {}", type);
-													// 17 UDP, 6 TCP
-													skip(in, packetSize - 12 - 2 - 9 - 1);
-													continue;
-												}
-										
-												skip(in, 2);
-										
 												String sourceIp = readIpV4(in);
+												//%%%% System.out.println("sourceIp="+sourceIp);
+												remaining -= 4;
 												String destinationIp = readIpV4(in);
+												//%%%% System.out.println("destinationIp="+destinationIp);
+												remaining -= 4;
 												int sourcePort = readShortBigEndian(in);
+												//%%%% System.out.println("sourcePort="+sourcePort);
+												remaining -= 2;
 												int destinationPort = readShortBigEndian(in);
-					
-												skip(in, 4);
+												//%%%% System.out.println("destinationPort="+destinationPort);
+												remaining -= 2;
+
+												int udpPacketSize = readShortBigEndian(in) - 8; // -8 because length includes udpPacketSize & checksum
+												//%%%% System.out.println("udpPacketSize=" + udpPacketSize);
+												remaining -= 2;
+												@SuppressWarnings("unused")
+												int checksum = readShortBigEndian(in);
+												//%%%% System.out.println("checksum=" + checksum);
+												remaining -= 2;
 												
-												byte[] data = new byte[packetSize - 12 - 2 - 9 - 1 - 2 - 4 - 4 - 2 - 2 - 4];
+												byte[] data = new byte[udpPacketSize];
+												//%%%% System.out.println("READ " + udpPacketSize);
 												in.readFully(data);
-												
-												LOGGER.trace("Packet received: {}:{} -> {}:{}", sourceIp, sourcePort, destinationIp, destinationPort);
+												remaining -= udpPacketSize;
+												//%%%% System.out.println("SKIP remaining=" + remaining);
+												skip(in, remaining);
+
+												LOGGER.trace("Packet received: {}:{} -> {}:{} {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp));
 												
 												if (output != null) {
 													output.writeInt(data.length);
@@ -189,9 +225,11 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													output.flush();
 												}
 												
-												ReadyConnection connection = connections.get(key(sourceIp, sourcePort));
-												if (connection != null) {
-													connection.handle(null, ByteBuffer.wrap(data, 0, data.length));
+												synchronized (connections) {
+													ReadyConnection connection = connections.get(destinationPort);
+													if (connection != null) {
+														connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
+													}
 												}
 											}
 										} finally {
@@ -223,70 +261,62 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			});
 		}
 		
-		private static final String key(String host, int port) {
-			try {
-				return InetAddress.getByName(host).getHostAddress() + ":" + port;
-			} catch (UnknownHostException e) {
-				LOGGER.warn("Could not determine IP of " + host);
-				return host + ":" + port;
+		private void add(int port, ReadyConnection connection) {
+			synchronized (connections) {
+				connections.put(port, connection);
 			}
 		}
 		
-		private boolean add(Address address, ReadyConnection connection) {
-			String key = key(address.getHost(), address.getPort());
-			
-			if (connections.containsKey(key)) {
-				return false;
+		private void remove(int port) {
+			synchronized (connections) {
+				connections.remove(port);
 			}
-			
-			connections.put(key, connection);
-			return true;
-		}
-		
-		private void remove(Address address) {
-			connections.remove(key(address.getHost(), address.getPort()));
-		}
-		
-		private boolean send(Address address, ByteBuffer buffer) {
-			if (socket == null) {
-				 return false;
-			}
-			try {
-				DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(address.getHost()), address.getPort());
-				socket.send(packet);
-			} catch (IOException ioe) {
-				LOGGER.error("Could not send UDP packet", ioe);
-				return false;
-			}
-			return true;
 		}
 	}
-
+	
 	private final Receiver receiver;
+	
 	public TcpdumpSyncDatagramReady(Receiver receiver) {
 		this.receiver = receiver;
 	}
 	
 	@Override
 	public void connect(final Address address, final ReadyConnection connection) {
-		if (!receiver.add(address, connection)) {
-			connection.failed(new IOException("Could not open simultaneous connections to: " + address));
+		final DatagramSocket socket;
+		try {
+			socket = new DatagramSocket();
+		} catch (IOException ioe) {
+			connection.failed(ioe);
 			return;
 		}
+		final int port = socket.getLocalPort();
+
+		receiver.add(port, connection);
 		
 		connection.connected(new FailableCloseableByteBufferHandler() {
+			private void closeSocket() {
+				socket.close();
+			}
+			
 			@Override
 			public void failed(IOException e) {
-				receiver.remove(address);
+				receiver.remove(port);
+				closeSocket();
 			}
 			@Override
 			public void close() {
-				receiver.remove(address);
+				receiver.remove(port);
+				closeSocket();
 			}
 			@Override
 			public void handle(Address a, ByteBuffer buffer) {
-				if (!receiver.send(address, buffer)) {
-					connection.failed(new IOException("Failed sending UDP packet"));
+				try {
+					DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(address.getHost()), address.getPort());
+					socket.send(packet);
+				} catch (IOException ioe) {
+					receiver.remove(port);
+					closeSocket();
+					connection.failed(ioe);
 				}
 			}
 		});

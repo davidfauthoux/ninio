@@ -22,7 +22,8 @@ public class TestScript4__testFloat {
 		Queue queue = new Queue();
 		
 		//new ProxyServer(9993, 10).start();
-		ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
+		//ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
+		ProxyClient proxy =  new ProxyClient(new Address("10.4.243.240", 9993));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -136,12 +137,14 @@ public class TestScript4__testFloat {
 					}
 				});
 
-				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);"), new Failable() {
+				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
+				//rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0" + /*1.3.6.1.2.1.2.2.1.2*/ "'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
+				
 				/*
 				rr.eval(new BasicScript().append("aaa = 666;log('aaa='+aaa);"), new Failable() {
 					@Override
@@ -194,7 +197,7 @@ public class TestScript4__testFloat {
 				});
 				*/
 				
-				Thread.sleep(500000);
+				Thread.sleep(50000);
 			}
 			
 			Thread.sleep(15000);
