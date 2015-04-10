@@ -13,10 +13,10 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
@@ -45,7 +45,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		private final File outputFile;
 		private final DataOutputStream output;
 		
-		private final Map<Integer, ReadyConnection> connections = new HashMap<>();
+		private final Map<Integer, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
 		public Receiver(final String interfaceId, final int port) {
 			if (DO_OUTPUT != null) {
@@ -225,11 +225,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													output.flush();
 												}
 												
-												synchronized (connections) {
-													ReadyConnection connection = connections.get(destinationPort);
-													if (connection != null) {
-														connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
-													}
+												ReadyConnection connection = connections.get(destinationPort);
+												if (connection != null) {
+													connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
 												}
 											}
 										} finally {
@@ -262,15 +260,11 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		}
 		
 		private void add(int port, ReadyConnection connection) {
-			synchronized (connections) {
-				connections.put(port, connection);
-			}
+			connections.put(port, connection);
 		}
 		
 		private void remove(int port) {
-			synchronized (connections) {
-				connections.remove(port);
-			}
+			connections.remove(port);
 		}
 	}
 	
