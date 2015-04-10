@@ -30,7 +30,7 @@ final class ProxyReady {
 	private static final Config CONFIG = ConfigUtils.load(ProxyReady.class);
 
 	public static final double DEFAULT_CONNECTION_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.connection");
-	//%% public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
+	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
 
 	private final Address proxyServerAddress;
 
@@ -39,7 +39,7 @@ final class ProxyReady {
 	private Map<Integer, Pair<Address, ReadyConnection>> currentConnections;
 	private int nextConnectionId;
 	private double connectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
-	private double readTimeout = Double.NaN;
+	private double readTimeout = DEFAULT_READ_TIMEOUT;
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
@@ -101,9 +101,15 @@ final class ProxyReady {
 			
 						try {
 							socket = new Socket();
-							socket.connect(new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort()), (int) (connectionTimeout * 1000d));
-							if (!Double.isNaN(readTimeout)) {
+							socket.setKeepAlive(true);
+							if (readTimeout > 0d) {
 								socket.setSoTimeout((int) (readTimeout * 1000d));
+							}
+							InetSocketAddress a = new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort());
+							if (connectionTimeout > 0d) {
+								socket.connect(a, (int) (connectionTimeout * 1000d));
+							} else {
+								socket.connect(a);
 							}
 							try {
 								out = new DataOutputStream(socket.getOutputStream());
