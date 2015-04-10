@@ -49,6 +49,8 @@ public final class ProxyServer {
 		server.start();
 	}
 	
+	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
+	
 	private final int port;
 	
 	private final ProxyUtils.ServerSide proxyUtils = ProxyUtils.server();
@@ -80,6 +82,10 @@ public final class ProxyServer {
 				try (ServerSocket ss = new ServerSocket(port)) {
 					while (true) {
 						final Socket socket = ss.accept();
+						socket.setKeepAlive(true);
+						if (DEFAULT_READ_TIMEOUT > 0d) {
+							socket.setSoTimeout((int) (DEFAULT_READ_TIMEOUT * 1000d));
+						}
 
 						clientExecutor.execute(new Runnable() {
 							@Override
