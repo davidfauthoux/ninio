@@ -38,10 +38,8 @@ public final class ProxyServer {
 
 	public static void main(String[] args) throws Exception {
 		ProxyServer server = new ProxyServer(CONFIG.getInt("proxy.port"), CONFIG.getInt("proxy.maxSimultaneousClients"));
-		if (CONFIG.hasPath("proxy.forward")) {
-			for (Config c : CONFIG.getConfigList("proxy.forward")) {
-				server.override(c.getString("type"), Forward.forward(new Address(c.getString("host"), c.getInt("port"))));
-			}
+		for (Config c : CONFIG.getConfigList("proxy.forward")) {
+			server.override(c.getString("type"), Forward.forward(new Address(c.getString("host"), c.getInt("port"))));
 		}
 		for (String host : CONFIG.getStringList("proxy.filter")) {
 			server.filter(host);
