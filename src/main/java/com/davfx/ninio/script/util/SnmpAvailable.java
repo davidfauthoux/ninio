@@ -20,13 +20,39 @@ public final class SnmpAvailable {
 	private SnmpAvailable() {
 	}
 	
-	public static void link(RegisteredFunctionsScriptRunner runner, final SnmpClientCache client) {
+	public static void link(RegisteredFunctionsScriptRunner runner, final SnmpClientCache client, final Cache cache) {
 		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClientConfigurator.DEFAULT_PORT));
+
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
+
+				final String oidAsString = JsonUtils.getString(r, "oid", null);
+				if (oidAsString == null) {
+					m.failed(new IOException("OID cannot be null"));
+					return;
+				}
+				final Oid oid;
+				try {
+					oid = new Oid(oidAsString);
+				} catch (Exception e) {
+					m.failed(new IOException("Invalid OID: " + oidAsString, e));
+					return;
+				}
+
+				final Cache.ForAddressCache internalCache;
+				if (cache == null) {
+					internalCache = null;
+				} else {
+					internalCache = cache.get(address);
+					if (!internalCache.register(oidAsString, m)) { // Check already waiting, register if so, set waiting if not
+						return;
+					}
+				}
+				
 				SnmpClientCache.Connectable c = client.get(address);
 				c.withCommunity(JsonUtils.getString(r, "community", null));
 				
@@ -45,29 +71,20 @@ public final class SnmpAvailable {
 					);
 				}
 
-				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
-
-				String oidAsString = JsonUtils.getString(r, "oid", null);
-				if (oidAsString == null) {
-					m.failed(new IOException("OID cannot be null"));
-					return;
-				}
-				final Oid oid;
-				try {
-					oid = new Oid(oidAsString);
-				} catch (Exception e) {
-					m.failed(new IOException("Invalid OID: " + oidAsString, e));
-					return;
-				}
-
 				c.connect(new SnmpClientHandler() {
 					@Override
 					public void failed(IOException e) {
 						m.failed(e);
+						if (internalCache != null) {
+							internalCache.failed(oidAsString, e);
+						}
 					}
 					@Override
 					public void close() {
 						m.close();
+						if (internalCache != null) {
+							internalCache.close(oidAsString);
+						}
 					}
 					@Override
 					public void launched(final Callback callback) {
@@ -76,7 +93,12 @@ public final class SnmpAvailable {
 							@Override
 							public void result(Result result) {
 								// JsonObject o = new JsonObject();
-								o.add(result.getOid().toString(), new JsonPrimitive(result.getValue())); // result.getValue().asString()));
+								String resultOidAsString = result.getOid().toString();
+								JsonPrimitive r = new JsonPrimitive(result.getValue());
+								o.add(resultOidAsString, r); // result.getValue().asString()));
+								if (internalCache != null) {
+									internalCache.add(resultOidAsString, r);
+								}
 								// m.partially(o);
 							}
 							
@@ -84,12 +106,18 @@ public final class SnmpAvailable {
 							public void close() {
 								m.done(o);
 								// m.done(new JsonObject());
+								if (internalCache != null) {
+									internalCache.done(oidAsString, o);
+								}
 								callback.close();
 							}
 							
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								if (internalCache != null) {
+									internalCache.failed(oidAsString, e);
+								}
 								callback.close();
 							}
 							/*%%%

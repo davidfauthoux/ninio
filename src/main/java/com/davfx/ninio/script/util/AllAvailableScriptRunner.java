@@ -26,10 +26,14 @@ import com.davfx.ninio.telnet.TelnetClientConfigurator;
 import com.davfx.util.ConfigUtils;
 import com.google.common.collect.Iterators;
 import com.google.gson.JsonElement;
+import com.typesafe.config.Config;
 
 public class AllAvailableScriptRunner implements AutoCloseable {
 
-	private static final int THREADING = ConfigUtils.load(AllAvailableScriptRunner.class).getInt("script.threading");
+	private static final Config CONFIG = ConfigUtils.load(AllAvailableScriptRunner.class);
+	
+	private static final int THREADING = CONFIG.getInt("script.threading");
+	private static final boolean CACHE = CONFIG.getBoolean("script.cache");
 
 	private final ExecutorScriptRunner[] runners;
 	private final AllAvailableRunner[] scriptRunners;
@@ -72,13 +76,17 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 			runners[i] = new ExecutorScriptRunner();
 		}
 		scriptRunners = new AllAvailableRunner[THREADING];
+		Cache pingCache = CACHE ? new Cache() : null;
+		Cache snmpCache = CACHE ? new Cache() : null;
+		Cache telnetCache = CACHE ? new Cache() : null;
+		Cache sshCache = CACHE ? new Cache() : null;
 		for (int i = 0; i < THREADING; i++) {
 			final RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, runners[i]));
-			PingAvailable.link(runner, ping);
-			SnmpAvailable.link(runner, snmp);
-			WaitingTelnetAvailable.link(runner, telnet);
-			WaitingSshAvailable.link(runner, ssh);
-			HttpAvailable.link(runner, http);
+			PingAvailable.link(runner, ping, pingCache);
+			SnmpAvailable.link(runner, snmp, snmpCache);
+			WaitingTelnetAvailable.link(runner, telnet, telnetCache);
+			WaitingSshAvailable.link(runner, ssh, sshCache);
+			HttpAvailable.link(runner, http); // No cache for HTTP
 			
 			final CallingEndScriptRunner callingEnd = new CallingEndScriptRunner(runner);
 

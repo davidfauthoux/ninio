@@ -18,24 +18,42 @@ public final class PingAvailable {
 	private PingAvailable() {
 	}
 	
-	public static void link(RegisteredFunctionsScriptRunner runner, final PingClientCache client) {
+	public static void link(RegisteredFunctionsScriptRunner runner, final PingClientCache client, final Cache cache) {
 		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				final String host = JsonUtils.getString(r, "host", "localhost");
-				PingClientCache.Connectable c = client.get(host);
 
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
+
+				final Cache.ForAddressCache internalCache;
+				if (cache == null) {
+					internalCache = null;
+				} else {
+					internalCache = cache.get(null);
+					if (!internalCache.register(host, m)) { // Check already waiting, register if so, set waiting if not
+						return;
+					}
+				}
+
+				PingClientCache.Connectable c = client.get(host);
+
 				c.connect(new PingClientHandler() {
 					@Override
 					public void failed(IOException e) {
 						m.failed(e);
+						if (internalCache != null) {
+							internalCache.failed(host, e);
+						}
 					}
 					@Override
 					public void close() {
 						m.close();
+						if (internalCache != null) {
+							internalCache.close(host);
+						}
 					}
 					@Override
 					public void launched(final Callback callback) {
@@ -43,11 +61,18 @@ public final class PingAvailable {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								if (internalCache != null) {
+									internalCache.failed(host, e);
+								}
 								callback.close();
 							}
 							@Override
 							public void pong(double time) {
-								m.done(new JsonPrimitive(time));
+								JsonPrimitive r = new JsonPrimitive(time);
+								m.done(r);
+								if (internalCache != null) {
+									internalCache.done(host, r);
+								}
 								callback.close();
 							}
 						});

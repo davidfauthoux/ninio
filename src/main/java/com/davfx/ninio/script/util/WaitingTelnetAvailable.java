@@ -19,19 +19,32 @@ public final class WaitingTelnetAvailable {
 	private WaitingTelnetAvailable() {
 	}
 	
-	public static void link(RegisteredFunctionsScriptRunner runner, final WaitingRemoteClientCache client) {
+	public static void link(RegisteredFunctionsScriptRunner runner, final WaitingRemoteClientCache client, final Cache cache) {
 		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", TelnetClient.DEFAULT_PORT));
-				WaitingRemoteClientCache.Connectable c = client.get(address);
+
+				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 
 				final String command = JsonUtils.getString(r, "command", null);
 				final double time = JsonUtils.getDouble(r, "time", Double.NaN);
 				final Pattern cut = JsonUtils.getPattern(r, "cut", null);
 				JsonElement init = r.get("init");
+
+				final Cache.ForAddressCache internalCache;
+				if (cache == null) {
+					internalCache = null;
+				} else {
+					internalCache = cache.get(address);
+					if (!internalCache.register(command, m)) { // Check already waiting, register if so, set waiting if not
+						return;
+					}
+				}
+				
+				WaitingRemoteClientCache.Connectable c = client.get(address);
 				if (init != null) {
 					for (JsonElement e : init.getAsJsonArray()) {
 						JsonObject o = e.getAsJsonObject();
@@ -39,15 +52,20 @@ public final class WaitingTelnetAvailable {
 					}
 				}
 
-				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 				c.connect(new WaitingRemoteClientHandler() {
 					@Override
 					public void failed(IOException e) {
 						m.failed(e);
+						if (internalCache != null) {
+							internalCache.failed(command, e);
+						}
 					}
 					@Override
 					public void close() {
 						m.close();
+						if (internalCache != null) {
+							internalCache.close(command);
+						}
 					}
 					@Override
 					public void launched(final String init, final Callback callback) {
@@ -55,6 +73,9 @@ public final class WaitingTelnetAvailable {
 							@Override
 							public void failed(IOException e) {
 								m.failed(e);
+								if (internalCache != null) {
+									internalCache.failed(command, e);
+								}
 								callback.close();
 							}
 							@Override
@@ -63,6 +84,9 @@ public final class WaitingTelnetAvailable {
 								t.add("init", new JsonPrimitive(init));
 								t.add("response", new JsonPrimitive(text));
 								m.done(t);
+								if (internalCache != null) {
+									internalCache.done(command, t);
+								}
 								callback.close();
 							}
 						});
