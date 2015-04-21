@@ -1,6 +1,6 @@
 ## 0.0.33
 
-* Configuration: ninio.socket.timeout (default configured to 30 seconds)
+* a9c02b5 Configuration: ninio.socket.timeout (default configured to 30 seconds)
 
 ## 0.0.32
 
