@@ -59,7 +59,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		this.queue = queue;
 		
 		httpConfigurator = new HttpClientConfigurator(queue, scheduledExecutor);
-		remoteConfigurator = new WaitingRemoteClientConfigurator(scheduledExecutor);
+		remoteConfigurator = new WaitingRemoteClientConfigurator(scheduledExecutor, scheduledExecutor);
 		telnetConfigurator = new TelnetClientConfigurator(queue);
 		sshConfigurator = new SshClientConfigurator(queue);
 		snmpConfigurator = new SnmpClientConfigurator(queue, scheduledExecutor);
