@@ -9,7 +9,13 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
 
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+
 public final class SocketReady implements Ready {
+	private static final Config CONFIG = ConfigUtils.load(Queue.class);
+	private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
+
 	private final Selector selector;
 	private final ByteBufferAllocator byteBufferAllocator;
 	
@@ -23,6 +29,7 @@ public final class SocketReady implements Ready {
 		try {
 			final SocketChannel channel = SocketChannel.open();
 			try {
+				channel.socket().setSoTimeout((int) (TIMEOUT * 1000d));
 				channel.configureBlocking(false);
 				SelectionKey inboundKey = channel.register(selector, SelectionKey.OP_CONNECT);
 				inboundKey.attach(new SelectionKeyVisitor() {
