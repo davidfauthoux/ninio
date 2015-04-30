@@ -35,19 +35,62 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSyncDatagramReady.class);
 
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
-	private static final Config CONFIG = ConfigUtils.load(SyncDatagramReady.class);
+	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
 	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("proxy.tcpdump.packet.size").intValue();
 	private static final String DO_OUTPUT = CONFIG.hasPath("proxy.tcpdump.output") ? CONFIG.getString("proxy.tcpdump.output") : null;
 
 	private static final int IP_HEADER_LENGTH = CONFIG.getBytes("proxy.tcpdump.packet.header").intValue();
 
+	public static interface Rule {
+		Iterable<String> parameters();
+	}
+	
+	public static final class SourcePortRule implements Rule {
+		private final List<String> params = new LinkedList<>();
+		public SourcePortRule(int port) {
+			params.add("src");
+			params.add("port");
+			params.add(String.valueOf(port));
+		}
+		@Override
+		public Iterable<String> parameters() {
+			return params;
+		}
+	}
+	
+	public static final class DestinationPortRule implements Rule {
+		private final List<String> params = new LinkedList<>();
+		public DestinationPortRule(int port) {
+			params.add("dst");
+			params.add("port");
+			params.add(String.valueOf(port));
+		}
+		@Override
+		public Iterable<String> parameters() {
+			return params;
+		}
+	}
+	
+	public static final class SourcePortRangeRule implements Rule {
+		private final List<String> params = new LinkedList<>();
+		public SourcePortRangeRule(int fromPort, int toPort) { // toPort inclusive
+			params.add("src");
+			params.add("portrange");
+			params.add(fromPort + "-" + toPort);
+		}
+		@Override
+		public Iterable<String> parameters() {
+			return params;
+		}
+	}
+	
 	public static final class Receiver {
 		private final File outputFile;
 		private final DataOutputStream output;
 		
 		private final Map<Integer, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		public Receiver(final String interfaceId, final int port) {
+		public Receiver(final String interfaceId, final Rule rule) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
 				DataOutputStream o;
@@ -89,7 +132,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						toExec.add("-U"); // Unbuffers output
 						toExec.add("src");
 						toExec.add("port");
-						toExec.add(String.valueOf(port));
+						for (String p : rule.parameters()) {
+							toExec.add(p);
+						}
 						
 						ProcessBuilder pb = new ProcessBuilder(toExec);
 						pb.directory(dir);

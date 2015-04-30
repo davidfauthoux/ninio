@@ -104,7 +104,7 @@ public final class ProxyUtils {
 
 		String datagramMode = CONFIG.getString("proxy.mode.datagram");
 		if (datagramMode.equals("sync.tcpdump")) {
-			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), CONFIG.getInt("proxy.tcpdump.port")))));
+			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), new TcpdumpSyncDatagramReady.SourcePortRule(CONFIG.getInt("proxy.tcpdump.port"))))));
 		} else if (datagramMode.equals("sync.java")) {
 			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {
