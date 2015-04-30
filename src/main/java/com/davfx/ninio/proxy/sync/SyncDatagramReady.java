@@ -21,6 +21,7 @@ import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
+@Deprecated
 public final class SyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SyncDatagramReady.class);
 	private static final Config CONFIG = ConfigUtils.load(SyncDatagramReady.class);

@@ -13,12 +13,10 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
+import com.davfx.ninio.common.TcpdumpSyncDatagramReady;
+import com.davfx.ninio.common.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.ninio.ping.InternalPingServerReadyFactory;
 import com.davfx.ninio.ping.PureJavaSyncPing;
-import com.davfx.ninio.proxy.sync.SyncDatagramReady;
-import com.davfx.ninio.proxy.sync.SyncDatagramReadyFactory;
-import com.davfx.ninio.proxy.sync.TcpdumpSyncDatagramReady;
-import com.davfx.ninio.proxy.sync.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
@@ -104,9 +102,9 @@ public final class ProxyUtils {
 
 		String datagramMode = CONFIG.getString("proxy.mode.datagram");
 		if (datagramMode.equals("sync.tcpdump")) {
-			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(CONFIG.getString("proxy.tcpdump.interface"), new TcpdumpSyncDatagramReady.SourcePortRule(CONFIG.getInt("proxy.tcpdump.port"))))));
-		} else if (datagramMode.equals("sync.java")) {
-			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
+			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.SourcePortRule(CONFIG.getInt("proxy.tcpdump.port")), CONFIG.getString("proxy.tcpdump.interface")))));
+		//%% } else if (datagramMode.equals("sync.java")) {
+			//%% configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {
 			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new DatagramReadyFactory()));
 		} else {

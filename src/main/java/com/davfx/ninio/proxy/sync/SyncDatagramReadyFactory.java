@@ -5,6 +5,7 @@ import com.davfx.ninio.common.QueueReady;
 import com.davfx.ninio.common.Ready;
 import com.davfx.ninio.common.ReadyFactory;
 
+@Deprecated
 public final class SyncDatagramReadyFactory implements ReadyFactory {
 	private final SyncDatagramReady.Receiver receiver;
 

@@ -1,4 +1,4 @@
-package com.davfx.ninio.proxy.sync;
+package com.davfx.ninio.common;
 
 import java.io.BufferedReader;
 import java.io.DataInputStream;
@@ -31,16 +31,15 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 
-@Deprecated
 public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSyncDatagramReady.class);
 
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
 	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
-	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("proxy.tcpdump.packet.size").intValue();
-	private static final String DO_OUTPUT = CONFIG.hasPath("proxy.tcpdump.output") ? CONFIG.getString("proxy.tcpdump.output") : null;
+	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("tcpdump.packet.size").intValue();
+	private static final String DO_OUTPUT = CONFIG.hasPath("tcpdump.output") ? CONFIG.getString("tcpdump.output") : null;
 
-	private static final int IP_HEADER_LENGTH = CONFIG.getBytes("proxy.tcpdump.packet.header").intValue();
+	private static final int IP_HEADER_LENGTH = System.getProperty("os.name").equals("Mac OS X") ? 16 : 26;
 
 	public static interface Rule {
 		Iterable<String> parameters();
@@ -102,9 +101,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		private final File outputFile;
 		private final DataOutputStream output;
 		
-		private final Map<Integer, ReadyConnection> connections = new ConcurrentHashMap<>();
+		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		public Receiver(final String interfaceId, final Rule rule) {
+		public Receiver(final Rule rule, final String... interfaceId) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
 				DataOutputStream o;
@@ -135,8 +134,10 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						}
 						toExec.add("-w");
 						toExec.add("/dev/stdout");
-						toExec.add("-i");
-						toExec.add(interfaceId);
+						for (String i : interfaceId) {
+							toExec.add("-i");
+							toExec.add(i);
+						}
 						toExec.add("-n");
 						toExec.add("-K");
 						toExec.add("-p");
@@ -282,9 +283,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													output.flush();
 												}
 												
-												ReadyConnection connection = connections.get(destinationPort);
+												ReadyConnection connection = connections.get(new Address(destinationIp, destinationPort));
 												if (connection != null) {
-													LOGGER.debug("HAS CONNECTION");
 													connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
 												}
 											}
@@ -317,12 +317,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			});
 		}
 		
-		private void add(int port, ReadyConnection connection) {
-			connections.put(port, connection);
+		private void add(Address address, ReadyConnection connection) {
+			connections.put(address, connection);
 		}
 		
-		private void remove(int port) {
-			connections.remove(port);
+		private void remove(Address address) {
+			connections.remove(address);
 		}
 	}
 	
@@ -341,7 +341,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	@Override
 	public void connect(final Address address, final ReadyConnection connection) {
 		final DatagramSocket socket;
-		final int port;
+		final Address receiveAddress;
 		if (bind) {
 			try {
 				socket = new DatagramSocket();
@@ -349,7 +349,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 				connection.failed(ioe);
 				return;
 			}
-			port = address.getPort();
+			receiveAddress = address;
 		} else {
 			try {
 				socket = new DatagramSocket();
@@ -357,14 +357,14 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 				connection.failed(ioe);
 				return;
 			}
-			port = socket.getLocalPort();
+			receiveAddress = new Address(address.getHost(), socket.getLocalPort());
 		}
 		
-		receiver.add(port, connection);
+		receiver.add(receiveAddress, connection);
 
 		connection.connected(new FailableCloseableByteBufferHandler() {
 			private void closeSocket() {
-				receiver.remove(port);
+				receiver.remove(receiveAddress);
 				socket.close();
 			}
 			
