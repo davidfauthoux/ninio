@@ -39,7 +39,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("tcpdump.packet.size").intValue();
 	private static final String DO_OUTPUT = CONFIG.hasPath("tcpdump.output") ? CONFIG.getString("tcpdump.output") : null;
 
-	private static final int IP_HEADER_LENGTH = System.getProperty("os.name").equals("Mac OS X") ? 16 : 26;
+	private static final int IP_HEADER_LENGTH_MONO = System.getProperty("os.name").equals("Mac OS X") ? CONFIG.getInt("tcpdump.packet.header.mono.macosx") : CONFIG.getInt("tcpdump.packet.header.mono.default");
+	private static final int IP_HEADER_LENGTH_MULTI = System.getProperty("os.name").equals("Mac OS X") ? CONFIG.getInt("tcpdump.packet.header.multi.macosx") : CONFIG.getInt("tcpdump.packet.header.multi.default");
 
 	public static interface Rule {
 		Iterable<String> parameters();
@@ -103,7 +104,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		
 		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		public Receiver(final Rule rule, final String... interfaceId) {
+		public Receiver(final Rule rule, final String interfaceId) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
 				DataOutputStream o;
@@ -134,16 +135,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						}
 						toExec.add("-w");
 						toExec.add("/dev/stdout");
-						boolean any = true;
-						for (String i : interfaceId) {
-							toExec.add("-i");
-							toExec.add(i);
-							any = false;
-						}
-						if (any) {
-							toExec.add("-i");
-							toExec.add("any");
-						}
+						toExec.add("-i");
+						toExec.add(interfaceId);
 						toExec.add("-n");
 						toExec.add("-K");
 						toExec.add("-p");
@@ -154,6 +147,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						for (String p : rule.parameters()) {
 							toExec.add(p);
 						}
+						
+						final int headerSize = interfaceId.equals("any") ? IP_HEADER_LENGTH_MULTI : IP_HEADER_LENGTH_MONO;
 						
 						ProcessBuilder pb = new ProcessBuilder(toExec);
 						pb.directory(dir);
@@ -194,6 +189,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 										DataInputStream in = new DataInputStream(input);
 										try {
 											long header = readIntLittleEndian(in);
+											//%%%% System.out.println("HEADER = " + header);
 											if (header != 0xA1B2C3D4) {
 												throw new IOException("Bad header: 0x" + Long.toHexString(header));
 											}
@@ -213,6 +209,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 											*/
 					
 											while (true) {
+												System.out.println("IN WHILE");
 												/*
 												typedef struct pcaprec_hdr_s {
 													guint32 ts_sec;         /* timestamp seconds * /
@@ -222,6 +219,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												} pcaprec_hdr_t;
 												*/
 												double timestamp = ((double) readIntLittleEndian(in)) + (((double) readIntLittleEndian(in)) / 1000000d); // sec, usec
+												//%%% System.out.println("TIMESTAMP = " + timestamp);
 												
 												int packetSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
 												//%%%% System.out.println("packetSize=" + packetSize);
@@ -231,10 +229,10 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												int actualPacketSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
 												//%%%% System.out.println("actualPacketSize=" + actualPacketSize);
 												
-												skip(in, IP_HEADER_LENGTH);
-												remaining -= IP_HEADER_LENGTH;
+												skip(in, headerSize);
+												remaining -= headerSize;
 
-												/*%%%%%%%%
+												/*%%%%%%%%%%
 												for (int i = 0; i < Integer.parseInt(System.getProperty("l")); i++) { //16 on Mac //26 on linux
 													System.out.println("__ = " + Integer.toHexString(in.readByte() & 0xFF));
 												}
@@ -281,7 +279,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												//%%%% System.out.println("SKIP remaining=" + remaining);
 												skip(in, remaining);
 
-												LOGGER.debug("Packet received: {}:{} -> {}:{} {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp));
+												LOGGER.trace("Packet received: {}:{} -> {}:{} {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp));
 												
 												if (output != null) {
 													output.writeInt(data.length);
@@ -292,6 +290,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												ReadyConnection connection = connections.get(new Address(destinationIp, destinationPort));
 												if (connection != null) {
 													connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
+													//%%% } else {
+													//%%% System.out.println("NO CONNECTION " + connections.keySet());
 												}
 											}
 										} finally {
