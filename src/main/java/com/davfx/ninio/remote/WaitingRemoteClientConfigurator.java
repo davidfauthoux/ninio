@@ -12,28 +12,32 @@ import com.typesafe.config.Config;
 public final class WaitingRemoteClientConfigurator implements Closeable {
 	private static final Config CONFIG = ConfigUtils.load(WaitingRemoteClientConfigurator.class);
 	
+	private static final double DEFAULT_CONNECT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "remote.waiting.connectTimeout");
 	private static final double DEFAULT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "remote.waiting.timeout");
 	private static final double DEFAULT_CALL_WITH_EMPTY_TIME = ConfigUtils.getDuration(CONFIG, "remote.waiting.callWithEmptyTime");
 	
+	public final ScheduledExecutorService connectTimeoutExecutor;
 	public final ScheduledExecutorService callWithEmptyExecutor;
 	private final boolean callWithEmptyExecutorToShutdown;
 	
 	//%% public double endOfCommandTime = ConfigUtils.getDuration(CONFIG, "remote.waiting.endOfCommandTime");
+	public double connectTimeout = DEFAULT_CONNECT_TIMEOUT;
 	public double timeout = DEFAULT_TIMEOUT;
 	
 	public double callWithEmptyTime = DEFAULT_CALL_WITH_EMPTY_TIME;
 
-	private WaitingRemoteClientConfigurator(ScheduledExecutorService callWithEmptyExecutor, boolean callWithEmptyExecutorToShutdown) {
+	private WaitingRemoteClientConfigurator(ScheduledExecutorService connectTimeoutExecutor, ScheduledExecutorService callWithEmptyExecutor, boolean callWithEmptyExecutorToShutdown) {
+		this.connectTimeoutExecutor = connectTimeoutExecutor;
 		this.callWithEmptyExecutor = callWithEmptyExecutor;
 		this.callWithEmptyExecutorToShutdown = callWithEmptyExecutorToShutdown;
 	}
 	
 	public WaitingRemoteClientConfigurator() throws IOException {
-		this(Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(WaitingRemoteClientConfigurator.class)), true);
+		this(Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(WaitingRemoteClientConfigurator.class)), Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(WaitingRemoteClientConfigurator.class)), true);
 	}
 
-	public WaitingRemoteClientConfigurator(ScheduledExecutorService callWithEmptyExecutor) {
-		this(callWithEmptyExecutor, false);
+	public WaitingRemoteClientConfigurator(ScheduledExecutorService connectTimeoutExecutor, ScheduledExecutorService callWithEmptyExecutor) {
+		this(connectTimeoutExecutor, callWithEmptyExecutor, false);
 	}
 
 	@Override
@@ -45,6 +49,7 @@ public final class WaitingRemoteClientConfigurator implements Closeable {
 	
 	public WaitingRemoteClientConfigurator(WaitingRemoteClientConfigurator configurator) {
 		callWithEmptyExecutorToShutdown = false;
+		connectTimeoutExecutor = configurator.connectTimeoutExecutor;
 		callWithEmptyExecutor = configurator.callWithEmptyExecutor;
 		//%% endOfCommandTime = configurator.endOfCommandTime;
 		timeout = configurator.timeout;

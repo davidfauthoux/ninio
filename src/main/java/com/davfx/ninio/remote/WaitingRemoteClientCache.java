@@ -87,7 +87,7 @@ public final class WaitingRemoteClientCache implements AutoCloseable {
 				
 				Hold c = clients.get(address);
 				if (c == null) {
-					c = new Hold(new WaitingRemoteClient(configurator, new CallingEmptyScheduledRemoteConnector(configurator, queue, remoteConnectorFactory.create(address))));
+					c = new Hold(new WaitingRemoteClient(configurator, new TimeoutingScheduledRemoteConnector(configurator, queue, new CallingEmptyScheduledRemoteConnector(configurator, queue, remoteConnectorFactory.create(address)))));
 					
 					final Hold cc = c;
 					clients.put(address, cc);
