@@ -134,9 +134,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						}
 						toExec.add("-w");
 						toExec.add("/dev/stdout");
+						boolean any = true;
 						for (String i : interfaceId) {
 							toExec.add("-i");
 							toExec.add(i);
+							any = false;
+						}
+						if (any) {
+							toExec.add("-i");
+							toExec.add("any");
 						}
 						toExec.add("-n");
 						toExec.add("-K");
