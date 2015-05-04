@@ -42,6 +42,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final int IP_HEADER_LENGTH_MONO = System.getProperty("os.name").equals("Mac OS X") ? CONFIG.getInt("tcpdump.packet.header.mono.macosx") : CONFIG.getInt("tcpdump.packet.header.mono.default");
 	private static final int IP_HEADER_LENGTH_MULTI = System.getProperty("os.name").equals("Mac OS X") ? CONFIG.getInt("tcpdump.packet.header.multi.macosx") : CONFIG.getInt("tcpdump.packet.header.multi.default");
 
+	private static final int UDP_ERROR_LIMIT = 100 * 1024;
+	
 	public static interface Rule {
 		Iterable<String> parameters();
 	}
@@ -225,10 +227,20 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												//%%%% System.out.println("packetSize=" + packetSize);
 												int remaining = packetSize;
 
+												if (remaining < 4) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												@SuppressWarnings("unused")
 												int actualPacketSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
 												//%%%% System.out.println("actualPacketSize=" + actualPacketSize);
 												
+												if (remaining < headerSize) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												skip(in, headerSize);
 												remaining -= headerSize;
 
@@ -251,29 +263,73 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												System.out.println("CHECKSUM = " + in.readShort());
 												*/
 												
+												if (remaining < 4) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												String sourceIp = readIpV4(in);
 												//%%%% System.out.println("sourceIp="+sourceIp);
 												remaining -= 4;
+
+												if (remaining < 4) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												String destinationIp = readIpV4(in);
 												//%%%% System.out.println("destinationIp="+destinationIp);
 												remaining -= 4;
+												
+												if (remaining < 2) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												int sourcePort = readShortBigEndian(in);
 												//%%%% System.out.println("sourcePort="+sourcePort);
 												remaining -= 2;
+
+												if (remaining < 2) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												int destinationPort = readShortBigEndian(in);
 												//%%%% System.out.println("destinationPort="+destinationPort);
 												remaining -= 2;
 
+												if (remaining < 2) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												int udpPacketSize = readShortBigEndian(in) - 8; // -8 because length includes udpPacketSize & checksum
 												//%%%% System.out.println("udpPacketSize=" + udpPacketSize);
 												remaining -= 2;
+
+												if (remaining < 2) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												@SuppressWarnings("unused")
 												int checksum = readShortBigEndian(in);
 												//%%%% System.out.println("checksum=" + checksum);
 												remaining -= 2;
 												
+												if ((udpPacketSize < 0) || (udpPacketSize > UDP_ERROR_LIMIT)) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												byte[] data = new byte[udpPacketSize];
 												//%%%% System.out.println("READ " + udpPacketSize);
+												if (remaining < data.length) {
+													LOGGER.debug("Invalid packet (remaining {} bytes)", remaining);
+													skip(in, remaining);
+													continue;
+												}
 												in.readFully(data);
 												remaining -= udpPacketSize;
 												//%%%% System.out.println("SKIP remaining=" + remaining);
@@ -293,7 +349,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													//%%% } else {
 													//%%% System.out.println("NO CONNECTION " + connections.keySet());
 												} else {
-													LOGGER.debug("No match for packet: {}:{} -> {}:{} {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp));
+													LOGGER.debug("No match for packet: {}:{} -> {}:{} {}, available: {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp), connections.keySet());
 												}
 											}
 										} finally {
@@ -347,7 +403,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	}
 	
 	@Override
-	public void connect(final Address address, final ReadyConnection connection) {
+	public void connect(Address address, final ReadyConnection connection) {
 		final DatagramSocket socket;
 		final Address receiveAddress;
 		if (bind) {
