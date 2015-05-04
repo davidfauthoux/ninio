@@ -209,7 +209,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 											*/
 					
 											while (true) {
-												System.out.println("IN WHILE");
+												//%%% System.out.println("IN WHILE");
 												/*
 												typedef struct pcaprec_hdr_s {
 													guint32 ts_sec;         /* timestamp seconds * /
@@ -292,6 +292,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
 													//%%% } else {
 													//%%% System.out.println("NO CONNECTION " + connections.keySet());
+												} else {
+													LOGGER.debug("No match for packet: {}:{} -> {}:{} {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp));
 												}
 											}
 										} finally {
