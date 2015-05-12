@@ -412,7 +412,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	}
 	
 	@Override
-	public void connect(Address address, final ReadyConnection connection) {
+	public void connect(final Address address, final ReadyConnection connection) {
 		final DatagramSocket socket;
 		final Address receiveAddress;
 		if (bind) {
@@ -451,6 +451,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			}
 			@Override
 			public void handle(Address a, ByteBuffer buffer) {
+				if (a == null) {
+					a = address;
+				}
 				try {
 					DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(a.getHost()), a.getPort());
 					socket.send(packet);

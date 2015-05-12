@@ -97,7 +97,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 				}
 				@Override
 				public void prepare(Iterable<String> script, Failable fail) {
-					runner.prepare(script, fail);
+					callingEnd.prepare(script, fail);
 				}
 				@Override
 				public void link(Runnable onEnd) {

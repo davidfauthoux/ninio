@@ -23,7 +23,7 @@ public class TestScript4__testFloat {
 		
 		//new ProxyServer(9993, 10).start();
 		//ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
-		ProxyClient proxy =  null;//new ProxyClient(new Address("10.4.243.240", 9993));
+		ProxyClient proxy =  new ProxyClient(new Address("172.17.10.20", 8888));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -137,14 +137,22 @@ public class TestScript4__testFloat {
 					}
 				});
 
+				/*
 				//rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.2.2.1.2'}, log_snmp);"), new Failable() {
-				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0" + /*1.3.6.1.2.1.2.2.1.2*/ "'}, log_snmp);"), new Failable() {
+				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0" + / *1.3.6.1.2.1.2.2.1.2* / "'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
 				});
-				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0" + /*1.3.6.1.2.1.2.2.1.2*/ "'}, log_snmp);"), new Failable() {
+				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0" + / *1.3.6.1.2.1.2.2.1.2* / "'}, log_snmp);"), new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				});
+				*/
+				rr.eval(new BasicScript().append("snmp({'host':'10.0.129.1', 'community':'public', oid:'1.1'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -202,6 +210,8 @@ public class TestScript4__testFloat {
 					}
 				});
 				*/
+				
+				/*
 				rr.eval(new BasicScript().append("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);"), new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -214,6 +224,7 @@ public class TestScript4__testFloat {
 						e.printStackTrace();
 					}
 				});
+				*/
 				
 				Thread.sleep(5000);
 			}
