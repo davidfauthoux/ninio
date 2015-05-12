@@ -31,6 +31,7 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 
+// F*cking apparmor: http://unix.stackexchange.com/questions/88253/permission-denied-when-writing-to-dev-stdout
 public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSyncDatagramReady.class);
 
@@ -145,7 +146,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							toExec.add("tcpdump");
 						}
 						toExec.add("-w");
-						toExec.add("/dev/stdout");
+						toExec.add("-"); //%%%%%%% "/dev/stdout");
 						toExec.add("-i");
 						toExec.add(interfaceId);
 						toExec.add("-n");
