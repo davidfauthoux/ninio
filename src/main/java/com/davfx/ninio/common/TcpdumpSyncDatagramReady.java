@@ -48,6 +48,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		Iterable<String> parameters();
 	}
 	
+	public static final class EmptyRule implements Rule {
+		public EmptyRule() {
+		}
+		@Override
+		public Iterable<String> parameters() {
+			return new LinkedList<>();
+		}
+	}
+	
 	public static final class SourcePortRule implements Rule {
 		private final List<String> params = new LinkedList<>();
 		public SourcePortRule(int port) {
