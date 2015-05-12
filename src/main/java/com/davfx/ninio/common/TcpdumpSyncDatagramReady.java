@@ -199,11 +199,13 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 									try {
 										DataInputStream in = new DataInputStream(input);
 										try {
+											LOGGER.debug("Reading tcpdump stream");
 											long header = readIntLittleEndian(in);
 											//%%%% System.out.println("HEADER = " + header);
 											if (header != 0xA1B2C3D4) {
 												throw new IOException("Bad header: 0x" + Long.toHexString(header));
 											}
+											LOGGER.debug("Tcpdump header recognized");
 											skip(in, 20);
 											/*
 											https://wiki.wireshark.org/Development/LibpcapFileFormat
@@ -219,7 +221,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 											} pcap_hdr_t;
 											*/
 					
+											LOGGER.debug("Entering tcpdump loop");
 											while (true) {
+												LOGGER.trace("Tcpdump loop, step 1");
 												//%%% System.out.println("IN WHILE");
 												/*
 												typedef struct pcaprec_hdr_s {
@@ -232,6 +236,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												double timestamp = ((double) readIntLittleEndian(in)) + (((double) readIntLittleEndian(in)) / 1000000d); // sec, usec
 												//%%% System.out.println("TIMESTAMP = " + timestamp);
 												
+												LOGGER.trace("Tcpdump loop, step 2");
 												int packetSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
 												//%%%% System.out.println("packetSize=" + packetSize);
 												int remaining = packetSize;
@@ -241,6 +246,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													skip(in, remaining);
 													continue;
 												}
+
+												LOGGER.trace("Tcpdump loop, step 3");
+
 												@SuppressWarnings("unused")
 												int actualPacketSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
 												//%%%% System.out.println("actualPacketSize=" + actualPacketSize);
@@ -332,6 +340,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													skip(in, remaining);
 													continue;
 												}
+												
+												LOGGER.trace("Tcpdump loop, step 4");
+												
 												byte[] data = new byte[udpPacketSize];
 												//%%%% System.out.println("READ " + udpPacketSize);
 												if (remaining < data.length) {
@@ -342,6 +353,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												in.readFully(data);
 												remaining -= udpPacketSize;
 												//%%%% System.out.println("SKIP remaining=" + remaining);
+												
+												LOGGER.trace("Tcpdump loop, step 5");
+
 												skip(in, remaining);
 
 												LOGGER.trace("Packet received: {}:{} -> {}:{} {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp));

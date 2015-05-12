@@ -226,7 +226,7 @@ public class TestScript4__testFloat {
 				});
 				*/
 				
-				Thread.sleep(5000);
+				Thread.sleep(500000);
 			}
 			
 			Thread.sleep(15000);

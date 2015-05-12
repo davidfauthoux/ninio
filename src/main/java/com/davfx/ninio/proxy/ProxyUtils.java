@@ -115,7 +115,7 @@ public final class ProxyUtils {
 		} else if (datagramMode.equals("async")) {
 			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new DatagramReadyFactory()));
 		} else {
-			throw new ConfigException.BadValue("proxy.mode.datagram", "Only sync.tcmpdump|sync.java|async modes allowed");
+			throw new ConfigException.BadValue("proxy.mode.datagram", "Only sync.tcmpdump|async modes allowed");
 		}
 		
 		configurators.put(PING_TYPE, new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(new PureJavaSyncPing())));
