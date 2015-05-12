@@ -115,7 +115,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		
 		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		public Receiver(final Rule rule, final String interfaceId) {
+		public Receiver(final Rule rule, final String interfaceId, final boolean promiscuous) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
 				DataOutputStream o;
@@ -150,7 +150,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						toExec.add(interfaceId);
 						toExec.add("-n");
 						toExec.add("-K");
-						toExec.add("-p");
+						if (!promiscuous) {
+							toExec.add("-p");
+						}
 						toExec.add("-q");
 						toExec.add("-s");
 						toExec.add(String.valueOf(MAX_PACKET_SIZE));
