@@ -103,7 +103,7 @@ public final class ProxyUtils {
 		String datagramMode = CONFIG.getString("proxy.mode.datagram");
 		if (datagramMode.equals("sync.tcpdump")) {
 			int port = CONFIG.getInt("proxy.tcpdump.port");
-			boolean promiscuous = CONFIG.getBoolean("proxy.tcpdump.promiscuous");
+			// boolean promiscuous = CONFIG.getBoolean("proxy.tcpdump.promiscuous");
 			String tcpdumpInterface = CONFIG.getString("proxy.tcpdump.interface");
 			TcpdumpSyncDatagramReady.Rule rule;
 			if (port < 0) {
@@ -111,7 +111,7 @@ public final class ProxyUtils {
 			} else {
 				rule = new TcpdumpSyncDatagramReady.SourcePortRule(port);
 			}
-			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface, promiscuous))));
+			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface))));
 		//%% } else if (datagramMode.equals("sync.java")) {
 			//%% configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {

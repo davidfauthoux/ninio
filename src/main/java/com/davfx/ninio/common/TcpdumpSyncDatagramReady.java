@@ -116,7 +116,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		
 		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		public Receiver(final Rule rule, final String interfaceId, final boolean promiscuous) {
+		public Receiver(final Rule rule, final String interfaceId) { //, final boolean promiscuous) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
 				DataOutputStream o;
@@ -151,9 +151,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						toExec.add(interfaceId);
 						toExec.add("-n");
 						toExec.add("-K");
-						if (!promiscuous) {
-							toExec.add("-p");
-						}
+						// if (!promiscuous) {
+						toExec.add("-p");
+						// }
 						toExec.add("-q");
 						toExec.add("-s");
 						toExec.add(String.valueOf(MAX_PACKET_SIZE));
@@ -226,7 +226,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 					
 											LOGGER.debug("Entering tcpdump loop");
 											while (true) {
-												LOGGER.trace("Tcpdump loop, step 1");
+												// LOGGER.trace("Tcpdump loop, step 1");
 												//%%% System.out.println("IN WHILE");
 												/*
 												typedef struct pcaprec_hdr_s {
@@ -239,7 +239,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												double timestamp = ((double) readIntLittleEndian(in)) + (((double) readIntLittleEndian(in)) / 1000000d); // sec, usec
 												//%%% System.out.println("TIMESTAMP = " + timestamp);
 												
-												LOGGER.trace("Tcpdump loop, step 2");
+												// LOGGER.trace("Tcpdump loop, step 2");
 												int packetSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
 												//%%%% System.out.println("packetSize=" + packetSize);
 												int remaining = packetSize;
@@ -250,7 +250,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													continue;
 												}
 
-												LOGGER.trace("Tcpdump loop, step 3");
+												// LOGGER.trace("Tcpdump loop, step 3");
 
 												@SuppressWarnings("unused")
 												int actualPacketSize = (int) readIntLittleEndian(in); //%%%%% - 8; // -8 because length includes packetSize & actualPacketSize
@@ -344,7 +344,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													continue;
 												}
 												
-												LOGGER.trace("Tcpdump loop, step 4");
+												// LOGGER.trace("Tcpdump loop, step 4");
 												
 												byte[] data = new byte[udpPacketSize];
 												//%%%% System.out.println("READ " + udpPacketSize);
@@ -357,7 +357,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												remaining -= udpPacketSize;
 												//%%%% System.out.println("SKIP remaining=" + remaining);
 												
-												LOGGER.trace("Tcpdump loop, step 5");
+												// LOGGER.trace("Tcpdump loop, step 5");
 
 												skip(in, remaining);
 
