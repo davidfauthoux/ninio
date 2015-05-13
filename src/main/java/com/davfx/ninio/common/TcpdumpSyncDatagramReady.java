@@ -372,10 +372,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												ReadyConnection connection = connections.get(new Address(destinationIp, destinationPort));
 												if (connection != null) {
 													connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
-													//%%% } else {
-													//%%% System.out.println("NO CONNECTION " + connections.keySet());
 												} else {
-													LOGGER.debug("No match for packet: {}:{} -> {}:{} {}, available: {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp), connections.keySet());
+													connection = connections.get(new Address(null, destinationPort));
+													if (connection != null) {
+														connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
+														//%%% } else {
+														//%%% System.out.println("NO CONNECTION " + connections.keySet());
+													} else {
+														LOGGER.debug("No match for packet: {}:{} -> {}:{} {}, available: {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp), connections.keySet());
+													}
 												}
 											}
 										} finally {
@@ -447,7 +452,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 				connection.failed(ioe);
 				return;
 			}
-			receiveAddress = new Address(address.getHost(), socket.getLocalPort());
+			receiveAddress = new Address(null, socket.getLocalPort());
 		}
 		
 		receiver.add(receiveAddress, connection);

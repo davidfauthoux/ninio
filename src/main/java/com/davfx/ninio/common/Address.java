@@ -11,6 +11,7 @@ public final class Address {
 		this.host = host;
 		this.port = port;
 	}
+	
 	public String getHost() {
 		return host;
 	}
@@ -20,11 +21,17 @@ public final class Address {
 
 	@Override
 	public String toString() {
+		if (host == null) {
+			return ":" + port;
+		}
 		return host + ":" + port;
 	}
 
 	@Override
 	public int hashCode() {
+		if (host == null) {
+			return port;
+		}
 		return host.hashCode();
 	}
 
@@ -37,8 +44,17 @@ public final class Address {
 			return false;
 		}
 		Address a = (Address) o;
-		if (!a.host.equals(host)) {
-			return false;
+		if (a.host == null) {
+			if (host != null) {
+				return false;
+			}
+		} else {
+			if (host == null) {
+				return false;
+			}
+			if (!a.host.equals(host)) {
+				return false;
+			}
 		}
 		if (a.port != port) {
 			return false;
