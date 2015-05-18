@@ -145,8 +145,22 @@ public class TestScript4__testFloat {
 				});
 				*/
 				
-				for (int j = 0; j < 10; j++)
-				rr.eval(new BasicScript().append("snmp({'host':'10.0.129.1', 'community':'public', oid:'1.1'}, log_snmp);"), new Failable() {
+				for (int j = 0; j < 10; j++) {
+					final int j$ = j;
+					rr.eval(new BasicScript().append("snmp({'host':'10.0.129.1', 'community':'public', oid:'1.1'}, log_snmp);"), new Failable() {
+						@Override
+						public void failed(IOException e) {
+							e.printStackTrace();
+						}
+					}, new Runnable() {
+						@Override
+						public void run() {
+							System.out.println(Thread.currentThread() + " ---------END " + j$ + "----------");
+						}
+					});
+				}
+					
+				rr.eval(new BasicScript().append("fire('toto');"), new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -154,10 +168,10 @@ public class TestScript4__testFloat {
 				}, new Runnable() {
 					@Override
 					public void run() {
-						System.out.println(Thread.currentThread() + " ---------END----------");
+						System.out.println(Thread.currentThread() + " ---------END FIRE----------");
 					}
 				});
-				
+
 				/*
 				rr.eval(new BasicScript().append("aaa = 666;log('aaa='+aaa);"), new Failable() {
 					@Override

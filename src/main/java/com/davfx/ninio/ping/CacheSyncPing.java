@@ -28,14 +28,9 @@ public final class CacheSyncPing implements SyncPing {
 		if (CACHE_SIZE == 0) {
 			cache = null;
 		} else {
-			if (CACHE_EXPIRATION > 0d) {
-				cache = CacheBuilder.newBuilder().maximumSize(CACHE_SIZE)
-							.expireAfterWrite((long) CACHE_EXPIRATION, TimeUnit.SECONDS)
-							.<String, Double>build();
-			} else {
-				cache = CacheBuilder.newBuilder().maximumSize(CACHE_SIZE)
-							.<String, Double>build();
-			}
+			cache = CacheBuilder.newBuilder().maximumSize(CACHE_SIZE)
+						.expireAfterWrite((long) CACHE_EXPIRATION, TimeUnit.SECONDS)
+						.<String, Double>build();
 		}
 	}
 
