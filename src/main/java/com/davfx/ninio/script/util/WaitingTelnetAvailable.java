@@ -19,8 +19,8 @@ public final class WaitingTelnetAvailable {
 	private WaitingTelnetAvailable() {
 	}
 	
-	public static void link(RegisteredFunctionsScriptRunner runner, final WaitingRemoteClientCache client, final Cache cache) {
-		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
+	public static void link(RegisteredFunctionsScript.Runner runner, final WaitingRemoteClientCache client, final Cache cache) {
+		runner.link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			@Override
 			public void call(JsonElement request, final AsyncScriptFunction.Callback<JsonElement> userCallback) {
 				JsonObject r = request.getAsJsonObject();

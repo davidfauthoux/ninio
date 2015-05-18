@@ -11,9 +11,8 @@ import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SyncScriptFunction;
-import com.davfx.ninio.script.util.AllAvailableRunner;
 import com.davfx.ninio.script.util.AllAvailableScriptRunner;
-import com.davfx.ninio.script.util.RegisteredFunctionsScriptRunner;
+import com.davfx.ninio.script.util.RegisteredFunctionsScript;
 import com.google.gson.JsonElement;
 
 public class TestScript4__testFloat {
@@ -32,7 +31,7 @@ public class TestScript4__testFloat {
 				r.pingConfigurator.override(proxy.ping());
 			}
 			
-			for (RegisteredFunctionsScriptRunner rr : r.runners()) {
+			for (RegisteredFunctionsScript rr : r.runners()) {
 				rr.register("log_telnet");
 				rr.register("log_snmp");
 				rr.register("log_ping");
@@ -50,15 +49,8 @@ public class TestScript4__testFloat {
 			}
 			
 			for (int i = 0; i < 10; i++) {
-				AllAvailableRunner rr = r.runner();
+				RegisteredFunctionsScript.Runner rr = r.runner();
 	
-				rr.link(new Runnable() {
-					@Override
-					public void run() {
-						System.out.println(Thread.currentThread() + " ---------END----------");
-					}
-				});
-				
 				rr.link("log_telnet", new SyncScriptFunction<JsonElement>() {
 					@Override
 					public JsonElement call(JsonElement request) {
@@ -83,7 +75,7 @@ public class TestScript4__testFloat {
 						for (Map.Entry<String, JsonElement> e : request.getAsJsonObject().get("result").getAsJsonObject().entrySet()) {
 							System.out.println(e.getKey() + " = " + e.getValue().getAsString());
 						}
-						System.out.println("DONE SNMP");
+						System.out.println(Thread.currentThread() + " --- DONE SNMP");
 						return null;
 					}
 				});
@@ -158,6 +150,11 @@ public class TestScript4__testFloat {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
+					}
+				}, new Runnable() {
+					@Override
+					public void run() {
+						System.out.println(Thread.currentThread() + " ---------END----------");
 					}
 				});
 				

@@ -25,11 +25,11 @@ public final class RoundRobinScriptRunner<T> implements ScriptRunner<T> {
 	}
 	
 	@Override
-	public void eval(Iterable<String> script, Failable fail, AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
+	public void eval(Iterable<String> script, Failable fail, Runnable end, AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
 		int i = index;
 		index = (index + 1) % runners.size();
 		ScriptRunner<T> r = runners.get(i);
-		r.eval(script, fail, asyncFunction, syncFunction);
+		r.eval(script, fail, end, asyncFunction, syncFunction);
 	}
 
 	public void close() {

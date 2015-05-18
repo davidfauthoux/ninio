@@ -5,7 +5,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.ClassThreadFactory;
-import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.http.HttpClientConfigurator;
 import com.davfx.ninio.http.util.SimpleHttpClient;
@@ -15,10 +14,8 @@ import com.davfx.ninio.remote.WaitingRemoteClientCache;
 import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
 import com.davfx.ninio.remote.ssh.SshRemoteConnectorFactory;
 import com.davfx.ninio.remote.telnet.TelnetRemoteConnectorFactory;
-import com.davfx.ninio.script.AsyncScriptFunction;
 import com.davfx.ninio.script.ExecutorScriptRunner;
 import com.davfx.ninio.script.QueueScriptRunner;
-import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.util.SnmpClientCache;
 import com.davfx.ninio.ssh.SshClientConfigurator;
@@ -36,7 +33,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	private static final boolean CACHE = CONFIG.getBoolean("script.cache");
 
 	private final ExecutorScriptRunner[] runners;
-	private final RegisteredFunctionsScriptRunner[] scriptRunners;
+	private final RegisteredFunctionsScript[] scriptRunners;
 	private int index = 0;
 	private final Queue queue;
 	
@@ -54,6 +51,11 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	public final SshClientConfigurator sshConfigurator;
 	public final SnmpClientConfigurator snmpConfigurator;
 	public final PingClientConfigurator pingConfigurator;
+
+	private final Cache pingCache = CACHE ? new Cache() : null;
+	private final Cache snmpCache = CACHE ? new Cache() : null;
+	private final Cache telnetCache = CACHE ? new Cache() : null;
+	private final Cache sshCache = CACHE ? new Cache() : null;
 
 	public AllAvailableScriptRunner(Queue queue) {
 		this.queue = queue;
@@ -75,64 +77,38 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		for (int i = 0; i < THREADING; i++) {
 			runners[i] = new ExecutorScriptRunner();
 		}
-		scriptRunners = new RegisteredFunctionsScriptRunner[THREADING];
-		Cache pingCache = CACHE ? new Cache() : null;
-		Cache snmpCache = CACHE ? new Cache() : null;
-		Cache telnetCache = CACHE ? new Cache() : null;
-		Cache sshCache = CACHE ? new Cache() : null;
+		scriptRunners = new RegisteredFunctionsScript[THREADING];
 		for (int i = 0; i < THREADING; i++) {
-			final RegisteredFunctionsScriptRunner runner = new RegisteredFunctionsScriptRunner(new QueueScriptRunner<JsonElement>(queue, runners[i]));
-			PingAvailable.link(runner, ping, pingCache);
-			SnmpAvailable.link(runner, snmp, snmpCache);
-			WaitingTelnetAvailable.link(runner, telnet, telnetCache);
-			WaitingSshAvailable.link(runner, ssh, sshCache);
-			HttpAvailable.link(runner, http); // No cache for HTTP
+			RegisteredFunctionsScript runner = new RegisteredFunctionsScript(new QueueScriptRunner<JsonElement>(queue, runners[i]));
+
+			runner.register(PingAvailable.CALL_FUNCTION_NAME);
+			runner.register(SnmpAvailable.CALL_FUNCTION_NAME);
+			runner.register(WaitingTelnetAvailable.CALL_FUNCTION_NAME);
+			runner.register(WaitingSshAvailable.CALL_FUNCTION_NAME);
+			runner.register(HttpAvailable.CALL_FUNCTION_NAME);
 			
 			scriptRunners[i] = runner;
 		}
 	}
 
-	public Iterable<RegisteredFunctionsScriptRunner> runners() {
-		return new Iterable<RegisteredFunctionsScriptRunner>() {
-			public Iterator<RegisteredFunctionsScriptRunner> iterator() {
+	public Iterable<RegisteredFunctionsScript> runners() {
+		return new Iterable<RegisteredFunctionsScript>() {
+			public Iterator<RegisteredFunctionsScript> iterator() {
 				return Iterators.forArray(scriptRunners);
 			}
 		};
 	}
 	
-	public AllAvailableRunner runner() {
+	public RegisteredFunctionsScript.Runner runner() {
 		int i = index;
 		index = (index + 1) % scriptRunners.length;
-		
-		final RegisteredFunctionsScriptRunner runner = scriptRunners[i];
-		final CallingEndScriptRunner callingEnd = new CallingEndScriptRunner(runner);
-
-		return new AllAvailableRunner() {
-			@Override
-			public void register(String functionId) {
-				runner.register(functionId);
-			}
-			@Override
-			public void prepare(Iterable<String> script, Failable fail) {
-				callingEnd.prepare(script, fail);
-			}
-			@Override
-			public void link(Runnable onEnd) {
-				callingEnd.link(onEnd);
-			}
-			@Override
-			public void link(String functionId, AsyncScriptFunction<JsonElement> function) {
-				runner.link(functionId, function);
-			}
-			@Override
-			public void link(String functionId, SyncScriptFunction<JsonElement> function) {
-				runner.link(functionId, function);
-			}
-			@Override
-			public void eval(Iterable<String> script, Failable fail) {
-				callingEnd.eval(script, fail);
-			}
-		};
+		RegisteredFunctionsScript.Runner r = scriptRunners[i].runner();
+		PingAvailable.link(r, ping, pingCache);
+		SnmpAvailable.link(r, snmp, snmpCache);
+		WaitingTelnetAvailable.link(r, telnet, telnetCache);
+		WaitingSshAvailable.link(r, ssh, sshCache);
+		HttpAvailable.link(r, http); // No cache for HTTP
+		return r;
 	}
 	
 	@Override

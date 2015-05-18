@@ -70,6 +70,23 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		executorService.shutdown();
 	}
 	
+	private static final class EndManager {
+		private int count = 0;
+		private final Runnable end;
+		public EndManager(Runnable end) {
+			this.end = end;
+		}
+		public void inc() {
+			count++;
+		}
+		public void dec() {
+			count--;
+			if (count == 0) {
+				end.run();
+			}
+		}
+	}
+	
 	// Must be be public to be called from javascript
 	public static final class FromScriptUsingConvert {
 		private final ScriptEngine scriptEngine;
@@ -77,13 +94,15 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
 		private final Failable fail;
+		private final EndManager endManager;
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
-		
-		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+
+		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			this.scriptEngine = scriptEngine;
 			this.bindings = bindings;
 			this.fail = fail;
+			this.endManager = endManager;
 			this.executorService = executorService;
 			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
 			this.asyncFunction = asyncFunction;
@@ -98,42 +117,47 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				}
 				return r;
 			}
+			endManager.inc();
 			asyncFunction.call(fromScriptParameterAsJson, new AsyncScriptFunction.Callback<JsonElement>() {
 				@Override
 				public void handle(final JsonElement response) {
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
-							//%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-							scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
-
-							long suffix;
-							
-							suffix = nextUnicitySuffix.get();
-							String callbackVar = UNICITY_PREFIX + "callback" + suffix;
-							nextUnicitySuffix.set(suffix + 1);
-							
-							bindings.put(callbackVar, callback);
-
-							suffix = nextUnicitySuffix.get();
-							String parameterVar = UNICITY_PREFIX + "parameter" + suffix;
-							nextUnicitySuffix.set(suffix + 1);
-							
-							bindings.put(parameterVar, response);
-
-							String callbackScript = callbackVar + "(" + UNICITY_PREFIX + "convertTo(" + parameterVar + "));";
 							try {
-								LOGGER.trace("Executing callback: {}", callbackScript);
-								scriptEngine.eval(callbackScript);
-							} catch (Exception e) {
-								LOGGER.error("Script error in: {}", callbackScript, e);
-								if (fail != null) {
-									fail.failed(new IOException(e));
+								//%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+	
+								long suffix;
+								
+								suffix = nextUnicitySuffix.get();
+								String callbackVar = UNICITY_PREFIX + "callback" + suffix;
+								nextUnicitySuffix.set(suffix + 1);
+								
+								bindings.put(callbackVar, callback);
+	
+								suffix = nextUnicitySuffix.get();
+								String parameterVar = UNICITY_PREFIX + "parameter" + suffix;
+								nextUnicitySuffix.set(suffix + 1);
+								
+								bindings.put(parameterVar, response);
+	
+								String callbackScript = callbackVar + "(" + UNICITY_PREFIX + "convertTo(" + parameterVar + "));";
+								try {
+									LOGGER.trace("Executing callback: {}", callbackScript);
+									scriptEngine.eval(callbackScript);
+								} catch (Exception e) {
+									LOGGER.error("Script error in: {}", callbackScript, e);
+									if (fail != null) {
+										fail.failed(new IOException(e));
+									}
 								}
+								
+								bindings.remove(callbackVar);
+								bindings.remove(parameterVar);
+							} finally {
+								endManager.dec();
 							}
-							
-							bindings.remove(callbackVar);
-							bindings.remove(parameterVar);
 						}
 					});
 				}
@@ -180,13 +204,15 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
 		private final Failable fail;
+		private final EndManager endManager;
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 		
-		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			this.scriptEngine = scriptEngine;
 			this.bindings = bindings;
 			this.fail = fail;
+			this.endManager = endManager;
 			this.executorService = executorService;
 			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
 			this.asyncFunction = asyncFunction;
@@ -202,35 +228,40 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				}
 				return r.toString();
 			}
+			endManager.inc();
 			asyncFunction.call(fromScriptParameterAsJson, new AsyncScriptFunction.Callback<JsonElement>() {
 				@Override
 				public void handle(final JsonElement response) {
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
-							//%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-							scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
-							
-							long suffix;
-							
-							suffix = nextUnicitySuffix.get();
-							String callbackVar = UNICITY_PREFIX + "callback" + suffix;
-							nextUnicitySuffix.set(suffix + 1);
-							
-							bindings.put(callbackVar, callback);
-
-							String callbackScript = callbackVar + "(" + response.toString() + ");";
 							try {
-								LOGGER.trace("Executing callback: {}", callbackScript);
-								scriptEngine.eval(callbackScript);
-							} catch (Exception e) {
-								LOGGER.error("Script error in: {}", callbackScript, e);
-								if (fail != null) {
-									fail.failed(new IOException(e));
+								//%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+								
+								long suffix;
+								
+								suffix = nextUnicitySuffix.get();
+								String callbackVar = UNICITY_PREFIX + "callback" + suffix;
+								nextUnicitySuffix.set(suffix + 1);
+								
+								bindings.put(callbackVar, callback);
+	
+								String callbackScript = callbackVar + "(" + response.toString() + ");";
+								try {
+									LOGGER.trace("Executing callback: {}", callbackScript);
+									scriptEngine.eval(callbackScript);
+								} catch (Exception e) {
+									LOGGER.error("Script error in: {}", callbackScript, e);
+									if (fail != null) {
+										fail.failed(new IOException(e));
+									}
 								}
+								
+								bindings.remove(callbackVar);
+							} finally {
+								endManager.dec();
 							}
-							
-							bindings.remove(callbackVar);
 						}
 					});
 				}
@@ -358,43 +389,51 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	
 
 	@Override
-	public void eval(final Iterable<String> script, final Failable fail, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
+	public void eval(final Iterable<String> script, final Failable fail, final Runnable end, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				if (scriptEngine == null) {
-					if (fail != null) {
-						fail.failed(new IOException("Bad engine"));
-					}
-					return;
-				}
-
-				Bindings bindings = new SimpleBindings();
-				bindings.putAll(initialBindings);
-				scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
-
-				String callVar = UNICITY_PREFIX + "call";
-				
-				if (USE_TO_STRING) {
-					bindings.put(callVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
-				} else {
-					bindings.put(callVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, asyncFunction, syncFunction));
-				}
-
+				EndManager endManager = new EndManager(end);
+				endManager.inc();
 				try {
-					int k = 0;
-					for (String s : script) {
-						long t = System.currentTimeMillis();
-						scriptEngine.eval(s);
-						t = System.currentTimeMillis() - t;
-						LOGGER.trace("Script #{} executed in {} ms\n{}", k, t, s);
-						k++;
+	
+					if (scriptEngine == null) {
+						if (fail != null) {
+							fail.failed(new IOException("Bad engine"));
+						}
+						return;
 					}
-				} catch (Exception e) {
-					LOGGER.error("Script error", e);
-					if (fail != null) {
-						fail.failed(new IOException(e));
+	
+					Bindings bindings = new SimpleBindings();
+					bindings.putAll(initialBindings);
+					scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+	
+					String callVar = UNICITY_PREFIX + "call";
+					
+					if (USE_TO_STRING) {
+						bindings.put(callVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
+					} else {
+						bindings.put(callVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
 					}
+	
+					try {
+						int k = 0;
+						for (String s : script) {
+							long t = System.currentTimeMillis();
+							scriptEngine.eval(s);
+							t = System.currentTimeMillis() - t;
+							LOGGER.trace("Script #{} executed in {} ms\n{}", k, t, s);
+							k++;
+						}
+					} catch (Exception e) {
+						LOGGER.error("Script error", e);
+						if (fail != null) {
+							fail.failed(new IOException(e));
+						}
+					}
+					
+				} finally {
+					endManager.dec();
 				}
 			}
 		});

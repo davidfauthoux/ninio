@@ -20,8 +20,8 @@ public final class HttpAvailable {
 	private HttpAvailable() {
 	}
 	
-	public static void link(RegisteredFunctionsScriptRunner runner, final SimpleHttpClient client) {
-		runner.register(CALL_FUNCTION_NAME).link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
+	public static void link(RegisteredFunctionsScript.Runner runner, final SimpleHttpClient client) {
+		runner.link(CALL_FUNCTION_NAME, new AsyncScriptFunction<JsonElement>() {
 			private String getString(JsonObject r, String key, String defaultValue) {
 				JsonElement e = r.get(key);
 				if (e == null) {

@@ -18,8 +18,8 @@ public final class QueueScriptRunner<T> implements ScriptRunner<T> {
 	}
 	
 	@Override
-	public void eval(Iterable<String> script, Failable fail, final AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
-		wrappee.eval(script, fail, new AsyncScriptFunction<T>() {
+	public void eval(Iterable<String> script, Failable fail, Runnable end, final AsyncScriptFunction<T> asyncFunction, SyncScriptFunction<T> syncFunction) {
+		wrappee.eval(script, fail, end, new AsyncScriptFunction<T>() {
 			@Override
 			public void call(final T request, final AsyncScriptFunction.Callback<T> callback) {
 				queue.post(new Runnable() {
