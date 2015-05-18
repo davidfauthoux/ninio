@@ -9,11 +9,11 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.script.BasicScript;
 import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.script.util.AllAvailableRunner;
 import com.davfx.ninio.script.util.AllAvailableScriptRunner;
+import com.davfx.ninio.script.util.RegisteredFunctionsScriptRunner;
 import com.google.gson.JsonElement;
 
 public class TestScript4__testFloat {
@@ -32,7 +32,7 @@ public class TestScript4__testFloat {
 				r.pingConfigurator.override(proxy.ping());
 			}
 			
-			for (AllAvailableRunner rr : r.runners()) {
+			for (RegisteredFunctionsScriptRunner rr : r.runners()) {
 				rr.register("log_telnet");
 				rr.register("log_snmp");
 				rr.register("log_ping");
@@ -152,6 +152,8 @@ public class TestScript4__testFloat {
 					}
 				});
 				*/
+				
+				for (int j = 0; j < 10; j++)
 				rr.eval(new BasicScript().append("snmp({'host':'10.0.129.1', 'community':'public', oid:'1.1'}, log_snmp);"), new Failable() {
 					@Override
 					public void failed(IOException e) {

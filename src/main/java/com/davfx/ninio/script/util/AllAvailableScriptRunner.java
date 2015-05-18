@@ -36,7 +36,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	private static final boolean CACHE = CONFIG.getBoolean("script.cache");
 
 	private final ExecutorScriptRunner[] runners;
-	private final AllAvailableRunner[] scriptRunners;
+	private final RegisteredFunctionsScriptRunner[] scriptRunners;
 	private int index = 0;
 	private final Queue queue;
 	
@@ -75,7 +75,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		for (int i = 0; i < THREADING; i++) {
 			runners[i] = new ExecutorScriptRunner();
 		}
-		scriptRunners = new AllAvailableRunner[THREADING];
+		scriptRunners = new RegisteredFunctionsScriptRunner[THREADING];
 		Cache pingCache = CACHE ? new Cache() : null;
 		Cache snmpCache = CACHE ? new Cache() : null;
 		Cache telnetCache = CACHE ? new Cache() : null;
@@ -88,40 +88,13 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 			WaitingSshAvailable.link(runner, ssh, sshCache);
 			HttpAvailable.link(runner, http); // No cache for HTTP
 			
-			final CallingEndScriptRunner callingEnd = new CallingEndScriptRunner(runner);
-
-			scriptRunners[i] = new AllAvailableRunner() {
-				@Override
-				public void register(String functionId) {
-					runner.register(functionId);
-				}
-				@Override
-				public void prepare(Iterable<String> script, Failable fail) {
-					callingEnd.prepare(script, fail);
-				}
-				@Override
-				public void link(Runnable onEnd) {
-					callingEnd.link(onEnd);
-				}
-				@Override
-				public void link(String functionId, AsyncScriptFunction<JsonElement> function) {
-					runner.link(functionId, function);
-				}
-				@Override
-				public void link(String functionId, SyncScriptFunction<JsonElement> function) {
-					runner.link(functionId, function);
-				}
-				@Override
-				public void eval(Iterable<String> script, Failable fail) {
-					callingEnd.eval(script, fail);
-				}
-			};
+			scriptRunners[i] = runner;
 		}
 	}
 
-	public Iterable<AllAvailableRunner> runners() {
-		return new Iterable<AllAvailableRunner>() {
-			public Iterator<AllAvailableRunner> iterator() {
+	public Iterable<RegisteredFunctionsScriptRunner> runners() {
+		return new Iterable<RegisteredFunctionsScriptRunner>() {
+			public Iterator<RegisteredFunctionsScriptRunner> iterator() {
 				return Iterators.forArray(scriptRunners);
 			}
 		};
@@ -130,7 +103,36 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 	public AllAvailableRunner runner() {
 		int i = index;
 		index = (index + 1) % scriptRunners.length;
-		return scriptRunners[i];
+		
+		final RegisteredFunctionsScriptRunner runner = scriptRunners[i];
+		final CallingEndScriptRunner callingEnd = new CallingEndScriptRunner(runner);
+
+		return new AllAvailableRunner() {
+			@Override
+			public void register(String functionId) {
+				runner.register(functionId);
+			}
+			@Override
+			public void prepare(Iterable<String> script, Failable fail) {
+				callingEnd.prepare(script, fail);
+			}
+			@Override
+			public void link(Runnable onEnd) {
+				callingEnd.link(onEnd);
+			}
+			@Override
+			public void link(String functionId, AsyncScriptFunction<JsonElement> function) {
+				runner.link(functionId, function);
+			}
+			@Override
+			public void link(String functionId, SyncScriptFunction<JsonElement> function) {
+				runner.link(functionId, function);
+			}
+			@Override
+			public void eval(Iterable<String> script, Failable fail) {
+				callingEnd.eval(script, fail);
+			}
+		};
 	}
 	
 	@Override
