@@ -116,6 +116,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		
 		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
+		private DatagramSocket socket = null;
+		
 		public Receiver(final Rule rule, final String interfaceId) { //, final boolean promiscuous) {
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
@@ -419,6 +421,13 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		private void remove(Address address) {
 			connections.remove(address);
 		}
+
+		public DatagramSocket socket() throws IOException {
+			if (socket == null) {
+				socket = new DatagramSocket();
+			}
+			return socket;
+		}
 	}
 	
 	private final Receiver receiver;
@@ -439,7 +448,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		final Address receiveAddress;
 		if (bind) {
 			try {
-				socket = new DatagramSocket();
+				socket = receiver.socket();
 			} catch (IOException ioe) {
 				connection.failed(ioe);
 				return;
