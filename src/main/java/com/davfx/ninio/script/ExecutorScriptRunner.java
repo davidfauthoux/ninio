@@ -5,7 +5,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import javax.script.Bindings;
-import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
 import javax.script.ScriptException;
@@ -146,12 +145,12 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								
 								bindings.put(parameterVar, response);
 	
-								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+								// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 								
 								String callbackScript = callbackVar + "(" + UNICITY_PREFIX + "convertTo(" + parameterVar + "));";
 								try {
 									LOGGER.trace("Executing callback: {}", callbackScript);
-									scriptEngine.eval(callbackScript);
+									scriptEngine.eval(callbackScript, bindings);
 								} catch (Exception e) {
 									LOGGER.error("Script error in: {}", callbackScript, e);
 									if (fail != null) {
@@ -252,12 +251,12 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								
 								bindings.put(callbackVar, callback);
 	
-								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+								// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 								
 								String callbackScript = callbackVar + "(" + response.toString() + ");";
 								try {
 									LOGGER.trace("Executing callback: {}", callbackScript);
-									scriptEngine.eval(callbackScript);
+									scriptEngine.eval(callbackScript, bindings);
 								} catch (Exception e) {
 									LOGGER.error("Script error in: {}", callbackScript, e);
 									if (fail != null) {
@@ -295,13 +294,12 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 
 				//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 				Bindings bindings = new CheckAllocationSimpleBindings();
-				scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+				// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 
-				String callVar = UNICITY_PREFIX + "call";
 				String callFunctions;
 				
 				if (USE_TO_STRING) {
-					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return JSON.parse(" + callVar + ".call(JSON.stringify(parameter), callback || null)); }; ";
+					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return JSON.parse(" + UNICITY_PREFIX + "call['$'].call(JSON.stringify(parameter), callback || null)); }; ";
 				} else {
 					try {
 						scriptEngine.eval("var " + UNICITY_PREFIX + "convertFrom = function(o) {"
@@ -331,7 +329,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								+ "if (typeof o == \"boolean\") {"
 									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonBoolean(o);"
 								+ "}"
-							+ "};");
+							+ "};", bindings);
 						scriptEngine.eval("var " + UNICITY_PREFIX + "convertTo = function(o) {"
 								+ "if (o == null) {"
 									+ "return null;"
@@ -359,7 +357,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 									+ "return null;"
 								+ "}"
 								+ "return null;"
-							+ "};");
+							+ "};", bindings);
 					} catch (Exception e) {
 						LOGGER.error("Script error", e);
 						if (fail != null) {
@@ -368,21 +366,22 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 						return;
 					}
 
-					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + callVar + ".call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
+					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + UNICITY_PREFIX + "call['$'].call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
 				}
 
-				callFunctions = "var " + callVar + " = null;" + callFunctions;
+				callFunctions = "var " + UNICITY_PREFIX + "call = {'$':undefined};" + callFunctions;
 				
 				try {
-					scriptEngine.eval(ScriptUtils.functions());
-					LOGGER.trace("Executing functions: {}", callFunctions);
-					scriptEngine.eval(callFunctions);
+					scriptEngine.eval(ScriptUtils.functions(), bindings);
+					// LOGGER.debug("Executing functions: {}", callFunctions);
+					scriptEngine.eval(callFunctions, bindings);
 					int k = 0;
 					for (String s : script) {
+						// LOGGER.debug("Executing script {}", s);
 						long t = System.currentTimeMillis();
-						scriptEngine.eval(s);
+						scriptEngine.eval(s, bindings);
 						t = System.currentTimeMillis() - t;
-						LOGGER.trace("Prepare script #{} executed in {} ms\n{}", k, t, s);
+						LOGGER.debug("Prepare script #{} executed in {} ms\n{}", k, t, s);
 						k++;
 					}
 				} catch (Exception e) {
@@ -425,23 +424,25 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 					Bindings bindings = new CheckAllocationSimpleBindings();
 					bindings.putAll(initialBindings);
 	
-					String callVar = UNICITY_PREFIX + "call";
+					String subCallVar = UNICITY_PREFIX + "call$";
 					
 					if (USE_TO_STRING) {
-						bindings.put(callVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
+						bindings.put(subCallVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
 					} else {
-						bindings.put(callVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
+						bindings.put(subCallVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
 					}
 
-					scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+					// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 
 					try {
+						scriptEngine.eval(UNICITY_PREFIX + "call['$'] = " + subCallVar + ";", bindings); // This re-referencing is required because functions are defined in prepare (before bindings.put(call))
 						int k = 0;
 						for (String s : script) {
+							// LOGGER.debug("Executing script {} with binding: {}", s, bindings.get(UNICITY_PREFIX + "call"));
 							long t = System.currentTimeMillis();
-							scriptEngine.eval(s);
+							scriptEngine.eval(s, bindings);
 							t = System.currentTimeMillis() - t;
-							LOGGER.trace("Script #{} executed in {} ms\n{}", k, t, s);
+							LOGGER.debug("Script #{} executed in {} ms\n{}", k, t, s);
 							k++;
 						}
 					} catch (Exception e) {
