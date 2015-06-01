@@ -75,9 +75,18 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	
 	private static final class EndManager {
 		private int count = 0;
-		private final Runnable end;
-		public EndManager(Runnable end) {
+		private Runnable end;
+		private Failable fail;
+		public EndManager(Failable fail, Runnable end) {
 			this.end = end;
+		}
+		public void fail(IOException e) {
+			end = null;
+			if (fail != null) {
+				Failable f = fail;
+				fail = null;
+				f.failed(e);
+			}
 		}
 		public void inc() {
 			count++;
@@ -86,7 +95,12 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			count--;
 			if (count == 0) {
 				// engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
-				end.run();
+				fail = null;
+				if (end != null) {
+					Runnable e = end;
+					end = null;
+					e.run();
+				}
 			}
 		}
 	}
@@ -97,16 +111,14 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		private final Bindings bindings;
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
-		private final Failable fail;
 		private final EndManager endManager;
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 
-		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			super(FromScriptUsingConvert.class);
 			this.scriptEngine = scriptEngine;
 			this.bindings = bindings;
-			this.fail = fail;
 			this.endManager = endManager;
 			this.executorService = executorService;
 			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
@@ -153,9 +165,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 									scriptEngine.eval(callbackScript, bindings);
 								} catch (Exception e) {
 									LOGGER.error("Script error in: {}", callbackScript, e);
-									if (fail != null) {
-										fail.failed(new IOException(e));
-									}
+									endManager.fail(new IOException(e));
 								}
 								
 								bindings.remove(callbackVar);
@@ -208,16 +218,14 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		private final Bindings bindings;
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
-		private final Failable fail;
 		private final EndManager endManager;
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 		
-		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			super(FromScriptUsingToString.class);
 			this.scriptEngine = scriptEngine;
 			this.bindings = bindings;
-			this.fail = fail;
 			this.endManager = endManager;
 			this.executorService = executorService;
 			this.nextUnicitySuffix = nextCallbackFunctionSuffix;
@@ -259,9 +267,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 									scriptEngine.eval(callbackScript, bindings);
 								} catch (Exception e) {
 									LOGGER.error("Script error in: {}", callbackScript, e);
-									if (fail != null) {
-										fail.failed(new IOException(e));
-									}
+									endManager.fail(new IOException(e));
 								}
 								
 								bindings.remove(callbackVar);
@@ -281,119 +287,129 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				initialBindings = null;
-
-				/*%%
-				if (scriptEngine == null) {
-					if (fail != null) {
-						fail.failed(new IOException("Bad engine"));
-					}
-					return;
-				}
-				*/
-
-				//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-				Bindings bindings = new CheckAllocationSimpleBindings();
-				// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
-
-				String callFunctions;
-				
-				if (USE_TO_STRING) {
-					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return JSON.parse(" + UNICITY_PREFIX + "call['$'].call(JSON.stringify(parameter), callback || null)); }; ";
-				} else {
-					try {
-						scriptEngine.eval("var " + UNICITY_PREFIX + "convertFrom = function(o) {"
-								+ "if (o == null) {"
-									+ "return null;"
-								+ "}"
-								+ "if (o instanceof Array) {"
-									+ "var p = new com.google.gson.JsonArray();"
-									+ "for (k in o) {"
-										+ "p.add(" + UNICITY_PREFIX + "convertFrom(o[k]));"
-									+ "}"
-									+ "return p;"
-								+ "}"
-								+ "if (o instanceof Object) {"
-									+ "var p = new com.google.gson.JsonObject();"
-									+ "for (k in o) {"
-										+ "p.add(k, " + UNICITY_PREFIX + "convertFrom(o[k]));"
-									+ "}"
-									+ "return p;"
-								+ "}"
-								+ "if (typeof o == \"string\") {"
-									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonString(o);"
-								+ "}"
-								+ "if (typeof o == \"number\") {"
-									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonNumber(o);"
-								+ "}"
-								+ "if (typeof o == \"boolean\") {"
-									+ "return " + ExecutorScriptRunner.class.getName() + ".jsonBoolean(o);"
-								+ "}"
-							+ "};", bindings);
-						scriptEngine.eval("var " + UNICITY_PREFIX + "convertTo = function(o) {"
-								+ "if (o == null) {"
-									+ "return null;"
-								+ "}"
-								+ "if (o.isJsonObject()) {"
-									+ "var i = o.entrySet().iterator();"
-									+ "var p = {};"
-									+ "while (i.hasNext()) {"
-										+ "var e = i.next();"
-										+ "p[e.getKey()] = " + UNICITY_PREFIX + "convertTo(e.getValue());"
-									+ "}"
-									+ "return p;"
-								+ "}"
-								+ "if (o.isJsonPrimitive()) {"
-									+ "var oo = o.getAsJsonPrimitive();"
-									+ "if (oo.isString()) {"
-										+ "return '' + oo.getAsString();" // ['' +] looks to be necessary
-									+ "}"
-									+ "if (oo.isNumber()) {"
-										+ "return oo.getAsNumber();"
-									+ "}"
-									+ "if (oo.isBoolean()) {"
-										+ "return oo.getAsBoolean();"
-									+ "}"
-									+ "return null;"
-								+ "}"
-								+ "return null;"
-							+ "};", bindings);
-					} catch (Exception e) {
-						LOGGER.error("Script error", e);
+				EndManager endManager = new EndManager(fail, null);
+				endManager.inc();
+				try {
+					initialBindings = null;
+	
+					/*%%
+					if (scriptEngine == null) {
 						if (fail != null) {
-							fail.failed(new IOException(e));
+							fail.failed(new IOException("Bad engine"));
 						}
 						return;
 					}
-
-					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + UNICITY_PREFIX + "call['$'].call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
-				}
-
-				callFunctions = "var " + UNICITY_PREFIX + "call = {'$':undefined};" + callFunctions;
-				
-				try {
-					scriptEngine.eval(ScriptUtils.functions(), bindings);
-					// LOGGER.debug("Executing functions: {}", callFunctions);
-					scriptEngine.eval(callFunctions, bindings);
+					*/
+	
+					//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
+					Bindings bindings = new CheckAllocationSimpleBindings();
+					// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+	
+					String callFunctions;
+					
+					if (USE_TO_STRING) {
+						callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return JSON.parse(" + UNICITY_PREFIX + "call['$'].call(JSON.stringify(parameter), callback || null)); }; ";
+					} else {
+						try {
+							scriptEngine.eval("var " + UNICITY_PREFIX + "convertFrom = function(o) {"
+									+ "if (o == null) {"
+										+ "return null;"
+									+ "}"
+									+ "if (o instanceof Array) {"
+										+ "var p = new com.google.gson.JsonArray();"
+										+ "for (k in o) {"
+											+ "p.add(" + UNICITY_PREFIX + "convertFrom(o[k]));"
+										+ "}"
+										+ "return p;"
+									+ "}"
+									+ "if (o instanceof Object) {"
+										+ "var p = new com.google.gson.JsonObject();"
+										+ "for (k in o) {"
+											+ "p.add(k, " + UNICITY_PREFIX + "convertFrom(o[k]));"
+										+ "}"
+										+ "return p;"
+									+ "}"
+									+ "if (typeof o == \"string\") {"
+										+ "return " + ExecutorScriptRunner.class.getName() + ".jsonString(o);"
+									+ "}"
+									+ "if (typeof o == \"number\") {"
+										+ "return " + ExecutorScriptRunner.class.getName() + ".jsonNumber(o);"
+									+ "}"
+									+ "if (typeof o == \"boolean\") {"
+										+ "return " + ExecutorScriptRunner.class.getName() + ".jsonBoolean(o);"
+									+ "}"
+								+ "};", bindings);
+							scriptEngine.eval("var " + UNICITY_PREFIX + "convertTo = function(o) {"
+									+ "if (o == null) {"
+										+ "return null;"
+									+ "}"
+									+ "if (o.isJsonObject()) {"
+										+ "var i = o.entrySet().iterator();"
+										+ "var p = {};"
+										+ "while (i.hasNext()) {"
+											+ "var e = i.next();"
+											+ "p[e.getKey()] = " + UNICITY_PREFIX + "convertTo(e.getValue());"
+										+ "}"
+										+ "return p;"
+									+ "}"
+									+ "if (o.isJsonPrimitive()) {"
+										+ "var oo = o.getAsJsonPrimitive();"
+										+ "if (oo.isString()) {"
+											+ "return '' + oo.getAsString();" // ['' +] looks to be necessary
+										+ "}"
+										+ "if (oo.isNumber()) {"
+											+ "return oo.getAsNumber();"
+										+ "}"
+										+ "if (oo.isBoolean()) {"
+											+ "return oo.getAsBoolean();"
+										+ "}"
+										+ "return null;"
+									+ "}"
+									+ "return null;"
+								+ "};", bindings);
+						} catch (Exception e) {
+							LOGGER.error("Script error", e);
+							endManager.fail(new IOException(e));
+							return;
+						}
+	
+						callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + UNICITY_PREFIX + "call['$'].call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
+					}
+	
+					callFunctions = "var " + UNICITY_PREFIX + "call = {'$':undefined};" + callFunctions;
+					
+					try {
+						scriptEngine.eval(ScriptUtils.functions(), bindings);
+						// LOGGER.debug("Executing functions: {}", callFunctions);
+						scriptEngine.eval(callFunctions, bindings);
+					} catch (Exception e) {
+						LOGGER.error("Script error", e);
+						endManager.fail(new IOException(e));
+						return;
+					}
+	
 					int k = 0;
 					for (String s : script) {
 						// LOGGER.debug("Executing script {}", s);
 						long t = System.currentTimeMillis();
-						scriptEngine.eval(s, bindings);
+						try {
+							scriptEngine.eval(s, bindings);
+						} catch (Exception e) {
+							LOGGER.error("Script error in: {}", s, e);
+							endManager.fail(new IOException(e));
+							return;
+						}
 						t = System.currentTimeMillis() - t;
 						LOGGER.debug("Prepare script #{} executed in {} ms\n{}", k, t, s);
 						k++;
 					}
-				} catch (Exception e) {
-					LOGGER.error("Script error", e);
-					if (fail != null) {
-						fail.failed(new IOException(e));
-					}
-					return;
+					
+					initialBindings = bindings;
+
+				} finally {
+					endManager.dec();
 				}
-				
-				initialBindings = bindings;
-			}
+			} 
 		});
 	}
 	
@@ -409,7 +425,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
-				EndManager endManager = new EndManager(end);
+				EndManager endManager = new EndManager(fail, end);
 				endManager.inc();
 				try {
 					/*%%
@@ -427,29 +443,35 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 					String subCallVar = UNICITY_PREFIX + "call$";
 					
 					if (USE_TO_STRING) {
-						bindings.put(subCallVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
+						bindings.put(subCallVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, endManager, asyncFunction, syncFunction));
 					} else {
-						bindings.put(subCallVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
+						bindings.put(subCallVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, endManager, asyncFunction, syncFunction));
 					}
 
 					// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 
 					try {
 						scriptEngine.eval(UNICITY_PREFIX + "call['$'] = " + subCallVar + ";", bindings); // This re-referencing is required because functions are defined in prepare (before bindings.put(call))
-						int k = 0;
-						for (String s : script) {
-							// LOGGER.debug("Executing script {} with binding: {}", s, bindings.get(UNICITY_PREFIX + "call"));
-							long t = System.currentTimeMillis();
-							scriptEngine.eval(s, bindings);
-							t = System.currentTimeMillis() - t;
-							LOGGER.debug("Script #{} executed in {} ms\n{}", k, t, s);
-							k++;
-						}
 					} catch (Exception e) {
 						LOGGER.error("Script error", e);
-						if (fail != null) {
-							fail.failed(new IOException(e));
+						endManager.fail(new IOException(e));
+						return;
+					}
+
+					int k = 0;
+					for (String s : script) {
+						// LOGGER.debug("Executing script {} with binding: {}", s, bindings.get(UNICITY_PREFIX + "call"));
+						long t = System.currentTimeMillis();
+						try {
+							scriptEngine.eval(s, bindings);
+						} catch (Exception e) {
+							LOGGER.error("Script error in: {}", s, e);
+							endManager.fail(new IOException(e));
+							return;
 						}
+						t = System.currentTimeMillis() - t;
+						LOGGER.debug("Script #{} executed in {} ms\n{}", k, t, s);
+						k++;
 					}
 					
 				} finally {
