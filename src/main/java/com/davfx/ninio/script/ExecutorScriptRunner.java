@@ -50,21 +50,25 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.call");
 	public static final String UNICITY_PREFIX = CONFIG.getString("script.functions.unicity.prefix");
 	
-	private final ScriptEngine scriptEngine;
+	private final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 	private Bindings initialBindings = null;
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ClassThreadFactory(ExecutorScriptRunner.class));
 	private final Mutable<Long> nextCallbackFunctionSuffix = new Mutable<Long>(0L);
 
 	public ExecutorScriptRunner() {
 		super(ExecutorScriptRunner.class);
-		
-		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
-		scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+	}
+	
+	private static ScriptEngine engine(ScriptEngineManager scriptEngineManager) {
+		ScriptEngine scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+		/*%%
 		if (scriptEngine == null) {
 			throw new IllegalArgumentException("Bad engine: " + ENGINE_NAME);
 		}
+		*/
 		//%% } else {
 		LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
+		return scriptEngine;
 	}
 	
 	@Override
@@ -107,7 +111,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	
 	// Must be be public to be called from javascript
 	public static final class FromScriptUsingConvert extends CheckAllocationObject {
-		private final ScriptEngine scriptEngine;
+		private final ScriptEngineManager scriptEngineManager;
 		private final Bindings bindings;
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
@@ -115,9 +119,9 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 
-		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingConvert(ScriptEngineManager scriptEngineManager, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			super(FromScriptUsingConvert.class);
-			this.scriptEngine = scriptEngine;
+			this.scriptEngineManager = scriptEngineManager;
 			this.bindings = bindings;
 			this.endManager = endManager;
 			this.executorService = executorService;
@@ -141,6 +145,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
+							ScriptEngine scriptEngine = engine(scriptEngineManager);
 							try {
 								//%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 								long suffix;
@@ -214,7 +219,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	}
 	
 	public static final class FromScriptUsingToString extends CheckAllocationObject {
-		private final ScriptEngine scriptEngine;
+		private final ScriptEngineManager scriptEngineManager;
 		private final Bindings bindings;
 		private final ExecutorService executorService;
 		private final Mutable<Long> nextUnicitySuffix;
@@ -222,9 +227,9 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		private final AsyncScriptFunction<JsonElement> asyncFunction;
 		private final SyncScriptFunction<JsonElement> syncFunction;
 		
-		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+		private FromScriptUsingToString(ScriptEngineManager scriptEngineManager, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
 			super(FromScriptUsingToString.class);
-			this.scriptEngine = scriptEngine;
+			this.scriptEngineManager = scriptEngineManager;
 			this.bindings = bindings;
 			this.endManager = endManager;
 			this.executorService = executorService;
@@ -249,6 +254,8 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
+							ScriptEngine scriptEngine = engine(scriptEngineManager);
+							
 							try {
 								//%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
 								long suffix;
@@ -287,6 +294,8 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
+				ScriptEngine scriptEngine = engine(scriptEngineManager);
+				
 				EndManager endManager = new EndManager(fail, null);
 				endManager.inc();
 				try {
@@ -425,6 +434,8 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
+				ScriptEngine scriptEngine = engine(scriptEngineManager);
+				
 				EndManager endManager = new EndManager(fail, end);
 				endManager.inc();
 				try {
@@ -443,9 +454,9 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 					String subCallVar = UNICITY_PREFIX + "call$";
 					
 					if (USE_TO_STRING) {
-						bindings.put(subCallVar, new FromScriptUsingToString(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, endManager, asyncFunction, syncFunction));
+						bindings.put(subCallVar, new FromScriptUsingToString(scriptEngineManager, bindings, executorService, nextCallbackFunctionSuffix, endManager, asyncFunction, syncFunction));
 					} else {
-						bindings.put(subCallVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, endManager, asyncFunction, syncFunction));
+						bindings.put(subCallVar, new FromScriptUsingConvert(scriptEngineManager, bindings, executorService, nextCallbackFunctionSuffix, endManager, asyncFunction, syncFunction));
 					}
 
 					// scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
