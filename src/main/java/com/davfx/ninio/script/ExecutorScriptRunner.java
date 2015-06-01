@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Failable;
+import com.davfx.ninio.util.CheckAllocationObject;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
 import com.google.gson.JsonElement;
@@ -24,7 +25,7 @@ import com.google.gson.JsonPrimitive;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 
-public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, AutoCloseable {
+public final class ExecutorScriptRunner extends CheckAllocationObject implements ScriptRunner<JsonElement>, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 	
 	private static final Config CONFIG = ConfigUtils.load(ExecutorScriptRunner.class);
@@ -56,17 +57,20 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 	private final Mutable<Long> nextCallbackFunctionSuffix = new Mutable<Long>(0L);
 
 	public ExecutorScriptRunner() {
+		super(ExecutorScriptRunner.class);
+		
 		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 		scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
 		if (scriptEngine == null) {
-			LOGGER.error("Bad engine: {}", ENGINE_NAME);
-		} else {
-			LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
+			throw new IllegalArgumentException("Bad engine: " + ENGINE_NAME);
 		}
+		//%% } else {
+		LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 	}
 	
 	@Override
 	public void close() {
+		LOGGER.debug("Script engine closed");
 		executorService.shutdown();
 	}
 	
@@ -82,13 +86,14 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		public void dec() {
 			count--;
 			if (count == 0) {
+				// engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
 				end.run();
 			}
 		}
 	}
 	
 	// Must be be public to be called from javascript
-	public static final class FromScriptUsingConvert {
+	public static final class FromScriptUsingConvert extends CheckAllocationObject {
 		private final ScriptEngine scriptEngine;
 		private final Bindings bindings;
 		private final ExecutorService executorService;
@@ -99,6 +104,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		private final SyncScriptFunction<JsonElement> syncFunction;
 
 		private FromScriptUsingConvert(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+			super(FromScriptUsingConvert.class);
 			this.scriptEngine = scriptEngine;
 			this.bindings = bindings;
 			this.fail = fail;
@@ -126,8 +132,6 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						public void run() {
 							try {
 								//%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
-	
 								long suffix;
 								
 								suffix = nextUnicitySuffix.get();
@@ -142,6 +146,8 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 								
 								bindings.put(parameterVar, response);
 	
+								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+								
 								String callbackScript = callbackVar + "(" + UNICITY_PREFIX + "convertTo(" + parameterVar + "));";
 								try {
 									LOGGER.trace("Executing callback: {}", callbackScript);
@@ -198,7 +204,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		}
 	}
 	
-	public static final class FromScriptUsingToString {
+	public static final class FromScriptUsingToString extends CheckAllocationObject {
 		private final ScriptEngine scriptEngine;
 		private final Bindings bindings;
 		private final ExecutorService executorService;
@@ -209,6 +215,7 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		private final SyncScriptFunction<JsonElement> syncFunction;
 		
 		private FromScriptUsingToString(ScriptEngine scriptEngine, Bindings bindings, ExecutorService executorService, Mutable<Long> nextCallbackFunctionSuffix, Failable fail, EndManager endManager, AsyncScriptFunction<JsonElement> asyncFunction, SyncScriptFunction<JsonElement> syncFunction) {
+			super(FromScriptUsingToString.class);
 			this.scriptEngine = scriptEngine;
 			this.bindings = bindings;
 			this.fail = fail;
@@ -237,8 +244,6 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 						public void run() {
 							try {
 								//%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
-								
 								long suffix;
 								
 								suffix = nextUnicitySuffix.get();
@@ -247,6 +252,8 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 								
 								bindings.put(callbackVar, callback);
 	
+								scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+								
 								String callbackScript = callbackVar + "(" + response.toString() + ");";
 								try {
 									LOGGER.trace("Executing callback: {}", callbackScript);
@@ -277,15 +284,17 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 			public void run() {
 				initialBindings = null;
 
+				/*%%
 				if (scriptEngine == null) {
 					if (fail != null) {
 						fail.failed(new IOException("Bad engine"));
 					}
 					return;
 				}
+				*/
 
 				//%%%%%%%%% Bindings bindings = scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE);
-				Bindings bindings = new SimpleBindings();
+				Bindings bindings = new CheckAllocationSimpleBindings();
 				scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 
 				String callVar = UNICITY_PREFIX + "call";
@@ -362,6 +371,8 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					callFunctions = "var " + CALL_FUNCTION_NAME + " = function(parameter, callback) { return " + UNICITY_PREFIX + "convertTo(" + callVar + ".call(" + UNICITY_PREFIX + "convertFrom(parameter), callback || null)); }; ";
 				}
 
+				callFunctions = "var " + callVar + " = null;" + callFunctions;
+				
 				try {
 					scriptEngine.eval(ScriptUtils.functions());
 					LOGGER.trace("Executing functions: {}", callFunctions);
@@ -387,6 +398,12 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 		});
 	}
 	
+	private static final class CheckAllocationSimpleBindings extends SimpleBindings {
+		@SuppressWarnings("unused")
+		private CheckAllocationObject check = new CheckAllocationObject(CheckAllocationSimpleBindings.class);
+		public CheckAllocationSimpleBindings() {
+		}
+	}
 
 	@Override
 	public void eval(final Iterable<String> script, final Failable fail, final Runnable end, final AsyncScriptFunction<JsonElement> asyncFunction, final SyncScriptFunction<JsonElement> syncFunction) {
@@ -396,17 +413,17 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 				EndManager endManager = new EndManager(end);
 				endManager.inc();
 				try {
-	
+					/*%%
 					if (scriptEngine == null) {
 						if (fail != null) {
 							fail.failed(new IOException("Bad engine"));
 						}
 						return;
 					}
+					*/
 	
-					Bindings bindings = new SimpleBindings();
+					Bindings bindings = new CheckAllocationSimpleBindings();
 					bindings.putAll(initialBindings);
-					scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
 	
 					String callVar = UNICITY_PREFIX + "call";
 					
@@ -415,7 +432,9 @@ public final class ExecutorScriptRunner implements ScriptRunner<JsonElement>, Au
 					} else {
 						bindings.put(callVar, new FromScriptUsingConvert(scriptEngine, bindings, executorService, nextCallbackFunctionSuffix, fail, endManager, asyncFunction, syncFunction));
 					}
-	
+
+					scriptEngine.setBindings(bindings, ScriptContext.ENGINE_SCOPE);
+
 					try {
 						int k = 0;
 						for (String s : script) {
