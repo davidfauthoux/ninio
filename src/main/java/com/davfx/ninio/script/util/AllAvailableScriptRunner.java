@@ -136,5 +136,7 @@ public class AllAvailableScriptRunner implements AutoCloseable {
 		pingConfigurator.close();
 		
 		scheduledExecutor.shutdown();
+		
+		System.gc(); //TODO rm
 	}
 }
