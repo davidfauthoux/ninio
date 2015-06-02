@@ -7,7 +7,17 @@ import javax.script.Bindings;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptException;
-import javax.script.SimpleBindings;
+
+// Beware! The objects created with prepared scripts are shared between the eval'd scripts BUT the directly referenced ones
+// Example:
+// - prepared: var s = 'string';
+// - prepared: var o = { a:'aa', b:'bb' };
+// - eval: println(s) -> 'string'
+// - eval: println(o) -> { a:'aa', b:'bb' }
+// - eval: s = '--'; println(s) -> '--'
+// - eval: println(s) -> 'string' // BACK TO prepared s (MODIFIED BY PREVIOUS eval SCRIPT BUT DIRECT REFERENCE)
+// - eval: o.a = '--'; println(o) -> { a:'--', b:'bb' }
+// - eval: println(o) -> { a:'--', b:'bb' } // BACK TO prepared o, BUT MODIFIED BY PREVIOUS eval SCRIPT
 
 public final class ReusableScriptEngine {
 
@@ -30,7 +40,19 @@ public final class ReusableScriptEngine {
 		void eval(String script) throws ScriptException;
 	}
 	
-	public EngineGenerator finish() {
+	private static void clearBindings(ScriptEngine engine) throws ScriptException {
+		// Java7: // engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
+		
+		// Java7/Java8:
+		for (String k : engine.getBindings(ScriptContext.ENGINE_SCOPE).keySet()) {
+			engine.eval(k + "=undefined;");
+		}
+		// engine.getBindings(ScriptContext.ENGINE_SCOPE).clear();
+
+		// This is not working in Java8, probably because it keeps track of closure somewhere else than in bindings // engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
+	}
+	
+	public EngineGenerator finish() throws ScriptException {
 		final Map<String, Object> preparedBindings = new HashMap<>();
 		Bindings b = engine.getBindings(ScriptContext.ENGINE_SCOPE);
 		for (Map.Entry<String, Object> e : b.entrySet()) {
@@ -38,7 +60,7 @@ public final class ReusableScriptEngine {
 		}
 
 		// Clear by security purpose
-		engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
+		clearBindings(engine);
 
 		return new EngineGenerator() {
 			@Override
@@ -46,7 +68,7 @@ public final class ReusableScriptEngine {
 				return new Engine() {
 					private final Map<String, Object> bindings = new HashMap<>();
 					
-					private void save() {
+					private void save() throws ScriptException {
 						bindings.clear();
 						Bindings b = engine.getBindings(ScriptContext.ENGINE_SCOPE);
 						for (Map.Entry<String, Object> e : b.entrySet()) {
@@ -54,21 +76,19 @@ public final class ReusableScriptEngine {
 						}
 						
 						// Clear to release memory
-						engine.setBindings(new SimpleBindings(), ScriptContext.ENGINE_SCOPE);
+						clearBindings(engine);
 					}
 					
-					private void restore() {
-						Bindings b = new SimpleBindings();
+					private void restore() throws ScriptException {
+						clearBindings(engine);
+						Bindings b = engine.getBindings(ScriptContext.ENGINE_SCOPE);
 						for (Map.Entry<String, Object> e : bindings.entrySet()) {
 							b.put(e.getKey(), e.getValue());
 						}
-						engine.setBindings(b, ScriptContext.ENGINE_SCOPE);
 					}
 					
 					{
-						for (Map.Entry<String, Object> e : preparedBindings.entrySet()) {
-							bindings.put(e.getKey(), e.getValue());
-						}
+						bindings.putAll(preparedBindings);
 					}
 					
 					@Override

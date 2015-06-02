@@ -347,7 +347,13 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 						k++;
 					}
 					
-					preparedScriptEngine = scriptEngine.finish();
+					try {
+						preparedScriptEngine = scriptEngine.finish();
+					} catch (Exception e) {
+						LOGGER.error("Script error", e);
+						endManager.fail(new IOException(e));
+						return;
+					}
 
 				} finally {
 					endManager.dec();
@@ -364,6 +370,11 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				EndManager endManager = new EndManager(fail, end);
 				endManager.inc();
 				try {
+					if (preparedScriptEngine == null) {
+						endManager.fail(new IOException("Error in prepare"));
+						return;
+					}
+					
 					ReusableScriptEngine.Engine reusableEngine = preparedScriptEngine.get();
 	
 					if (USE_TO_STRING) {
