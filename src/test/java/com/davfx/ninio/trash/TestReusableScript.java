@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.script.ReusableScriptEngine;
+import com.davfx.ninio.script.SharingReusableScriptEngine;
 
 public class TestReusableScript {
 	
@@ -17,7 +18,7 @@ public class TestReusableScript {
 		ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("JavaScript");
 		LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 
-		ReusableScriptEngine engine = new ReusableScriptEngine(scriptEngine);
+		ReusableScriptEngine engine = new SharingReusableScriptEngine(scriptEngine);
 		engine.prepare("var a = 'aaa';"
 				+ "var b = null;"
 				+ "var o = {oo:'ooo',pp:'ppp'};"

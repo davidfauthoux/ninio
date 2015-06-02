@@ -41,6 +41,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		}
 	}
 	
+	private static final boolean ENGINE_PREPARED = CONFIG.getBoolean("script.prepared");
 	private static final String ENGINE_NAME = CONFIG.getString("script.engine");
 	static {
 		LOGGER.debug("Engine: {}", ENGINE_NAME);
@@ -56,15 +57,25 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	public ExecutorScriptRunner() {
 		super(ExecutorScriptRunner.class);
 		
-		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
-		ScriptEngine engine = scriptEngineManager.getEngineByName(ENGINE_NAME);
-		if (engine == null) {
-			throw new IllegalArgumentException("Bad engine: " + ENGINE_NAME);
-		}
-		//%% } else {
-		LOGGER.debug("Script engine {}/{}", engine.getFactory().getEngineName(), engine.getFactory().getEngineVersion());
+		final ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 		
-		scriptEngine = new ReusableScriptEngine(engine);
+		if (ENGINE_PREPARED) {
+			ScriptEngine engine = scriptEngineManager.getEngineByName(ENGINE_NAME);
+			if (engine == null) {
+				throw new IllegalArgumentException("Bad engine: " + ENGINE_NAME);
+			}
+			//%% } else {
+			LOGGER.debug("Script engine {}/{}", engine.getFactory().getEngineName(), engine.getFactory().getEngineVersion());
+
+			scriptEngine = new SharingReusableScriptEngine(engine);
+		} else {
+			scriptEngine = new SimpleReusableScriptEngine(new SimpleReusableScriptEngine.ScriptEngineFactory() {
+				@Override
+				public ScriptEngine engine() {
+					return scriptEngineManager.getEngineByName(ENGINE_NAME);
+				}
+			});
+		}
 	}
 	
 	@Override
