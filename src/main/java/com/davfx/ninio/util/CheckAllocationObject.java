@@ -16,6 +16,8 @@ public class CheckAllocationObject {
 		private final List<Time> times = new ArrayList<>();
 		public int count = 0;
 		public int max = 0;
+		public CountMax() {
+		}
 		public String inc(Time time) {
 			int c;
 			int m;
@@ -30,7 +32,7 @@ public class CheckAllocationObject {
 			}
 			return c + " (max " + m + ")";
 		}
-		public synchronized String dec(Time time) {
+		public String dec(Time time) {
 			int c;
 			int m;
 			long t;
@@ -59,6 +61,8 @@ public class CheckAllocationObject {
 	
 	private static final class Time {
 		public final long timestamp = System.currentTimeMillis();
+		public Time() {
+		}
 	}
 	
 	private static final Map<Class<?>, CountMax> COUNTS = new HashMap<>();
