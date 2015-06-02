@@ -4,9 +4,6 @@ import java.util.Iterator;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.http.HttpClientConfigurator;
@@ -29,8 +26,6 @@ import com.google.gson.JsonElement;
 import com.typesafe.config.Config;
 
 public final class AllAvailableScriptRunner implements AutoCloseable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(AllAvailableScriptRunner.class);
-	
 	private static final Config CONFIG = ConfigUtils.load(AllAvailableScriptRunner.class);
 	
 	private static final int THREADING = CONFIG.getInt("script.threading");
@@ -140,8 +135,5 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 		pingConfigurator.close();
 		
 		scheduledExecutor.shutdown();
-		
-		LOGGER.info("*** Calling GC");
-		System.gc(); //TODO rm
 	}
 }
