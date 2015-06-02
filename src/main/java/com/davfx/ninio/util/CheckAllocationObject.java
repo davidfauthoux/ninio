@@ -2,7 +2,6 @@ package com.davfx.ninio.util;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,30 +10,46 @@ public class CheckAllocationObject {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CheckAllocationObject.class);
 	
-	private static final Map<Class<?>, AtomicInteger> COUNTS = new HashMap<>();
+	private static final class CountMax {
+		public int count = 0;
+		public int max = 0;
+		public synchronized String inc() {
+			count++;
+			if (count > max) {
+				max = count;
+			}
+			return count + " (max " + max + ")";
+		}
+		public synchronized String dec() {
+			count--;
+			return count + " (max " + max + ")";
+		}
+	}
+	
+	private static final Map<Class<?>, CountMax> COUNTS = new HashMap<>();
 
 	private final String prefix;
-	private final AtomicInteger count;
+	private final CountMax count;
 	
 	public CheckAllocationObject(Class<?> clazz) {
 		prefix = clazz.getName();
-		AtomicInteger c;
+		CountMax c;
 		synchronized (COUNTS) {
 			c = COUNTS.get(clazz);
 			if (c == null) {
-				c = new AtomicInteger();
+				c = new CountMax();
 				COUNTS.put(clazz, c);
 			}
 		}
 		count = c;
 		
-		int x = count.incrementAndGet();
+		String x = count.inc();
 		LOGGER.debug("*** {} | Allocation inc: {}", prefix, x);
 	}
 	
 	@Override
 	protected void finalize() {
-		int x = count.decrementAndGet();
+		String x = count.dec();
 		LOGGER.debug("*** {} | Allocation dec: {}", prefix, x);
 	}
 }

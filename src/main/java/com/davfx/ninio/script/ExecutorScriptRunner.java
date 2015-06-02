@@ -343,7 +343,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 							return;
 						}
 						t = System.currentTimeMillis() - t;
-						LOGGER.debug("Prepare script #{} executed in {} ms\n{}", k, t, s);
+						LOGGER.trace("Prepare script #{} executed in {} ms\n{}", k, t, s);
 						k++;
 					}
 					
@@ -384,7 +384,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 							return;
 						}
 						t = System.currentTimeMillis() - t;
-						LOGGER.debug("Script #{} executed in {} ms\n{}", k, t, s);
+						LOGGER.trace("Script #{} executed in {} ms\n{}", k, t, s);
 						k++;
 					}
 					
