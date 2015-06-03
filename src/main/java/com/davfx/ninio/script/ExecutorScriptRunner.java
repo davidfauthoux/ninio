@@ -482,6 +482,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 					try {
 						scriptEngine.eval(s);
 					} catch (ScriptException se) {
+						LOGGER.error("Script error: {}", s, se);
 						endManager.fail(new IOException(se));
 					}
 				} finally {
@@ -584,6 +585,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 							try {
 								scriptEngine.eval(s);
 							} catch (ScriptException se) {
+								LOGGER.error("Script error: {}", s, se);
 								endManager.fail(new IOException(se));
 							}
 						} finally {
