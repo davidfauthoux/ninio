@@ -5,21 +5,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import javax.script.Bindings;
-import javax.script.ScriptContext;
-import javax.script.ScriptEngine;
-import javax.script.ScriptEngineManager;
-import javax.script.SimpleBindings;
-
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.proxy.ProxyClient;
 import com.davfx.ninio.proxy.ProxyServer;
-import com.davfx.ninio.script.BasicScript;
+import com.davfx.ninio.script.ScriptRunner;
 import com.davfx.ninio.script.SyncScriptFunction;
 import com.davfx.ninio.script.util.AllAvailableScriptRunner;
-import com.davfx.ninio.script.util.RegisteredFunctionsScript;
 import com.google.gson.JsonElement;
 
 public class TestScriptMem {
@@ -78,26 +71,18 @@ public class TestScriptMem {
 				r.snmpConfigurator.override(proxy.datagram());
 				r.pingConfigurator.override(proxy.ping());
 			}
-			for (RegisteredFunctionsScript rr : r.runners()) {
-				rr.register("log_telnet");
-				rr.register("log_snmp");
-				rr.register("log_ping");
-				rr.register("outln");
-				rr.register("errln");
-				rr.register("fire");
-				List<String> s = new LinkedList<String>();
-				s.add("log('INIT OK');");
-				rr.prepare(s, new Failable() {
+			for (ScriptRunner rr : r.runners()) {
+				rr.prepare("log('INIT OK');", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
 					}
-				});
+				}, null);
 			}
 
-			RegisteredFunctionsScript.Runner rr = r.runner();
+			ScriptRunner.Engine rr = r.runner();
 
-			rr.link("log_telnet", new SyncScriptFunction<JsonElement>() {
+			rr.register("log_telnet", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
 					JsonElement error = request.getAsJsonObject().get("error");
@@ -110,7 +95,7 @@ public class TestScriptMem {
 				}
 			});
 
-			rr.link("log_snmp", new SyncScriptFunction<JsonElement>() {
+			rr.register("log_snmp", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
 					JsonElement error = request.getAsJsonObject().get("error");
@@ -126,7 +111,7 @@ public class TestScriptMem {
 				}
 			});
 
-			rr.link("log_ping", new SyncScriptFunction<JsonElement>() {
+			rr.register("log_ping", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
 					JsonElement error = request.getAsJsonObject().get("error");
@@ -139,7 +124,7 @@ public class TestScriptMem {
 				}
 			});
 
-			rr.link("outln", new SyncScriptFunction<JsonElement>() {
+			rr.register("outln", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
 					if (request == null) {
@@ -151,7 +136,7 @@ public class TestScriptMem {
 				}
 			});
 
-			rr.link("errln", new SyncScriptFunction<JsonElement>() {
+			rr.register("errln", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
 					if (request == null) {
@@ -163,7 +148,7 @@ public class TestScriptMem {
 				}
 			});
 
-			rr.link("fire", new SyncScriptFunction<JsonElement>() {
+			rr.register("fire", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
 					if (request == null) {
@@ -201,7 +186,8 @@ public class TestScriptMem {
 				});
 				*/
 				long t = System.nanoTime();
-				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);"), new Failable() {
+				if (false)
+				rr.eval("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -227,7 +213,8 @@ public class TestScriptMem {
 					}
 				});
 				*/
-				rr.eval(new BasicScript().append("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);"), new Failable() {
+				if (false)
+				rr.eval("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -238,7 +225,8 @@ public class TestScriptMem {
 						System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
-				rr.eval(new BasicScript().append("ping({'host':'172.17.0.1'}, log_ping);"), new Failable() {
+				//if (false)
+				rr.eval("ping({'host':'172.17.0.1'}, log_ping);", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
