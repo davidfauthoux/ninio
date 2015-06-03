@@ -85,6 +85,10 @@ public class TestScriptMem {
 			rr.register("log_telnet", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
+					if (request == null) {
+						System.out.println("ERRRRRRRRRRRROR NULL");
+						return null;
+					}
 					JsonElement error = request.getAsJsonObject().get("error");
 					if (error != null) {
 						System.out.println("ERROR " + error.getAsString());
@@ -98,6 +102,10 @@ public class TestScriptMem {
 			rr.register("log_snmp", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
+					if (request == null) {
+						System.out.println("ERRRRRRRRRRRROR NULL");
+						return null;
+					}
 					JsonElement error = request.getAsJsonObject().get("error");
 					if (error != null) {
 						System.out.println("ERROR SNMP " + error.getAsString());
@@ -114,6 +122,10 @@ public class TestScriptMem {
 			rr.register("log_ping", new SyncScriptFunction() {
 				@Override
 				public JsonElement call(JsonElement request) {
+					if (request == null) {
+						System.out.println("ERRRRRRRRRRRROR NULL");
+						return null;
+					}
 					JsonElement error = request.getAsJsonObject().get("error");
 					if (error != null) {
 						System.out.println("ERROR PING " + error.getAsString());
@@ -185,8 +197,8 @@ public class TestScriptMem {
 					}
 				});
 				*/
-				long t = System.nanoTime();
-				if (false)
+				//long t = System.nanoTime();
+				//if (false)
 				rr.eval("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -198,8 +210,8 @@ public class TestScriptMem {
 						System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
-				t = System.nanoTime() - t;
-				System.out.println("=========== " + (t / (1000d * 1000d)) + " ms");
+				//t = System.nanoTime() - t;
+				//System.out.println("=========== " + (t / (1000d * 1000d)) + " ms");
 				/*
 				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.2', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r, err) { snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r, err) { snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);ping({'host':'172.17.0.2'}, log_ping);var ooo=null;var aaa=ooo.indexOf('ee');    java.lang.System.out.println('r='+JSON.stringify(r));});ping({'host':'172.17.0.2'}, log_ping);java.lang.System.out.println('r='+JSON.stringify(r));}); "), new Failable() {
 					@Override
@@ -213,7 +225,7 @@ public class TestScriptMem {
 					}
 				});
 				*/
-				if (false)
+				//if (false)
 				rr.eval("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);", new Failable() {
 					@Override
 					public void failed(IOException e) {

@@ -28,9 +28,20 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 
 public final class ExecutorScriptRunner extends CheckAllocationObject implements ScriptRunner, AutoCloseable {
-	/*%%%
+	/*%%%%%%%
 	public static void main(String[] args) throws Exception {
 		ScriptRunner r = new ExecutorScriptRunner();
+		ScriptRunner.Engine e = r.engine();
+		e.register("echo", new SyncScriptFunction() {
+			@Override
+			public JsonElement call(JsonElement request) {
+				JsonObject o = new JsonObject();
+				o.add("request", request);
+				o.add("response", new JsonPrimitive("This is an echo"));
+				return o;
+			}
+		});
+		e.eval("java.lang.System.out.println('ECHO ' + JSON.stringify(echo('aaa')));", null, null);
 		r.register("echo", new AsyncScriptFunction() {
 			@Override
 			public void call(JsonElement request, Callback callback) {
@@ -74,10 +85,10 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		e.eval("var aaa = 'aaa'; echo2('a', function(r) { println(aaa + ' ECHO2 ' + JSON.stringify(r)); });", null, null);
 		e.eval("echo2('a', function(r) { println(aaa + ' ECHO2 ' + JSON.stringify(r)); });", null, null);
 		e.eval("println('ECHO3 ' + JSON.stringify(echo3('a')));", null, null);
-		
 		Thread.sleep(1000);
 		System.exit(0);
-	}*/
+	}
+		*/
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 	
@@ -102,7 +113,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		LOGGER.debug("Engine: {}", ENGINE_NAME);
 	}
 	public static final String CALL_FUNCTION_NAME = CONFIG.getString("script.functions.call");
-	//TODO public static final String UNICITY_PREFIX = CONFIG.getString("script.functions.unicity.prefix");
+	public static final String UNICITY_PREFIX = CONFIG.getString("script.functions.unicity.prefix");
 	
 	private final ScriptEngine scriptEngine;
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ClassThreadFactory(ExecutorScriptRunner.class));
@@ -123,28 +134,33 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		try {
 			scriptEngine.eval(ScriptUtils.functions());
 			scriptEngine.eval(""
-					+ "var __$nextUnicityId = 0;"
-					+ "var __$callbacks = {};"
-					+ "var __$instanceId = null;"
+					+ "var " + UNICITY_PREFIX + "nextUnicityId = 0;"
+					+ "var " + UNICITY_PREFIX + "callbacks = {};"
+					+ "var " + UNICITY_PREFIX + "instanceId = null;"
 				);
 			
-			if (!USE_TO_STRING) {
+			if (USE_TO_STRING) {
 				scriptEngine.eval(""
-						+ "var __$convertFrom = function(o) {"
+						+ "var " + UNICITY_PREFIX + "convertFrom = JSON.stringify;"
+						+ "var " + UNICITY_PREFIX + "convertTo = JSON.parse;"
+					);
+			} else {
+				scriptEngine.eval(""
+						+ "var " + UNICITY_PREFIX + "convertFrom = function(o) {"
 							+ "if (o == null) {"
 								+ "return null;"
 							+ "}"
 							+ "if (o instanceof Array) {"
 								+ "var p = new com.google.gson.JsonArray();"
 								+ "for (k in o) {"
-									+ "p.add(__$convertFrom(o[k]));"
+									+ "p.add(" + UNICITY_PREFIX + "convertFrom(o[k]));"
 								+ "}"
 								+ "return p;"
 							+ "}"
 							+ "if (o instanceof Object) {"
 								+ "var p = new com.google.gson.JsonObject();"
 								+ "for (k in o) {"
-									+ "p.add(k, __$convertFrom(o[k]));"
+									+ "p.add(k, " + UNICITY_PREFIX + "convertFrom(o[k]));"
 								+ "}"
 								+ "return p;"
 							+ "}"
@@ -158,7 +174,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								+ "return " + ExecutorScriptRunner.class.getName() + ".jsonBoolean(o);"
 							+ "}"
 						+ "};"
-					+ "var __$convertTo = function(o) {"
+					+ "var " + UNICITY_PREFIX + "convertTo = function(o) {"
 						+ "if (o == null) {"
 							+ "return null;"
 						+ "}"
@@ -167,7 +183,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 							+ "var p = {};"
 							+ "while (i.hasNext()) {"
 								+ "var e = i.next();"
-								+ "p[e.getKey()] = __$convertTo(e.getValue());"
+								+ "p[e.getKey()] = " + UNICITY_PREFIX + "convertTo(e.getValue());"
 							+ "}"
 							+ "return p;"
 						+ "}"
@@ -241,13 +257,28 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			super(SyncInternal.class);
 			this.syncFunction = syncFunction;
 		}
-		public String call(String requestAsString) {
-			JsonElement request = new JsonParser().parse(requestAsString);
+		public Object call(Object requestAsObject) {
+			JsonElement request;
+			if (requestAsObject == null) {
+				request = null;
+			} else {
+				if (USE_TO_STRING) {
+					request = new JsonParser().parse((String) requestAsObject);
+				} else {
+					request = (JsonElement) requestAsObject;
+				}
+			}
+			
 			JsonElement response = syncFunction.call(request);
 			if (response == null) {
 				return null;
 			}
-			return response.toString();
+			
+			if (USE_TO_STRING) {
+				return response.toString();
+			} else {
+				return response;
+			}
 		}
 	}
 	
@@ -260,10 +291,14 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		}
 		public void call(final String instanceId, Object requestAsObject, final String callbackId) {
 			JsonElement request;
-			if (USE_TO_STRING) {
-				request = new JsonParser().parse((String) requestAsObject);
+			if (requestAsObject == null) {
+				request = null;
 			} else {
-				request = (JsonElement) requestAsObject;
+				if (USE_TO_STRING) {
+					request = new JsonParser().parse((String) requestAsObject);
+				} else {
+					request = (JsonElement) requestAsObject;
+				}
 			}
 			
 			final EndManager endManager = endManagers.get(instanceId);
@@ -280,24 +315,36 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								try {
 									if (USE_TO_STRING) {
 										scriptEngine.eval(""
-												+ "var __$f = __$callbacks['" + callbackId + "'];"
-												+ "delete __$callbacks['" + callbackId + "'];"
-												+ "if (__$f) __$f(" + response.toString() + ");"
+												+ "var " + UNICITY_PREFIX + "f = " + UNICITY_PREFIX + "callbacks['" + callbackId + "'];"
+												+ "delete " + UNICITY_PREFIX + "callbacks['" + callbackId + "'];"
+												+ "if (" + UNICITY_PREFIX + "f) " + UNICITY_PREFIX + "f(" + ((response == null) ? "null" : response.toString()) + ");"
+												+ UNICITY_PREFIX + "f = null;" // Memsafe null-set
+												+ UNICITY_PREFIX + "f = undefined;"
 											);
 									} else {
-										scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put("__$response", response);
-										try {
-											scriptEngine.eval("var __$r = __$convertTo(__$response);");
-										} finally {
-											scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove("__$response");
+										if (response == null) {
+											scriptEngine.eval("var " + UNICITY_PREFIX + "r = null;");
+										} else {
+											String id = String.valueOf(nextUnicityId);
+											nextUnicityId++;
+
+											scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(UNICITY_PREFIX + "response" + id, response);
+											try {
+												scriptEngine.eval("var " + UNICITY_PREFIX + "r = " + UNICITY_PREFIX + "convertTo(" + UNICITY_PREFIX + "response" + id + ");");
+											} finally {
+												scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(UNICITY_PREFIX + "response" + id, null); // Memsafe null-set
+												scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(UNICITY_PREFIX + "response" + id);
+											}
 										}
 										
 										scriptEngine.eval(""
-												+ "var __$f = __$callbacks['" + callbackId + "'];"
-												+ "delete __$callbacks['" + callbackId + "'];"
-												+ "if (__$f) __$f(__$r);"
-												+ "__$r = null;" //TODO check if required in Java7
-												+ "__$r = undefined;" //TODO check if release from mem
+												+ "var " + UNICITY_PREFIX + "f = " + UNICITY_PREFIX + "callbacks['" + callbackId + "'];"
+												+ "delete " + UNICITY_PREFIX + "callbacks['" + callbackId + "'];"
+												+ "if (" + UNICITY_PREFIX + "f) " + UNICITY_PREFIX + "f(" + UNICITY_PREFIX + "r);"
+												+ UNICITY_PREFIX + "r = null;" // Memsafe null-set
+												+ UNICITY_PREFIX + "r = undefined;"
+												+ UNICITY_PREFIX + "f = null;" // Memsafe null-set
+												+ UNICITY_PREFIX + "f = undefined;"
 											);
 									}
 								} catch (ScriptException se) {
@@ -325,31 +372,23 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				String id = String.valueOf(nextUnicityId);
 				nextUnicityId++;
 				
-				String functionObjectVar = "__$function" + id;
+				String functionObjectVar = UNICITY_PREFIX + "function" + id;
 				scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new SyncInternal(syncFunction));
 				
 				try {
-					if (USE_TO_STRING) {
-						scriptEngine.eval(""
-								+ "var " + function + " = function(p) {"
-									+ "var r = " + functionObjectVar + ".call(JSON.stringify(p));"
-									+ "if (r == null) {"
-										+ "return r;"
-									+ "}"
-									+ "return JSON.parse(r);"
-								+ "};"
-							);
-					} else {
-						scriptEngine.eval(""
-								+ "var " + function + " = function(p) {"
-									+ "var r = " + functionObjectVar + ".call(__$convertFrom(p));"
-									+ "if (r == null) {"
-										+ "return r;"
-									+ "}"
-									+ "return __$convertTo(r);"
-								+ "};"
-							);
-					}
+					scriptEngine.eval(""
+							+ "var " + function + " = function(p) {"
+								+ "var q = null;"
+								+ "if (p) {"
+									+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
+								+ "}"
+								+ "var r = " + functionObjectVar + ".call(q);"
+								+ "if (r == null) {"
+									+ "return null;"
+								+ "}"
+								+ "return " + UNICITY_PREFIX + "convertTo(r);"
+							+ "};"
+						);
 				} catch (ScriptException se) {
 					LOGGER.error("Could not register {}", function, se);
 				}
@@ -365,29 +404,22 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				String id = String.valueOf(nextUnicityId);
 				nextUnicityId++;
 				
-				String functionObjectVar = "__$function" + id;
+				String functionObjectVar = UNICITY_PREFIX + "function" + id;
 				scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(asyncFunction));
 				
 				try {
-					if (USE_TO_STRING) {
-						scriptEngine.eval(""
-								+ "var " + function + " = function(p, callback) {"
-									+ "var callbackId = '" + function + "' + __$nextUnicityId;"
-									+ "__$nextUnicityId++;"
-									+ "__$callbacks[callbackId] = callback;"
-									+ functionObjectVar + ".call(__$instanceId, JSON.stringify(p), callbackId);"
-								+ "};"
-							);
-					} else {
-						scriptEngine.eval(""
-								+ "var " + function + " = function(p, callback) {"
-									+ "var callbackId = '" + function + "' + __$nextUnicityId;"
-									+ "__$nextUnicityId++;"
-									+ "__$callbacks[callbackId] = callback;"
-									+ functionObjectVar + ".call(__$instanceId, __$convertFrom(p), callbackId);"
-								+ "};"
-							);
-					}
+					scriptEngine.eval(""
+							+ "var " + function + " = function(p, callback) {"
+								+ "var q = null;"
+								+ "if (p) {"
+									+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
+								+ "}"
+								+ "var callbackId = '" + function + "' + " + UNICITY_PREFIX + "nextUnicityId;"
+								+ UNICITY_PREFIX + "nextUnicityId++;"
+								+ UNICITY_PREFIX + "callbacks[callbackId] = callback;"
+								+ functionObjectVar + ".call(" + UNICITY_PREFIX + "instanceId, q, callbackId);"
+							+ "};"
+						);
 				} catch (ScriptException se) {
 					LOGGER.error("Could not register {}", function, se);
 				}
@@ -405,8 +437,8 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				endManagers.remove(instanceId);
 				if (bindingsToRemove != null) {
 					for (String functionObjectVar : bindingsToRemove) {
-						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, null);
-						//TODO check if ok in Java8 // scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(functionObjectVar);
+						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, null); // Memsafe null-set
+						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(functionObjectVar);
 					}
 				}
 			}
@@ -443,7 +475,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				endManager.inc();
 				try {
 					StringBuilder scriptBuilder = new StringBuilder();
-					scriptBuilder.append("__$instanceId = '" + endManager.instanceId + "';");
+					scriptBuilder.append(UNICITY_PREFIX + "instanceId = '" + endManager.instanceId + "';");
 					scriptBuilder.append(script);
 					
 					String s = scriptBuilder.toString();
@@ -486,8 +518,8 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 							nextUnicityId++;
 	
 							StringBuilder scriptBuilder = new StringBuilder();
-							scriptBuilder.append("__$instanceId = '" + endManager.instanceId + "';");
-							scriptBuilder.append("var __$closure" + closureId + " = function() {");
+							scriptBuilder.append(UNICITY_PREFIX + "instanceId = '" + endManager.instanceId + "';");
+							scriptBuilder.append("var " + UNICITY_PREFIX + "closure" + closureId + " = function() {");
 	
 							for (Map.Entry<String, SyncScriptFunction> e : syncFunctions.entrySet()) {
 								String function = e.getKey();
@@ -496,31 +528,23 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								String id = String.valueOf(nextUnicityId);
 								nextUnicityId++;
 								
-								String functionObjectVar = "__$function" + id;
+								String functionObjectVar = UNICITY_PREFIX + "function" + id;
 								scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new SyncInternal(syncFunction));
 								bindingsToRemove.add(functionObjectVar);
 								
-								if (USE_TO_STRING) {
-									scriptBuilder.append(""
-												+ "var " + function + " = function(p) {"
-													+ "var r = " + functionObjectVar + ".call(JSON.stringify(p));"
-													+ "if (r == null) {"
-														+ "return null;"
-													+ "}"
-													+ "return JSON.parse(r);"
-												+ "};"
-											);
-								} else {
-									scriptBuilder.append(""
-												+ "var " + function + " = function(p) {"
-													+ "var r = " + functionObjectVar + ".call(__$convertFrom(p));"
-													+ "if (r == null) {"
-														+ "return null;"
-													+ "}"
-													+ "return __$convertTo(r);"
-												+ "};"
-											);
-								}
+								scriptBuilder.append(""
+											+ "var " + function + " = function(p) {"
+												+ "var q = null;"
+												+ "if (p) {"
+													+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
+												+ "}"
+												+ "var r = " + functionObjectVar + ".call(q);"
+												+ "if (r == null) {"
+													+ "return null;"
+												+ "}"
+												+ "return " + UNICITY_PREFIX + "convertTo(r);"
+											+ "};"
+										);
 							}
 	
 							for (Map.Entry<String, AsyncScriptFunction> e : asyncFunctions.entrySet()) {
@@ -530,37 +554,30 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								String id = String.valueOf(nextUnicityId);
 								nextUnicityId++;
 								
-								String functionObjectVar = "__$function" + id;
+								String functionObjectVar = UNICITY_PREFIX + "function" + id;
 								scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(asyncFunction));
 								bindingsToRemove.add(functionObjectVar);
 
-								if (USE_TO_STRING) {
-									scriptBuilder.append(""
-												+ "var " + function + " = function(p, callback) {"
-													+ "var callbackId = '" + function + "' + __$nextUnicityId;"
-													+ "__$nextUnicityId++;"
-													+ "__$callbacks[callbackId] = callback;"
-													+ functionObjectVar + ".call(__$instanceId, JSON.stringify(p), callbackId);"
-												+ "};"
-											);
-								} else {
-									scriptBuilder.append(""
-												+ "var " + function + " = function(p, callback) {"
-													+ "var callbackId = '" + function + "' + __$nextUnicityId;"
-													+ "__$nextUnicityId++;"
-													+ "__$callbacks[callbackId] = callback;"
-													+ functionObjectVar + ".call(__$instanceId, __$convertFrom(p), callbackId);"
-												+ "};"
-											);
-								}
+								scriptBuilder.append(""
+											+ "var " + function + " = function(p, callback) {"
+												+ "var q = null;"
+												+ "if (p) {"
+													+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
+												+ "}"
+												+ "var callbackId = '" + function + "' + " + UNICITY_PREFIX + "nextUnicityId;"
+												+ UNICITY_PREFIX + "nextUnicityId++;"
+												+ UNICITY_PREFIX + "callbacks[callbackId] = callback;"
+												+ functionObjectVar + ".call(" + UNICITY_PREFIX + "instanceId, q, callbackId);"
+											+ "};"
+										);
 							}
 							
 							scriptBuilder.append(script);
 							scriptBuilder.append(""
 									+ "};"
-									+ "__$closure" + closureId + "();"
-									+ "__$closure" + closureId + " = null;" //TODO check if required in Java7
-									+ "__$closure" + closureId + " = undefined;" //TODO check if release from mem
+									+ UNICITY_PREFIX + "closure" + closureId + "();"
+									+ UNICITY_PREFIX + "closure" + closureId + " = null;" // Memsafe null-set
+									+ UNICITY_PREFIX + "closure" + closureId + " = undefined;"
 								);
 							
 							String s = scriptBuilder.toString();
