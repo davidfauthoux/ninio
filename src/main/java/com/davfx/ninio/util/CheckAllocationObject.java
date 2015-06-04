@@ -12,6 +12,10 @@ public class CheckAllocationObject {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CheckAllocationObject.class);
 	
+	private static final boolean DISPLAY_INC = false;
+	private static final boolean DISPLAY_DEC = false;
+	private static final double DISPLAY_DEC_LIMIT = 10d * 60d;
+	
 	private static final class CountMax {
 		private final List<Time> times = new ArrayList<>();
 		public int count = 0;
@@ -29,6 +33,9 @@ public class CheckAllocationObject {
 				}
 				c = count;
 				m = max;
+			}
+			if (!DISPLAY_INC) {
+				return null;
 			}
 			return c + " (max " + m + ")";
 		}
@@ -48,11 +55,18 @@ public class CheckAllocationObject {
 				}
 			}
 
+			if (!DISPLAY_DEC) {
+				return null;
+			}
+
 			if (t < 0L) {
 				return c + " (max " + m + ")";
 			}
 
 			long delta = (System.currentTimeMillis() - t) / 1000L;
+			if (delta < ((long) DISPLAY_DEC_LIMIT)) {
+				return null;
+			}
 			long min = delta / 60L;
 			long sec = delta - (min * 60L);
 			return c + " (max " + m + ", oldest " + min + " min " + sec + " sec ago)";
@@ -84,12 +98,16 @@ public class CheckAllocationObject {
 		count = c;
 		
 		String x = count.inc(time);
-		LOGGER.debug("*** {} | Allocation inc: {}", prefix, x);
+		if (x != null) {
+			LOGGER.trace("*** {} | Allocation inc: {}", prefix, x);
+		}
 	}
 	
 	@Override
 	protected void finalize() {
 		String x = count.dec(time);
-		LOGGER.debug("*** {} | Allocation dec: {}", prefix, x);
+		if (x != null) {
+			LOGGER.debug("*** {} | Allocation dec: {}", prefix, x);
+		}
 	}
 }
