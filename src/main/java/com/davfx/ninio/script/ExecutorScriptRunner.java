@@ -372,7 +372,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				String id = String.valueOf(nextUnicityId);
 				nextUnicityId++;
 				
-				String functionObjectVar = UNICITY_PREFIX + "function" + id;
+				String functionObjectVar = UNICITY_PREFIX + "function_" + function + id;
 				scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new SyncInternal(syncFunction));
 				
 				try {
@@ -404,7 +404,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				String id = String.valueOf(nextUnicityId);
 				nextUnicityId++;
 				
-				String functionObjectVar = UNICITY_PREFIX + "function" + id;
+				String functionObjectVar = UNICITY_PREFIX + "function_" + function + id;
 				scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(asyncFunction));
 				
 				try {
@@ -436,10 +436,12 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			public void run() {
 				endManagers.remove(instanceId);
 				if (bindingsToRemove != null) {
+					/*TODO
 					for (String functionObjectVar : bindingsToRemove) {
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, null); // Memsafe null-set
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(functionObjectVar);
 					}
+					*/
 				}
 			}
 		};
@@ -529,7 +531,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								String id = String.valueOf(nextUnicityId);
 								nextUnicityId++;
 								
-								String functionObjectVar = UNICITY_PREFIX + "function" + id;
+								String functionObjectVar = UNICITY_PREFIX + "function_" + function + id;
 								scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new SyncInternal(syncFunction));
 								bindingsToRemove.add(functionObjectVar);
 								
@@ -555,7 +557,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								String id = String.valueOf(nextUnicityId);
 								nextUnicityId++;
 								
-								String functionObjectVar = UNICITY_PREFIX + "function" + id;
+								String functionObjectVar = UNICITY_PREFIX + "function_" + function + id;
 								scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(asyncFunction));
 								bindingsToRemove.add(functionObjectVar);
 
