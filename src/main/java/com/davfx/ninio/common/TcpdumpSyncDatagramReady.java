@@ -11,6 +11,7 @@ import java.io.InputStreamReader;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.LinkedList;
@@ -22,11 +23,6 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ClassThreadFactory;
-import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.common.Ready;
-import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
@@ -116,7 +112,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		
 		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		private DatagramSocket socket = null;
+		//%% private DatagramSocket socket = null;
 		
 		public Receiver(final Rule rule, final String interfaceId) { //, final boolean promiscuous) {
 			if (DO_OUTPUT != null) {
@@ -422,12 +418,14 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			connections.remove(address);
 		}
 
+		/*%%%
 		public DatagramSocket socket() throws IOException {
 			if (socket == null) {
 				socket = new DatagramSocket();
 			}
 			return socket;
 		}
+		*/
 	}
 	
 	private final Receiver receiver;
@@ -448,11 +446,23 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		final Address receiveAddress;
 		if (bind) {
 			try {
+				InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
+				if (a == null) {
+					throw new IOException("Invalid address");
+				}
+				socket = new DatagramSocket(a);
+			} catch (IOException ioe) {
+				connection.failed(ioe);
+				return;
+			}
+			/*%%%
+			try {
 				socket = receiver.socket();
 			} catch (IOException ioe) {
 				connection.failed(ioe);
 				return;
 			}
+			*/
 			receiveAddress = address;
 		} else {
 			try {
@@ -483,12 +493,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			@Override
 			public void handle(Address a, ByteBuffer buffer) {
 				if (a == null) {
+					LOGGER.trace("Sending datagram to null address, using instead: {}", address);
 					a = address;
 				}
+				LOGGER.trace("Sending datagram to: {}", a);
 				try {
 					DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(a.getHost()), a.getPort());
 					socket.send(packet);
 				} catch (IOException ioe) {
+					LOGGER.trace("Error while sending datagram to: {}", a, ioe);
 					closeSocket();
 					connection.failed(ioe);
 				}
