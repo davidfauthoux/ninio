@@ -436,12 +436,10 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			public void run() {
 				endManagers.remove(instanceId);
 				if (bindingsToRemove != null) {
-					/*TODO
 					for (String functionObjectVar : bindingsToRemove) {
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, null); // Memsafe null-set
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(functionObjectVar);
 					}
-					*/
 				}
 			}
 		};
