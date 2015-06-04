@@ -172,7 +172,7 @@ public class TestScriptMem {
 				}
 			});
 
-			for (int i = 0; i < 1; i++) {
+			for (int i = 0; i < 20; i++) {
 				/*
 				rr.eval(new BasicScript().append("aaaaa='aaaaabbbbb';"), new Failable() {
 					@Override
@@ -199,7 +199,7 @@ public class TestScriptMem {
 				*/
 				//long t = System.nanoTime();
 				//if (false)
-				rr.eval("snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
+				rr.eval("snmp$({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r) { log_snmp(r);ping$({'host':'172.17.0.1'}, log_ping); });", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -226,7 +226,7 @@ public class TestScriptMem {
 				});
 				*/
 				//if (false)
-				rr.eval("telnet({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);", new Failable() {
+				rr.eval("telnet$({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -238,7 +238,7 @@ public class TestScriptMem {
 					}
 				});
 				//if (false)
-				rr.eval("ping({'host':'172.17.0.1'}, log_ping);", new Failable() {
+				rr.eval("ping$({'host':'172.17.0.1'}, log_ping);", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -251,7 +251,7 @@ public class TestScriptMem {
 				});
 			}
 
-			Thread.sleep(20000);
+			Thread.sleep(200000);
 		} finally {
 			r.close();
 		}

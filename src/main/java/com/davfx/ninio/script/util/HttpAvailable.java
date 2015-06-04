@@ -45,7 +45,7 @@ public final class HttpAvailable {
 				return e.getAsBoolean();
 			}
 			@Override
-			public void call(JsonElement request, final AsyncScriptFunction.Callback userCallback) {
+			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				client.withMethod(HttpRequest.Method.valueOf(getString(r, "method", "GET").toUpperCase()));
 				JsonElement post = r.get("post");

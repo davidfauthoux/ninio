@@ -119,6 +119,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	private final ExecutorService executorService = Executors.newSingleThreadExecutor(new ClassThreadFactory(ExecutorScriptRunner.class));
 	private int nextUnicityId = 0;
 	private final Map<String, EndManager> endManagers = new HashMap<>();
+	private final List<String> registeredFunctions = new LinkedList<>();
 
 	public ExecutorScriptRunner() {
 		super(ExecutorScriptRunner.class);
@@ -136,7 +137,6 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			scriptEngine.eval(""
 					+ "var " + UNICITY_PREFIX + "nextUnicityId = 0;"
 					+ "var " + UNICITY_PREFIX + "callbacks = {};"
-					+ "var " + UNICITY_PREFIX + "instanceId = null;"
 				);
 			
 			if (USE_TO_STRING) {
@@ -219,13 +219,18 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		private int count = 0;
 		private Runnable end;
 		private Failable fail;
+		private boolean ended = false;
 		public EndManager(String instanceId, Failable fail, Runnable end) {
 			super(EndManager.class);
 			this.instanceId = instanceId;
 			this.end = end;
 			this.fail = fail;
 		}
+		public boolean isEnded() {
+			return ended;
+		}
 		public void fail(IOException e) {
+			ended = true;
 			LOGGER.error("Failed", e);
 			end = null;
 			Failable f = fail;
@@ -236,10 +241,13 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		}
 		public void inc() {
 			count++;
+			//%% LOGGER.debug("******************* INC {} = {}", instanceId, count);
 		}
 		public void dec() {
 			count--;
+			//%% LOGGER.debug("******************* DEC {} = {}", instanceId, count);
 			if (count == 0) {
+				ended = true;
 				fail = null;
 				Runnable e = end;
 				end = null;
@@ -284,9 +292,11 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	
 	// Must be be public to be called from javascript
 	public final class AsyncInternal extends CheckAllocationObject {
+		private final String function;
 		private final AsyncScriptFunction asyncFunction;
-		private AsyncInternal(AsyncScriptFunction asyncFunction) {
+		private AsyncInternal(String function, AsyncScriptFunction asyncFunction) {
 			super(AsyncInternal.class);
+			this.function = function;
 			this.asyncFunction = asyncFunction;
 		}
 		public void call(final String instanceId, Object requestAsObject, final String callbackId) {
@@ -302,15 +312,25 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			}
 			
 			final EndManager endManager = endManagers.get(instanceId);
-			if (endManager != null) {
-				endManager.inc();
-			}
+			endManager.inc();
+			
+			LOGGER.trace("Call {}, instanceId = {}, callbackId = {}", function, instanceId, callbackId);
+			
+			//%% LOGGER.debug("-----------> INC instanceId={} callbackId={}", instanceId, callbackId);
 			asyncFunction.call(request, new AsyncScriptFunction.Callback() {
 				@Override
 				public void handle(final JsonElement response) {
+					if (executorService.isShutdown()) {
+						LOGGER.warn("Callback called after script engine has been closed");
+						return;
+					}
 					executorService.execute(new Runnable() {
 						@Override
 						public void run() {
+							if (endManager.isEnded()) {
+								LOGGER.warn("Callback called on a terminated object");
+								return;
+							}
 							try {
 								try {
 									if (USE_TO_STRING) {
@@ -348,14 +368,10 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 											);
 									}
 								} catch (ScriptException se) {
-									if (endManager != null) {
-										endManager.fail(new IOException(se));
-									}
+									endManager.fail(new IOException(se));
 								}
 							} finally {
-								if (endManager != null) {
-									endManager.dec();
-								}
+								endManager.dec();
 							}
 						}
 					});
@@ -405,21 +421,25 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				nextUnicityId++;
 				
 				String functionObjectVar = UNICITY_PREFIX + "function_" + function + id;
-				scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(asyncFunction));
+				scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(function, asyncFunction));
 				
 				try {
 					scriptEngine.eval(""
-							+ "var " + function + " = function(p, callback) {"
-								+ "var q = null;"
-								+ "if (p) {"
-									+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
-								+ "}"
-								+ "var callbackId = '" + function + "' + " + UNICITY_PREFIX + "nextUnicityId;"
-								+ UNICITY_PREFIX + "nextUnicityId++;"
-								+ UNICITY_PREFIX + "callbacks[callbackId] = callback;"
-								+ functionObjectVar + ".call(" + UNICITY_PREFIX + "instanceId, q, callbackId);"
+							+ "var " + UNICITY_PREFIX + function + " = function(instanceId) {"
+								+ "return function(p, callback) {"
+									+ "var q = null;"
+									+ "if (p) {"
+										+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
+									+ "}"
+									+ "var callbackId = '" + function + id + "_' + " + UNICITY_PREFIX + "nextUnicityId;"
+									+ UNICITY_PREFIX + "nextUnicityId++;"
+									+ UNICITY_PREFIX + "callbacks[callbackId] = callback;"
+									+ functionObjectVar + ".call(instanceId, q, callbackId);"
+								+ "};"
 							+ "};"
 						);
+					
+					registeredFunctions.add(function);
 				} catch (ScriptException se) {
 					LOGGER.error("Could not register {}", function, se);
 				}
@@ -436,6 +456,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			public void run() {
 				endManagers.remove(instanceId);
 				if (bindingsToRemove != null) {
+					//%% LOGGER.debug("*************** TERMINATED {}", instanceId);
 					for (String functionObjectVar : bindingsToRemove) {
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, null); // Memsafe null-set
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(functionObjectVar);
@@ -465,9 +486,18 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		
 		return endManager;
 	}
+	
+	private void addRegisteredFunctions(StringBuilder scriptBuilder, String instanceId) {
+		for (String function : registeredFunctions) {
+			scriptBuilder.append("var " + function + " = " + UNICITY_PREFIX + function + "('" + instanceId + "');");
+		}
+	}
 
 	@Override
 	public void prepare(final String script, final Failable fail, final Runnable end) {
+		if (executorService.isShutdown()) {
+			return;
+		}
 		executorService.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -475,7 +505,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 				endManager.inc();
 				try {
 					StringBuilder scriptBuilder = new StringBuilder();
-					scriptBuilder.append(UNICITY_PREFIX + "instanceId = '" + endManager.instanceId + "';");
+					addRegisteredFunctions(scriptBuilder, endManager.instanceId);
 					scriptBuilder.append(script);
 					
 					String s = scriptBuilder.toString();
@@ -508,6 +538,9 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			
 			@Override
 			public void eval(final String script, final Failable fail, final Runnable end) {
+				if (executorService.isShutdown()) {
+					return;
+				}
 				executorService.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -519,8 +552,8 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 							nextUnicityId++;
 	
 							StringBuilder scriptBuilder = new StringBuilder();
-							scriptBuilder.append(UNICITY_PREFIX + "instanceId = '" + endManager.instanceId + "';");
 							scriptBuilder.append("var " + UNICITY_PREFIX + "closure" + closureId + " = function() {");
+							addRegisteredFunctions(scriptBuilder, endManager.instanceId);
 	
 							for (Map.Entry<String, SyncScriptFunction> e : syncFunctions.entrySet()) {
 								String function = e.getKey();
@@ -556,7 +589,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								nextUnicityId++;
 								
 								String functionObjectVar = UNICITY_PREFIX + "function_" + function + id;
-								scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(asyncFunction));
+								scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, new AsyncInternal(function, asyncFunction));
 								bindingsToRemove.add(functionObjectVar);
 
 								scriptBuilder.append(""
@@ -565,10 +598,10 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 												+ "if (p) {"
 													+ "q = " + UNICITY_PREFIX + "convertFrom(p);"
 												+ "}"
-												+ "var callbackId = '" + function + "' + " + UNICITY_PREFIX + "nextUnicityId;"
+												+ "var callbackId = '" + function + id + "_' + " + UNICITY_PREFIX + "nextUnicityId;"
 												+ UNICITY_PREFIX + "nextUnicityId++;"
 												+ UNICITY_PREFIX + "callbacks[callbackId] = callback;"
-												+ functionObjectVar + ".call(" + UNICITY_PREFIX + "instanceId, q, callbackId);"
+												+ functionObjectVar + ".call('" + endManager.instanceId + "', q, callbackId);"
 											+ "};"
 										);
 							}

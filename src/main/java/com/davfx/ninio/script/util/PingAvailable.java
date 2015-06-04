@@ -20,7 +20,7 @@ public final class PingAvailable {
 	public static void register(ScriptRunner runner, final PingClientCache client, final Cache cache) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction() {
 			@Override
-			public void call(JsonElement request, final AsyncScriptFunction.Callback userCallback) {
+			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				final String host = JsonUtils.getString(r, "host", "localhost");

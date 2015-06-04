@@ -23,7 +23,7 @@ public final class WaitingTelnetAvailable {
 	public static void register(ScriptRunner runner, final WaitingRemoteClientCache client, final Cache cache) {
 		runner.register(CALL_FUNCTION_NAME, new AsyncScriptFunction() {
 			@Override
-			public void call(JsonElement request, final AsyncScriptFunction.Callback userCallback) {
+			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
 				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", TelnetClient.DEFAULT_PORT));

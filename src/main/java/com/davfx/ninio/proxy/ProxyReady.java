@@ -151,7 +151,7 @@ final class ProxyReady {
 														public void close() {
 															synchronized (lock) {
 																connections.remove(connectionId);
-																LOGGER.debug("Connections size = {}", connections.size());
+																LOGGER.trace("Connections size = {}", connections.size());
 															}
 															try {
 																out.writeInt(connectionId);
@@ -204,7 +204,7 @@ final class ProxyReady {
 											Pair<Address, ReadyConnection> currentConnection;
 											synchronized (lock) {
 												currentConnection = connections.remove(connectionId);
-												LOGGER.debug("Connections size = {}", connections.size());
+												LOGGER.trace("Connections size = {}", connections.size());
 											}
 											if (currentConnection != null) {
 												currentConnection.second.close();
