@@ -16,6 +16,7 @@ import com.davfx.ninio.remote.WaitingRemoteClientConfigurator;
 import com.davfx.ninio.remote.ssh.SshRemoteConnectorFactory;
 import com.davfx.ninio.remote.telnet.TelnetRemoteConnectorFactory;
 import com.davfx.ninio.script.ExecutorScriptRunner;
+import com.davfx.ninio.script.QueueScriptRunner;
 import com.davfx.ninio.script.ScriptRunner;
 import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.util.SnmpClientCache;
@@ -30,7 +31,7 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 	private static final int THREADING = CONFIG.getInt("script.threading");
 	private static final boolean CACHE = CONFIG.getBoolean("script.cache");
 
-	private final ExecutorScriptRunner[] runners;
+	private final ScriptRunner[] runners;
 	private int index = 0;
 	private final Queue queue;
 	
@@ -70,9 +71,9 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 		snmp = new SnmpClientCache(snmpConfigurator);
 		ping = new PingClientCache(pingConfigurator);
 
-		runners = new ExecutorScriptRunner[THREADING];
+		runners = new ScriptRunner[THREADING];
 		for (int i = 0; i < THREADING; i++) {
-			runners[i] = new ExecutorScriptRunner();
+			runners[i] = new QueueScriptRunner(queue, new ExecutorScriptRunner());
 			PingAvailable.register(runners[i], ping, pingCache);
 			SnmpAvailable.register(runners[i], snmp, snmpCache);
 			WaitingTelnetAvailable.register(runners[i], telnet, telnetCache);
@@ -108,7 +109,7 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 			}
 		});
 
-		for (ExecutorScriptRunner r : runners) {
+		for (ScriptRunner r : runners) {
 			r.close();
 		}
 		
