@@ -81,9 +81,7 @@ public final class ProxyServer {
 					while (true) {
 						final Socket socket = ss.accept();
 						socket.setKeepAlive(true);
-						if (DEFAULT_READ_TIMEOUT > 0d) {
-							socket.setSoTimeout((int) (DEFAULT_READ_TIMEOUT * 1000d));
-						}
+						socket.setSoTimeout((int) (DEFAULT_READ_TIMEOUT * 1000d));
 
 						clientExecutor.execute(new Runnable() {
 							@Override

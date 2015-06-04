@@ -102,15 +102,9 @@ final class ProxyReady {
 						try {
 							socket = new Socket();
 							socket.setKeepAlive(true);
-							if (readTimeout > 0d) {
-								socket.setSoTimeout((int) (readTimeout * 1000d));
-							}
+							socket.setSoTimeout((int) (readTimeout * 1000d));
 							InetSocketAddress a = new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort());
-							if (connectionTimeout > 0d) {
-								socket.connect(a, (int) (connectionTimeout * 1000d));
-							} else {
-								socket.connect(a);
-							}
+							socket.connect(a, (int) (connectionTimeout * 1000d));
 							try {
 								out = new DataOutputStream(socket.getOutputStream());
 								in = new DataInputStream(socket.getInputStream());
