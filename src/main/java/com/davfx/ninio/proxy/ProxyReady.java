@@ -3,6 +3,8 @@ package com.davfx.ninio.proxy;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -40,6 +42,9 @@ final class ProxyReady {
 	private int nextConnectionId;
 	private double connectionTimeout = DEFAULT_CONNECTION_TIMEOUT;
 	private double readTimeout = DEFAULT_READ_TIMEOUT;
+	private double throttleBytesPerSecond = 0d;
+	private double throttleTimeStep = 0d;
+	private long throttleBytesStep = 0L;
 	
 	private final ProxyUtils.ClientSide proxyUtils = ProxyUtils.client();
 	
@@ -65,6 +70,13 @@ final class ProxyReady {
 		return this;
 	}
 	
+	public ProxyReady throttle(double bytesPerSecond, double timeStep, long bytesStep) {
+		throttleBytesPerSecond = bytesPerSecond;
+		throttleTimeStep = timeStep;
+		throttleBytesStep = bytesStep;
+		return this;
+	}
+
 	public ProxyReady withConnectionTimeout(double connectionTimeout) {
 		this.connectionTimeout = connectionTimeout;
 		return this;
@@ -98,16 +110,21 @@ final class ProxyReady {
 					if (currentOut == null) {
 						final DataInputStream in;
 						final Socket socket;
+						final Throttle throttle = (throttleBytesPerSecond == 0d) ? null : new Throttle(throttleBytesPerSecond, throttleTimeStep, throttleBytesStep);
 			
 						try {
+							
 							socket = new Socket();
 							socket.setKeepAlive(true);
 							socket.setSoTimeout((int) (readTimeout * 1000d));
 							InetSocketAddress a = new InetSocketAddress(proxyServerAddress.getHost(), proxyServerAddress.getPort());
 							socket.connect(a, (int) (connectionTimeout * 1000d));
+							
+							OutputStream sout;
+							InputStream sin;
 							try {
-								out = new DataOutputStream(socket.getOutputStream());
-								in = new DataInputStream(socket.getInputStream());
+								sout = socket.getOutputStream();
+								sin = socket.getInputStream();
 							} catch (IOException ee) {
 								try {
 									socket.close();
@@ -115,6 +132,10 @@ final class ProxyReady {
 								}
 								throw ee;
 							}
+							
+							out = new DataOutputStream(sout);
+							in = new DataInputStream(sin);
+
 						} catch (final IOException ioe) {
 							connection.failed(new IOException("Connection to proxy cannot be established", ioe));
 							executor.execute(new Runnable() {
@@ -180,10 +201,14 @@ final class ProxyReady {
 															if (!buffer.hasRemaining()) {
 																return;
 															}
+															int len = buffer.remaining();
 															try {
 																out.writeInt(connectionId);
-																out.writeInt(buffer.remaining());
-																out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
+																out.writeInt(len);
+																out.write(buffer.array(), buffer.arrayOffset(), len);
+																if (throttle != null) {
+																	throttle.sent(len);
+																}
 																out.flush();
 															} catch (IOException ioe) {
 																try {

@@ -4,12 +4,20 @@ import java.util.concurrent.Executor;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.ReadyFactory;
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
 
 public final class ProxyClient {
+	private static final Config CONFIG = ConfigUtils.load(ProxyClient.class);
+
+	private static final double THROTTLE_BYTES_PER_SECOND = CONFIG.getDouble("proxy.throttle.bps");
+	private static final double THROTTLE_TIME_STEP = ConfigUtils.getDuration(CONFIG, "proxy.throttle.step.time");
+	private static final long THROTTLE_BYTES_STEP = CONFIG.getBytes("proxy.throttle.step.bytes");
+
 	private final ProxyReady proxyReady;
 
 	public ProxyClient(Address proxyServerAddress) {
-		proxyReady = new ProxyReady(proxyServerAddress);
+		proxyReady = new ProxyReady(proxyServerAddress).throttle(THROTTLE_BYTES_PER_SECOND, THROTTLE_TIME_STEP, THROTTLE_BYTES_STEP);
 	}
 
 	public ReadyFactory socket() {
