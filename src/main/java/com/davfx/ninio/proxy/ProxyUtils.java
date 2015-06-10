@@ -118,7 +118,13 @@ public final class ProxyUtils {
 			} else {
 				rule = new TcpdumpSyncDatagramReady.SourcePortRule(port);
 			}
-			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface));
+			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface);
+			try {
+				receiver.prepare();
+			} catch (IOException ioe) {
+				LOGGER.error("Tcpdump receiver could not be prepared", ioe);
+			}
+			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(receiver);
 		//%% } else if (datagramMode.equals("sync.java")) {
 			//%% configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {
