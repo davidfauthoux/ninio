@@ -9,6 +9,8 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
@@ -256,13 +258,17 @@ final class ProxyReady {
 								} catch (IOException e) {
 								}
 			
+								List<ReadyConnection> toClose = new LinkedList<>();
 								synchronized (lock) {
 									currentOut = null;
 									currentConnections = null;
+									for (Pair<Address, ReadyConnection> c : connections.values()) {
+										toClose.add(c.second);
+									}
 								}
 
-								for (Pair<Address, ReadyConnection> c : connections.values()) {
-									c.second.failed(new IOException("Connection lost"));
+								for (ReadyConnection c : toClose) {
+									c.failed(new IOException("Connection lost"));
 								}
 								
 								listener.disconnected();
@@ -281,7 +287,9 @@ final class ProxyReady {
 					nextConnectionId++;
 				}
 				
-				connections.put(connectionId, new Pair<>(address, connection));
+				synchronized (lock) {
+					connections.put(connectionId, new Pair<>(address, connection));
+				}
 
 				try {
 					out.writeInt(connectionId);

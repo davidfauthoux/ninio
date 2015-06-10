@@ -1,9 +1,5 @@
 package com.davfx.ninio.common;
 
-import com.davfx.ninio.common.Queue;
-import com.davfx.ninio.common.QueueReady;
-import com.davfx.ninio.common.Ready;
-import com.davfx.ninio.common.ReadyFactory;
 
 public final class TcpdumpSyncDatagramReadyFactory implements ReadyFactory {
 	private final TcpdumpSyncDatagramReady.Receiver receiver;

@@ -185,6 +185,7 @@ public final class EchoSnmpServer {
 	public static void main(String[] args) throws Exception {
 		Address address = new Address(CONFIG.getString("snmp.server.host"), CONFIG.getInt("snmp.server.port"));
 		TcpdumpSyncDatagramReady.Receiver tcpdump = CONFIG.getString("snmp.server.tcpdump.interface").isEmpty() ? null : new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.DestinationPortRule(address.getPort()), CONFIG.getString("snmp.server.tcpdump.interface"));
+		tcpdump.prepare();
 		EchoSnmpServer server = new EchoSnmpServer(new Queue(), tcpdump, address);
 		server.start();
 	}

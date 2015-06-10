@@ -27,18 +27,12 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 
-// sudo sysctl -w net.core.rmem_max=8388608
-// sudo sysctl -w net.core.wmem_max=8388608
-// sudo sysctl -w net.core.rmem_default=8388608
-// sudo sysctl -w net.core.wmem_default=8388608
-// sudo sysctl -w net.ipv4.route.flush=1
-
 // F*cking apparmor: http://unix.stackexchange.com/questions/88253/permission-denied-when-writing-to-dev-stdout
-public final class TcpdumpSyncDatagramReady implements Ready {
-	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSyncDatagramReady.class);
+public final class Copy_2_of_TcpdumpSyncDatagramReady implements Ready {
+	private static final Logger LOGGER = LoggerFactory.getLogger(Copy_2_of_TcpdumpSyncDatagramReady.class);
 
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
-	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
+	private static final Config CONFIG = ConfigUtils.load(Copy_2_of_TcpdumpSyncDatagramReady.class);
 	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("tcpdump.packet.size").intValue();
 	private static final String DO_OUTPUT = CONFIG.hasPath("tcpdump.output") ? CONFIG.getString("tcpdump.output") : null;
 
@@ -115,13 +109,13 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		}
 	}
 	
-	public static final class Receiver implements AutoCloseable {
+	public static final class Receiver {
 		private final File outputFile;
 		private final DataOutputStream output;
 		
-		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
+		private final Map<Address, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
-		private DatagramSocket socket = null;
+		//%% private DatagramSocket socket = null;
 		
 		public Receiver(final Rule rule, final String interfaceId) { //, final boolean promiscuous) {
 			if (DO_OUTPUT != null) {
@@ -139,7 +133,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 				output = null;
 			}
 
-			Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class)).execute(new Runnable() {
+			Executors.newSingleThreadExecutor(new ClassThreadFactory(Copy_2_of_TcpdumpSyncDatagramReady.class)).execute(new Runnable() {
 				@Override
 				public void run() {
 					while (true) {
@@ -184,7 +178,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						
 						if (p != null) {
 							final InputStream error = p.getErrorStream();
-							Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class, "err")).execute(new Runnable() {
+							Executors.newSingleThreadExecutor(new ClassThreadFactory(Copy_2_of_TcpdumpSyncDatagramReady.class, "err")).execute(new Runnable() {
 								@Override
 								public void run() {
 									try {
@@ -203,7 +197,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							});
 							
 							final InputStream input = p.getInputStream();
-							Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class, "in")).execute(new Runnable() {
+							Executors.newSingleThreadExecutor(new ClassThreadFactory(Copy_2_of_TcpdumpSyncDatagramReady.class, "in")).execute(new Runnable() {
 								@Override
 								public void run() {
 									try {
@@ -376,18 +370,18 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 													output.flush();
 												}
 												
-												ReadyConnection connection = connections.get("s/" + sourceIp + "/"); //%% new Address(destinationIp, destinationPort));
-												if (connection == null) {
-													connection = connections.get("d/" + destinationIp + "/" + destinationPort); //%% new Address(null, destinationPort));
-												}
-												if (connection == null) {
-													connection = connections.get("s//" + destinationPort); //%% new Address(null, destinationPort));
-												}
-												
+												ReadyConnection connection = connections.get(new Address(destinationIp, destinationPort));
 												if (connection != null) {
 													connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
 												} else {
-													LOGGER.trace("No match for packet: {}:{} -> {}:{} {}, available: {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp), connections.keySet());
+													connection = connections.get(new Address(null, destinationPort));
+													if (connection != null) {
+														connection.handle(new Address(sourceIp, sourcePort), ByteBuffer.wrap(data, 0, data.length));
+														//%%% } else {
+														//%%% System.out.println("NO CONNECTION " + connections.keySet());
+													} else {
+														LOGGER.trace("No match for packet: {}:{} -> {}:{} {}, available: {}", sourceIp, sourcePort, destinationIp, destinationPort, DateUtils.from(timestamp), connections.keySet());
+													}
 												}
 											}
 										} finally {
@@ -419,45 +413,32 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			});
 		}
 		
-		private void add(String key, ReadyConnection connection) {
-			connections.put(key, connection);
+		private void add(Address address, ReadyConnection connection) {
+			connections.put(address, connection);
 		}
 		
-		private void remove(String key) {
-			connections.remove(key);
+		private void remove(Address address) {
+			connections.remove(address);
 		}
 
-		public Receiver prepare() throws IOException {
-			DatagramSocket s = new DatagramSocket();
-			try {
-				s.setReceiveBufferSize(READ_BUFFER_SIZE);
-				s.setSendBufferSize(WRITE_BUFFER_SIZE);
-				LOGGER.debug("Datagram socket buffer size, receive {}, send {}", s.getReceiveBufferSize(), s.getSendBufferSize());
-			} catch (IOException ioe) {
-				s.close();
-				throw ioe;
+		/*%%%
+		public DatagramSocket socket() throws IOException {
+			if (socket == null) {
+				socket = new DatagramSocket();
 			}
-			socket = s;
-			return this;
+			return socket;
 		}
-		
-		@Override
-		public void close() {
-			if (socket != null) {
-				socket.close();
-				socket = null;
-			}
-		}
+		*/
 	}
 	
 	private final Receiver receiver;
 	private boolean bind = false;
 	
-	public TcpdumpSyncDatagramReady(Receiver receiver) {
+	public Copy_2_of_TcpdumpSyncDatagramReady(Receiver receiver) {
 		this.receiver = receiver;
 	}
 	
-	public TcpdumpSyncDatagramReady bind() {
+	public Copy_2_of_TcpdumpSyncDatagramReady bind() {
 		bind = true;
 		return this;
 	}
@@ -465,8 +446,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	@Override
 	public void connect(final Address address, final ReadyConnection connection) {
 		final DatagramSocket socket;
-		final String key;
-		final boolean haveToCloseSocket;
+		final Address receiveAddress;
 		if (bind) {
 			try {
 				InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
@@ -474,53 +454,41 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 					throw new IOException("Invalid address");
 				}
 				socket = new DatagramSocket(a);
-				try {
-					socket.setReceiveBufferSize(READ_BUFFER_SIZE);
-					socket.setSendBufferSize(WRITE_BUFFER_SIZE);
-					LOGGER.debug("Datagram bound socket {} buffer size, receive {}, send {}", a, socket.getReceiveBufferSize(), socket.getSendBufferSize());
-				} catch (IOException ioee) {
-					socket.close();
-					throw ioee;
-				}
-				haveToCloseSocket = true;
+				socket.setReceiveBufferSize(READ_BUFFER_SIZE);
+				socket.setSendBufferSize(WRITE_BUFFER_SIZE);
+				LOGGER.debug("Datagram bound socket {} buffer size, receive {}, send {}", a, socket.getReceiveBufferSize(), socket.getSendBufferSize());
 			} catch (IOException ioe) {
 				connection.failed(ioe);
 				return;
 			}
-			key = "d/" + address.getHost() + "/" + address.getPort();
-		} else {
-			if (receiver.socket == null) {
-				try {
-					socket = new DatagramSocket();
-					try {
-						socket.setReceiveBufferSize(READ_BUFFER_SIZE);
-						socket.setSendBufferSize(WRITE_BUFFER_SIZE);
-						LOGGER.debug("Datagram socket buffer size, receive {}, send {}", socket.getReceiveBufferSize(), socket.getSendBufferSize());
-					} catch (IOException ioee) {
-						socket.close();
-						throw ioee;
-					}
-					haveToCloseSocket = true;
-				} catch (IOException ioe) {
-					connection.failed(ioe);
-					return;
-				}
-				key = "s//" + socket.getLocalPort();
-			} else {
-				socket = receiver.socket;
-				key = "s/" + address.getHost() + "/";
-				haveToCloseSocket = false;
+			/*%%%
+			try {
+				socket = receiver.socket();
+			} catch (IOException ioe) {
+				connection.failed(ioe);
+				return;
 			}
+			*/
+			receiveAddress = address;
+		} else {
+			try {
+				socket = new DatagramSocket();
+				socket.setReceiveBufferSize(READ_BUFFER_SIZE);
+				socket.setSendBufferSize(WRITE_BUFFER_SIZE);
+				LOGGER.debug("Datagram socket buffer size, receive {}, send {}", socket.getReceiveBufferSize(), socket.getSendBufferSize());
+			} catch (IOException ioe) {
+				connection.failed(ioe);
+				return;
+			}
+			receiveAddress = new Address(null, socket.getLocalPort());
 		}
 		
-		receiver.add(key, connection);
+		receiver.add(receiveAddress, connection);
 
 		connection.connected(new FailableCloseableByteBufferHandler() {
 			private void closeSocket() {
-				receiver.remove(key);
-				if (haveToCloseSocket) {
-					socket.close();
-				}
+				receiver.remove(receiveAddress);
+				socket.close();
 			}
 			
 			@Override

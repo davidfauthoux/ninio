@@ -10,7 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.common.CountingReadyFactory;
 import com.davfx.ninio.common.DatagramReadyFactory;
+import com.davfx.ninio.common.LogCount;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.ninio.common.SocketReadyFactory;
 import com.davfx.ninio.common.TcpdumpSyncDatagramReady;
@@ -31,6 +33,10 @@ public final class ProxyUtils {
 	public static final String PING_TYPE = CONFIG.getString("proxy.ping");
 	public static final String REPROXY_TYPE = CONFIG.getString("proxy.reproxy");
 	//%% private static final int PING_MAX_SIMULTANEOUS_CLIENTS = ConfigUtils.load(InternalPingServerReadyFactory.class).getInt("ping.maxSimultaneousClients");
+	public static final long DATAGRAM_READ_STEP = CONFIG.getBytes("proxy.log.datagram.read.step");
+	public static final String DATAGRAM_READ_PREFIX = CONFIG.getString("proxy.log.datagram.read.prefix");
+	public static final long DATAGRAM_WRITE_STEP = CONFIG.getBytes("proxy.log.datagram.write.step");
+	public static final String DATAGRAM_WRITE_PREFIX = CONFIG.getString("proxy.log.datagram.write.prefix");
 	
 	private ProxyUtils() {
 	}
@@ -100,6 +106,7 @@ public final class ProxyUtils {
 		
 		configurators.put(SOCKET_TYPE, new SimpleServerSideConfigurator(new SocketReadyFactory()));
 
+		ReadyFactory datagramReadyFactory;
 		String datagramMode = CONFIG.getString("proxy.mode.datagram");
 		if (datagramMode.equals("sync.tcpdump")) {
 			int port = CONFIG.getInt("proxy.tcpdump.port");
@@ -111,14 +118,18 @@ public final class ProxyUtils {
 			} else {
 				rule = new TcpdumpSyncDatagramReady.SourcePortRule(port);
 			}
-			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface))));
+			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface));
 		//%% } else if (datagramMode.equals("sync.java")) {
 			//%% configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {
-			configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new DatagramReadyFactory()));
+			datagramReadyFactory = new DatagramReadyFactory();
 		} else {
 			throw new ConfigException.BadValue("proxy.mode.datagram", "Only sync.tcmpdump|async modes allowed");
 		}
+		if ((DATAGRAM_READ_STEP > 0L) || (DATAGRAM_WRITE_STEP > 0L)) {
+			datagramReadyFactory = new CountingReadyFactory((DATAGRAM_READ_STEP > 0L) ? new LogCount(DATAGRAM_READ_PREFIX, DATAGRAM_READ_STEP) : null, (DATAGRAM_WRITE_STEP > 0L) ? new LogCount(DATAGRAM_WRITE_PREFIX, DATAGRAM_WRITE_STEP) : null, datagramReadyFactory);
+		}
+		configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(datagramReadyFactory));
 		
 		configurators.put(PING_TYPE, new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(new PureJavaSyncPing())));
 
