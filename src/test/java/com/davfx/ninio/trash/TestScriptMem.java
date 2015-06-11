@@ -17,7 +17,23 @@ import com.google.gson.JsonElement;
 
 public class TestScriptMem {
 	public static void main(String[] args) throws Exception {
+		System.setProperty("proxy.throttle.bps", "1000");
 		System.out.println(System.getProperty("java.version"));
+/*
+		{
+			long tttt;
+			File fff = new File(".---temp");
+			try (OutputStream out = new ThrottleOutputStream(1000, 0.001d, 100000, new FileOutputStream(fff))) {
+				long tttt$ = System.currentTimeMillis();
+				for (int i = 0; i < 100; i++) {
+					out.write(new byte[100]);
+				}
+				tttt = System.currentTimeMillis() - tttt$;
+			}
+			System.out.println((tttt / 1000d) + " ms, size = " + fff.length() + ", bps = " + (fff.length() / (tttt / 1000d)));
+		}
+		System.exit(0);
+*/
 		/*
 		ScriptEngine scriptEngine = new ScriptEngineManager().getEngineByName("JavaScript");
 		Bindings bindings = new SimpleBindings();
@@ -41,10 +57,10 @@ public class TestScriptMem {
 
 		Queue queue = new Queue();
 		
-		new ProxyServer(9993, 10).start();
-		ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
-
-		foo(proxy, queue);
+		//new ProxyServer(9993, 10).start();
+		//ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
+		//foo(proxy, queue);
+		foo(null, queue);
 
 		System.out.println("--------------------------------------- DONE ------------");
 

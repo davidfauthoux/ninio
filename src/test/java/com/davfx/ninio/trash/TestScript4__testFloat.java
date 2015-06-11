@@ -19,7 +19,8 @@ public class TestScript4__testFloat {
 		
 		//new ProxyServer(9993, 10).start();
 		//ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
-		ProxyClient proxy =  new ProxyClient(new Address("172.17.10.20", 8888));
+		//ProxyClient proxy =  new ProxyClient(new Address("172.17.10.20", 8888));
+		ProxyClient proxy =  new ProxyClient(new Address("172.17.10.16", 8888));
 		AllAvailableScriptRunner r = new AllAvailableScriptRunner(queue);
 		try {
 			if (proxy !=null) {
@@ -28,6 +29,7 @@ public class TestScript4__testFloat {
 				r.pingConfigurator.override(proxy.ping());
 			}
 			
+			/*
 			int ethMin = 129;
 			int ethMax = 140;
 			int ipMin = 1;
@@ -37,7 +39,7 @@ public class TestScript4__testFloat {
 			for (int eth = ethMin; eth <= ethMax; eth++) {
 				for (int j = ipMin; j <= ipMax; j++) {
 					final int j$ = j;
-
+					*/
 					ScriptRunner.Engine rr = r.runner();
 	
 					rr.register("log_telnet", new SyncScriptFunction() {
@@ -134,6 +136,18 @@ public class TestScript4__testFloat {
 					});
 					*/
 				
+					rr.eval("snmp({'host':'10.224.1.1', 'community':'public', oid:'1.1.1'}, log_snmp);", new Failable() {
+						@Override
+						public void failed(IOException e) {
+							e.printStackTrace();
+						}
+					}, new Runnable() {
+						@Override
+						public void run() {
+							System.out.println(Thread.currentThread() + " ---------END");
+						}
+					});
+					/*
 					rr.eval("snmp({'host':'10.0." + eth + "." + j + "', 'community':'public', oid:'1.1'}, log_snmp);", new Failable() {
 						@Override
 						public void failed(IOException e) {
@@ -145,7 +159,8 @@ public class TestScript4__testFloat {
 							count[0]++;
 							System.out.println(Thread.currentThread() + " ---------END " + j$ + "---------- " + count[0] + " < " + total);
 						}
-					});
+					});*/
+					
 					/*
 					rr.eval("aaa = 666;log('aaa='+aaa);", new Failable() {
 						@Override
@@ -212,9 +227,10 @@ public class TestScript4__testFloat {
 						}
 					});
 					*/
-				
+				/*
 				}
 			}
+			*/
 
 			Thread.sleep(500000);
 		} finally {
