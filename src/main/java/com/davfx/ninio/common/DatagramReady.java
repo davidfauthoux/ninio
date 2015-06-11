@@ -8,7 +8,14 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.LinkedList;
 
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+
 public final class DatagramReady implements Ready {
+	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
+	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
+	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
+
 	private static final class AddressedByteBuffer {
 		Address address;
 		ByteBuffer buffer;
@@ -35,9 +42,11 @@ public final class DatagramReady implements Ready {
 			final DatagramChannel channel = DatagramChannel.open();
 			try {
 				channel.configureBlocking(false);
+				channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
+				channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
 				final SelectionKey selectionKey = channel.register(selector, 0);
 				
-				final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<AddressedByteBuffer>();
+				final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 	
 				selectionKey.attach(new SelectionKeyVisitor() {
 					@Override
@@ -57,7 +66,7 @@ public final class DatagramReady implements Ready {
 									connection.close();
 								} else {
 									readBuffer.flip();
-									connection.handle(new Address(from.getHostName(), from.getPort()), readBuffer);
+									connection.handle(new Address(from.getHostString(), from.getPort()), readBuffer);
 								}
 							} catch (IOException e) {
 								try {

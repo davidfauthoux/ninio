@@ -89,7 +89,7 @@ public final class SnmpClient implements Closeable {
 				
 				final InstanceMapper instanceMapper = new InstanceMapper(configurator, requestIdProvider);
 				instanceMappers.add(instanceMapper);
-
+				
 				ready.connect(configurator.address, new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -144,7 +144,7 @@ public final class SnmpClient implements Closeable {
 							public void get(Oid oid, GetCallback callback) {
 								Instance i = new Instance(instanceMapper, callback, w, oid, configurator);
 								instanceMapper.map(i);
-								w.get(i.instanceId, oid);
+								w.get(configurator.address, i.instanceId, oid);
 							}
 						});
 					}
@@ -230,34 +230,34 @@ public final class SnmpClient implements Closeable {
 			this.authEngine = authEngine;
 		}
 		
-		public void get(int instanceId, Oid oid) {
+		public void get(Address to, int instanceId, Oid oid) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);
 				LOGGER.trace("Writing GET: {} #{} ({})", oid, instanceId, community);
-				write.handle(null, builder.getBuffer());
+				write.handle(to, builder.getBuffer());
 			} else {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, oid);
-				write.handle(null, builder.getBuffer());
+				write.handle(to, builder.getBuffer());
 			}
 		}
-		public void getNext(int instanceId, Oid oid) {
+		public void getNext(Address to, int instanceId, Oid oid) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, oid);
 				LOGGER.trace("Writing GETNEXT: {} #{} ({})", oid, instanceId, community);
-				write.handle(null, builder.getBuffer());
+				write.handle(to, builder.getBuffer());
 			} else {
 				Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, oid);
-				write.handle(null, builder.getBuffer());
+				write.handle(to, builder.getBuffer());
 			}
 		}
-		public void getBulk(int instanceId, Oid oid, int bulkLength) {
+		public void getBulk(Address to, int instanceId, Oid oid, int bulkLength) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, bulkLength);
 				LOGGER.trace("Writing GETBULK: {} #{} ({})", oid, instanceId, community);
-				write.handle(null, builder.getBuffer());
+				write.handle(to, builder.getBuffer());
 			} else {
 				Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, oid, bulkLength);
-				write.handle(null, builder.getBuffer());
+				write.handle(to, builder.getBuffer());
 			}
 		}
 	}
@@ -345,13 +345,13 @@ public final class SnmpClient implements Closeable {
 				LOGGER.trace("Repeating {} {}", instanceMapper.configurator.address, requestOid);
 				switch (shouldRepeatWhat) { 
 				case 0:
-					write.get(instanceId, requestOid);
+					write.get(instanceMapper.configurator.address, instanceId, requestOid);
 					break;
 				case 1:
-					write.getNext(instanceId, requestOid);
+					write.getNext(instanceMapper.configurator.address, instanceId, requestOid);
 					break;
 				case 2:
-					write.getBulk(instanceId, requestOid, configurator.bulkSize);
+					write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
 					break;
 				default:
 					break;
@@ -386,7 +386,7 @@ public final class SnmpClient implements Closeable {
 					LOGGER.trace("Retrying GET after receiving auth engine completion message");
 					instanceMapper.map(this);
 					sendTimestamp = new Date();
-					write.get(instanceId, requestOid);
+					write.get(instanceMapper.configurator.address, instanceId, requestOid);
 				} else {
 					boolean fallback = false;
 					if (errorStatus != 0) {
@@ -425,7 +425,7 @@ public final class SnmpClient implements Closeable {
 						instanceMapper.map(this);
 						sendTimestamp = new Date();
 						shouldRepeatWhat = 1;
-						write.getNext(instanceId, requestOid);
+						write.getNext(instanceMapper.configurator.address, instanceId, requestOid);
 					}
 				}
 			} else {
@@ -470,7 +470,7 @@ public final class SnmpClient implements Closeable {
 						instanceMapper.map(this);
 						sendTimestamp = new Date();
 						shouldRepeatWhat = 2;
-						write.getBulk(instanceId, requestOid, configurator.bulkSize);
+						write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
 					} else {
 						// Stop here
 						//%% shouldRepeatWhat = -1;

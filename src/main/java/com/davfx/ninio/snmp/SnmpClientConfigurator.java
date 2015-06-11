@@ -5,9 +5,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Closeable;
-import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
@@ -36,13 +36,14 @@ public final class SnmpClientConfigurator implements Closeable {
 	
 	public double repeatRandomization = ConfigUtils.getDuration(CONFIG, "snmp.repeatRandomization");
 	
-	public ReadyFactory readyFactory = new DatagramReadyFactory();
+	public ReadyFactory readyFactory;
 
 	private SnmpClientConfigurator(Queue queue, boolean queueToClose, ScheduledExecutorService repeatExecutor, boolean repeatExecutorToShutdown) {
 		this.queue = queue;
 		this.queueToClose = queueToClose;
 		this.repeatExecutor = repeatExecutor;
 		this.repeatExecutorToShutdown = repeatExecutorToShutdown;
+		readyFactory = new ByAddressDatagramReadyFactory(queue);
 	}
 	
 	public SnmpClientConfigurator() throws IOException {

@@ -285,9 +285,6 @@ final class ProxyReady {
 					
 					connectionId = nextConnectionId;
 					nextConnectionId++;
-				}
-				
-				synchronized (lock) {
 					connections.put(connectionId, new Pair<>(address, connection));
 				}
 
@@ -299,7 +296,13 @@ final class ProxyReady {
 					proxyUtils.write(connecterType, out);
 					out.flush();
 				} catch (IOException ioe) {
-					connection.failed(new IOException("Connection to proxy failed", ioe));
+					LOGGER.error("Could not establish connection", ioe);
+					// Close the socket
+					try {
+						out.close();
+					} catch (IOException e) {
+					}
+					//%% connection.failed(new IOException("Connection to proxy failed", ioe));
 				}
 			}
 		});

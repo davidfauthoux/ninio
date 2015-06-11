@@ -51,11 +51,14 @@ public final class ProxyServer {
 	
 	private final int port;
 	
-	private final ProxyUtils.ServerSide proxyUtils = ProxyUtils.server();
+	private final Queue queue;
+	private final ProxyUtils.ServerSide proxyUtils;
 	private final ExecutorService clientExecutor;
 	private final Set<String> hostsToFilter = new HashSet<>();
 	
-	public ProxyServer(int port, int maxNumberOfSimultaneousClients) {
+	public ProxyServer(int port, int maxNumberOfSimultaneousClients) throws IOException {
+		queue = new Queue();
+		proxyUtils = ProxyUtils.server(queue);
 		this.port = port;
 		LOGGER.debug("Proxy server on port {}", port);
 		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ClassThreadFactory(ProxyServer.class, "read"));
@@ -72,8 +75,7 @@ public final class ProxyServer {
 		return this;
 	}
 	
-	public void start() throws IOException {
-		final Queue queue = new Queue();
+	public void start() {
 		Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, "listen")).execute(new Runnable() {
 			@Override
 			public void run() {
@@ -196,14 +198,14 @@ public final class ProxyServer {
 											if (connection != null) {
 												if (!hostsToFilter.contains(connection.first.getHost())) {
 													if (connection.second != null) {
-														connection.second.handle(null, ByteBuffer.wrap(b));
+														connection.second.handle(connection.first, ByteBuffer.wrap(b));
 													}
 												}
 											}
 										}
 									}
 								} catch (IOException e) {
-									LOGGER.info("Socket closed by peer");
+									LOGGER.info("Socket closed by peer", e);
 
 									try {
 										socket.close();

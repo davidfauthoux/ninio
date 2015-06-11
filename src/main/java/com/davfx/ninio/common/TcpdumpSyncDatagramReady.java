@@ -534,8 +534,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			@Override
 			public void handle(Address a, ByteBuffer buffer) {
 				if (a == null) {
-					LOGGER.trace("Sending datagram to null address, using instead: {}", address);
-					a = address;
+					LOGGER.error("Dropping datagram sent to null address"); //%% , using instead: {}", address);
+					return;
+					//%% a = address;
 				}
 				LOGGER.trace("Sending datagram to: {}", a);
 				try {
