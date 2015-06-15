@@ -215,7 +215,7 @@ public class TestScriptMem {
 				});
 				*/
 				//long t = System.nanoTime();
-				//if (false)
+				if (false)
 				rr.eval("snmp$({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r) { log_snmp(r);ping$({'host':'172.17.0.1'}, log_ping); });", new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -229,7 +229,7 @@ public class TestScriptMem {
 				});
 				//t = System.nanoTime() - t;
 				//System.out.println("=========== " + (t / (1000d * 1000d)) + " ms");
-				//if (false)
+				if (false)
 				rr.eval("snmp$({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -241,7 +241,7 @@ public class TestScriptMem {
 						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
-				//if (false)
+				if (false)
 				rr.eval("telnet$({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);", new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -253,7 +253,7 @@ public class TestScriptMem {
 						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
-				//if (false)
+				if (false)
 				rr.eval("ping$({'host':'172.17.0.1'}, log_ping);", new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -265,13 +265,24 @@ public class TestScriptMem {
 						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
+				rr.eval("snmp$({'host':'null', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
+					@Override
+					public void failed(IOException e) {
+						e.printStackTrace();
+					}
+				}, new Runnable() {
+					@Override
+					public void run() {
+						System.out.println(Thread.currentThread() + " ---------END");
+					}
+				});
 
 				//System.out.println("********* FREE ***********");
 				free();
-				Thread.sleep(500);
+				Thread.sleep(5000);
 			}
 
-			for (int i = 0; i < 5; i++) {
+			for (int i = 0; i < 50; i++) {
 				//System.out.println("********* FREE ***********");
 				free();
 				Thread.sleep(500);
@@ -283,7 +294,7 @@ public class TestScriptMem {
 	
 	private static void free() {
 		List<byte[]> l = new LinkedList<>();
-		for (int i = 0; i < 1250; i++) {
+		for (int i = 0; i < 10; i++) {
 			l.add(new byte[100000]);
 		}
 	}

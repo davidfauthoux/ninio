@@ -88,7 +88,7 @@ public final class SnmpClient implements Closeable {
 				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
 				final InstanceMapper instanceMapper = new InstanceMapper(configurator, requestIdProvider);
-				//instanceMappers.add(instanceMapper);
+				instanceMappers.add(instanceMapper);
 				
 				ready.connect(configurator.address, new ReadyConnection() {
 					@Override

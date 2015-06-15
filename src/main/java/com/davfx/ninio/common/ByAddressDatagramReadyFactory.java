@@ -96,10 +96,21 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 											}
 											return;
 										} else {
+											InetSocketAddress a;
 											try {
-												channel.send(b.buffer, AddressUtils.toConnectableInetSocketAddress(b.address));
+												a = AddressUtils.toConnectableInetSocketAddress(b.address);
 											} catch (IOException e) {
-												LOGGER.warn("Error trying to send to {}", b.address);
+												LOGGER.warn("Invalid address: {}", b.address);
+												b.buffer.position(b.buffer.position() + b.buffer.remaining());
+												a = null;
+											}
+											
+											if (a != null) {
+												try {
+													channel.send(b.buffer, a);
+												} catch (IOException e) {
+													LOGGER.warn("Error trying to send to {}", b.address);
+												}
 											}
 											
 											if (b.buffer.hasRemaining()) {

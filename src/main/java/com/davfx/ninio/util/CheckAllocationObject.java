@@ -14,7 +14,7 @@ public class CheckAllocationObject {
 	
 	private static final boolean DISPLAY_INC = false;
 	private static final boolean DISPLAY_DEC = true;
-	private static final double DISPLAY_DEC_LIMIT = 10d * 60d;
+	private static final double DISPLAY_DEC_LIMIT = 1d * 60d;
 	
 	private static final class CountMax {
 		private final List<Time> times = new ArrayList<>();

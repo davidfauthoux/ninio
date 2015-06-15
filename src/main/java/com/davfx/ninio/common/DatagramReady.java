@@ -8,11 +8,17 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.LinkedList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.util.CheckAllocationObject;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class DatagramReady extends CheckAllocationObject implements Ready {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(DatagramReady.class);
+	
 	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
@@ -87,19 +93,39 @@ public final class DatagramReady extends CheckAllocationObject implements Ready 
 									}
 									return;
 								} else {
-									try {
-										if (b.address == null) {
-											channel.write(b.buffer);
-										} else {
-											channel.send(b.buffer, AddressUtils.toConnectableInetSocketAddress(b.address));
-										}
-									} catch (IOException e) {
+									if (b.address == null) {
 										try {
-											channel.close();
-										} catch (IOException ee) {
+											channel.write(b.buffer);
+										} catch (IOException e) {
+											try {
+												channel.close();
+											} catch (IOException ee) {
+											}
+											connection.close();
+											break;
 										}
-										connection.close();
-										break;
+									} else {
+										InetSocketAddress a;
+										try {
+											a = AddressUtils.toConnectableInetSocketAddress(b.address);
+										} catch (IOException e) {
+											LOGGER.warn("Invalid address: {}", b.address);
+											b.buffer.position(b.buffer.position() + b.buffer.remaining());
+											a = null;
+										}
+										
+										if (a != null) {
+											try {
+												channel.send(b.buffer, a);
+											} catch (IOException e) {
+												try {
+													channel.close();
+												} catch (IOException ee) {
+												}
+												connection.close();
+												break;
+											}
+										}
 									}
 									
 									if (b.buffer.hasRemaining()) {
