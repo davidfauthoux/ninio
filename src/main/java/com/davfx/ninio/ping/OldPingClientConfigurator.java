@@ -22,7 +22,7 @@ public final class OldPingClientConfigurator implements Closeable {
 	private final boolean repeatExecutorToShutdown;
 	public ReadyFactory readyFactory;
 	
-	public Address address = new Address("localhost", DEFAULT_PORT);
+	public Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	public double minTimeToRepeat = ConfigUtils.getDuration(CONFIG, "ping.minTimeToRepeat");
 	public double repeatTime = ConfigUtils.getDuration(CONFIG, "ping.repeatTime");
 	public double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ping.timeoutFromBeginning");

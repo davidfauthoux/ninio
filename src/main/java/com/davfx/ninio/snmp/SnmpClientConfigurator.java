@@ -5,9 +5,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import com.davfx.ninio.common.Address;
-import com.davfx.ninio.common.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Closeable;
+import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
@@ -24,7 +24,7 @@ public final class SnmpClientConfigurator implements Closeable {
 	
 	public String community = "community";
 	public AuthRemoteEngine authEngine = null;
-	public Address address = new Address("localhost", DEFAULT_PORT);
+	public Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	public int bulkSize = CONFIG.getInt("snmp.bulkSize");
 	public double minTimeToRepeat = ConfigUtils.getDuration(CONFIG, "snmp.minTimeToRepeat");
 	public int getLimit = CONFIG.getInt("snmp.getLimit");;
@@ -36,14 +36,13 @@ public final class SnmpClientConfigurator implements Closeable {
 	
 	public double repeatRandomization = ConfigUtils.getDuration(CONFIG, "snmp.repeatRandomization");
 	
-	public ReadyFactory readyFactory;
+	public ReadyFactory readyFactory = new DatagramReadyFactory();
 
 	private SnmpClientConfigurator(Queue queue, boolean queueToClose, ScheduledExecutorService repeatExecutor, boolean repeatExecutorToShutdown) {
 		this.queue = queue;
 		this.queueToClose = queueToClose;
 		this.repeatExecutor = repeatExecutor;
 		this.repeatExecutorToShutdown = repeatExecutorToShutdown;
-		readyFactory = new ByAddressDatagramReadyFactory(queue);
 	}
 	
 	public SnmpClientConfigurator() throws IOException {

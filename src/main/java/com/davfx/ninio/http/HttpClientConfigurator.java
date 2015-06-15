@@ -31,7 +31,7 @@ public final class HttpClientConfigurator implements Closeable {
 	public ReadyFactory readyFactory = new SocketReadyFactory();
 	public ReadyFactory secureReadyFactory = null;
 	public Trust trust = null;
-	public Address address = new Address("localhost", Http.DEFAULT_PORT);
+	public Address address = new Address(Address.LOCALHOST, Http.DEFAULT_PORT);
 
 	private HttpClientConfigurator(Queue queue, boolean queueToClose, ScheduledExecutorService recyclersCloserExecutor, boolean recyclersCloserExecutorToShutdown) {
 		this.queue = queue;

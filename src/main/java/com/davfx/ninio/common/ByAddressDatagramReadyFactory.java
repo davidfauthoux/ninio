@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-public final class ByAddressDatagramReadyFactory implements ReadyFactory {
+public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByAddressDatagramReadyFactory.class);
 
@@ -29,14 +29,16 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory {
 		Address address;
 		ByteBuffer buffer;
 	}
-
+	
+	private final Queue queue;
 	private final Map<Address, ReadyConnection> connections = new HashMap<>();
 	private FailableCloseableByteBufferHandler write = null;
 	private IOException error = null;
 	private boolean closed = false;
 	private final List<ReadyConnection> toConnect = new LinkedList<>();
 	
-	public ByAddressDatagramReadyFactory(Queue queue) {
+	public ByAddressDatagramReadyFactory(Queue globalQueue) {
+		queue = globalQueue;
 		final Selector selector = queue.getSelector();
 		final ByteBufferAllocator byteBufferAllocator = queue.allocator();
 		queue.post(new Runnable() {
@@ -190,7 +192,6 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory {
 					}
 					@Override
 					public void close() {
-						//TODO Close in Autocloseable.close?
 						/* Never closed
 						if (!selector.isOpen()) {
 							return;
@@ -222,7 +223,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory {
 	}
 	
 	@Override
-	public Ready create(Queue queue) {
+	public Ready create(Queue ignoredQueue) {
 		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(Address address, ReadyConnection connection) {
@@ -245,6 +246,23 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory {
 				
 				connections.put(address, connection);
 				connection.connected(write);
+			}
+		});
+	}
+	
+	@Override
+	public void close() {
+		queue.post(new Runnable() {
+			@Override
+			public void run() {
+				for (ReadyConnection connection : toConnect) {
+					connection.close();
+				}
+				toConnect.clear();
+				for (ReadyConnection c : connections.values()) {
+					c.close();
+				}
+				connections.clear();
 			}
 		});
 	}

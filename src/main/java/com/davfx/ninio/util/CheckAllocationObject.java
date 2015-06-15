@@ -13,7 +13,7 @@ public class CheckAllocationObject {
 	private static final Logger LOGGER = LoggerFactory.getLogger(CheckAllocationObject.class);
 	
 	private static final boolean DISPLAY_INC = false;
-	private static final boolean DISPLAY_DEC = false;
+	private static final boolean DISPLAY_DEC = true;
 	private static final double DISPLAY_DEC_LIMIT = 10d * 60d;
 	
 	private static final class CountMax {
@@ -99,7 +99,7 @@ public class CheckAllocationObject {
 		
 		String x = count.inc(time);
 		if (x != null) {
-			LOGGER.trace("*** {} | Allocation inc: {}", prefix, x);
+			LOGGER.debug("*** {} | Allocation inc: {}", prefix, x);
 		}
 	}
 	

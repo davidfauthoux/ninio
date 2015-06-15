@@ -2,6 +2,7 @@ package com.davfx.ninio.script.util;
 
 import java.nio.ByteBuffer;
 
+import com.davfx.ninio.common.Address;
 import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.util.InMemoryPost;
@@ -60,7 +61,7 @@ public final class HttpAvailable {
 				
 				Integer port = getInt(r, "port", null);
 				Boolean secure = getBoolean(r, "secure", null);
-				client.on(getString(r, "path", null)).withHost(getString(r, "host", "localhost"));
+				client.on(getString(r, "path", null)).withHost(getString(r, "host", Address.LOCALHOST));
 				if (secure != null) {
 					client.secure(secure);
 				}

@@ -30,7 +30,7 @@ public final class PingClientConfigurator implements Closeable {
 	private final boolean queueToClose;
 	public ReadyFactory readyFactory;
 	
-	public Address address = new Address("localhost", DEFAULT_PORT);
+	public Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	//%% public double timeout = ConfigUtils.getDuration(CONFIG, "ping.timeout");
 	//%% public int maxSimultaneousClients = CONFIG.getInt("ping.maxSimultaneousClients");
 	

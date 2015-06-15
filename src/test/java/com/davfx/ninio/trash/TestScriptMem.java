@@ -60,9 +60,10 @@ public class TestScriptMem {
 		//new ProxyServer(9993, 10).start();
 		//ProxyClient proxy =  new ProxyClient(new Address("127.0.0.1", 9993));
 		//foo(proxy, queue);
-		foo(null, queue);
-
-		System.out.println("--------------------------------------- DONE ------------");
+		for (int i = 0; i < 50; i++) {
+			foo(null, queue);
+			System.out.println("--------------------------------------- DONE ------------");
+		}
 
 		for (int i = 0; i < 100; i++) {
 			free();
@@ -188,7 +189,7 @@ public class TestScriptMem {
 				}
 			});
 
-			for (int i = 0; i < 20; i++) {
+			for (int i = 0; i < 10; i++) {
 				/*
 				rr.eval(new BasicScript().append("aaaaa='aaaaabbbbb';"), new Failable() {
 					@Override
@@ -223,13 +224,13 @@ public class TestScriptMem {
 				}, new Runnable() {
 					@Override
 					public void run() {
-						System.out.println(Thread.currentThread() + " ---------END");
+						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
 				//t = System.nanoTime() - t;
 				//System.out.println("=========== " + (t / (1000d * 1000d)) + " ms");
-				/*
-				rr.eval(new BasicScript().append("snmp({'host':'127.0.0.2', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r, err) { snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r, err) { snmp({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);ping({'host':'172.17.0.2'}, log_ping);var ooo=null;var aaa=ooo.indexOf('ee');    java.lang.System.out.println('r='+JSON.stringify(r));});ping({'host':'172.17.0.2'}, log_ping);java.lang.System.out.println('r='+JSON.stringify(r));}); "), new Failable() {
+				//if (false)
+				rr.eval("snmp$({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
 					@Override
 					public void failed(IOException e) {
 						e.printStackTrace();
@@ -237,10 +238,9 @@ public class TestScriptMem {
 				}, new Runnable() {
 					@Override
 					public void run() {
-						System.out.println(Thread.currentThread() + " ---------END");
+						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
-				*/
 				//if (false)
 				rr.eval("telnet$({'init':[{cut:'.*login\\\\:\\\\s'},{command:'davidfauthoux',cut:'.*Password\\\\:'},{command:'orod,ove',cut:'.*\\\\$\\\\s'}], 'command':'ls',cut:'.*\\\\$\\\\s'}, log_telnet);", new Failable() {
 					@Override
@@ -250,7 +250,7 @@ public class TestScriptMem {
 				}, new Runnable() {
 					@Override
 					public void run() {
-						System.out.println(Thread.currentThread() + " ---------END");
+						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
 				//if (false)
@@ -262,12 +262,20 @@ public class TestScriptMem {
 				}, new Runnable() {
 					@Override
 					public void run() {
-						System.out.println(Thread.currentThread() + " ---------END");
+						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
+
+				//System.out.println("********* FREE ***********");
+				free();
+				Thread.sleep(500);
 			}
 
-			Thread.sleep(200000);
+			for (int i = 0; i < 5; i++) {
+				//System.out.println("********* FREE ***********");
+				free();
+				Thread.sleep(500);
+			}
 		} finally {
 			r.close();
 		}
@@ -275,8 +283,8 @@ public class TestScriptMem {
 	
 	private static void free() {
 		List<byte[]> l = new LinkedList<>();
-		for (int i = 0; i < 100; i++) {
-			l.add(new byte[1000000]);
+		for (int i = 0; i < 1250; i++) {
+			l.add(new byte[100000]);
 		}
 	}
 }

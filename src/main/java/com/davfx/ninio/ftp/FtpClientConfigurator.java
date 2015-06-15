@@ -11,7 +11,7 @@ public final class FtpClientConfigurator {
 	public Queue queue = null;
 	public String login = "user";
 	public String password = "pass";
-	public Address address = new Address("localhost", DEFAULT_PORT);
+	public Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	public String host = null;
 	public int port = -1;
 

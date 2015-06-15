@@ -119,7 +119,7 @@ public final class ProxyUtils {
 			} else {
 				rule = new TcpdumpSyncDatagramReady.SourcePortRule(port);
 			}
-			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface);
+			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(rule, tcpdumpInterface); // Never closed, but could be when proxy server is closed
 			try {
 				receiver.prepare();
 			} catch (IOException ioe) {
@@ -129,7 +129,7 @@ public final class ProxyUtils {
 		//%% } else if (datagramMode.equals("sync.java")) {
 			//%% configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {
-			datagramReadyFactory = new ByAddressDatagramReadyFactory(queue);
+			datagramReadyFactory = new ByAddressDatagramReadyFactory(queue); // Never closed, but could be when proxy server is closed
 		} else {
 			throw new ConfigException.BadValue("proxy.mode.datagram", "Only sync.tcmpdump|async modes allowed");
 		}

@@ -5,17 +5,15 @@ import java.io.IOException;
 import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.Failable;
 import com.davfx.ninio.script.AsyncScriptFunction;
-import com.davfx.ninio.util.CheckAllocationObject;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
 
-final class AsyncScriptFunctionCallbackManager extends CheckAllocationObject implements Closeable, Failable {
+final class AsyncScriptFunctionCallbackManager implements Closeable, Failable {
 	private final AsyncScriptFunction.Callback callback;
 	private boolean closed = false;
 
 	public AsyncScriptFunctionCallbackManager(AsyncScriptFunction.Callback wrappee) {
-		super(AsyncScriptFunctionCallbackManager.class);
 		this.callback = wrappee;
 	}
 	

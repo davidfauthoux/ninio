@@ -27,7 +27,7 @@ public final class SnmpAvailable {
 			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
-				Address address = new Address(JsonUtils.getString(r, "host", "localhost"), JsonUtils.getInt(r, "port", SnmpClientConfigurator.DEFAULT_PORT));
+				Address address = new Address(JsonUtils.getString(r, "host", Address.LOCALHOST), JsonUtils.getInt(r, "port", SnmpClientConfigurator.DEFAULT_PORT));
 
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 

@@ -14,7 +14,7 @@ public final class TelnetClientConfigurator implements Closeable {
 	public final Queue queue;
 	private final boolean queueToClose;
 	
-	public Address address = new Address("localhost", DEFAULT_PORT);
+	public Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 
 	public ReadyFactory readyFactory = new SocketReadyFactory();
 

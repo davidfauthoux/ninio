@@ -2,6 +2,7 @@ package com.davfx.ninio.script.util;
 
 import java.io.IOException;
 
+import com.davfx.ninio.common.Address;
 import com.davfx.ninio.ping.PingClientHandler;
 import com.davfx.ninio.ping.util.PingClientCache;
 import com.davfx.ninio.script.AsyncScriptFunction;
@@ -23,7 +24,7 @@ public final class PingAvailable {
 			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
-				final String host = JsonUtils.getString(r, "host", "localhost");
+				final String host = JsonUtils.getString(r, "host", Address.LOCALHOST);
 
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 

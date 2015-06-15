@@ -8,10 +8,11 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.LinkedList;
 
+import com.davfx.ninio.util.CheckAllocationObject;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-public final class DatagramReady implements Ready {
+public final class DatagramReady extends CheckAllocationObject implements Ready {
 	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
@@ -27,6 +28,7 @@ public final class DatagramReady implements Ready {
 	private boolean bind = false;
 
 	public DatagramReady(Selector selector, ByteBufferAllocator byteBufferAllocator) {
+		super(DatagramReady.class);
 		this.selector = selector;
 		this.byteBufferAllocator = byteBufferAllocator;
 	}

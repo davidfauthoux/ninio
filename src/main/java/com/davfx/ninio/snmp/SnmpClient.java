@@ -88,7 +88,7 @@ public final class SnmpClient implements Closeable {
 				Ready ready = configurator.readyFactory.create(configurator.queue);
 				
 				final InstanceMapper instanceMapper = new InstanceMapper(configurator, requestIdProvider);
-				instanceMappers.add(instanceMapper);
+				//instanceMappers.add(instanceMapper);
 				
 				ready.connect(configurator.address, new ReadyConnection() {
 					@Override
@@ -161,12 +161,13 @@ public final class SnmpClient implements Closeable {
 		});
 	}
 	
-	private static final class InstanceMapper {
+	private static final class InstanceMapper { // extends CheckAllocationObject {
 		private final SnmpClientConfigurator configurator;
 		private final Map<Integer, Instance> instances = new HashMap<>();
 		private RequestIdProvider requestIdProvider;
 		
 		public InstanceMapper(SnmpClientConfigurator configurator, RequestIdProvider requestIdProvider) {
+			// super(InstanceMapper.class);
 			this.configurator = configurator;
 			this.requestIdProvider = requestIdProvider;
 		}
@@ -220,11 +221,12 @@ public final class SnmpClient implements Closeable {
 		}
 	}
 	
-	private static final class SnmpWriter {
+	private static final class SnmpWriter { // extends CheckAllocationObject {
 		private final CloseableByteBufferHandler write;
 		private final String community;
 		private final AuthRemoteEngine authEngine;
 		public SnmpWriter(CloseableByteBufferHandler write, String community, AuthRemoteEngine authEngine) {
+			// super(SnmpWriter.class);
 			this.write = write;
 			this.community = community;
 			this.authEngine = authEngine;
@@ -262,7 +264,7 @@ public final class SnmpClient implements Closeable {
 		}
 	}
 	
-	private static final class Instance {
+	private static final class Instance { // extends CheckAllocationObject {
 		private final InstanceMapper instanceMapper;
 		private SnmpClientHandler.Callback.GetCallback callback;
 		private final SnmpWriter write;
@@ -279,6 +281,7 @@ public final class SnmpClient implements Closeable {
 		private final double repeatRandomizationRandomized;
 
 		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, SnmpClientConfigurator configurator) {
+			// super(Instance.class);
 			this.instanceMapper = instanceMapper;
 			this.callback = callback;
 			this.write = write;

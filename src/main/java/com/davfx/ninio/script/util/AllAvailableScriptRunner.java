@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import com.davfx.ninio.common.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.http.HttpClientConfigurator;
@@ -43,6 +44,8 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 	
 	private final ScheduledExecutorService scheduledExecutor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(AllAvailableScriptRunner.class));
 	
+	private final ByAddressDatagramReadyFactory udpReadyFactory; // Should be used to override all UDP connection factories in order to share the datagram socket
+	
 	public final HttpClientConfigurator httpConfigurator;
 	public final WaitingRemoteClientConfigurator remoteConfigurator;
 	public final TelnetClientConfigurator telnetConfigurator;
@@ -58,11 +61,13 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 	public AllAvailableScriptRunner(Queue queue) {
 		this.queue = queue;
 		
+		udpReadyFactory = new ByAddressDatagramReadyFactory(queue);
+		
 		httpConfigurator = new HttpClientConfigurator(queue, scheduledExecutor);
 		remoteConfigurator = new WaitingRemoteClientConfigurator(scheduledExecutor, scheduledExecutor);
 		telnetConfigurator = new TelnetClientConfigurator(queue);
 		sshConfigurator = new SshClientConfigurator(queue);
-		snmpConfigurator = new SnmpClientConfigurator(queue, scheduledExecutor);
+		snmpConfigurator = new SnmpClientConfigurator(queue, scheduledExecutor).override(udpReadyFactory);
 		pingConfigurator = new PingClientConfigurator(queue); //%%%, scheduledExecutor);
 
 		http = new SimpleHttpClient(httpConfigurator);
@@ -119,6 +124,8 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 		sshConfigurator.close();
 		snmpConfigurator.close();
 		pingConfigurator.close();
+		
+		udpReadyFactory.close();
 		
 		scheduledExecutor.shutdown();
 	}

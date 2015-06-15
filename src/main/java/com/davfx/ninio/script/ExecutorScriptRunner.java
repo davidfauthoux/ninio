@@ -27,7 +27,7 @@ import com.google.gson.JsonPrimitive;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 
-public final class ExecutorScriptRunner extends CheckAllocationObject implements ScriptRunner, AutoCloseable {
+public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 	/*%%%%%%%
 	public static void main(String[] args) throws Exception {
 		ScriptRunner r = new ExecutorScriptRunner();
@@ -122,8 +122,6 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	private final List<String> registeredFunctions = new LinkedList<>();
 
 	public ExecutorScriptRunner() {
-		super(ExecutorScriptRunner.class);
-		
 		ScriptEngineManager scriptEngineManager = new ScriptEngineManager();
 		
 		scriptEngine = scriptEngineManager.getEngineByName(ENGINE_NAME);
@@ -241,11 +239,11 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 		}
 		public void inc() {
 			count++;
-			//%% LOGGER.debug("******************* INC {} = {}", instanceId, count);
+			//%%% LOGGER.debug("******************* INC {} = {}", instanceId, count);
 		}
 		public void dec() {
 			count--;
-			//%% LOGGER.debug("******************* DEC {} = {}", instanceId, count);
+			//%%% LOGGER.debug("******************* DEC {} = {}", instanceId, count);
 			if (count == 0) {
 				ended = true;
 				fail = null;
@@ -259,10 +257,10 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	}
 	
 	// Must be be public to be called from javascript
-	public final class SyncInternal extends CheckAllocationObject {
+	public final class SyncInternal { // extends CheckAllocationObject {
 		private final SyncScriptFunction syncFunction;
 		private SyncInternal(SyncScriptFunction syncFunction) {
-			super(SyncInternal.class);
+			// super(SyncInternal.class);
 			this.syncFunction = syncFunction;
 		}
 		public Object call(Object requestAsObject) {
@@ -291,11 +289,11 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	}
 	
 	// Must be be public to be called from javascript
-	public final class AsyncInternal extends CheckAllocationObject {
+	public final class AsyncInternal { // extends CheckAllocationObject {
 		private final String function;
 		private final AsyncScriptFunction asyncFunction;
 		private AsyncInternal(String function, AsyncScriptFunction asyncFunction) {
-			super(AsyncInternal.class);
+			// super(AsyncInternal.class);
 			this.function = function;
 			this.asyncFunction = asyncFunction;
 		}
@@ -314,12 +312,13 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 			final EndManager endManager = endManagers.get(instanceId);
 			endManager.inc();
 			
-			LOGGER.trace("Call {}, instanceId = {}, callbackId = {}", function, instanceId, callbackId);
+			LOGGER.trace("Call {}, instanceId = {}, callbackId = {}, request = {}", function, instanceId, callbackId, request);
 			
 			//%% LOGGER.debug("-----------> INC instanceId={} callbackId={}", instanceId, callbackId);
 			asyncFunction.call(request, new AsyncScriptFunction.Callback() {
 				@Override
 				public void handle(final JsonElement response) {
+					//%%% LOGGER.debug("*************** CALLBACK {} {}", instanceId, response);
 					if (executorService.isShutdown()) {
 						LOGGER.warn("Callback called after script engine has been closed");
 						return;
@@ -450,13 +449,16 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 	private EndManager endManager(final List<String> bindingsToRemove, final Failable fail, final Runnable end) {
 		final String instanceId = String.valueOf(nextUnicityId);
 		nextUnicityId++;
-		
+
 		final Runnable clean = new Runnable() {
 			@Override
 			public void run() {
+				//%%% LOGGER.debug("{}", endManagers);
 				endManagers.remove(instanceId);
+				//%%% LOGGER.debug("{}", endManagers);
+				//%%% LOGGER.debug("*************** TERMINATED {}", instanceId);
 				if (bindingsToRemove != null) {
-					//%% LOGGER.debug("*************** TERMINATED {}", instanceId);
+					//%%% LOGGER.debug("*************** TERMINATED {} {}", bindingsToRemove, instanceId);
 					for (String functionObjectVar : bindingsToRemove) {
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).put(functionObjectVar, null); // Memsafe null-set
 						scriptEngine.getBindings(ScriptContext.ENGINE_SCOPE).remove(functionObjectVar);
@@ -615,6 +617,7 @@ public final class ExecutorScriptRunner extends CheckAllocationObject implements
 								);
 							
 							String s = scriptBuilder.toString();
+							//%%% LOGGER.debug("EVAL {} {} {}", endManager.instanceId, bindingsToRemove, s);
 							try {
 								scriptEngine.eval(s);
 							} catch (ScriptException se) {
