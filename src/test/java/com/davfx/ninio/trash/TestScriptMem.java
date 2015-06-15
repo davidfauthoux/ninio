@@ -215,7 +215,7 @@ public class TestScriptMem {
 				});
 				*/
 				//long t = System.nanoTime();
-				if (false)
+				//if (false)
 				rr.eval("snmp$({'host':'127.0.0.1', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, function(r) { log_snmp(r);ping$({'host':'172.17.0.1'}, log_ping); });", new Failable() {
 					@Override
 					public void failed(IOException e) {
@@ -265,6 +265,7 @@ public class TestScriptMem {
 						//System.out.println(Thread.currentThread() + " ---------END");
 					}
 				});
+				if (false)
 				rr.eval("snmp$({'host':'null', 'community':'public', oid:'1.3.6.1.2.1.1.4.0'}, log_snmp);", new Failable() {
 					@Override
 					public void failed(IOException e) {

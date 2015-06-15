@@ -71,6 +71,11 @@ public final class SnmpAvailable {
 							JsonUtils.getString(priv, "method", null).toUpperCase()
 					);
 				}
+				
+				JsonElement timeout = r.get("timeout");
+				if (timeout != null) {
+					c.withTimeoutFromBeginning(timeout.getAsDouble());
+				}
 
 				c.connect(new SnmpClientHandler() {
 					@Override

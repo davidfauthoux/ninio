@@ -37,6 +37,7 @@ public final class SnmpClientCache implements AutoCloseable {
 	public static interface Connectable {
 		Connectable withCommunity(String community);
 		Connectable withLoginPassword(String authLogin, String authPassword, String authDigestAlgorithm, String privLogin, String privPassword, String privEncryptionAlgorithm);
+		Connectable withTimeoutFromBeginning(double timeoutFromBeginning);
 		void connect(SnmpClientHandler clientHandler);
 	}
 	
@@ -49,6 +50,7 @@ public final class SnmpClientCache implements AutoCloseable {
 			private String privLogin = null;
 			private String privPassword = null;
 			private String privEncryptionAlgorithm = null;
+			private double timeoutFromBeginning = Double.NaN;
 			@Override
 			public Connectable withCommunity(String community) {
 				this.community = community;
@@ -62,6 +64,11 @@ public final class SnmpClientCache implements AutoCloseable {
 				this.privLogin = privLogin;
 				this.privPassword = privPassword;
 				this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+				return this;
+			}
+			@Override
+			public Connectable withTimeoutFromBeginning(double timeoutFromBeginning) {
+				this.timeoutFromBeginning = timeoutFromBeginning;
 				return this;
 			}
 			@Override
@@ -88,6 +95,9 @@ public final class SnmpClientCache implements AutoCloseable {
 					}
 					if ((authLogin != null) && (authPassword != null) && (authDigestAlgorithm != null) && (privLogin != null) && (privPassword != null) && (privEncryptionAlgorithm != null)) {
 						clientConfigurator.withLoginPassword(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
+					}
+					if (!Double.isNaN(timeoutFromBeginning)) {
+						clientConfigurator.withTimeoutFromBeginning(timeoutFromBeginning);
 					}
 
 					c = new Hold(new SnmpClient(clientConfigurator.withAddress(address)));
