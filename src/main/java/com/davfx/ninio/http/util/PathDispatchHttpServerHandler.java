@@ -11,9 +11,15 @@ import com.davfx.ninio.http.HttpServerHandler;
 
 public final class PathDispatchHttpServerHandler implements HttpServerHandler {
 	private final Map<String, HttpServerHandler> handlers = new HashMap<String, HttpServerHandler>();
+	private HttpServerHandler defaultHandler = null;
 	private HttpServerHandler currentHandler = null;
 
 	public PathDispatchHttpServerHandler() {
+	}
+	
+	public PathDispatchHttpServerHandler fallback(HttpServerHandler handler) {
+		defaultHandler = handler;
+		return this;
 	}
 	
 	public PathDispatchHttpServerHandler add(String path, HttpServerHandler handler) {
@@ -24,6 +30,9 @@ public final class PathDispatchHttpServerHandler implements HttpServerHandler {
 	@Override
 	public void handle(HttpRequest request) {
 		currentHandler = handlers.get(new HttpQuery(request.getPath()).getPath());
+		if (currentHandler == null) {
+			currentHandler = defaultHandler;
+		}
 		if (currentHandler == null) {
 			return;
 		}
