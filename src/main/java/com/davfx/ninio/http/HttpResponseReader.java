@@ -143,7 +143,7 @@ final class HttpResponseReader {
 						gzipReader = null;
 					}
 					chunked = Http.CHUNKED.equalsIgnoreCase(headers.get(Http.TRANSFER_ENCODING));
-					keepAlive = http11 && Http.KEEP_ALIVE.equalsIgnoreCase(headers.get(Http.CONNECTION));
+					keepAlive = http11 || Http.KEEP_ALIVE.equalsIgnoreCase(headers.get(Http.CONNECTION));
 					handler.received(new HttpResponse(responseCode, responseReason, headers));
 				} else {
 					LOGGER.trace("Header line: {}", line);
