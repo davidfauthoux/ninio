@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Failable;
-import com.davfx.ninio.util.CheckAllocationObject;
 import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -212,14 +211,13 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 		executorService.shutdown();
 	}
 	
-	private static final class EndManager extends CheckAllocationObject {
+	private static final class EndManager {
 		public final String instanceId;
 		private int count = 0;
 		private Runnable end;
 		private Failable fail;
 		private boolean ended = false;
 		public EndManager(String instanceId, Failable fail, Runnable end) {
-			super(EndManager.class);
 			this.instanceId = instanceId;
 			this.end = end;
 			this.fail = fail;

@@ -8,11 +8,12 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Deprecated
 public class CheckAllocationObject {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CheckAllocationObject.class);
 	
-	private static final boolean DISPLAY_INC = false;
+	private static final boolean DISPLAY_INC = true;
 	private static final boolean DISPLAY_DEC = true;
 	private static final double DISPLAY_DEC_LIMIT = 1d * 60d;
 	
@@ -103,6 +104,8 @@ public class CheckAllocationObject {
 		}
 	}
 	
+	// Beware! Don't use this class in production!
+	// http://stackoverflow.com/questions/8355064/is-memory-leak-why-java-lang-ref-finalizer-eat-so-much-memory
 	@Override
 	protected void finalize() {
 		String x = count.dec(time);

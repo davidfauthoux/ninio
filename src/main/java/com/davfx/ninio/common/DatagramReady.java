@@ -11,11 +11,10 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.CheckAllocationObject;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-public final class DatagramReady extends CheckAllocationObject implements Ready {
+public final class DatagramReady implements Ready {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(DatagramReady.class);
 	
@@ -34,7 +33,6 @@ public final class DatagramReady extends CheckAllocationObject implements Ready 
 	private boolean bind = false;
 
 	public DatagramReady(Selector selector, ByteBufferAllocator byteBufferAllocator) {
-		super(DatagramReady.class);
 		this.selector = selector;
 		this.byteBufferAllocator = byteBufferAllocator;
 	}

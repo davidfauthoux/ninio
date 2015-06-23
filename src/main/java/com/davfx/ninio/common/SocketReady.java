@@ -9,9 +9,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
 
-import com.davfx.ninio.util.CheckAllocationObject;
-
-public final class SocketReady extends CheckAllocationObject implements Ready {
+public final class SocketReady implements Ready {
 	// private static final Config CONFIG = ConfigUtils.load(Queue.class);
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
 
@@ -19,7 +17,6 @@ public final class SocketReady extends CheckAllocationObject implements Ready {
 	private final ByteBufferAllocator byteBufferAllocator;
 	
 	public SocketReady(Selector selector, ByteBufferAllocator byteBufferAllocator) {
-		super(SocketReady.class);
 		this.selector = selector;
 		this.byteBufferAllocator = byteBufferAllocator;
 	}
