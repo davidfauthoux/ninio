@@ -28,6 +28,16 @@ public final class Address {
 		}
 		return host + ":" + port;
 	}
+	
+	public static Address of(String hostPort) {
+		int i = hostPort.indexOf(':');
+		String h = hostPort.substring(0, i);
+		if (h.isEmpty()) {
+			h = null;
+		}
+		int p = Integer.parseInt(hostPort.substring(i + 1));
+		return new Address(h, p);
+	}
 
 	@Override
 	public int hashCode() {
