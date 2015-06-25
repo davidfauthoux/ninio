@@ -29,6 +29,7 @@ public final class PingClientConfigurator implements Closeable {
 	public final Queue queue;
 	private final boolean queueToClose;
 	public ReadyFactory readyFactory;
+	private final InternalPingServerReadyFactory readyFactoryToClose;
 	
 	public Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	//%% public double timeout = ConfigUtils.getDuration(CONFIG, "ping.timeout");
@@ -37,7 +38,10 @@ public final class PingClientConfigurator implements Closeable {
 	private PingClientConfigurator(Queue queue, boolean queueToClose) {
 		this.queue = queue;
 		this.queueToClose = queueToClose;
-		readyFactory = new InternalPingServerReadyFactory(new CacheSyncPing(SHELL_MODE ? new ShellCommandSyncPing() : new PureJavaSyncPing()));
+		InternalPingServerReadyFactory internalPingServerReadyFactory = new InternalPingServerReadyFactory(new CacheSyncPing(SHELL_MODE ? new ShellCommandSyncPing() : new PureJavaSyncPing()));
+		readyFactoryToClose = internalPingServerReadyFactory;
+		readyFactory = internalPingServerReadyFactory;
+		
 	}
 	
 	public PingClientConfigurator() throws IOException {
@@ -53,6 +57,9 @@ public final class PingClientConfigurator implements Closeable {
 		if (queueToClose) {
 			queue.close();
 		}
+		if (readyFactoryToClose != null) {
+			readyFactoryToClose.close();
+		}
 	}
 	
 	public PingClientConfigurator(PingClientConfigurator configurator) {
@@ -62,6 +69,7 @@ public final class PingClientConfigurator implements Closeable {
 		//%% timeout = configurator.timeout;
 		//%% maxSimultaneousClients = configurator.maxSimultaneousClients;
 		readyFactory = configurator.readyFactory;
+		readyFactoryToClose = null;
 	}
 	
 	/*%%%%%
