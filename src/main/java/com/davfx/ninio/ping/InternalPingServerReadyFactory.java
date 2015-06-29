@@ -24,7 +24,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	private static final int MAX_SIMULTANEOUS_CLIENTS = CONFIG.getInt("ping.maxSimultaneousClients");
 	
 	private final SyncPing syncPing;
-	private ExecutorService clientExecutor;
+	private final ExecutorService clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ClassThreadFactory(InternalPingServerReadyFactory.class));
 
 	public InternalPingServerReadyFactory(SyncPing syncPing) {
 		this.syncPing = syncPing;
@@ -32,17 +32,11 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	
 	@Override
 	public void close() {
-		if (clientExecutor != null) {
-			clientExecutor.shutdown();
-		}
+		clientExecutor.shutdown();
 	}
 	
 	@Override
-	public Ready create(Queue queue) {
-		if (clientExecutor == null) {
-			clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ClassThreadFactory(InternalPingServerReadyFactory.class));
-		}
-		
+	public Ready create(final Queue queue) {
 		return new Ready() {
 			@Override
 			public void connect(Address address, final ReadyConnection connection) {
@@ -87,7 +81,11 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 								if (closed || clientExecutor.isShutdown()) {
 									return;
 								}
-								connection.handle(null, s);
+								queue.post(new Runnable() {
+									public void run() {
+										connection.handle(null, s);
+									}
+								});
 							}
 						});
 					}
