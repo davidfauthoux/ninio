@@ -20,8 +20,15 @@ public final class HttpServerHandlerToJsonHttpServerHandler implements HttpServe
 	private HttpRequest request = null;
 	private InMemoryPost post = null;
 	
+	private boolean crossDomain = false;
+	
 	public HttpServerHandlerToJsonHttpServerHandler(JsonHttpServerHandler handler) {
 		this.handler = handler;
+	}
+	
+	public HttpServerHandlerToJsonHttpServerHandler crossDomain() {
+		crossDomain = true;
+		return this;
 	}
 	
 	@Override
@@ -57,6 +64,9 @@ public final class HttpServerHandlerToJsonHttpServerHandler implements HttpServe
 					r.getHeaders().put(Http.CONTENT_TYPE, Http.ContentType.JSON);
 					ByteBuffer bb = ByteBuffer.wrap(response.toString().getBytes(Http.UTF8_CHARSET));
 					r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(bb.remaining()));
+					if (crossDomain) {
+						r.getHeaders().put("Access-Control-Allow-Origin", "*");
+					}
 					write.write(r);
 					write.handle(null, bb);
 					write.close();
