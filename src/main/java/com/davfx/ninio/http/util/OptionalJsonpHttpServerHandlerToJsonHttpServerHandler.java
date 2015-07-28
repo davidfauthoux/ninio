@@ -62,11 +62,13 @@ public final class OptionalJsonpHttpServerHandlerToJsonHttpServerHandler impleme
 					return;
 				} else {
 					HttpResponse r = new HttpResponse(Http.Status.OK, Http.Message.OK);
-					r.getHeaders().put(Http.CONTENT_TYPE, Http.ContentType.JSON);
 					
 					String responseAsString = response.toString();
 					if (jsonp != null) {
 						responseAsString = jsonp + "(" + responseAsString + ");";
+						r.getHeaders().put(Http.CONTENT_TYPE, Http.ContentType.JAVASCRIPT);
+					} else {
+						r.getHeaders().put(Http.CONTENT_TYPE, Http.ContentType.JSON);
 					}
 					
 					ByteBuffer bb = ByteBuffer.wrap(responseAsString.getBytes(Http.UTF8_CHARSET));
