@@ -65,8 +65,8 @@ public final class HttpServerHandlerToJsonHttpServerHandler implements HttpServe
 					ByteBuffer bb = ByteBuffer.wrap(response.toString().getBytes(Http.UTF8_CHARSET));
 					r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(bb.remaining()));
 					if (crossDomain) {
-						r.getHeaders().put("Access-Control-Allow-Origin", "*");
-						r.getHeaders().put("Access-Control-Allow-Methods", "GET, POST");
+						r.getHeaders().put(Http.ACCESS_CONTROL_ALLOW_ORIGIN, Http.WILDCARD);
+						r.getHeaders().put(Http.ACCESS_CONTROL_ALLOW_METHODS, Http.ACCESS_CONTROL_ALLOWED_METHODS);
 					}
 					write.write(r);
 					write.handle(null, bb);

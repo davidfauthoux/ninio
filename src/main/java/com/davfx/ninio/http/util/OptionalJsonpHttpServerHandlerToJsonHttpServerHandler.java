@@ -20,8 +20,15 @@ public final class OptionalJsonpHttpServerHandlerToJsonHttpServerHandler impleme
 	private HttpRequest request = null;
 	private InMemoryPost post = null;
 	
+	private boolean crossDomain = false;
+	
 	public OptionalJsonpHttpServerHandlerToJsonHttpServerHandler(JsonHttpServerHandler handler) {
 		this.handler = handler;
+	}
+	
+	public OptionalJsonpHttpServerHandlerToJsonHttpServerHandler crossDomain() {
+		crossDomain = true;
+		return this;
 	}
 	
 	@Override
@@ -64,6 +71,10 @@ public final class OptionalJsonpHttpServerHandlerToJsonHttpServerHandler impleme
 					
 					ByteBuffer bb = ByteBuffer.wrap(responseAsString.getBytes(Http.UTF8_CHARSET));
 					r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(bb.remaining()));
+					if (crossDomain) {
+						r.getHeaders().put(Http.ACCESS_CONTROL_ALLOW_ORIGIN, Http.WILDCARD);
+						r.getHeaders().put(Http.ACCESS_CONTROL_ALLOW_METHODS, Http.ACCESS_CONTROL_ALLOWED_METHODS);
+					}
 					write.write(r);
 					write.handle(null, bb);
 					write.close();

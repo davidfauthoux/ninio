@@ -32,6 +32,10 @@ public interface Http {
 	String USER_AGENT = "User-Agent";
 	String ACCEPT = "Accept";
 
+	String ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin";
+	String ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods";
+	String ACCESS_CONTROL_ALLOWED_METHODS = "GET, PUT, POST, DELETE, HEAD";
+
 	String DEFAULT_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
 	String DEFAULT_ACCEPT = "*/*";
 
