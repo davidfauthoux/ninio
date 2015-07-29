@@ -109,16 +109,12 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 												try {
 													channel.send(b.buffer, a);
 												} catch (IOException e) {
-													LOGGER.trace("Error trying to send to {}", b.address, e);
-													try {
-														channel.close();
-													} catch (IOException ee) {
-													}
-													return;
+													LOGGER.debug("Error trying to send to {}", b.address, e);
+													b = null;
 												}
 											}
 											
-											if (b.buffer.hasRemaining()) {
+											if ((b != null) && b.buffer.hasRemaining()) {
 												return;
 											}
 											
