@@ -72,7 +72,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 											if (connection != null) {
 												connection.handle(fromAddress, readBuffer);
 											} else {
-												LOGGER.warn("Packet received but no match: {} / {}", fromAddress, connections.keySet());
+												LOGGER.trace("Packet received but no match: {} / {}", fromAddress, connections.keySet());
 											}
 										}
 									} catch (IOException e) {
@@ -109,7 +109,12 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 												try {
 													channel.send(b.buffer, a);
 												} catch (IOException e) {
-													LOGGER.warn("Error trying to send to {}", b.address);
+													LOGGER.trace("Error trying to send to {}", b.address, e);
+													try {
+														channel.close();
+													} catch (IOException ee) {
+													}
+													return;
 												}
 											}
 											
