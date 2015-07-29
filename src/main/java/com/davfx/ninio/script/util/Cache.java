@@ -57,6 +57,7 @@ public final class Cache {
 				return false;
 			}
 			if (error != null) {
+				LOGGER.trace("Immediately using error from cache for: {}", key);
 				m.failed(error);
 				return false;
 			}
