@@ -21,14 +21,28 @@ public final class Oid {
 	}
 
 	public Oid(int[] raw) {
-		if (raw.length < 2) {
-			throw new IllegalArgumentException();
-		}
+		//%% if (raw.length < 2) {
+		//%% throw new IllegalArgumentException();
+		//%% }
 		this.raw = raw;
 	}
 
 	public int[] getRaw() {
 		return raw;
+	}
+	
+	public Oid sub(Oid child) {
+		if (child.raw.length <= raw.length) {
+			return null;
+		}
+		for (int i = 0; i < raw.length; i++) {
+			if (raw[i] != child.raw[i]) {
+				return null;
+			}
+		}
+		int[] r = new int[child.raw.length - raw.length];
+		System.arraycopy(child.raw, raw.length, r, 0, r.length);
+		return new Oid(r);
 	}
 
 	@Override
