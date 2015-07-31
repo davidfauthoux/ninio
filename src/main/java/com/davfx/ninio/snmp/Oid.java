@@ -9,9 +9,9 @@ public final class Oid {
 
 	public Oid(String dotNotation) {
 		List<String> s = Splitter.on('.').splitToList(dotNotation);
-		if (s.size() < 2) {
-			throw new IllegalArgumentException();
-		}
+		//%% if (s.size() < 2) {
+		//%% throw new IllegalArgumentException();
+		//%% }
 		raw = new int[s.size()];
 		int i = 0;
 		for (String e : s) {
@@ -42,6 +42,13 @@ public final class Oid {
 		}
 		int[] r = new int[child.raw.length - raw.length];
 		System.arraycopy(child.raw, raw.length, r, 0, r.length);
+		return new Oid(r);
+	}
+
+	public Oid append(Oid suffix) {
+		int[] r = new int[raw.length + suffix.raw.length];
+		System.arraycopy(raw, 0, r, 0, raw.length);
+		System.arraycopy(suffix.raw, 0, r, raw.length, suffix.raw.length);
 		return new Oid(r);
 	}
 
