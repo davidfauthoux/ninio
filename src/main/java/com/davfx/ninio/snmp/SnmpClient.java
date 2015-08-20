@@ -57,6 +57,15 @@ public final class SnmpClient implements Closeable {
 	@Override
 	public void close() {
 		closed = true;
+		configurator.queue.post(new Runnable() {
+			@Override
+			public void run() {
+				for (InstanceMapper i : instanceMappers) {
+					i.close();
+				}
+				instanceMappers.clear();
+			}
+		});
 	}
 	
 	private static final Random RANDOM = new Random(System.currentTimeMillis());
@@ -196,7 +205,14 @@ public final class SnmpClient implements Closeable {
 			instances.clear();
 		}
 		*/
-		
+
+		public void close() {
+			for (Instance i : instances.values()) {
+				i.close();
+			}
+			instances.clear();
+		}
+
 		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
 			Instance i = instances.remove(instanceId);
 			//%% LOGGER.debug("Instances in MEM = {}", instances.size());
@@ -230,6 +246,10 @@ public final class SnmpClient implements Closeable {
 			this.write = write;
 			this.community = community;
 			this.authEngine = authEngine;
+		}
+		
+		public void close() {
+			write.close();
 		}
 		
 		public void get(Address to, int instanceId, Oid oid) {
@@ -292,8 +312,9 @@ public final class SnmpClient implements Closeable {
 			repeatRandomizationRandomized = (RANDOM.nextDouble() * configurator.repeatRandomization) - (1d / 2d); // [ -0.5, 0.5 [
 		}
 		
-		/*%%
-		public void closedByPeer() {
+		public void close() {
+			write.close();
+
 			if (callback == null) {
 				return;
 			}
@@ -305,9 +326,8 @@ public final class SnmpClient implements Closeable {
 			requestOid = null;
 			SnmpClientHandler.Callback.GetCallback c = callback;
 			callback = null;
-			c.failed(new IOException("Closed by peer"));
+			c.failed(new IOException("Closed"));
 		}
-		*/
 		
 		public void repeat(Date now) {
 			if (callback == null) {

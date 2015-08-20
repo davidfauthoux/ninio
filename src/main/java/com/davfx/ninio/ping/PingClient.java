@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.Address;
+import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.CloseableByteBufferHandler;
 import com.davfx.ninio.common.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.common.Ready;
@@ -19,7 +20,7 @@ import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 import com.google.common.primitives.Longs;
 
-public final class PingClient { //%% implements Closeable {
+public final class PingClient implements Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingClient.class);
 
 	private final PingClientConfigurator configurator;
@@ -28,6 +29,19 @@ public final class PingClient { //%% implements Closeable {
 
 	public PingClient(final PingClientConfigurator configurator) {
 		this.configurator = configurator;
+	}
+
+	@Override
+	public void close() {
+		configurator.queue.post(new Runnable() {
+			@Override
+			public void run() {
+				for (InstanceMapper i : instanceMappers) {
+					i.close();
+				}
+				instanceMappers.clear();
+			}
+		});
 	}
 	
 	private static final class RequestIdProvider {
@@ -84,7 +98,7 @@ public final class PingClient { //%% implements Closeable {
 							}
 							@Override
 							public void ping(String host, PingCallback callback) {
-								Instance i = new Instance(callback);
+								Instance i = new Instance(callback, w);
 								instanceMapper.map(i);
 								w.ping(i.instanceId, host);
 							}
@@ -130,13 +144,13 @@ public final class PingClient { //%% implements Closeable {
 		public void closedByUser() {
 			instances.clear();
 		}
-		public void closedByPeer() {
+		*/
+		public void close() {
 			for (Instance i : instances.values()) {
-				i.closedByPeer();
+				i.close();
 			}
 			instances.clear();
 		}
-		*/
 	
 		public void handle(long instanceId, double time) {
 			Instance i = instances.remove(instanceId);
@@ -152,6 +166,9 @@ public final class PingClient { //%% implements Closeable {
 		public PingWriter(CloseableByteBufferHandler write) {
 			this.write = write;
 		}
+		public void close() {
+			write.close();
+		}
 		public void ping(long instanceId, String host) {
 			byte[] h = host.getBytes(Charsets.UTF_8);
 			ByteBuffer bb = ByteBuffer.allocate(Longs.BYTES + Ints.BYTES + h.length);
@@ -164,15 +181,18 @@ public final class PingClient { //%% implements Closeable {
 	}
 	
 	private static final class Instance {
+		private final PingWriter write;
 		private PingClientHandler.Callback.PingCallback callback;
 		public long instanceId;
 
-		public Instance(PingClientHandler.Callback.PingCallback callback) {
+		public Instance(PingClientHandler.Callback.PingCallback callback, PingWriter write) {
 			this.callback = callback;
+			this.write = write;
 		}
 		
-		/*%%
-		public void closedByPeer() {
+		public void close() {
+			write.close();
+			
 			if (callback == null) {
 				return;
 			}
@@ -181,7 +201,6 @@ public final class PingClient { //%% implements Closeable {
 			callback = null;
 			c.failed(new IOException("Closed by peer"));
 		}
-		*/
 		
 		private void handle(double time) {
 			PingClientHandler.Callback.PingCallback c = callback;
