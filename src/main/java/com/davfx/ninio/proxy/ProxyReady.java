@@ -102,7 +102,7 @@ final class ProxyReady {
 		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(Address address, ReadyConnection connection) {
-				queue.check();
+				//%% queue.check();
 				
 				final DataOutputStream out;
 				final Map<Integer, Pair<Address, ReadyConnection>> connections;

@@ -21,6 +21,7 @@ public final class DatagramReady implements Ready {
 	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
+	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
 
 	private static final class AddressedByteBuffer {
 		Address address;
@@ -53,6 +54,7 @@ public final class DatagramReady implements Ready {
 				final SelectionKey selectionKey = channel.register(selector, 0);
 				
 				final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
+				final long[] toWriteLength = new long[] { 0L };
 	
 				selectionKey.attach(new SelectionKeyVisitor() {
 					@Override
@@ -113,8 +115,10 @@ public final class DatagramReady implements Ready {
 										}
 										
 										if (a != null) {
+											long before = b.buffer.remaining();
 											try {
 												channel.send(b.buffer, a);
+												toWriteLength[0] -= before - b.buffer.remaining();
 											} catch (IOException e) {
 												try {
 													channel.close();
@@ -184,6 +188,13 @@ public final class DatagramReady implements Ready {
 						b.address = address;
 						b.buffer = buffer;
 						toWriteQueue.addLast(b);
+						toWriteLength[0] += b.buffer.remaining();
+						while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength[0] > WRITE_MAX_BUFFER_SIZE)) {
+							AddressedByteBuffer r = toWriteQueue.removeFirst();
+							long l = r.buffer.remaining();
+							toWriteLength[0] -= l;
+							LOGGER.warn("Dropping {} bytes that should have been sent to {}", l, r.address);
+						}
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 					}
 					@Override

@@ -24,6 +24,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
+	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
 	
 	private static final class AddressedByteBuffer {
 		Address address;
@@ -42,9 +43,10 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 		final Selector selector = queue.getSelector();
 		final ByteBufferAllocator byteBufferAllocator = queue.allocator();
 		queue.post(new Runnable() {
+			private final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
+			private long toWriteLength = 0L;
 			@Override
 			public void run() {
-				final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 				final DatagramChannel channel;
 				final SelectionKey selectionKey;
 				try {
@@ -106,8 +108,10 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 											}
 											
 											if (a != null) {
+												long before = b.buffer.remaining();
 												try {
 													channel.send(b.buffer, a);
+													toWriteLength -= before - b.buffer.remaining();
 												} catch (IOException e) {
 													LOGGER.debug("Error trying to send to {}", b.address, e);
 													b = null;
@@ -200,6 +204,13 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 						b.address = address;
 						b.buffer = buffer;
 						toWriteQueue.addLast(b);
+						toWriteLength += b.buffer.remaining();
+						while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+							AddressedByteBuffer r = toWriteQueue.removeFirst();
+							long l = r.buffer.remaining();
+							toWriteLength -= l;
+							LOGGER.warn("Dropping {} bytes that should have been sent to {}", l, r.address);
+						}
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 					}
 					@Override
@@ -235,6 +246,8 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(final Address address, ReadyConnection connection) {
+				//%% queue.check();
+				
 				// Address ignored, socket not connected, not bound
 				
 				if (error != null) {
@@ -256,6 +269,8 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void failed(IOException e) {
+						//%% queue.check();
+						
 						connections.remove(address);
 
 						/* Global connection never closed
@@ -264,6 +279,8 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					}
 					@Override
 					public void close() {
+						//%% queue.check();
+						
 						connections.remove(address);
 
 						/* Global connection never closed
@@ -272,6 +289,8 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					}
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
+						//%% queue.check();
+						
 						write.handle(address, buffer);
 					}
 				});

@@ -2,6 +2,10 @@ package com.davfx.ninio.ping;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -25,6 +29,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	
 	private final SyncPing syncPing;
 	private final ExecutorService clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ClassThreadFactory(InternalPingServerReadyFactory.class));
+	private final Map<String, List<PingCallback>> pinging = new HashMap<>();
 
 	public InternalPingServerReadyFactory(SyncPing syncPing) {
 		this.syncPing = syncPing;
@@ -33,6 +38,9 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	@Override
 	public void close() {
 		clientExecutor.shutdown();
+		synchronized (pinging) {
+			pinging.clear();
+		}
 	}
 	
 	@Override
@@ -61,26 +69,18 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 						bb.get(hostBytes);
 						final String host = new String(hostBytes, Charsets.UTF_8);
 					
-						clientExecutor.execute(new Runnable() {
+						ping(host, new PingCallback() {
 							@Override
-							public void run() {
-								final ByteBuffer s = ByteBuffer.allocate(Longs.BYTES + Doubles.BYTES);
-								s.putLong(id);
-
-								long t = System.currentTimeMillis();
-								boolean reachable = syncPing.isReachable(host, TIMEOUT);
-								double elapsed = (System.currentTimeMillis() - t) / 1000d;
-								if (reachable) {
-									s.putDouble(elapsed);
-								} else {
-									s.putDouble(Double.NaN);
-								}
-								
-								s.flip();
-						
-								if (closed || clientExecutor.isShutdown()) {
+							public void handle(double elapsed) {
+								if (closed) {
 									return;
 								}
+
+								final ByteBuffer s = ByteBuffer.allocate(Longs.BYTES + Doubles.BYTES);
+								s.putLong(id);
+								s.putDouble(elapsed);
+								s.flip();
+						
 								queue.post(new Runnable() {
 									public void run() {
 										connection.handle(null, s);
@@ -92,5 +92,52 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 				});
 			}
 		};
+	}
+	
+	private static interface PingCallback {
+		void handle(double elapsed);
+	}
+	private void ping(final String host, PingCallback callback) {
+		if (clientExecutor.isShutdown()) {
+			return;
+		}
+		
+		boolean launch = false;
+		synchronized (pinging) {
+			List<PingCallback> callbacks = pinging.get(host);
+			if (callbacks == null) {
+				callbacks = new LinkedList<>();
+				pinging.put(host, callbacks);
+				launch = true;
+			}
+			callbacks.add(callback);
+		}
+		
+		if (!launch) {
+			return;
+		}
+		
+		clientExecutor.execute(new Runnable() {
+			@Override
+			public void run() {
+				long t = System.currentTimeMillis();
+				boolean reachable = syncPing.isReachable(host, TIMEOUT);
+				double elapsed = (System.currentTimeMillis() - t) / 1000d;
+				if (!reachable) {
+					elapsed = Double.NaN;
+				}
+				
+				List<PingCallback> callbacks;
+				synchronized (pinging) {
+					callbacks = pinging.remove(host);
+				}
+				if (callbacks == null) {
+					return;
+				}
+				for (PingCallback callback : callbacks) {
+					callback.handle(elapsed);
+				}
+			}
+		});
 	}
 }

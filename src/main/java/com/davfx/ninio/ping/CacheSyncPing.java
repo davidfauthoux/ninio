@@ -51,6 +51,7 @@ public final class CacheSyncPing implements SyncPing {
 		}
 	}
 	
+	/*%%%
 	private static void check(SyncPing ping, String host, double timeout) {
 		long t = System.currentTimeMillis();
 		boolean r = ping.isReachable(host, timeout);
@@ -62,4 +63,5 @@ public final class CacheSyncPing implements SyncPing {
 		check(p, "8.8.8.8", 0.2d);
 		check(p, "8.8.8.8", 0.2d);
 	}
+	*/
 }

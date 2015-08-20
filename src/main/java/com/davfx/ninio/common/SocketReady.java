@@ -9,9 +9,19 @@ import java.nio.channels.Selector;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+
 public final class SocketReady implements Ready {
-	// private static final Config CONFIG = ConfigUtils.load(Queue.class);
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(SocketReady.class);
+	
+	private static final Config CONFIG = ConfigUtils.load(Queue.class);
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
+	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
 
 	private final Selector selector;
 	private final ByteBufferAllocator byteBufferAllocator;
@@ -30,6 +40,8 @@ public final class SocketReady implements Ready {
 				channel.configureBlocking(false);
 				SelectionKey inboundKey = channel.register(selector, SelectionKey.OP_CONNECT);
 				inboundKey.attach(new SelectionKeyVisitor() {
+					private long toWriteLength = 0L;
+
 					@Override
 					public void visit(SelectionKey key) {
 						if (!key.isConnectable()) {
@@ -78,8 +90,10 @@ public final class SocketReady implements Ready {
 												}
 												return;
 											} else {
+												long before = b.remaining();
 												try {
 													channel.write(b);
+													toWriteLength -= before - b.remaining();
 												} catch (IOException e) {
 													try {
 														channel.close();
@@ -124,7 +138,18 @@ public final class SocketReady implements Ready {
 									if (!selectionKey.isValid()) {
 										return;
 									}
+									if (toWriteLength < 0L) {
+										return;
+									}
 									toWriteQueue.addLast(buffer);
+									toWriteLength += buffer.remaining();
+									while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+										LOGGER.warn("Buffer overflow, closing connection to {}", address);
+										toWriteLength = -1L;
+										toWriteQueue.clear();
+										toWriteQueue.addLast(null);
+										return;
+									}
 									selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 								}
 								@Override
@@ -136,6 +161,9 @@ public final class SocketReady implements Ready {
 										return;
 									}
 									if (!selectionKey.isValid()) {
+										return;
+									}
+									if (toWriteLength < 0L) {
 										return;
 									}
 									toWriteQueue.addLast(null);
