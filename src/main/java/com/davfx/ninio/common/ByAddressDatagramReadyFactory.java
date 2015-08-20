@@ -204,7 +204,6 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					}
 					@Override
 					public void close() {
-						/* Never closed
 						if (!selector.isOpen()) {
 							return;
 						}
@@ -216,13 +215,10 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 						}
 						toWriteQueue.addLast(null);
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-						*/
 					}
 					@Override
 					public void failed(IOException e) {
-						/* Never closed
 						close();
-						*/
 					}
 				};
 
@@ -238,7 +234,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 	public Ready create(Queue ignoredQueue) {
 		return new QueueReady(queue, new Ready() {
 			@Override
-			public void connect(Address address, ReadyConnection connection) {
+			public void connect(final Address address, ReadyConnection connection) {
 				// Address ignored, socket not connected, not bound
 				
 				if (error != null) {
@@ -257,7 +253,28 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 				}
 				
 				connections.put(address, connection);
-				connection.connected(write);
+				connection.connected(new FailableCloseableByteBufferHandler() {
+					@Override
+					public void failed(IOException e) {
+						connections.remove(address);
+
+						/* Global connection never closed
+						write.failed(e);
+						*/
+					}
+					@Override
+					public void close() {
+						connections.remove(address);
+
+						/* Global connection never closed
+						write.close();
+						*/
+					}
+					@Override
+					public void handle(Address address, ByteBuffer buffer) {
+						write.handle(address, buffer);
+					}
+				});
 			}
 		});
 	}
