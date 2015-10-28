@@ -181,7 +181,7 @@ public final class SimpleHttpClient implements Closeable {
 			
 			@Override
 			public void failed(IOException e) {
-				LOGGER.error("Failed to connect to: {}", configurator.address, e);
+				LOGGER.error("Failed to connect to: {}", address, e);
 				handler.handle(-1, null, null, null);
 			}
 		});

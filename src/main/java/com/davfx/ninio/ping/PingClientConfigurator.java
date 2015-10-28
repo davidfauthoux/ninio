@@ -6,12 +6,12 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Closeable;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyFactory;
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
+import com.typesafe.config.ConfigFactory;
 
 public final class PingClientConfigurator implements Closeable {
-	private static final Config CONFIG = ConfigUtils.load(PingClientConfigurator.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	public static final int DEFAULT_PORT = CONFIG.getInt("ping.port");
 	
 	public static final boolean SHELL_MODE;

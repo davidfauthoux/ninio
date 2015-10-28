@@ -19,12 +19,12 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Failable;
-import com.davfx.util.ConfigUtils;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
+import com.typesafe.config.ConfigFactory;
 
 public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 	/*%%%%%%%
@@ -91,7 +91,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(ExecutorScriptRunner.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	
 	private static final boolean USE_TO_STRING;
 	static {

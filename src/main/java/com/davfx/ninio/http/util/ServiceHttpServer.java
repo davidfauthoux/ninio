@@ -9,11 +9,11 @@ import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class ServiceHttpServer {
-	private static final Config CONFIG = ConfigUtils.load(ServiceHttpServer.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();

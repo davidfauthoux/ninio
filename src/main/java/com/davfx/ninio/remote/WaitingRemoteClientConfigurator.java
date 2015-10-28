@@ -8,9 +8,10 @@ import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Closeable;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class WaitingRemoteClientConfigurator implements Closeable {
-	private static final Config CONFIG = ConfigUtils.load(WaitingRemoteClientConfigurator.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	
 	private static final double DEFAULT_CONNECT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "remote.waiting.connectTimeout");
 	private static final double DEFAULT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "remote.waiting.timeout");

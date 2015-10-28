@@ -8,10 +8,11 @@ import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 final class CacheFailSnmpClientHandler implements SnmpClientHandler {
 	
-	private static final Config CONFIG = ConfigUtils.load(CacheFailSnmpClientHandler.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	private static final double EXPIRATION = ConfigUtils.getDuration(CONFIG, "snmp.cache.fail.expiration");
 	
 	private final SnmpClientHandler wrappee;

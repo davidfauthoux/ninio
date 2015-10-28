@@ -20,14 +20,14 @@ import com.davfx.ninio.common.TcpdumpSyncDatagramReady;
 import com.davfx.ninio.common.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.ninio.ping.InternalPingServerReadyFactory;
 import com.davfx.ninio.ping.PureJavaSyncPing;
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
+import com.typesafe.config.ConfigFactory;
 
 public final class ProxyUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyUtils.class);
 
-	private static final Config CONFIG = ConfigUtils.load(ProxyUtils.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static final String SOCKET_TYPE = CONFIG.getString("proxy.socket");
 	public static final String DATAGRAM_TYPE = CONFIG.getString("proxy.datagram");

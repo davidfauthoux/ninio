@@ -6,9 +6,10 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class ProxyClient {
-	private static final Config CONFIG = ConfigUtils.load(ProxyClient.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	private static final double THROTTLE_BYTES_PER_SECOND = CONFIG.getDouble("proxy.throttle.bps");
 	private static final double THROTTLE_TIME_STEP = ConfigUtils.getDuration(CONFIG, "proxy.throttle.step.time");

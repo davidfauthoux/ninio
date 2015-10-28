@@ -11,10 +11,12 @@ import com.davfx.ninio.common.Address;
 import com.davfx.ninio.ping.PingClient;
 import com.davfx.ninio.ping.PingClientConfigurator;
 import com.davfx.ninio.ping.PingClientHandler;
-import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class PingClientCache implements AutoCloseable {
-	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(PingClientCache.class).getInt("ping.cache.expire.threshold");
+	private static final Config CONFIG = ConfigFactory.load();
+	private static final int CACHE_EXPIRE_THRESHOLD = CONFIG.getInt("ping.cache.expire.threshold");
 
 	private final PingClientConfigurator configurator;
 	

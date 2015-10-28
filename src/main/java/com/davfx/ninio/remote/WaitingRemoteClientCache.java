@@ -11,11 +11,13 @@ import java.util.regex.Pattern;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.common.Queue;
-import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class WaitingRemoteClientCache implements AutoCloseable {
-	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(WaitingRemoteClientCache.class).getInt("remote.cache.expire.threshold");
+	private static final Config CONFIG = ConfigFactory.load();
+	private static final int CACHE_EXPIRE_THRESHOLD = CONFIG.getInt("remote.cache.expire.threshold");
 
 	private final WaitingRemoteClientConfigurator configurator;
 	private final Queue queue;

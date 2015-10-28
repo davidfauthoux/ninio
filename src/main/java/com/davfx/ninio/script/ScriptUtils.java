@@ -3,13 +3,16 @@ package com.davfx.ninio.script;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class ScriptUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ScriptUtils.class);
 
-	private static final String LOG_FUNCTION_NAME = ConfigUtils.load(ScriptUtils.class).getString("script.functions.log");
-	private static final String LOG_PREFIX = ConfigUtils.load(ScriptUtils.class).getString("script.log.prefix");
+	private static final Config CONFIG = ConfigFactory.load();
+
+	private static final String LOG_FUNCTION_NAME = CONFIG.getString("script.functions.log");
+	private static final String LOG_PREFIX = CONFIG.getString("script.log.prefix");
 
 	private ScriptUtils() {
 	}

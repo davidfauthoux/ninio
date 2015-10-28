@@ -11,12 +11,13 @@ import com.davfx.util.ConfigUtils;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class CacheSyncPing implements SyncPing {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CacheSyncPing.class);
 
-	private static final Config CONFIG = ConfigUtils.load(CacheSyncPing.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	private static final int CACHE_SIZE = CONFIG.getInt("ping.cache.size");
 	private static final double CACHE_EXPIRATION = ConfigUtils.getDuration(CONFIG, "ping.cache.expiration");
 

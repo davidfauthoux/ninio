@@ -18,15 +18,15 @@ import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.websocket.WebsocketHttpServerHandler;
 import com.davfx.ninio.ssh.SshClient;
 import com.davfx.ninio.ssh.SshClientConfigurator;
-import com.davfx.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class SshWebsocketServer {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshWebsocketServer.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(SshWebsocketServer.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();

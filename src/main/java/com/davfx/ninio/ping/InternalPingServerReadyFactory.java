@@ -21,9 +21,10 @@ import com.google.common.base.Charsets;
 import com.google.common.primitives.Doubles;
 import com.google.common.primitives.Longs;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class InternalPingServerReadyFactory implements ReadyFactory, AutoCloseable {
-	private static final Config CONFIG = ConfigUtils.load(InternalPingServerReadyFactory.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ping.timeout");
 	private static final int MAX_SIMULTANEOUS_CLIENTS = CONFIG.getInt("ping.maxSimultaneousClients");
 	

@@ -11,14 +11,14 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class DatagramReady implements Ready {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(DatagramReady.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(TcpdumpSyncDatagramReady.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();

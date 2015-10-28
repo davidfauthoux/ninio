@@ -24,14 +24,14 @@ import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerConfigurator;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
-import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class HostRouteHttpServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HostRouteHttpServer.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(HostRouteHttpServer.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static void main(String[] args) throws Exception {
 		Queue queue = new Queue();

@@ -11,13 +11,13 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class Queue implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Queue.class);
 
-	private static final Config CONFIG = ConfigUtils.load(Queue.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.queue.buffer.size").intValue();
 	
 	private final long threadId;

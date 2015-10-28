@@ -28,10 +28,11 @@ import com.davfx.ninio.common.ReadyConnection;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 final class ProxyReady {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyReady.class);
-	private static final Config CONFIG = ConfigUtils.load(ProxyReady.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static final double DEFAULT_CONNECTION_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.connection");
 	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");

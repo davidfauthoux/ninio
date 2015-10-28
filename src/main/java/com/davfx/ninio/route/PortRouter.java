@@ -21,14 +21,14 @@ import com.davfx.ninio.common.SocketListening;
 import com.davfx.ninio.common.SocketReady;
 import com.davfx.ninio.common.SslSocketListening;
 import com.davfx.ninio.common.Trust;
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class PortRouter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(PortRouter.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(PortRouter.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static void main(String[] args) throws Exception {
 		new PortRouter(new Queue(),

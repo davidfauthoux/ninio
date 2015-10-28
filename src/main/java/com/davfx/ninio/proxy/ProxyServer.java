@@ -31,10 +31,11 @@ import com.davfx.util.ConfigUtils;
 import com.davfx.util.Mutable;
 import com.davfx.util.Pair;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class ProxyServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyServer.class);
-	private static final Config CONFIG = ConfigUtils.load(ProxyServer.class);
+	private static final Config CONFIG = ConfigFactory.load();
 
 	public static void main(String[] args) throws Exception {
 		ProxyServer server = new ProxyServer(CONFIG.getInt("proxy.port"), CONFIG.getInt("proxy.maxSimultaneousClients"));

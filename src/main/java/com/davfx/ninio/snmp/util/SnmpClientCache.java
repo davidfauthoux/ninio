@@ -12,10 +12,12 @@ import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.SnmpClient;
 import com.davfx.ninio.snmp.SnmpClientConfigurator;
 import com.davfx.ninio.snmp.SnmpClientHandler;
-import com.davfx.util.ConfigUtils;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class SnmpClientCache implements AutoCloseable {
-	private static final int CACHE_EXPIRE_THRESHOLD = ConfigUtils.load(SnmpClientCache.class).getInt("snmp.cache.expire.threshold");
+	private static final Config CONFIG = ConfigFactory.load();
+	private static final int CACHE_EXPIRE_THRESHOLD = CONFIG.getInt("snmp.cache.expire.threshold");
 	
 	private final SnmpClientConfigurator configurator;
 	

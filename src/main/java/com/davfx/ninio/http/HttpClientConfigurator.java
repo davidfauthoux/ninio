@@ -14,10 +14,11 @@ import com.davfx.ninio.common.SslReadyFactory;
 import com.davfx.ninio.common.Trust;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class HttpClientConfigurator implements Closeable {
 	
-	private static final Config CONFIG = ConfigUtils.load(HttpClientConfigurator.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	
 	public final Queue queue;
 	private final boolean queueToClose;

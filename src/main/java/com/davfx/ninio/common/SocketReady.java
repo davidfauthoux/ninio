@@ -12,14 +12,14 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class SocketReady implements Ready {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SocketReady.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(Queue.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
 

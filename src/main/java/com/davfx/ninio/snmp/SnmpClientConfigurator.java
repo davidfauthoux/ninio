@@ -12,9 +12,10 @@ import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class SnmpClientConfigurator implements Closeable {
-	private static final Config CONFIG = ConfigUtils.load(SnmpClientConfigurator.class);
+	private static final Config CONFIG = ConfigFactory.load();
 	public static final int DEFAULT_PORT = 161;
 
 	public final Queue queue;
