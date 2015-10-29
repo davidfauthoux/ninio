@@ -12,7 +12,6 @@ import java.util.concurrent.Executors;
 import javax.script.ScriptContext;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
-import javax.script.ScriptException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -200,7 +199,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 						+ "return null;"
 					+ "};");
 			}
-		} catch (ScriptException se) {
+		} catch (Exception se) {
 			LOGGER.error("Could not initialize script engine", se);
 		}
 	}
@@ -364,7 +363,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 												+ UNICITY_PREFIX + "f = undefined;"
 											);
 									}
-								} catch (ScriptException se) {
+								} catch (Exception se) {
 									endManager.fail(new IOException(se));
 								}
 							} finally {
@@ -402,7 +401,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 								+ "return " + UNICITY_PREFIX + "convertTo(r);"
 							+ "};"
 						);
-				} catch (ScriptException se) {
+				} catch (Exception se) {
 					LOGGER.error("Could not register {}", function, se);
 				}
 			}
@@ -437,7 +436,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 						);
 					
 					registeredFunctions.add(function);
-				} catch (ScriptException se) {
+				} catch (Exception se) {
 					LOGGER.error("Could not register {}", function, se);
 				}
 			}
@@ -511,7 +510,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 					String s = scriptBuilder.toString();
 					try {
 						scriptEngine.eval(s);
-					} catch (ScriptException se) {
+					} catch (Exception se) {
 						LOGGER.error("Script error: {}", s, se);
 						endManager.fail(new IOException(se));
 					}
@@ -618,7 +617,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 							//%%% LOGGER.debug("EVAL {} {} {}", endManager.instanceId, bindingsToRemove, s);
 							try {
 								scriptEngine.eval(s);
-							} catch (ScriptException se) {
+							} catch (Exception se) {
 								LOGGER.error("Script error: {}", s, se);
 								endManager.fail(new IOException(se));
 							}
