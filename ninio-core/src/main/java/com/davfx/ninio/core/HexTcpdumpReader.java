@@ -14,31 +14,42 @@ import com.google.common.base.Charsets;
 final class HexTcpdumpReader implements TcpdumpReader {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HexTcpdumpReader.class);
 	
+	private static final int MAX_SIZE = 100 * 1024;
+	
 	public HexTcpdumpReader() {
 	}
 
 	@Override
 	public Iterable<String> tcpdumpOptions() {
-		return Arrays.asList("-x", "-tt");
+		return Arrays.asList("-x", "-tt", "-l", "-v");
 	}
 	
 	@Override
-	public void read(InputStream input, int maxSize, Handler handler) throws IOException {
+	public void read(InputStream input, Handler handler) throws IOException {
+		LOGGER.trace("Reading hex tcpdump");
 		BufferedReader r = new BufferedReader(new InputStreamReader(input, Charsets.US_ASCII));
 		byte[] bytes = null;
 		int bytesIndex = 0;
 		double timestamp = 0d;
 		long lineCount = 0L;
 		while (true) {
+			LOGGER.trace("Reading hex line...");
 			String line = r.readLine();
 			if (line == null) {
+				LOGGER.debug("End");
 				break;
 			}
+			
+			LOGGER.trace("Hex line: {}", line);
 			
 			lineCount++;
 			
 			try {
-				if (line.charAt(0) == '\t') {
+				char first = line.charAt(0);
+				if (first == ' ') {
+					// Ignored
+					continue;
+				} else if (first == '\t') {
 					if (bytes == null) {
 						continue;
 					}
@@ -69,17 +80,27 @@ final class HexTcpdumpReader implements TcpdumpReader {
 							even = !even;
 						}
 					}
+					if (bytesIndex == bytes.length) {
+						IpPacketReadUtils.read(timestamp, bytes, 0, bytesIndex, handler);
+						bytes = null;
+					}
 					continue;
 				} else {
 					if (bytes != null) {
-						IpPacketReadUtils.read(timestamp, bytes, 0, bytesIndex, handler);
-						bytes = null;
+						throw new IOException("Incomplete packet (" + bytesIndex + " < " + bytes.length + ")");
 					}
 				}
 				
 				int i = line.indexOf(' ');
+				String lengthString = ", length ";
+				int j = line.indexOf(lengthString);
+				int k = line.indexOf(")", j + lengthString.length());
 				timestamp = Double.parseDouble(line.substring(0,  i));
-				bytes = new byte[maxSize];
+				int length = Integer.parseInt(line.substring(j + lengthString.length(),  k));
+				if (length > MAX_SIZE) {
+					throw new IOException("Packet too big: " + length);
+				}
+				bytes = new byte[length];
 				bytesIndex = 0;
 			} catch (Exception e) {
 				LOGGER.error("Error on line #{}: {}", lineCount, line, e);

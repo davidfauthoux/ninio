@@ -11,5 +11,5 @@ interface TcpdumpReader {
 		void handle(double timestamp, Address source, Address destination, ByteBuffer buffer);
 	}
 	
-	void read(InputStream input, int maxSize, Handler handler) throws IOException;
+	void read(InputStream input, Handler handler) throws IOException;
 }

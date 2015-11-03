@@ -13,19 +13,17 @@ import com.google.common.io.LittleEndianDataInputStream;
 final class RawTcpdumpReader implements TcpdumpReader {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RawTcpdumpReader.class);
 	
-	private boolean any = false;
-	
-	public RawTcpdumpReader() {
-	}
-	
-	public RawTcpdumpReader any() {
-		any = true;
-		return this;
-	}
+	private static final int MAX_SIZE = 100 * 1024;
 
+	private final boolean any;
+	
+	public RawTcpdumpReader(boolean any) {
+		this.any = any;
+	}
+	
 	@Override
 	public Iterable<String> tcpdumpOptions() {
-		return Arrays.asList("-w", "-");
+		return Arrays.asList("-w", "-", "-U");
 	}
 
 	/*%%%
@@ -41,7 +39,7 @@ final class RawTcpdumpReader implements TcpdumpReader {
 	*/
 
 	@Override
-	public void read(InputStream input, int maxSize, Handler handler) throws IOException {
+	public void read(InputStream input, Handler handler) throws IOException {
 		@SuppressWarnings("resource")
 		LittleEndianDataInputStream in = new LittleEndianDataInputStream(input);
 		LOGGER.debug("Reading tcpdump stream");
@@ -73,7 +71,7 @@ final class RawTcpdumpReader implements TcpdumpReader {
 
 		while (true) {
 			try {
-				// LOGGER.trace("Tcpdump loop, step 1");
+				//%% LOGGER.debug("Tcpdump loop, step 1");
 				/*
 				typedef struct pcaprec_hdr_s {
 					guint32 ts_sec;         /* timestamp seconds * /
@@ -107,7 +105,13 @@ final class RawTcpdumpReader implements TcpdumpReader {
 				
 				LOGGER.trace("Tcpdump packet ({} bytes)", actualLength);
 	
-				byte[] bytes = new byte[actualLength - destinationMac.length - sourceMac.length - unused.length];
+				int l = actualLength - destinationMac.length - sourceMac.length - unused.length;
+				
+				if (l > MAX_SIZE) {
+					throw new IOException("Packet too big: " + l);
+				}
+
+				byte[] bytes = new byte[l];
 				in.readFully(bytes);
 				IpPacketReadUtils.read(timestamp, bytes, 0, bytes.length, handler);
 			} catch (EOFException eof) {

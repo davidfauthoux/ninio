@@ -11,23 +11,27 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.util.Lock;
 import com.google.common.base.Charsets;
 
+// Mac OS X:
+// sudo chmod go=r /dev/bpf*
+
 public class TestTcpdump {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(TestTcpdump.class);
 	
 	@Test
 	public void test() throws Exception {
+		System.setProperty("ninio.tcpdump.mode", "hex"); // raw not working on Mac OS X
 		final Lock<String, IOException> lock = new Lock<>();
 		
 		Queue queue = new Queue();
 		
 		final int port = 8080;
 
+		TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.DestinationPortRule(port), "lo0");
 		{
-			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.EmptyRule(), "en0");
 			Ready ready = new TcpdumpSyncDatagramReady(receiver).bind();
 	
-			new QueueReady(queue, ready).connect(new Address(null, port), new ReadyConnection() {
+			new QueueReady(queue, ready).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() { // Address MUST be specified for the packet to be mapped
 				@Override
 				public void handle(Address address, ByteBuffer buffer) {
 					String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
@@ -54,7 +58,7 @@ public class TestTcpdump {
 			});
 		}
 		
-		Thread.sleep(2000);
+		Thread.sleep(1000);
 		
 		{
 			Ready ready = new DatagramReady(queue.getSelector(), queue.allocator());
@@ -69,7 +73,7 @@ public class TestTcpdump {
 				@Override
 				public void connected(FailableCloseableByteBufferHandler write) {
 					LOGGER.debug("Connected -->");
-					write.handle(new Address(Address.LOCALHOST, port), ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
+					write.handle(new Address(Address.LOCALHOST, port), ByteBuffer.wrap(("test").getBytes(Charsets.UTF_8)));
 				}
 				
 				@Override
@@ -86,7 +90,6 @@ public class TestTcpdump {
 			});
 		}
 		
-		Thread.sleep(50000);
 		Assertions.assertThat(lock.waitFor()).isEqualTo("test");
 	}
 	

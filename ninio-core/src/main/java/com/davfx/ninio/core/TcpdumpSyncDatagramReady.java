@@ -20,7 +20,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.util.ClassThreadFactory;
+import com.google.common.base.Joiner;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
 
 // sudo sysctl -w net.core.rmem_max=8388608
@@ -35,9 +37,19 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
 	private static final Config CONFIG = ConfigFactory.load();
-	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("ninio.tcpdump.packet.size").intValue();
 	//%% private static final String DO_OUTPUT = CONFIG.hasPath("ninio.tcpdump.output") ? CONFIG.getString("ninio.tcpdump.output") : null;
 
+	private static final boolean RAW;
+	static {
+		String mode = CONFIG.getString("ninio.tcpdump.mode");
+		if (mode.equals("raw")) {
+			RAW = true;
+		} else if (mode.equals("hex")) {
+			RAW = false;
+		} else {
+			throw new ConfigException.BadValue("ninio.tcpdump.mode", "Invalid: " + mode + ", only 'raw' and 'hex' allowed");
+		}
+	}
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.tcpdump.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.tcpdump.datagram.write.size").intValue();
 
@@ -135,7 +147,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class)).execute(new Runnable() {
 				@Override
 				public void run() {
-					final TcpdumpReader tcpdumpReader = new RawTcpdumpReader();
+					final TcpdumpReader tcpdumpReader = RAW ? new RawTcpdumpReader(interfaceId.equals("any")) : new HexTcpdumpReader();
 					
 					while (true) {
 						File dir = new File(".");
@@ -171,7 +183,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						pb.directory(dir);
 						Process p;
 						try {
-							LOGGER.info("Executing {} in: {}", toExec, dir.getCanonicalPath());
+							LOGGER.info("In: {}, executing: {}", dir.getCanonicalPath(), Joiner.on(' ').join(toExec));
 							p = pb.start();
 						} catch (IOException e) {
 							LOGGER.error("Could not run tcpdump", e);
@@ -204,7 +216,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 								public void run() {
 									try {
 										try {
-											tcpdumpReader.read(input, MAX_PACKET_SIZE, new TcpdumpReader.Handler() {
+											tcpdumpReader.read(input, new TcpdumpReader.Handler() {
 												@Override
 												public void handle(double timestamp, Address sourceAddress, Address destinationAddress, ByteBuffer buffer) {
 													/*%% if (output != null) {
