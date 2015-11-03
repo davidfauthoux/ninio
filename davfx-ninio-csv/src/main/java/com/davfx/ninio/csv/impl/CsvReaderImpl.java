@@ -13,13 +13,32 @@ import com.davfx.ninio.csv.CsvReader;
 public final class CsvReaderImpl implements CsvReader {
 	private final char delimiter;
 	private final char quote;
+	private final boolean ignoreEmptyLines;
 
 	private final BufferedReader reader;
 
-	public CsvReaderImpl(Charset charset, char delimiter, char quote, InputStream in) {
+	public CsvReaderImpl(Charset charset, char delimiter, char quote, boolean ignoreEmptyLines, InputStream in) {
 		this.delimiter = delimiter;
 		this.quote = quote;
+		this.ignoreEmptyLines = ignoreEmptyLines;
 		reader = new BufferedReader(new InputStreamReader(in, charset));
+	}
+	
+	@Override
+	public String skip() throws IOException {
+		while (true) {
+			String line = reader.readLine();
+			if (line == null) {
+				return null;
+			}
+			
+			line = line.trim();
+			if (ignoreEmptyLines && line.isEmpty()) {
+				continue;
+			}
+
+			return line;
+		}
 	}
 	
 	@Override
@@ -31,7 +50,7 @@ public final class CsvReaderImpl implements CsvReader {
 			}
 			
 			line = line.trim();
-			if (line.isEmpty()) { // Empty lines are IGNORED! (Is it conform to CSV format?) //FIXME Check this!
+			if (ignoreEmptyLines && line.isEmpty()) {
 				continue;
 			}
 

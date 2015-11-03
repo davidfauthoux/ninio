@@ -121,6 +121,7 @@
 	</profiles>
 
 	<modules>
+		<module>davfx-ninio-util</module>
 		<module>davfx-ninio-csv</module>
 	</modules>
 
