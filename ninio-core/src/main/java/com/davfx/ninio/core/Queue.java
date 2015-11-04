@@ -25,14 +25,19 @@ public final class Queue implements AutoCloseable {
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 	
-	public static Selector selector() throws IOException {
-		return SelectorProvider.provider().openSelector();
+	public static Selector selector() {
+		try {
+			return SelectorProvider.provider().openSelector();
+		} catch (IOException ioe) {
+			LOGGER.error("Could not create selector", ioe);
+			return null;
+		}
 	}
 	
-	public Queue() throws IOException {
+	public Queue() {
 		this(selector());
 	}
-	public Queue(final Selector selector) {
+	private Queue(final Selector selector) {
 		this.selector = selector;
 
 		Thread t = new ClassThreadFactory(Queue.class).newThread(new Runnable() {
@@ -40,6 +45,9 @@ public final class Queue implements AutoCloseable {
 			public void run() {
 				while (true) {
 					try {
+						if (selector == null) {
+							throw new IOException("Selector could not be created");
+						}
 						if (!selector.isOpen()) {
 							break;
 						}
@@ -98,6 +106,9 @@ public final class Queue implements AutoCloseable {
 			return;
 		}
 		
+		if (selector == null) {
+			return;
+		}
 		toRun.add(r);
 		selector.wakeup();
 	}
@@ -113,6 +124,9 @@ public final class Queue implements AutoCloseable {
 	
 	@Override
 	public void close() {
+		if (selector == null) {
+			return;
+		}
 		try {
 			selector.close();
 		} catch (IOException e) {
