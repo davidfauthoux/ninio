@@ -5,9 +5,9 @@ ninio-snmp
 final String login = "<your-login>";
 final String password = "<your-password>";
 
-new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).create().connect(new TelnetClientHandler() {
+new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).create().connect(new ReadyConnection() {
 	private final StringBuilder received = new StringBuilder();
-	private Callback callback;
+	private FailableCloseableByteBufferHandler write;
 	private boolean done = false;
 	@Override
 	public void failed(IOException e) {
@@ -17,27 +17,31 @@ new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).create().connect(
 	public void close() {
 		System.out.println("Closed");
 	}
+	private void send(String line) {
+		write.handle(null, ByteBuffer.wrap((line + TelnetClient.EOL).getBytes(TelnetClient.CHARSET)));
+	}
 	@Override
-	public void received(String text) {
-		received.append(text);
-		System.out.print(text);
+	public void handle(Address address, ByteBuffer buffer) {
+		String s = new String(buffer.array(), buffer.position(), buffer.remaining());
+		received.append(s);
+		System.out.print(s);
 		if (received.toString().endsWith("login: ")) {
 			received.setLength(0);
-			callback.send(login + TelnetClient.EOL);
+			send(login);
 		}
 		if (received.toString().endsWith("Password:")) {
 			received.setLength(0);
-			callback.send(password + TelnetClient.EOL);
+			send(password);
 		}
 		if (!done && received.toString().endsWith(login + "$ ")) {
 			received.setLength(0);
-			callback.send("echo TEST" + TelnetClient.EOL);
+			send("echo TEST");
 			done = true;
 		}
 	}
 	@Override
-	public void launched(Callback callback) {
-		this.callback = callback;
+	public void connected(FailableCloseableByteBufferHandler write) {
+		this.write = write;
 	}
 });
 ```

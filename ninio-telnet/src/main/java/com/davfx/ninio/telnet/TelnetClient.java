@@ -2,6 +2,7 @@ package com.davfx.ninio.telnet;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
@@ -10,10 +11,14 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.core.ReadyFactory;
-import com.google.common.base.Charsets;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class TelnetClient {
+	private static final Config CONFIG = ConfigFactory.load();
+
 	public static final String EOL = "\r\n";
+	public static final Charset CHARSET = Charset.forName(CONFIG.getString("ninio.telnet.charset"));
 
 	private final Queue queue;
 	private final ReadyFactory readyFactory;
@@ -25,7 +30,7 @@ public final class TelnetClient {
 		this.address = address;
 	}
 	
-	public void connect(final TelnetClientHandler clientHandler) {
+	public void connect(final ReadyConnection clientHandler) {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
@@ -45,15 +50,20 @@ public final class TelnetClient {
 					@Override
 					public void connected(FailableCloseableByteBufferHandler write) {
 						reader = new TelnetResponseReader(clientHandler, write);
-						clientHandler.launched(new TelnetClientHandler.Callback() {
+						clientHandler.connected(new FailableCloseableByteBufferHandler() {
 							@Override
-							public void close() {
-								reader.close();
+							public void failed(IOException e) {
+								reader.doClose();
 							}
 							
 							@Override
-							public void send(String line) {
-								reader.send(line);
+							public void close() {
+								reader.doClose();
+							}
+							
+							@Override
+							public void handle(Address address, ByteBuffer buffer) {
+								reader.doHandle(address, buffer);
 							}
 						});
 					}
@@ -67,7 +77,7 @@ public final class TelnetClient {
 		});
 	}
 
-	private static final class TelnetResponseReader implements CloseableByteBufferHandler, TelnetClientHandler.Callback {
+	private static final class TelnetResponseReader {
 		private static enum State {
 			NONE,
 			IAC,
@@ -94,32 +104,28 @@ public final class TelnetClient {
 
 		private final CloseableByteBufferHandler write;
 
-		private final TelnetClientHandler handler;
+		private final ReadyConnection handler;
 
-		public TelnetResponseReader(TelnetClientHandler handler, CloseableByteBufferHandler write) {
+		public TelnetResponseReader(ReadyConnection handler, CloseableByteBufferHandler write) {
 			this.handler = handler;
 			this.write = write;
 		}
 
-		@Override
-		public void close() {
+		public void doClose() {
 			if (!closed) {
 				closed = true;
 				write.close();
-				//%%%%%%%% handler.close();
 			}
 		}
 		
-		@Override
-		public void send(String line) {
-			write.handle(null, ByteBuffer.wrap(line.getBytes(Charsets.US_ASCII)));
+		public void doHandle(Address address, ByteBuffer buffer) {
+			write.handle(address, buffer);
 		}
 
 		private void write(byte response, byte command) {
 			write.handle(null, ByteBuffer.wrap(new byte[] { IAC, response, command }));
 		}
 
-		@Override
 		public void handle(Address address, ByteBuffer buffer) {
 			if (closed) {
 				return;
@@ -194,7 +200,7 @@ public final class TelnetClient {
 			}
 
 			if (r.length() > 0) {
-				handler.received(r.toString());
+				handler.handle(address, ByteBuffer.wrap(r.toString().getBytes(CHARSET)));
 			}
 		}
 	}
