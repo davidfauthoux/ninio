@@ -7,7 +7,7 @@ public final class Lock<R, E extends Exception> {
 	public Lock() {
 	}
 	
-	public synchronized R waitFor() throws Exception {
+	public synchronized R waitFor() throws E {
 		while (true) {
 			if (result != null) {
 				return result;

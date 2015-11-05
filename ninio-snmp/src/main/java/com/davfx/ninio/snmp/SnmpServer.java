@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
@@ -16,13 +17,12 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.QueueReady;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
+import com.davfx.ninio.util.GlobalQueue;
 import com.davfx.ninio.util.Pair;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 // Syntax: snmp[bulk]walk -v2c -c<anything> -On <ip>:6161 <oid>
 // snmpbulkwalk -v2c -cpublic -On 127.0.0.1:6161 1.1.2
-public final class SnmpServer {
+public final class SnmpServer implements AutoCloseable, Closeable {
 	
 	public static interface Handler {
 		interface Callback {
@@ -31,26 +31,32 @@ public final class SnmpServer {
 		void from(Oid oid, Callback callback);
 	}
 	
-	private static final Config CONFIG = ConfigFactory.load();
-
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpServer.class);
 	private static final int NO_SUCH_NAME_ERROR = 2;
 	
-	public SnmpServer(Queue queue, Address address, final Handler handler) {
-		Ready ready = new DatagramReady(queue.getSelector(), queue.allocator()).bind();
+	private final Queue queue;
+	private CloseableByteBufferHandler write = null;
+	private boolean closed = false;
+	
+	public SnmpServer(Address address, Handler handler) {
+		this(GlobalQueue.get(), address, handler);
+	}
+	public SnmpServer(Queue queue, Address address, Handler handler) {
+		this(queue, new DatagramReady(queue.getSelector(), queue.allocator()).bind(), address, handler);
+	}
+	public SnmpServer(Queue queue, Ready ready, Address address, final Handler handler) {
+		this.queue = queue;
 
 		new QueueReady(queue, ready).connect(address, new ReadyConnection() {
 			private BerPacket ber(String s) {
 				return new BytesBerPacket(BerPacketUtils.bytes(s));
 			}
 			
-			private CloseableByteBufferHandler write;
-			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
 				int requestId;
 				String community;
-				int bulkLength;
+				final int bulkLength;
 				int request;
 				final Oid oid;
 				try {
@@ -83,24 +89,9 @@ public final class SnmpServer {
 					return;
 				}
 
-				LOGGER.debug("Request with community: {} and oid: {}", community, oid);
+				LOGGER.trace("Request with community: {} and oid: {}", community, oid);
 				
-				if ((request == BerConstants.GET) || (request == BerConstants.GETNEXT) || (request == BerConstants.GETBULK)) {
-					final boolean skipEq;
-					final int max;
-					if (request == BerConstants.GETNEXT) {
-						LOGGER.debug("Getting next from: {}", oid);
-						max = 1;
-						skipEq = true;
-					} else if (request == BerConstants.GETBULK) {
-						LOGGER.debug("Getting bulk from: {}", oid);
-						max = bulkLength;
-						skipEq = false;
-					} else {
-						max = 0;
-						skipEq = false;
-					}
-
+				if (request == BerConstants.GET) {
 					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
 
 					handler.from(oid, new Handler.Callback() {
@@ -109,21 +100,73 @@ public final class SnmpServer {
 							// if (!oid.isPrefix(handleOid)) {
 							// return false;
 							// }
-							if (skipEq && handleOid.equals(oid)) {
-								// Skipped
-							} else {
-								next.add(new Pair<>(handleOid, ber(value)));
-							}
-							return next.size() < max;
+							next.add(new Pair<>(handleOid, ber(value)));
+							return false;
 						}
 					});
 
 					if (next.isEmpty()) {
-						LOGGER.debug("No next");
+						LOGGER.trace("GET {}: None", oid);
 						write(address, build(requestId, community, NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 
+					LOGGER.trace("GET {}: {}", oid, next);
+					write(address, build(requestId, community, 0, 0, next));
+					return;
+				}
+				
+				if (request == BerConstants.GETNEXT) {
+					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
+
+					handler.from(oid, new Handler.Callback() {
+						@Override
+						public boolean handle(Oid handleOid, String value) {
+							if (handleOid.equals(oid)) {
+								// Skipped
+							} else {
+								next.add(new Pair<>(handleOid, ber(value)));
+							}
+							return false;
+						}
+					});
+
+					if (next.isEmpty()) {
+						LOGGER.trace("GETNEXT {}: No next", oid);
+						write(address, build(requestId, community, NO_SUCH_NAME_ERROR, 0, null));
+						return;
+					}
+
+					LOGGER.trace("GETNEXT {}: {}", oid, next);
+					write(address, build(requestId, community, 0, 0, next));
+					return;
+				}
+				
+				if (request == BerConstants.GETBULK) {
+					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
+
+					handler.from(oid, new Handler.Callback() {
+						@Override
+						public boolean handle(Oid handleOid, String value) {
+							// if (!oid.isPrefix(handleOid)) {
+							// return false;
+							// }
+							if (handleOid.equals(oid)) {
+								// Skipped
+							} else {
+								next.add(new Pair<>(handleOid, ber(value)));
+							}
+							return next.size() < bulkLength;
+						}
+					});
+
+					if (next.isEmpty()) {
+						LOGGER.trace("GETBULK {}: No next", oid);
+						write(address, build(requestId, community, NO_SUCH_NAME_ERROR, 0, null));
+						return;
+					}
+
+					LOGGER.trace("GETBULK {}: {}", oid, next);
 					write(address, build(requestId, community, 0, 0, next));
 					return;
 				}
@@ -166,8 +209,12 @@ public final class SnmpServer {
 			
 			@Override
 			public void connected(FailableCloseableByteBufferHandler write) {
-				LOGGER.debug("Connected");
-				this.write = write;
+				LOGGER.trace("Connected");
+				if (closed) {
+					write.close();
+				} else {
+					SnmpServer.this.write = write;
+				}
 			}
 			
 			@Override
@@ -175,7 +222,20 @@ public final class SnmpServer {
 			}
 		});
 	}
-
+	
+	@Override
+	public void close() {
+		queue.post(new Runnable() {
+			@Override
+			public void run() {
+				closed = true;
+				if (write != null) {
+					write.close();
+				}
+			}
+		});
+	}
+	
 	/*%%%%
 	public static void main(String[] args) throws Exception {
 		Config config = ConfigFactory.load();

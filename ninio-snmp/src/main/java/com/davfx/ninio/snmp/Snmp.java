@@ -1,9 +1,12 @@
 package com.davfx.ninio.snmp;
 
+import java.io.IOException;
+
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
+import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.GlobalQueue;
 import com.typesafe.config.Config;
@@ -60,9 +63,44 @@ public final class Snmp {
 			q = GlobalQueue.get();
 		}
 		if (authEngine != null) {
-			return new SnmpClient(queue, readyFactory, address, authEngine, timeoutFromBeginning);
+			return new SnmpClient(q, readyFactory, address, authEngine, timeoutFromBeginning);
 		} else {
-			return new SnmpClient(queue, readyFactory, address, community, timeoutFromBeginning);
+			return new SnmpClient(q, readyFactory, address, community, timeoutFromBeginning);
 		}
+	}
+	
+	public void get(final Oid oid, final SnmpClientHandler.Callback.GetCallback getCallback) {
+		final SnmpClient client = create();
+		client.connect(new SnmpClientHandler() {
+			@Override
+			public void failed(IOException e) {
+				getCallback.failed(e);
+			}
+			@Override
+			public void close() {
+				getCallback.failed(new IOException("Prematurely closed"));
+			}
+			@Override
+			public void launched(final Callback callback) {
+				callback.get(oid, new GetCallback() {
+					@Override
+					public void failed(IOException e) {
+						callback.close();
+						client.close();
+						getCallback.failed(e);
+					}
+					@Override
+					public void close() {
+						callback.close();
+						client.close();
+						getCallback.close();
+					}
+					@Override
+					public void result(Result result) {
+						getCallback.result(result);
+					}
+				});
+			}
+		});
 	}
 }

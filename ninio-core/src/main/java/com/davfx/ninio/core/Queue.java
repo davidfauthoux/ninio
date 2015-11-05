@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.util.ClassThreadFactory;
+import com.davfx.ninio.util.Wait;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -98,6 +99,11 @@ public final class Queue implements AutoCloseable {
 		if (!isInside()) {
 			throw new IllegalStateException("Should be in queue thread");
 		}
+	}
+	public Wait finish() {
+		Wait wait = new Wait();
+		post(wait);
+		return wait;
 	}
 	
 	public void post(Runnable r) {

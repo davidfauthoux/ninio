@@ -3,14 +3,12 @@ package com.davfx.ninio.core;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public final class CountingReady implements Ready {
+public final class CountingCurrentOpenReady implements Ready {
 	private final Ready wrappee;
-	private final Count readCount;
-	private final Count writeCount;
+	private final Count openCount;
 	
-	public CountingReady(Count readCount, Count writeCount, Ready wrappee) {
-		this.readCount = readCount;
-		this.writeCount = writeCount;
+	public CountingCurrentOpenReady(Count openCount, Ready wrappee) {
+		this.openCount = openCount;
 		this.wrappee = wrappee;
 	}
 	
@@ -23,34 +21,40 @@ public final class CountingReady implements Ready {
 			}
 			@Override
 			public void close() {
+				if (openCount != null) {
+					openCount.inc(-1);
+				}
 				connection.close();
 			}
 			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
-				if (readCount != null) {
-					readCount.inc(buffer.remaining());
-				}
 				connection.handle(address, buffer);
 			}
 			
 			@Override
 			public void connected(final FailableCloseableByteBufferHandler write) {
+				if (openCount != null) {
+					openCount.inc(1);
+				}
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void failed(IOException e) {
+						if (openCount != null) {
+							openCount.inc(-1);
+						}
 						write.failed(e);
 					}
 					@Override
 					public void close() {
+						if (openCount != null) {
+							openCount.inc(-1);
+						}
 						write.close();
 					}
 					
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
-						if (writeCount != null) {
-							writeCount.inc(buffer.remaining());
-						}
 						write.handle(address, buffer);
 					}
 				});

@@ -27,7 +27,7 @@ import com.davfx.ninio.util.QueueScheduled;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class SnmpClient implements Closeable {
+public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
 	private static final Config CONFIG = ConfigFactory.load();
@@ -163,7 +163,6 @@ public final class SnmpClient implements Closeable {
 							@Override
 							public void close() {
 								if (instanceMappers.remove(instanceMapper)) {
-									//%% instanceMapper.closedByUser();
 									// Nothing to do
 								}
 								
@@ -182,7 +181,6 @@ public final class SnmpClient implements Closeable {
 					public void close() {
 						if (instanceMappers.remove(instanceMapper)) {
 							clientHandler.close();
-							//%% instanceMapper.closedByPeer();
 						}
 					}
 				});
@@ -214,18 +212,6 @@ public final class SnmpClient implements Closeable {
 			instance.instanceId = instanceId;
 		}
 		
-		/*%%
-		public void closedByUser() {
-			instances.clear();
-		}
-		public void closedByPeer() {
-			for (Instance i : instances.values()) {
-				i.closedByPeer();
-			}
-			instances.clear();
-		}
-		*/
-
 		public void close() {
 			for (Instance i : instances.values()) {
 				i.close();
@@ -235,7 +221,6 @@ public final class SnmpClient implements Closeable {
 
 		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
 			Instance i = instances.remove(instanceId);
-			//%% LOGGER.debug("Instances in MEM = {}", instances.size());
 			if (i == null) {
 				return;
 			}
@@ -310,13 +295,11 @@ public final class SnmpClient implements Closeable {
 		private final SnmpWriter write;
 		private final Oid initialRequestOid;
 		private Oid requestOid;
-		//%% private List<Result> allResults = null;
 		private int countResults = 0;
 		private final double timeoutFromBeginning;
 		private final double beginningTimestamp = DateUtils.now();
-		//%% private Date receptionTimestamp = null;
 		private double sendTimestamp = DateUtils.now();
-		private int shouldRepeatWhat = 0;
+		private int shouldRepeatWhat = BerConstants.GET;
 		public int instanceId;
 		private final double repeatRandomizationRandomized;
 
@@ -342,7 +325,7 @@ public final class SnmpClient implements Closeable {
 				return;
 			}
 			
-			shouldRepeatWhat = -1;
+			shouldRepeatWhat = 0;
 			requestOid = null;
 			SnmpClientHandler.Callback.GetCallback c = callback;
 			callback = null;
@@ -359,39 +342,24 @@ public final class SnmpClient implements Closeable {
 			
 			double t = now - beginningTimestamp;
 			if (t >= timeoutFromBeginning) {
-				shouldRepeatWhat = -1;
+				shouldRepeatWhat = 0;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
-				//%% allResults = null;
 				c.failed(new IOException("Timeout from beginning [" + t + " seconds] requesting: " + instanceMapper.address + " " + initialRequestOid));
 				return;
 			}
 
-			/*%%%%%%%
-			if (receptionTimestamp != null) {
-				double t = n - DateUtils.from(receptionTimestamp);
-				if (t >= configurator.timeoutFromLastReception) {
-					requestOid = null;
-					SnmpClientHandler.Callback.GetCallback c = callback;
-					callback = null;
-					//%% allResults = null;
-					c.failed(new IOException("Timeout [" + t + " seconds] from last reception requesting: " + initialRequestOid));
-					return;
-				}
-			}
-			*/
-			
 			if ((now - sendTimestamp) >= (MIN_TIME_TO_REPEAT + repeatRandomizationRandomized)) {
 				LOGGER.trace("Repeating {} {}", instanceMapper.address, requestOid);
 				switch (shouldRepeatWhat) { 
-				case 0:
+				case BerConstants.GET:
 					write.get(instanceMapper.address, instanceId, requestOid);
 					break;
-				case 1:
+				case BerConstants.GETNEXT:
 					write.getNext(instanceMapper.address, instanceId, requestOid);
 					break;
-				case 2:
+				case BerConstants.GETBULK:
 					write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
 					break;
 				default:
@@ -410,19 +378,15 @@ public final class SnmpClient implements Closeable {
 				return;
 			}
 
-			//%% receptionTimestamp = new Date();
-			
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED) {
-				//%% shouldRepeatWhat = -1;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
-				//%% allResults = null;
 				c.failed(new IOException("Authentication failed"));
 				return;
 			}
 			
-			if (shouldRepeatWhat == 0) {
+			if (shouldRepeatWhat == BerConstants.GET) {
 				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
 					LOGGER.trace("Retrying GET after receiving auth engine completion message");
 					instanceMapper.map(this);
@@ -451,32 +415,30 @@ public final class SnmpClient implements Closeable {
 							found = r;
 						}
 						if (found != null) {
-							//%% shouldRepeatWhat = -1;
 							requestOid = null;
 							SnmpClientHandler.Callback.GetCallback c = callback;
 							callback = null;
-							//%% allResults = null;
 							c.result(found);
 							c.close();
 							return;
 						}
 					}
 					if (fallback) {
-						//%% allResults = new LinkedList<>();
 						instanceMapper.map(this);
 						sendTimestamp = DateUtils.now();
-						shouldRepeatWhat = 1;
-						write.getNext(instanceMapper.address, instanceId, requestOid);
+						// shouldRepeatWhat = BerConstants.GETNEXT;
+						// write.getNext(instanceMapper.address, instanceId, requestOid);
+						shouldRepeatWhat = BerConstants.GETBULK;
+						write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
 					}
 				}
 			} else {
 				if (errorStatus != 0) {
-					//%% shouldRepeatWhat = -1;
 					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
-					//%% allResults = null;
-					c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
+					c.close();
+					//%% c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
 				} else {
 					Oid lastOid = null;
 					for (Result r : results) {
@@ -493,14 +455,12 @@ public final class SnmpClient implements Closeable {
 						}
 						LOGGER.trace("Addind to results: {}", r);
 						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-						//%% if ((getLimit > 0) && (allResults.size() == getLimit)) {
 							LOGGER.warn("{} reached limit", requestOid);
 							lastOid = null;
 							break;
 						}
 						countResults++;
 						callback.result(r);
-						//%% allResults.add(r);
 						lastOid = r.getOid();
 					}
 					if (lastOid != null) {
@@ -510,19 +470,13 @@ public final class SnmpClient implements Closeable {
 						
 						instanceMapper.map(this);
 						sendTimestamp = DateUtils.now();
-						shouldRepeatWhat = 2;
+						shouldRepeatWhat = BerConstants.GETBULK;
 						write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
 					} else {
 						// Stop here
-						//%% shouldRepeatWhat = -1;
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;
 						callback = null;
-						/*%%
-						List<Result> r = allResults;
-						allResults = null;
-						c.finished(r);
-						*/
 						c.close();
 					}
 				}
