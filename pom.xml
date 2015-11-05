@@ -125,6 +125,7 @@
 		<module>ninio-csv</module>
 		<module>ninio-core</module>
 		<module>ninio-snmp</module>
+		<module>ninio-telnet</module>
 	</modules>
 
 	<dependencies>

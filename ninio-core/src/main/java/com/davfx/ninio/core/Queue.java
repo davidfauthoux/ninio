@@ -81,7 +81,7 @@ public final class Queue implements AutoCloseable {
 				}
 			}
 		});
-		
+		t.setDaemon(true);
 		t.start();
 		
 		threadId = t.getId();
