@@ -9,6 +9,8 @@ import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.core.Trust;
 import com.google.common.base.Charsets;
 
+// /!\ NOT WORKING WITH Java7 ON UP-TO-DATE open-ssl SERVERS
+
 //*** TO ADD THE PUBLIC KEY TO THE AUTHORIZED KEYS ON THE SERVER: *** 
 // keytool -importkeystore -srckeystore keystore.jks -destkeystore keystore.p12 -deststoretype PKCS12 -srcalias "test-alias" -deststorepass "test-password" -destkeypass "test-password"
 // openssl pkcs12 -in keystore.p12  -nokeys -out cert.pem
