@@ -127,6 +127,7 @@
 		<module>ninio-snmp</module>
 		<module>ninio-telnet</module>
 		<module>ninio-ssh</module>
+		<module>ninio-ftp</module>
 	</modules>
 
 	<dependencies>
