@@ -1,9 +1,13 @@
 package com.davfx.ninio.ssh;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.RSAPublicKeySpec;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -92,7 +96,7 @@ public final class SshClient {
 					
 					{
 						clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
-						clientExchange.add("ssh-rsa,ssh-dss");
+						clientExchange.add("ssh-rsa");
 						clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
 						clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
 						clientExchange.add("hmac-md5,hmac-sha1,hmac-sha2-256"); //,hmac-sha1-96,hmac-md5-96");
@@ -135,7 +139,7 @@ public final class SshClient {
 	
 									int command = packet.readByte();
 
-									LOGGER.debug("Command: {}", command);
+									LOGGER.trace("Command: {}", command);
 									
 									if (command == SshUtils.SSH_MSG_KEXINIT) {
 										serverCookie = new byte[16];
@@ -262,20 +266,22 @@ public final class SshClient {
 											off = Ints.BYTES + off + Ints.BYTES;
 											len = (int) sp.readInt();
 										}
+										ByteBuffer signed = ByteBuffer.wrap(sig, off, len);
 										
-										boolean signatureOk;
 										if (alg.equals("ssh-rsa")) {
-											signatureOk = new Sha1RsaSignatureVerifier().verify(ksb, H, sig, off, len);
-										} else if (alg.equals("ssh-dss")) {
-											signatureOk = new Sha1DssSignatureVerifier().verify(ksb, H, sig, off, len);
+											byte[] ee = ksb.readBlob();
+											byte[] n = ksb.readBlob();
+
+											KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+											RSAPublicKeySpec rsaPubKeySpec = new RSAPublicKeySpec(new BigInteger(n), new BigInteger(ee));
+											RSAPublicKey pubKey = (RSAPublicKey) keyFactory.generatePublic(rsaPubKeySpec);
+											if (!new RsaSshPublicKey(null, pubKey).verify(ByteBuffer.wrap(H), signed)) {
+												throw new IOException("Bad signature");
+											}
 										} else {
 											throw new IOException("Unknown key exchange algorithm: " + alg);
 										}
 
-										if (!signatureOk) {
-											throw new IOException("Bad signature");
-										}
-	
 										sessionId = H;
 	
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_NEWKEYS);
@@ -308,8 +314,9 @@ public final class SshClient {
 										write.handle(null, b.finish());
 									} else if (command == SshUtils.SSH_MSG_USERAUTH_FAILURE) {
 										List<String> methods = Splitter.on(',').splitToList(packet.readString());
+										int partialSuccess = packet.readByte();
 
-										LOGGER.debug("Authentication methods: {}", methods);
+										LOGGER.trace("Authentication methods: {}, partial success = {}", methods, partialSuccess);
 										
 										if (passwordWritten) {
 											throw new IOException("Bad authentication");
@@ -326,9 +333,7 @@ public final class SshClient {
 											b.writeString("password");
 											b.writeByte(0);
 											b.writeString(password);
-										// } else if ((publicKey != null) && (publicKeyAlgorithm != null)) {
 										} else if (publicKey != null) {
-											LOGGER.debug("Using key authentication");
 											if (!methods.contains("publickey")) {
 												throw new IOException("Public key authentication method not accepted by server, methods are: " + methods);
 											}
@@ -336,32 +341,28 @@ public final class SshClient {
 											b.writeString("publickey");
 											b.writeByte(0);
 											b.writeString(publicKey.getAlgorithm());
-											b.writeString(publicKey.getAlgorithm());
-											//TODO b.writeBlob(publicKey.getBlob());
+											b.writeBlob(publicKey.getBlob());
 										} else {
 											throw new IOException("No password/public key provided");
 										}
 										write.handle(null, b.finish());
 										passwordWritten = true;
 									} else if (command == SshUtils.SSH_MSG_USERAUTH_PK_OK) {
-										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_USERAUTH_REQUEST);
-										b.writeString(login);
-										b.writeString("ssh-connection");
-										b.writeString("publickey");
-										b.writeByte(1);
 										String alg = publicKey.getAlgorithm();
-										b.writeString(alg);
-										b.writeString(publicKey.getAlgorithm());
-										b.writeBlob(publicKey.getBlob()); //TODO any blob?
 
-										ByteBuffer bb = b.finish();
 										SshPacketBuilder toSign = new SshPacketBuilder();
 										toSign.writeBlob(sessionId);
-										toSign.writeBlob(bb);
+										toSign.writeByte(SshUtils.SSH_MSG_USERAUTH_REQUEST);
+										toSign.writeString(login);
+										toSign.writeString("ssh-connection");
+										toSign.writeString("publickey");
+										toSign.writeByte(1);
+										toSign.writeString(alg);
+										toSign.writeBlob(publicKey.getBlob());
 
 										ByteBuffer signature = publicKey.sign(toSign.finish());
 
-										b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_USERAUTH_REQUEST);
+										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_USERAUTH_REQUEST);
 										b.writeString(login);
 										b.writeString("ssh-connection");
 										b.writeString("publickey");
@@ -460,11 +461,10 @@ public final class SshClient {
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_REQUEST) {
 										packet.readInt();
 										String message = packet.readString();
-										LOGGER.debug("Ignored channel request: {}", message);
+										LOGGER.trace("Ignored channel request: {}", message);
 									} else if (command == SshUtils.SSH_MSG_GLOBAL_REQUEST) {
-										// Ignored
 										String message = packet.readString();
-										LOGGER.debug("Ignored global request: {}", message);
+										LOGGER.trace("Ignored global request: {}", message);
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_EOF) {
 										// Ignored
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_CLOSE) {

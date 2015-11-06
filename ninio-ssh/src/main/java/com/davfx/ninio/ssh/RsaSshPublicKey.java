@@ -39,7 +39,11 @@ public final class RsaSshPublicKey implements SshPublicKey {
 		Signature s = Signature.getInstance("SHA1withRSA");
 		s.initSign(privateKey);
 		s.update(b.array(), b.position(), b.remaining());
-		return ByteBuffer.wrap(s.sign());
+
+		SshPacketBuilder k = new SshPacketBuilder();
+		k.writeString(getAlgorithm());
+		k.writeBlob(s.sign());
+		return k.finish();
 	}
 	
 	@Override
