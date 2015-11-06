@@ -7,6 +7,7 @@ import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
@@ -71,5 +72,9 @@ public final class Ssh {
 			q = GlobalQueue.get();
 		}
 		return new SshClient(q, readyFactory, address, login, password, key);
+	}
+	
+	public void download(String filePath, final FailableCloseableByteBufferHandler handler) {
+		new ScpDownloadClient(create()).get(filePath, handler);
 	}
 }
