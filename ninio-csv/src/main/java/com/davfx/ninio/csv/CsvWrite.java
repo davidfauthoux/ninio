@@ -12,7 +12,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 public final class CsvWrite {
-	private static final Config CONFIG = ConfigFactory.load();
+	
+	private static final Config CONFIG = ConfigFactory.load(CsvWrite.class.getClassLoader());
 	private Charset charset = Charset.forName(CONFIG.getString("ninio.csv.charset"));
 	private char delimiter = ConfigUtils.getChar(CONFIG, "ninio.csv.delimiter");
 	private char quote = ConfigUtils.getChar(CONFIG, "ninio.csv.quote");

@@ -21,7 +21,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByAddressDatagramReadyFactory.class);
 
-	private static final Config CONFIG = ConfigFactory.load();
+	private static final Config CONFIG = ConfigFactory.load(ByAddressDatagramReadyFactory.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();

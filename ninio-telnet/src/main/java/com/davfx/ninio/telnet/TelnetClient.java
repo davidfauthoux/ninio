@@ -15,8 +15,9 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 public final class TelnetClient {
-	private static final Config CONFIG = ConfigFactory.load();
 
+	private static final Config CONFIG = ConfigFactory.load(TelnetClient.class.getClassLoader());
+	
 	public static final String EOL = "\r\n";
 	public static final Charset CHARSET = Charset.forName(CONFIG.getString("ninio.telnet.charset"));
 

@@ -1,5 +1,5 @@
-ninio-snmp
-==========
+ninio-ftp
+=========
 
 ```java
 String login = "<your-login>";

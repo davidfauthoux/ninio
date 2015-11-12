@@ -1,5 +1,5 @@
-ninio-snmp
-==========
+ninio-telnet
+============
 
 ```java
 final String login = "<your-login>";

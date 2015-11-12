@@ -2,6 +2,7 @@ package com.davfx.ninio.core;
 
 public final class Address {
 	public static final String LOCALHOST = "127.0.0.1";
+	public static final String ANY = "0.0.0.0";
 	
 	private final String host;
 	private final int port;

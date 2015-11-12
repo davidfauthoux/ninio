@@ -6,7 +6,6 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.GlobalQueue;
 import com.typesafe.config.Config;
@@ -14,8 +13,8 @@ import com.typesafe.config.ConfigFactory;
 
 public final class Snmp {
 	
-	private static final Config CONFIG = ConfigFactory.load();
-
+	private static final Config CONFIG = ConfigFactory.load(Snmp.class.getClassLoader());
+	
 	public static final int DEFAULT_PORT = 161;
 
 	private Queue queue = null;
@@ -82,7 +81,7 @@ public final class Snmp {
 			}
 			@Override
 			public void launched(final Callback callback) {
-				callback.get(oid, new GetCallback() {
+				callback.get(oid, new Callback.GetCallback() {
 					@Override
 					public void failed(IOException e) {
 						callback.close();

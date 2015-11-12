@@ -36,7 +36,8 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSyncDatagramReady.class);
 
 	private static final double WAIT_ON_TCPDUMP_ENDED = 5d;
-	private static final Config CONFIG = ConfigFactory.load();
+	
+	private static final Config CONFIG = ConfigFactory.load(TcpdumpSyncDatagramReady.class.getClassLoader());
 	//%% private static final String DO_OUTPUT = CONFIG.hasPath("ninio.tcpdump.output") ? CONFIG.getString("ninio.tcpdump.output") : null;
 
 	private static final boolean RAW;

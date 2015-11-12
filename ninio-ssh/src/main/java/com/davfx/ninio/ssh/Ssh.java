@@ -18,8 +18,8 @@ import com.typesafe.config.ConfigFactory;
 
 public final class Ssh {
 	
-	private static final Config CONFIG = ConfigFactory.load();
-
+	private static final Config CONFIG = ConfigFactory.load(Ssh.class.getClassLoader());
+	
 	public static final int DEFAULT_PORT = 22;
 
 	private Queue queue = null;

@@ -30,7 +30,7 @@ import com.typesafe.config.ConfigFactory;
 public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
-	private static final Config CONFIG = ConfigFactory.load();
+	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
 
 	private static final int BULK_SIZE = CONFIG.getInt("ninio.snmp.bulkSize");
 	private static final double MIN_TIME_TO_REPEAT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.minTimeToRepeat");

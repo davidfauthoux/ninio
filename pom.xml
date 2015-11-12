@@ -134,6 +134,7 @@
 		<module>ninio-telnet</module>
 		<module>ninio-ssh</module>
 		<module>ninio-ftp</module>
+		<module>ninio-ping</module>
 	</modules>
 
 	<dependencies>

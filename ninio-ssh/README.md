@@ -1,5 +1,5 @@
-ninio-snmp
-==========
+ninio-ssh
+=========
 
 ```java
 new Ssh()

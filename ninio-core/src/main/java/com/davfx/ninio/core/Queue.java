@@ -19,7 +19,7 @@ import com.typesafe.config.ConfigFactory;
 public final class Queue implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Queue.class);
 
-	private static final Config CONFIG = ConfigFactory.load();
+	private static final Config CONFIG = ConfigFactory.load(Queue.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.queue.buffer.size").intValue();
 	
 	private final long threadId;

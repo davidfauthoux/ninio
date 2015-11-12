@@ -6,7 +6,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 
 public final class Readme {
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		new Snmp().to(new Address("127.0.0.1", Snmp.DEFAULT_PORT)).get(new Oid("1.3.6.1.2.1.1.4.0"), new GetCallback() {
 			@Override
 			public void failed(IOException e) {
@@ -21,5 +21,7 @@ public final class Readme {
 				System.out.println("Result: " + result);
 			}
 		});
+		
+		Thread.sleep(1000);
 	}
 }
