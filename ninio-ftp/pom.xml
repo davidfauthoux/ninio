@@ -9,7 +9,7 @@
 
 	<artifactId>ninio-ftp</artifactId>
 
-	<packaging>jar</packaging>
+	<packaging>bundle</packaging>
 
 	<dependencies>
 		<dependency>

@@ -9,8 +9,8 @@
 
 	<artifactId>ninio-csv</artifactId>
 
-	<packaging>jar</packaging>
-	
+	<packaging>bundle</packaging>
+
 	<dependencies>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>

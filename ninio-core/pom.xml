@@ -9,7 +9,7 @@
 
 	<artifactId>ninio-core</artifactId>
 
-	<packaging>jar</packaging>
+	<packaging>bundle</packaging>
 
 	<dependencies>
 		<dependency>

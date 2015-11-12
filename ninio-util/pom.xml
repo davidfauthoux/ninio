@@ -9,5 +9,5 @@
 
 	<artifactId>ninio-util</artifactId>
 
-	<packaging>jar</packaging>
+	<packaging>bundle</packaging>
 </project>
