@@ -21,11 +21,12 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.core.ReadyFactory;
+import com.davfx.ninio.telnet.TelnetReady;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
 
-public final class SshClient {
+public final class SshClient implements TelnetReady {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshClient.class);
 
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
@@ -56,6 +57,7 @@ public final class SshClient {
 		return this;
 	}
 
+	@Override
 	public void connect(final ReadyConnection clientHandler) {
 		queue.post(new Runnable() {
 			@Override

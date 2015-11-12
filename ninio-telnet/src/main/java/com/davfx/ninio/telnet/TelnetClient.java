@@ -14,7 +14,7 @@ import com.davfx.ninio.core.ReadyFactory;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class TelnetClient {
+public final class TelnetClient implements TelnetReady {
 
 	private static final Config CONFIG = ConfigFactory.load(TelnetClient.class.getClassLoader());
 	
@@ -31,6 +31,7 @@ public final class TelnetClient {
 		this.address = address;
 	}
 	
+	@Override
 	public void connect(final ReadyConnection clientHandler) {
 		queue.post(new Runnable() {
 			@Override
