@@ -119,7 +119,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		}
 	}
 	
-	public static final class Receiver implements AutoCloseable {
+	public static final class Receiver implements AutoCloseable, Closeable {
 		//%% private final File outputFile;
 		//%% private final DataOutputStream output;
 		

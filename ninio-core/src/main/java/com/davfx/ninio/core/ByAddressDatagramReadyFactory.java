@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCloseable {
+public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCloseable, Closeable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByAddressDatagramReadyFactory.class);
 

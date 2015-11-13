@@ -135,6 +135,7 @@
 		<module>ninio-ssh</module>
 		<module>ninio-ftp</module>
 		<module>ninio-ping</module>
+		<module>ninio-proxy</module>
 	</modules>
 
 	<dependencies>
