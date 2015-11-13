@@ -37,7 +37,7 @@ public final class Readme {
 			.withLogin("<your-login>")
 			.withKey(trust, "test-alias", "test-password")
 			// .withPassword("<your-password>")
-		.to(new Address("127.0.0.1", Ssh.DEFAULT_PORT)).create().connect(new ReadyConnection() {
+		.to(new Address("127.0.0.1", Ssh.DEFAULT_PORT)).client().connect(new ReadyConnection() {
 			
 			private FailableCloseableByteBufferHandler write;
 

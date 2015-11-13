@@ -18,7 +18,7 @@ public final class ReadmeWithCutOnPrompt {
 		commands.add(new CutOnPromptClient.NextCommand("Password:", password));
 		commands.add(new CutOnPromptClient.NextCommand(login + "$", "ls"));
 		final Iterator<CutOnPromptClient.NextCommand> commandsIterator = commands.iterator();
-		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).create(), new CutOnPromptClient.Handler() {
+		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), new CutOnPromptClient.Handler() {
 			@Override
 			public void failed(IOException e) {
 				e.printStackTrace();

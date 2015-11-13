@@ -66,7 +66,7 @@ public final class Ssh {
 		return withKey(trust.getPrivateKey(alias, password), trust.getPublicKey(alias));
 	}
 
-	public SshClient create() {
+	public SshClient client() {
 		Queue q = queue;
 		if (q == null) {
 			q = GlobalQueue.get();
@@ -75,6 +75,6 @@ public final class Ssh {
 	}
 	
 	public void download(String filePath, final FailableCloseableByteBufferHandler handler) {
-		new ScpDownloadClient(create()).get(filePath, handler);
+		new ScpDownloadClient(client()).get(filePath, handler);
 	}
 }

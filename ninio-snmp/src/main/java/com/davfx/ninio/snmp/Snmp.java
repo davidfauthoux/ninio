@@ -56,7 +56,7 @@ public final class Snmp {
 		return this;
 	}
 
-	public SnmpClient create() {
+	public SnmpClient client() {
 		Queue q = queue;
 		if (q == null) {
 			q = GlobalQueue.get();
@@ -69,7 +69,7 @@ public final class Snmp {
 	}
 	
 	public void get(final Oid oid, final SnmpClientHandler.Callback.GetCallback getCallback) {
-		final SnmpClient client = create();
+		final SnmpClient client = client();
 		client.connect(new SnmpClientHandler() {
 			@Override
 			public void failed(IOException e) {

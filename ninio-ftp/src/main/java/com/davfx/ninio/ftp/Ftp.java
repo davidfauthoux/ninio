@@ -44,7 +44,7 @@ public final class Ftp {
 		return this;
 	}
 	
-	public FtpClient create() {
+	public FtpClient client() {
 		Queue q = queue;
 		if (q == null) {
 			q = GlobalQueue.get();

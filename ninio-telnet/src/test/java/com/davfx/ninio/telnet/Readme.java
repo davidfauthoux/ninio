@@ -12,7 +12,7 @@ public final class Readme {
 		final String login = "<your-login>";
 		final String password = "<your-password>";
 		
-		new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).create().connect(new ReadyConnection() {
+		new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client().connect(new ReadyConnection() {
 			
 			private final StringBuilder received = new StringBuilder();
 			private FailableCloseableByteBufferHandler write;

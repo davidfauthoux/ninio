@@ -40,7 +40,7 @@ public final class Ping {
 		return this;
 	}
 	
-	public PingClient create() {
+	public PingClient client() {
 		Queue q = queue;
 		if (q == null) {
 			q = GlobalQueue.get();
@@ -49,7 +49,7 @@ public final class Ping {
 	}
 	
 	public void ping(final String host, final PingClientHandler.Callback.PingCallback pingCallback) {
-		final PingClient client = create();
+		final PingClient client = client();
 		client.connect(new PingClientHandler() {
 			@Override
 			public void failed(IOException e) {

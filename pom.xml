@@ -7,7 +7,7 @@
 	<packaging>pom</packaging>
 
 	<name>${project.groupId}:${project.artifactId}</name>
-	<description>A Java NIO HTTP client/server as light as possible</description>
+	<description>ninio</description>
 	<url>https://github.com/davidfauthoux/ninio</url>
 	<licenses>
 		<license>
@@ -134,6 +134,7 @@
 		<module>ninio-ftp</module>
 		<module>ninio-ping</module>
 		<module>ninio-proxy</module>
+		<module>ninio-http</module>
 	</modules>
 
 	<dependencies>

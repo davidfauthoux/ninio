@@ -12,7 +12,7 @@ public final class Readme {
 
 		new Ftp()
 			.withLogin(login).withPassword(password)
-		.to(new Address("<ftp-host>", Ftp.DEFAULT_PORT)).create().connect(new FtpClientHandler() {
+		.to(new Address("<ftp-host>", Ftp.DEFAULT_PORT)).client().connect(new FtpClientHandler() {
 			@Override
 			public void failed(IOException e) {
 				e.printStackTrace();

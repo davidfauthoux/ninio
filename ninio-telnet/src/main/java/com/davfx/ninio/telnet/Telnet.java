@@ -32,7 +32,7 @@ public final class Telnet {
 		return this;
 	}
 	
-	public TelnetClient create() {
+	public TelnetClient client() {
 		Queue q = queue;
 		if (q == null) {
 			q = GlobalQueue.get();
