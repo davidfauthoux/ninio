@@ -25,8 +25,8 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.QueueReady;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.util.ClassThreadFactory;
-import com.davfx.ninio.util.Pair;
+import com.davfx.util.ClassThreadFactory;
+import com.davfx.util.Pair;
 
 final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyReadyGenerator.class);

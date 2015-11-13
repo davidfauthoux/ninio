@@ -19,7 +19,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.ClassThreadFactory;
+import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Joiner;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;

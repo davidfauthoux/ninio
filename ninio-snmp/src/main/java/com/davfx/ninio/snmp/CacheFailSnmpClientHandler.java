@@ -3,7 +3,7 @@ package com.davfx.ninio.snmp;
 import java.io.IOException;
 import java.util.Date;
 
-import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 

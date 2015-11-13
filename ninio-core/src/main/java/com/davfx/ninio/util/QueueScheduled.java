@@ -6,6 +6,7 @@ import java.util.concurrent.TimeUnit;
 
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
+import com.davfx.util.ClassThreadFactory;
 
 public final class QueueScheduled {
 	private static final ScheduledExecutorService REPEAT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(QueueScheduled.class, true));

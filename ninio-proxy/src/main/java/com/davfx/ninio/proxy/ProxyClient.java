@@ -3,7 +3,7 @@ package com.davfx.ninio.proxy;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 

@@ -18,7 +18,7 @@ import com.davfx.ninio.core.QueueReady;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.util.GlobalQueue;
-import com.davfx.ninio.util.Pair;
+import com.davfx.util.Pair;
 
 // Syntax: snmp[bulk]walk -v2c -c<anything> -On <ip>:6161 <oid>
 // snmpbulkwalk -v2c -cpublic -On 127.0.0.1:6161 1.1.2

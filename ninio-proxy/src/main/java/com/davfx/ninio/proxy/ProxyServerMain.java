@@ -1,7 +1,7 @@
 package com.davfx.ninio.proxy;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.util.Wait;
+import com.davfx.util.Wait;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 

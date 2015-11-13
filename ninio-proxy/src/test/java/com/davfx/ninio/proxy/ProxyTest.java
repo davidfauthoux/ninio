@@ -26,7 +26,7 @@ import com.davfx.ninio.core.SocketReadyFactory;
 import com.davfx.ninio.ping.Ping;
 import com.davfx.ninio.ping.PingClientHandler.Callback.PingCallback;
 import com.davfx.ninio.util.GlobalQueue;
-import com.davfx.ninio.util.Lock;
+import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
 
 public class ProxyTest {

@@ -6,8 +6,8 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.GlobalQueue;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 

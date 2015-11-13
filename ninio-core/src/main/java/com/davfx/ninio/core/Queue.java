@@ -11,8 +11,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.ClassThreadFactory;
-import com.davfx.ninio.util.Wait;
+import com.davfx.util.ClassThreadFactory;
+import com.davfx.util.Wait;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 

@@ -21,9 +21,9 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.ConfigUtils;
-import com.davfx.ninio.util.DateUtils;
 import com.davfx.ninio.util.QueueScheduled;
+import com.davfx.util.ConfigUtils;
+import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 

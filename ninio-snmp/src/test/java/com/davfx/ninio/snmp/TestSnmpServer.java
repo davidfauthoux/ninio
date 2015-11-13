@@ -16,7 +16,7 @@ import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 import com.davfx.ninio.util.GlobalQueue;
-import com.davfx.ninio.util.Lock;
+import com.davfx.util.Lock;
 
 public class TestSnmpServer {
 
