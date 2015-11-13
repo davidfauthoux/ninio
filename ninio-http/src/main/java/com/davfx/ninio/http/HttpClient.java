@@ -241,7 +241,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			appendHeader(header, h.getKey(), h.getValue());
 		}
 		if (!request.headers.containsKey(HttpHeaderKey.HOST)) {
-			appendHeader(header, HttpHeaderKey.HOST, request.address.getHost()); // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
+			appendHeader(header, HttpHeaderKey.HOST, request.address.getHost()); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
 		}
 		if (!request.headers.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
 			appendHeader(header, HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);

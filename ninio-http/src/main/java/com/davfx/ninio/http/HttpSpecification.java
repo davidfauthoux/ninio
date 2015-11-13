@@ -20,6 +20,7 @@ interface HttpSpecification {
 	char EXTENSION_SEPARATOR = ';';
 	char MULTIPLE_SEPARATOR = ',';
 
+	//TODO rm ?
 	String PROTOCOL = "http://";
 	String SECURE_PROTOCOL = "https://";
 	
