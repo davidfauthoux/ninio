@@ -15,7 +15,7 @@ import com.typesafe.config.ConfigFactory;
 final class GzipReader {
 
 	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
-	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer.size").intValue();
+	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
 
 	static final int GZIP_MAGIC = 0x8b1f;
 	

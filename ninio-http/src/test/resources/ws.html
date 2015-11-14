@@ -1,0 +1,114 @@
+<!doctype html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<script src="//ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+	<style type="text/css">
+		.disconnected {
+			background: red;
+		}
+		.connecting {
+			background: orange;
+		}
+		.connected {
+			background: default;
+		}
+</style>
+</head>
+<body>
+	<div>
+		<textarea id="out"></textarea>
+	</div>
+	<div>
+		<input type="text" id="in"></input>
+	</div>
+	<script type="text/javascript">
+		
+		function scrollToBottom(t) {
+			if (t.length) {
+				t.scrollTop(t[0].scrollHeight - t.height());
+			}
+		}
+		
+		$(document).ready(function() {
+			var wsUri = "ws://127.0.0.1:8080/ws";   
+			var websocket;
+			var connect = function() {
+				if (websocket != null) {
+					switch (websocket.readyState) {
+					case 0:
+						$('#in').removeClass('disconnected');
+						$('#in').addClass('connecting');
+						$('#in').removeClass('connected');
+						break;
+					case 1:
+						$('#in').removeClass('disconnected');
+						$('#in').removeClass('connecting');
+						$('#in').addClass('connected');
+						break;
+					default:
+						$('#in').addClass('disconnected');
+						$('#in').removeClass('connecting');
+						$('#in').removeClass('connected');
+						break;
+					}
+				}
+			};
+	
+			if ((websocket != null) && ((websocket.readyState == 2) || (websocket.readyState == 3))) {
+				websocket = null;
+			}
+	
+			if (websocket == null) {
+				websocket = new WebSocket(wsUri); 
+				
+				websocket.onopen = function(ev) {
+					console.log("Connected");
+				}
+				websocket.onclose = function(ev) { 
+					console.log("Disconnected");
+				};
+				websocket.onmessage = function(ev) { 
+					console.log("Message: " + ev.data);
+					if ((typeof ev.data) == "string") {
+						var text = ev.data;
+						console.log('Received: '+ text);
+						$('#out').val($('#out').val() + text);
+						scrollToBottom($('#out'));
+					} else {
+						var reader = new FileReader();
+						reader.onload = function (event) {
+							var text = event.target.result;
+							console.log('Received: '+ text);
+							$('#out').val($('#out').val() + text);
+							scrollToBottom($('#out'));
+						};
+						reader.readAsText(ev.data, "UTF-8");
+						// reader.readAsBinaryString(ev.data); // raw data
+					}
+				};
+	
+				websocket.onerror = function(ev) { 
+					console.log("Error: " + ev.data);
+				};
+	 		}
+		
+			setInterval(connect, 1000);
+			$('#in').addClass('disconnected');
+			$('#in').removeClass('connecting');
+			$('#in').removeClass('connected');
+			$('#in').focus();
+		
+			$('#in').keyup(function(event) {
+				if (event.keyCode == 13) {
+					var t = $('#in').val();
+					console.log("Sending: " + t);
+					websocket.send(t + '\n');
+					// websocket.flush();
+			        $('#in').val("");
+				}
+			});
+		});
+	
+	</script>
+</body>

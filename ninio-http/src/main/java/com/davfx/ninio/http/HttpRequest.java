@@ -8,17 +8,17 @@ public final class HttpRequest {
 	public final Address address;
 	public final boolean secure;
 	public final HttpMethod method;
-	public final String path;
+	public final HttpPath path;
 	public final ImmutableMultimap<String, String> headers;
 	
-	public HttpRequest(Address address, boolean secure, HttpMethod method, String path, ImmutableMultimap<String, String> headers) {
+	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path, ImmutableMultimap<String, String> headers) {
 		this.address = address;
 		this.secure = secure;
 		this.method = method;
 		this.path = path;
 		this.headers = headers;
 	}
-	public HttpRequest(Address address, boolean secure, HttpMethod method, String path) {
+	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path) {
 		this(address, secure, method, path, ImmutableMultimap.<String, String>of());
 	}
 	

@@ -15,6 +15,7 @@ import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpClientHandler;
 import com.davfx.ninio.http.HttpMethod;
+import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.google.common.base.Charsets;
@@ -33,7 +34,7 @@ public final class WebsocketReady implements Ready {
 	
 	@Override
 	public void connect(Address address, final ReadyConnection connection) {
-		HttpRequest request = new HttpRequest(address, false, HttpMethod.GET, "/", ImmutableMultimap.<String, String>builder()
+		HttpRequest request = new HttpRequest(address, false, HttpMethod.GET, new HttpPath("/"), ImmutableMultimap.<String, String>builder()
 			.put("Sec-WebSocket-Key", BaseEncoding.base64().encode(String.valueOf(random.nextLong()).getBytes(Charsets.UTF_8)))
 			.put("Sec-WebSocket-Version", "13")
 			.put("Connection", "Upgrade")

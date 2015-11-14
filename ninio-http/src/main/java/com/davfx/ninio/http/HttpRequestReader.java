@@ -154,7 +154,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 						}
 					}
 					
-					handler.handle(new HttpRequest(address, secure, requestMethod, requestPath, ImmutableMultimap.copyOf(headers)));
+					handler.handle(new HttpRequest(address, secure, requestMethod, new HttpPath(requestPath), ImmutableMultimap.copyOf(headers)));
 					
 					contentLength = 0;
 					for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {

@@ -214,7 +214,7 @@ public class HttpServerTest {
 			Thread.sleep(100);
 			
 			final Lock<String, IOException> lock = new Lock<>();
-			new Http().client().send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, "/test?a=b"), new HttpClientHandler() {
+			new Http().client().send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, new HttpPath("/test?a=b")), new HttpClientHandler() {
 				private HttpResponse response;
 				
 				@Override
@@ -305,7 +305,7 @@ public class HttpServerTest {
 			final Lock<String, IOException> lock = new Lock<>();
 			final String post = "post";
 			try (HttpClient client = new Http().client()) {
-				client.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, "/test?a=b", ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(post.length()))), new HttpClientHandler() {
+				client.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, new HttpPath("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(post.length()))), new HttpClientHandler() {
 					private HttpResponse response;
 					
 					@Override

@@ -2,32 +2,21 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.List;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.util.Pair;
+import com.google.common.base.Function;
 
 public final class DispatchHttpServerHandler implements HttpServerHandler {
-	private final List<Pair<HttpRequestFilter, HttpServerHandler>> handlers = new LinkedList<>();
+	private final Function<HttpRequest, HttpServerHandler> dispatchMap;
 	private HttpServerHandler currentHandler = null;
 
-	public DispatchHttpServerHandler() {
-	}
-	
-	public DispatchHttpServerHandler add(HttpRequestFilter filter, HttpServerHandler handler) {
-		handlers.add(new Pair<HttpRequestFilter, HttpServerHandler>(filter, handler));
-		return this;
+	public DispatchHttpServerHandler(Function<HttpRequest, HttpServerHandler> dispatchMap) {
+		this.dispatchMap = dispatchMap;
 	}
 	
 	@Override
 	public void handle(HttpRequest request) {
-		for (Pair<HttpRequestFilter, HttpServerHandler> p : handlers) {
-			if (p.first.accept(request)) {
-				currentHandler = p.second;
-				break;
-			}
-		}
+		currentHandler = dispatchMap.apply(request);
 		if (currentHandler == null) {
 			return;
 		}

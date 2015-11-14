@@ -7,12 +7,6 @@ interface HttpSpecification {
 	char CR = '\r';
 	char LF = '\n';
 	
-	char PARAMETERS_START = '?';
-	char PARAMETERS_SEPARATOR = '&';
-	char PARAMETER_KEY_VALUE_SEPARATOR = '=';
-	char PORT_SEPARATOR = ':';
-	char PATH_SEPARATOR = '/';
-
 	char START_LINE_SEPARATOR = ' ';
 	
 	char HEADER_KEY_VALUE_SEPARATOR = ':';
@@ -20,7 +14,13 @@ interface HttpSpecification {
 	char EXTENSION_SEPARATOR = ';';
 	char MULTIPLE_SEPARATOR = ',';
 
-	//TODO rm ?
+	char PARAMETERS_START = '?';
+	char PARAMETERS_SEPARATOR = '&';
+	char PARAMETER_KEY_VALUE_SEPARATOR = '=';
+	char HASH_SEPARATOR = '#';
+	char PORT_SEPARATOR = ':';
+	char PATH_SEPARATOR = '/';
+
 	String PROTOCOL = "http://";
 	String SECURE_PROTOCOL = "https://";
 	

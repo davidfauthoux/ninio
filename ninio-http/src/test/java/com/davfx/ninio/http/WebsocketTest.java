@@ -1,5 +1,6 @@
 package com.davfx.ninio.http;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -21,7 +22,8 @@ public final class WebsocketTest {
 	
 	public static void main(String[] args) {
 		Wait wait = new Wait();
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+		int port = 8080;
+		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, port), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}
@@ -31,34 +33,38 @@ public final class WebsocketTest {
 			
 			@Override
 			public HttpServerHandler create() {
-				return new WebsocketHttpServerHandler(true, new ReadyConnection() {
-					private CloseableByteBufferHandler write;
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.debug("Received {} <--: {}", address, s);
-						write.handle(null, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
-					}
-					
-					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
-						LOGGER.debug("Connected <--");
-						this.write = write;
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed <--");
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed <--", e);
-					}
-				});
-			}
-			
+				return new DispatchHttpServerHandler(
+					new PathDispatchFunction()
+						.add("/ws", new WebsocketHttpServerHandler(false, new ReadyConnection() {
+							private CloseableByteBufferHandler write;
+							@Override
+							public void handle(Address address, ByteBuffer buffer) {
+								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+								LOGGER.debug("Received {} <--: {}", address, s);
+								write.handle(null, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
+							}
+							
+							@Override
+							public void connected(FailableCloseableByteBufferHandler write) {
+								LOGGER.debug("Connected <--");
+								this.write = write;
+							}
+							
+							@Override
+							public void close() {
+								LOGGER.debug("Closed <--");
+							}
+							
+							@Override
+							public void failed(IOException e) {
+								LOGGER.warn("Failed <--", e);
+							}
+						}))
+						.withDefault(new FileHttpServerHandler(new File("src/test/resources")))
+					);
+				}
 		})) {
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/ws.html");
 			wait.waitFor();
 		}
 	}

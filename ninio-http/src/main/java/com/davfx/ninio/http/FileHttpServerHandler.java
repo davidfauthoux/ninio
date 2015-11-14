@@ -1,29 +1,48 @@
 package com.davfx.ninio.http;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.davfx.ninio.core.Address;
+import com.google.common.collect.ImmutableMultimap;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class FileHttpServerHandler implements HttpServerHandler {
 	
-	public static interface File {
-		String contentType();
-		InputStream open();
+	private static final Config CONFIG = ConfigFactory.load(FileHttpServerHandler.class.getClassLoader());
+	private static final String DEFAULT_INDEX = CONFIG.getString("ninio.http.file.index");
+	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.file.buffer").intValue();
+	
+	private static final Map<String, String> DEFAULT_CONTENT_TYPES = new HashMap<>();
+	static {
+		for (Config c : CONFIG.getConfigList("ninio.http.file.contentTypes")) {
+			DEFAULT_CONTENT_TYPES.put(c.getString("extension").toLowerCase(), c.getString("contentType"));
+		}
 	}
 	
+	private final File dir;
 	private HttpRequest request;
-	private final Map<String, File> content = new LinkedHashMap<>();
+	private final Map<String, String> contentTypes = new LinkedHashMap<>();
+	private String index = DEFAULT_INDEX;
 	
-	public FileHttpServerHandler() {
+	public FileHttpServerHandler(File dir) {
+		this.dir = dir;
+		contentTypes.putAll(DEFAULT_CONTENT_TYPES);
 	}
 	
-	public FileHttpServerHandler add(String path, File content) {
-		content.put(path, content);
+	public FileHttpServerHandler withContentType(String extension, String contentType) {
+		contentTypes.put(extension.toLowerCase(), contentType);
+		return this;
+	}
+	public FileHttpServerHandler withIndex(String index) {
+		this.index = index;
 		return this;
 	}
 	
@@ -43,36 +62,29 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	@Override
 	public void ready(Write write) {
 		try {
-			String path;
-			
-			File file = new HttpQuery(request.getPath()).getFile(dir, index);
-
-			if (file == null) {
-				write.write(new HttpResponse(Http.Status.FORBIDDEN, Http.Message.FORBIDDEN));
-				write.close();
-				return;
-			}
+			File file = new File(dir, request.path.path.isEmpty() ? index : request.path.path);
 
 			if (file.isFile()) {
 				String name = file.getName();
 				String contentType = null;
 				for (Map.Entry<String, String> e : contentTypes.entrySet()) {
-					if (name.endsWith(e.getKey())) {
+					if (name.toLowerCase().endsWith(e.getKey())) {
 						contentType = e.getValue();
 						break;
 					}
 				}
 				
-				HttpResponse r = new HttpResponse(Http.Status.OK, Http.Message.OK);
-				// r.getHeaders().put("Cache-Control", "private, max-age=0, no-cache");
-				r.getHeaders().put(Http.CONTENT_LENGTH, String.valueOf(file.length()));
+				ImmutableMultimap.Builder<String, String> parameters = ImmutableMultimap.builder();
+				parameters.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(file.length()));
 				if (contentType != null) {
-					r.getHeaders().put(Http.CONTENT_TYPE, contentType);
+					parameters.put(HttpHeaderKey.CONTENT_TYPE, contentType);
 				}
-				write.write(r);
+				// "Cache-Control", "private, max-age=0, no-cache"
+
+				write.write(new HttpResponse(HttpStatus.OK, HttpMessage.OK, parameters.build()));
 				try (InputStream in = new FileInputStream(file)) {
 					while (true) {
-						byte[] b = new byte[10 * 1024];
+						byte[] b = new byte[BUFFER_SIZE];
 						int l = in.read(b);
 						if (l < 0) {
 							break;
@@ -82,11 +94,11 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 				}
 				write.close();
 			} else {
-				write.write(new HttpResponse(Http.Status.NOT_FOUND, Http.Message.NOT_FOUND));
+				write.write(new HttpResponse(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND));
 				write.close();
 			}
 		} catch (IOException ioe) {
-			write.write(new HttpResponse(Http.Status.INTERNAL_SERVER_ERROR, Http.Message.INTERNAL_SERVER_ERROR));
+			write.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR));
 			write.close();
 		}
 	}

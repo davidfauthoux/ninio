@@ -20,7 +20,7 @@ public final class Queue implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(Queue.class);
 
 	private static final Config CONFIG = ConfigFactory.load(Queue.class.getClassLoader());
-	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.queue.buffer.size").intValue();
+	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.queue.buffer").intValue();
 	
 	private final long threadId;
 	private final Selector selector;
