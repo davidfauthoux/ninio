@@ -6,7 +6,6 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.GlobalQueue;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -17,7 +16,9 @@ public final class Snmp {
 	
 	public static final int DEFAULT_PORT = 161;
 
-	private Queue queue = null;
+	private static final Queue DEFAULT_QUEUE = new Queue();
+
+	private Queue queue = DEFAULT_QUEUE;
 	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ninio.snmp.defaultTimeoutFromBeginning");
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = new DatagramReadyFactory();
@@ -57,14 +58,10 @@ public final class Snmp {
 	}
 
 	public SnmpClient client() {
-		Queue q = queue;
-		if (q == null) {
-			q = GlobalQueue.get();
-		}
 		if (authEngine != null) {
-			return new SnmpClient(q, readyFactory, address, authEngine, timeoutFromBeginning);
+			return new SnmpClient(queue, readyFactory, address, authEngine, timeoutFromBeginning);
 		} else {
-			return new SnmpClient(q, readyFactory, address, community, timeoutFromBeginning);
+			return new SnmpClient(queue, readyFactory, address, community, timeoutFromBeginning);
 		}
 	}
 	

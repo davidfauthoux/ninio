@@ -10,9 +10,9 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.http.websocket.WebsocketHttpServerHandler;
-import com.davfx.ninio.util.GlobalQueue;
 import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 
@@ -23,7 +23,7 @@ public final class WebsocketTest {
 	public static void main(String[] args) {
 		Wait wait = new Wait();
 		int port = 8080;
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, port), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue(); HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, port), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}

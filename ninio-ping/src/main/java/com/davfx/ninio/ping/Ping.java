@@ -4,7 +4,6 @@ import java.io.IOException;
 
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.GlobalQueue;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
@@ -23,8 +22,10 @@ public final class Ping {
 			throw new ConfigException.BadValue("ninio.ping.mode", "Invalid mode, only 'java' and 'shell' allowed");
 		}
 	}
-	
-	private Queue queue = null;
+
+	private static final Queue DEFAULT_QUEUE = new Queue();
+
+	private Queue queue = DEFAULT_QUEUE;
 	private ReadyFactory readyFactory = new InternalPingServerReadyFactory(DEFAULT_SYNC_PING);
 
 	public Ping() {
@@ -41,11 +42,7 @@ public final class Ping {
 	}
 	
 	public PingClient client() {
-		Queue q = queue;
-		if (q == null) {
-			q = GlobalQueue.get();
-		}
-		return new PingClient(q, readyFactory);
+		return new PingClient(queue, readyFactory);
 	}
 	
 	public void ping(final String host, final PingClientHandler.Callback.PingCallback pingCallback) {

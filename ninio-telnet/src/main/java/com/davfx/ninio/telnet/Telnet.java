@@ -10,7 +10,9 @@ public final class Telnet {
 	
 	public static final int DEFAULT_PORT = 23;
 
-	private Queue queue = null;
+	private static final Queue DEFAULT_QUEUE = new Queue();
+
+	private Queue queue = DEFAULT_QUEUE;
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = new SocketReadyFactory();
 
@@ -33,10 +35,6 @@ public final class Telnet {
 	}
 	
 	public TelnetClient client() {
-		Queue q = queue;
-		if (q == null) {
-			q = GlobalQueue.get();
-		}
-		return new TelnetClient(q, readyFactory, address);
+		return new TelnetClient(queue, readyFactory, address);
 	}
 }

@@ -4,13 +4,14 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
-import com.davfx.ninio.util.GlobalQueue;
 
 public final class Ftp {
 	
 	public static final int DEFAULT_PORT = 21;
 
-	private Queue queue = null;
+	private static final Queue DEFAULT_QUEUE = new Queue();
+
+	private Queue queue = DEFAULT_QUEUE;
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = new SocketReadyFactory();
 
@@ -45,10 +46,6 @@ public final class Ftp {
 	}
 	
 	public FtpClient client() {
-		Queue q = queue;
-		if (q == null) {
-			q = GlobalQueue.get();
-		}
-		return new FtpClient(q, readyFactory, address, login, password);
+		return new FtpClient(queue, readyFactory, address, login, password);
 	}
 }

@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.DispatchHttpServerHandler;
 import com.davfx.ninio.http.HttpContentType;
 import com.davfx.ninio.http.HttpMessage;
@@ -26,7 +27,6 @@ import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.HttpStatus;
-import com.davfx.ninio.util.GlobalQueue;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
@@ -43,6 +43,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 
 	private final HttpRequestFunctionContainer dispatch;
 	private HttpServer server = null;
+	private final Queue queue = new Queue();
 	private final ExecutorService executor = Executors.newFixedThreadPool(THREADS, new ClassThreadFactory(HttpService.class));
 	
 	public HttpService() {
@@ -58,7 +59,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 	}
 	
 	public HttpService start(int port) {
-		server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, port), new HttpServerHandlerFactory() {
+		server = new HttpServer(queue, null, new Address(Address.ANY, port), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 				LOGGER.error("Failed", e);

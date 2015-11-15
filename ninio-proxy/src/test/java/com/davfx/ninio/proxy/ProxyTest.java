@@ -15,6 +15,7 @@ import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.Listen;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.QueueListen;
 import com.davfx.ninio.core.QueueReady;
 import com.davfx.ninio.core.Ready;
@@ -37,7 +38,7 @@ public class ProxyTest {
 	public void testSocket() throws Exception {
 		int proxyServerPort = 9999;
 		
-		try (ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
+		try (Queue queue = new Queue(); ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
 			proxyServer.start();
 			try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxyServerPort), new ProxyListener() {
 				@Override
@@ -56,8 +57,8 @@ public class ProxyTest {
 			
 				int port = 7777;
 				
-				Listen socketListen = new SocketListen(GlobalQueue.get().getSelector(), GlobalQueue.get().allocator());
-				new QueueListen(GlobalQueue.get(), socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
+				Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
+				new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
 					@Override
 					public void listening(Closeable closeable) {
 					}
@@ -91,7 +92,7 @@ public class ProxyTest {
 				
 				socketReadyFactory = proxyClient.socket();
 				
-				Ready socketReady = socketReadyFactory.create(GlobalQueue.get());
+				Ready socketReady = socketReadyFactory.create(queue);
 				socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -124,7 +125,7 @@ public class ProxyTest {
 	public void testDatagram() throws Exception {
 		int proxyServerPort = 9999;
 		
-		try (ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
+		try (Queue queue = new Queue(); ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
 			proxyServer.start();
 			try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxyServerPort), new ProxyListener() {
 				@Override
@@ -143,7 +144,7 @@ public class ProxyTest {
 				
 				int port = 7777;
 				
-				new QueueReady(GlobalQueue.get(), new DatagramReady(GlobalQueue.get().getSelector(), GlobalQueue.get().allocator()).bind()).connect(new Address(null, port), new ReadyConnection() {
+				new QueueReady(queue, new DatagramReady(queue.getSelector(), queue.allocator()).bind()).connect(new Address(null, port), new ReadyConnection() {
 					private FailableCloseableByteBufferHandler write;
 					
 					@Override
@@ -178,7 +179,7 @@ public class ProxyTest {
 				
 				socketReadyFactory = proxyClient.datagram();
 				
-				Ready socketReady = socketReadyFactory.create(GlobalQueue.get());
+				Ready socketReady = socketReadyFactory.create(queue);
 				socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -213,7 +214,7 @@ public class ProxyTest {
 	public void testPing() throws Exception {
 		int proxyServerPort = 9999;
 		
-		try (ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
+		try (Queue queue = new Queue(); ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
 			proxyServer.start();
 			try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxyServerPort), new ProxyListener() {
 				@Override
@@ -254,7 +255,7 @@ public class ProxyTest {
 		int proxy0ServerPort = 9998;
 		int proxy1ServerPort = 9999;
 		
-		try (ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
+		try (Queue queue = new Queue(); ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
 			proxy0Server.start();
 			
 			try (ProxyServer proxy1Server = new ProxyServer(proxy1ServerPort, 1)) {
@@ -279,8 +280,8 @@ public class ProxyTest {
 					
 					int port = 7777;
 					
-					Listen socketListen = new SocketListen(GlobalQueue.get().getSelector(), GlobalQueue.get().allocator());
-					new QueueListen(GlobalQueue.get(), socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
+					Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
+					new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
 						@Override
 						public void listening(Closeable closeable) {
 						}
@@ -314,7 +315,7 @@ public class ProxyTest {
 					
 					socketReadyFactory = proxyClient.hop();
 					
-					Ready socketReady = socketReadyFactory.create(GlobalQueue.get());
+					Ready socketReady = socketReadyFactory.create(queue);
 					socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
@@ -349,7 +350,7 @@ public class ProxyTest {
 		int proxy0ServerPort = 9998;
 		int proxy1ServerPort = 9999;
 		
-		try (ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
+		try (Queue queue = new Queue(); ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
 			proxy0Server.start();
 			
 			try (ProxyServer proxy1Server = new ProxyServer(proxy1ServerPort, 1)) {
@@ -386,8 +387,8 @@ public class ProxyTest {
 				
 					int port = 7777;
 					
-					Listen socketListen = new SocketListen(GlobalQueue.get().getSelector(), GlobalQueue.get().allocator());
-					new QueueListen(GlobalQueue.get(), socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
+					Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
+					new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
 						@Override
 						public void listening(Closeable closeable) {
 						}
@@ -421,7 +422,7 @@ public class ProxyTest {
 					
 					socketReadyFactory = proxyClient.socket();
 					
-					Ready socketReady = socketReadyFactory.create(GlobalQueue.get());
+					Ready socketReady = socketReadyFactory.create(queue);
 					socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {

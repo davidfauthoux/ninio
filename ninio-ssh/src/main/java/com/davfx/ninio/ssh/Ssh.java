@@ -12,7 +12,6 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
 import com.davfx.ninio.core.Trust;
-import com.davfx.ninio.util.GlobalQueue;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -22,7 +21,9 @@ public final class Ssh {
 	
 	public static final int DEFAULT_PORT = 22;
 
-	private Queue queue = null;
+	private static final Queue DEFAULT_QUEUE = new Queue();
+
+	private Queue queue = DEFAULT_QUEUE;
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = new SocketReadyFactory();
 	private String login = CONFIG.getString("ninio.ssh.defaultLogin");
@@ -67,11 +68,7 @@ public final class Ssh {
 	}
 
 	public SshClient client() {
-		Queue q = queue;
-		if (q == null) {
-			q = GlobalQueue.get();
-		}
-		return new SshClient(q, readyFactory, address, login, password, key);
+		return new SshClient(queue, readyFactory, address, login, password, key);
 	}
 	
 	public void download(String filePath, final FailableCloseableByteBufferHandler handler) {

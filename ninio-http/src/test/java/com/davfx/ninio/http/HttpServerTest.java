@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.util.GlobalQueue;
+import com.davfx.ninio.core.Queue;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
@@ -27,7 +27,7 @@ public class HttpServerTest {
 	
 	@Test
 	public void testGetServerWithJavaClient() throws Exception {
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue(); HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}
@@ -93,7 +93,7 @@ public class HttpServerTest {
 	
 	@Test
 	public void testPostServerWithJavaClient() throws Exception {
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue(); HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}
@@ -165,7 +165,7 @@ public class HttpServerTest {
 	
 	@Test
 	public void testGetServerWithNinioClient() throws Exception {
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue(); HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}
@@ -252,7 +252,7 @@ public class HttpServerTest {
 
 	@Test
 	public void testPostServerWithNinioClient() throws Exception {
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue(); HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}
@@ -345,7 +345,7 @@ public class HttpServerTest {
 	
 	@Test
 	public void testGetServerWithSimpleNinioClient() throws Exception {
-		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+		try (Queue queue = new Queue(); HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 			}

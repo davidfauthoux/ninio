@@ -17,7 +17,6 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.QueueReady;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.util.GlobalQueue;
 import com.davfx.util.Pair;
 
 // Syntax: snmp[bulk]walk -v2c -c<anything> -On <ip>:6161 <oid>
@@ -39,7 +38,7 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 	private boolean closed = false;
 	
 	public SnmpServer(Address address, Handler handler) {
-		this(GlobalQueue.get(), address, handler);
+		this(new Queue(), address, handler);
 	}
 	public SnmpServer(Queue queue, Address address, Handler handler) {
 		this(queue, new DatagramReady(queue.getSelector(), queue.allocator()).bind(), address, handler);

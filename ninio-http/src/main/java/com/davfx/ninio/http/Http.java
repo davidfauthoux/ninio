@@ -12,12 +12,13 @@ import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
 import com.davfx.ninio.core.SslReadyFactory;
 import com.davfx.ninio.core.Trust;
-import com.davfx.ninio.util.GlobalQueue;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class Http {
 
-	private Queue queue = null;
+	private static final Queue DEFAULT_QUEUE = new Queue();
+
+	private Queue queue = DEFAULT_QUEUE;
 	private ReadyFactory readyFactory = new SocketReadyFactory();
 	private ReadyFactory secureReadyFactory = new SslReadyFactory(new Trust());
 
@@ -45,11 +46,7 @@ public final class Http {
 	}
 
 	public HttpClient client() {
-		Queue q = queue;
-		if (q == null) {
-			q = GlobalQueue.get();
-		}
-		return new HttpClient(q, readyFactory, secureReadyFactory);
+		return new HttpClient(queue, readyFactory, secureReadyFactory);
 	}
 	
 	public static interface Handler extends Failable, Closeable {
