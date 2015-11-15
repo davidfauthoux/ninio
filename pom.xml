@@ -135,6 +135,7 @@
 		<module>ninio-ping</module>
 		<module>ninio-proxy</module>
 		<module>ninio-http</module>
+		<module>ninio-script</module>
 	</modules>
 
 	<dependencies>
