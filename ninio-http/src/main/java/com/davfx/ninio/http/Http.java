@@ -13,6 +13,7 @@ import com.davfx.ninio.core.SocketReadyFactory;
 import com.davfx.ninio.core.SslReadyFactory;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.util.GlobalQueue;
+import com.google.common.collect.ImmutableMultimap;
 
 public final class Http {
 
@@ -85,7 +86,7 @@ public final class Http {
 	}
 	public void post(String url, final ByteBuffer post, final Handler handler) {
 		final HttpClient client = client();
-		client.send(HttpRequest.of(url, HttpMethod.POST), new HttpClientHandler() {
+		client.send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()), new HttpClientHandler() {
 			@Override
 			public void failed(IOException e) {
 				client.close();
