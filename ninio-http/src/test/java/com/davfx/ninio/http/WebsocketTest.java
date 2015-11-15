@@ -34,8 +34,8 @@ public final class WebsocketTest {
 			@Override
 			public HttpServerHandler create() {
 				return new DispatchHttpServerHandler(
-					new PathDispatchFunction()
-						.add("/ws", new WebsocketHttpServerHandler(false, new ReadyConnection() {
+					new HttpRequestFunctionContainer()
+						.add(new SubPathHttpRequestFilter(HttpQueryPath.of("/ws")), new WebsocketHttpServerHandler(false, new ReadyConnection() {
 							private CloseableByteBufferHandler write;
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
@@ -60,7 +60,7 @@ public final class WebsocketTest {
 								LOGGER.warn("Failed <--", e);
 							}
 						}))
-						.withDefault(new FileHttpServerHandler(new File("src/test/resources")))
+						.add(new SubPathHttpRequestFilter(HttpQueryPath.of()), new FileHttpServerHandler(new File("src/test/resources")))
 					);
 				}
 		})) {

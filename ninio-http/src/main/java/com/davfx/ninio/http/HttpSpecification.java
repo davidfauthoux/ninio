@@ -1,6 +1,6 @@
 package com.davfx.ninio.http;
 
-interface HttpSpecification {
+public interface HttpSpecification {
 	String HTTP10 = "HTTP/1.0";
 	String HTTP11 = "HTTP/1.1";
 	

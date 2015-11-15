@@ -1,12 +1,27 @@
 package com.davfx.ninio.http;
 
+import java.nio.charset.Charset;
+
 import com.google.common.base.Charsets;
 
-public interface HttpContentType {
+public final class HttpContentType {
 
-	String PLAIN_TEXT = "text/plain; charset=" + Charsets.UTF_8.name();
-	String JSON = "application/json; charset=" + Charsets.UTF_8.name();
-	String JAVASCRIPT = "application/javascript; charset=" + Charsets.UTF_8.name();
-	String WWW_FORM_URL_ENCODED = "application/x-www-form-urlencoded";
-
+	private HttpContentType() {
+	}
+	
+	public static String plainText(Charset c) {
+		return "text/plain; charset=" + c.name();
+	}
+	public static String plainText() {
+		return plainText(Charsets.UTF_8);
+	}
+	public static String json(Charset c) {
+		return "application/json; charset=" + c.name();
+	}
+	public static String json() {
+		return json(Charsets.UTF_8);
+	}
+	public static String wwwFormUrlEncoded() {
+		return "application/x-www-form-urlencoded";
+	}
 }

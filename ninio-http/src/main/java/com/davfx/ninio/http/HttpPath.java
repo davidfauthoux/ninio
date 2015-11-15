@@ -1,10 +1,7 @@
 package com.davfx.ninio.http;
 
-import java.util.Deque;
-import java.util.LinkedList;
 import java.util.List;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMultimap;
 
@@ -13,35 +10,8 @@ public final class HttpPath {
 		System.out.println(Splitter.on('/').splitToList(""));
 	}
 	public final String line;
-	public final String path;
+	public final HttpQueryPath path;
 	public final ImmutableMultimap<String, String> parameters;
-	
-	private static String path(String p, int end) {
-		if (p.isEmpty()) {
-			throw new IllegalArgumentException("Invalid empty path");
-		}
-		if (p.charAt(0) != HttpSpecification.PATH_SEPARATOR) {
-			throw new IllegalArgumentException("Path must start with '" + HttpSpecification.PATH_SEPARATOR + "': " + p);
-		}
-		String s;
-		if (end < 0) {
-			s = p.substring(1);
-		} else {
-			s = p.substring(1, end);
-		}
-		Deque<String> l = new LinkedList<>();
-		for (String k : Splitter.on(HttpSpecification.PATH_SEPARATOR).splitToList(s)) {
-			if (k.equals(".")) {
-				continue;
-			}
-			if (k.equals("..")) {
-				l.removeLast();
-				continue;
-			}
-			l.add(k);
-		}
-		return Joiner.on(HttpSpecification.PATH_SEPARATOR).join(l);
-	}
 	
 	public HttpPath(String line) {
 		this.line = line;
@@ -51,12 +21,12 @@ public final class HttpPath {
 			parameters = ImmutableMultimap.<String, String>of();
 			int j = line.indexOf(HttpSpecification.HASH_SEPARATOR);
 			if (j < 0) {
-				path = path(line, -1);
+				path = HttpQueryPath.of(line);
 			} else {
-				path = path(line, j);
+				path = HttpQueryPath.of(line.substring(0, j));
 			}
 		} else {
-			path = path(line, i);
+			path = HttpQueryPath.of(line.substring(0, i));
 			int j = line.indexOf(HttpSpecification.HASH_SEPARATOR);
 			String s;
 			if (j < 0) {

@@ -20,12 +20,12 @@ import com.davfx.ninio.http.DispatchHttpServerHandler;
 import com.davfx.ninio.http.HttpContentType;
 import com.davfx.ninio.http.HttpMessage;
 import com.davfx.ninio.http.HttpRequest;
+import com.davfx.ninio.http.HttpRequestFunctionContainer;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.HttpStatus;
-import com.davfx.ninio.http.PathDispatchFunction;
 import com.davfx.ninio.util.GlobalQueue;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
@@ -39,15 +39,14 @@ public final class HttpService implements AutoCloseable, Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpService.class);
 	
 	private static final Config CONFIG = ConfigFactory.load(HttpService.class.getClassLoader());
-	
 	private static final int THREADS = CONFIG.getInt("ninio.http.service.threads");
-	
-	private final PathDispatchFunction dispatch;
+
+	private final HttpRequestFunctionContainer dispatch;
 	private HttpServer server = null;
 	private final ExecutorService executor = Executors.newFixedThreadPool(THREADS, new ClassThreadFactory(HttpService.class));
 	
 	public HttpService() {
-		dispatch = new PathDispatchFunction();
+		dispatch = new HttpRequestFunctionContainer();
 	}
 	
 	@Override
@@ -78,7 +77,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 		return this;
 	}
 	
-	public HttpService register(String path, final HttpServiceHandler handler) {
+	public HttpService register(HttpRequestFilter filter, final HttpServiceHandler handler) {
 		HttpServerHandler h = new HttpServerHandler() {
 			private HttpRequest request;
 			private File postFile = null;
@@ -166,13 +165,19 @@ public final class HttpService implements AutoCloseable, Closeable {
 					public void run() {
 						try {
 							handler.handle(r, post, new HttpServiceResult() {
+								private String contentType = HttpContentType.plainText();
 								@Override
-								public void success(String contentType, String content) {
-									write.write(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.PLAIN_TEXT))); //TODO charset
+								public HttpServiceResult contentType(String contentType) {
+									this.contentType = contentType;
+									return this;
+								}
+								@Override
+								public void success(String content) {
+									write.write(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
 									write.handle(null, ByteBuffer.wrap(content.getBytes(Charsets.UTF_8)));
 								}
 								@Override
-								public OutputStream success(String contentType) {
+								public OutputStream success() {
 									write.write(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, contentType)));
 									return new OutputStream() {
 										@Override
@@ -198,7 +203,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 								}
 							});
 						} catch (IOException ioe) {
-							write.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.PLAIN_TEXT))); //TODO Charset
+							write.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
 							write.handle(null, ByteBuffer.wrap(ioe.getMessage().getBytes(Charsets.UTF_8)));
 						}
 						write.close();
@@ -213,13 +218,10 @@ public final class HttpService implements AutoCloseable, Closeable {
 				request = null;
 			}
 		};
-
-		if (path == null) {
-			dispatch.withDefault(h);
-		} else {
-			dispatch.add(path, h);
-		}
+		
+		dispatch.add(filter, h);
 		
 		return this;
 	}
+
 }

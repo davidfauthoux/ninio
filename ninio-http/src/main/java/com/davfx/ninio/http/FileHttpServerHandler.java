@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import com.davfx.ninio.core.Address;
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMultimap;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -62,7 +63,7 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	@Override
 	public void ready(Write write) {
 		try {
-			File file = new File(dir, request.path.path.isEmpty() ? index : request.path.path);
+			File file = new File(dir, request.path.path.path.isEmpty() ? index : (File.separatorChar + Joiner.on(File.separatorChar).join(request.path.path.path)));
 
 			if (file.isFile()) {
 				String name = file.getName();

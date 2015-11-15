@@ -17,44 +17,54 @@ public final class DispatchHttpServerHandler implements HttpServerHandler {
 	@Override
 	public void handle(HttpRequest request) {
 		currentHandler = dispatchMap.apply(request);
+		
 		if (currentHandler == null) {
-			return;
+			currentHandler = new HttpServerHandler() {
+				@Override
+				public void failed(IOException e) {
+				}
+				@Override
+				public void close() {
+				}
+				@Override
+				public void handle(Address address, ByteBuffer buffer) {
+				}
+				@Override
+				public void ready(Write write) {
+					write.failed(new IOException("No handler provided"));
+				}
+				@Override
+				public void handle(HttpRequest request) {
+				}
+			};
 		}
+		
 		currentHandler.handle(request);
 	}
 	
 	@Override
 	public void handle(Address address, ByteBuffer buffer) {
-		if (currentHandler == null) {
-			return;
-		}
 		currentHandler.handle(address, buffer);
 	}
 	
 	@Override
 	public void close() {
-		if (currentHandler == null) {
-			return;
+		if (currentHandler != null) {
+			currentHandler.close();
 		}
-		currentHandler.close();
 		currentHandler = null;
 	}
 	
 	@Override
 	public void failed(IOException e) {
-		if (currentHandler == null) {
-			return;
+		if (currentHandler != null) {
+			currentHandler.failed(e);
 		}
-		currentHandler.failed(e);
 		currentHandler = null;
 	}
 	
 	@Override
 	public void ready(Write write) {
-		if (currentHandler == null) {
-			write.failed(null);
-			return;
-		}
 		currentHandler.ready(write);
 	}
 }

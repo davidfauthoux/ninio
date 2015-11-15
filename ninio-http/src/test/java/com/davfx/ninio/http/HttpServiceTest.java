@@ -17,7 +17,7 @@ public final class HttpServiceTest {
 		int port = 8080;
 		try (HttpService server = new HttpService()) {
 			server
-			.register("/echo", new HttpServiceHandler() {
+			.register(new SubPathHttpRequestFilter(HttpQueryPath.of("/echo/string")), new HttpServiceHandler() {
 				@Override
 				public void handle(HttpRequest request, InputStream post, HttpServiceResult result) {
 					/*
@@ -29,10 +29,10 @@ public final class HttpServiceTest {
 						}
 					}
 					*/
-					result.success(HttpContentType.PLAIN_TEXT, "echo " + request.path.parameters.get("message").iterator().next());
+					result.success("echo/string " + request.path.parameters.get("message").iterator().next());
 				}
 			})
-			.register("/echostream", new HttpServiceHandler() {
+			.register(new SubPathHttpRequestFilter(HttpQueryPath.of("/echo/stream")), new HttpServiceHandler() {
 				@Override
 				public void handle(HttpRequest request, InputStream post, HttpServiceResult result) throws IOException {
 					/*
@@ -44,35 +44,15 @@ public final class HttpServiceTest {
 						}
 					}
 					*/
-					result.success(HttpContentType.PLAIN_TEXT).write(("echo " + request.path.parameters.get("message").iterator().next()).getBytes(Charsets.UTF_8));
+					result.success().write(("echo/stream " + request.path.parameters.get("message").iterator().next()).getBytes(Charsets.UTF_8));
 				}
 			})
 			.start(port);
 
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo?message=helloworld");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echostream?message=helloworld");
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/string?message=helloworld");
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/stream?message=helloworld");
 			wait.waitFor();
 		}
-	}
-	
-	@SuppressWarnings("resource")
-	public static void main2(String[] args) {
-		new HttpService()
-		.register("/echo", new HttpServiceHandler() {
-			@Override
-			public void handle(HttpRequest request, InputStream post, HttpServiceResult result) {
-				String echo = "echo " + request.path.parameters.get("message").iterator().next();
-				result.success(HttpContentType.PLAIN_TEXT, echo);
-			}
-		})
-		.register("/echostream", new HttpServiceHandler() {
-			@Override
-			public void handle(HttpRequest request, InputStream post, HttpServiceResult result) throws IOException {
-				String echo = "echo " + request.path.parameters.get("message").iterator().next();
-				result.success(HttpContentType.PLAIN_TEXT).write(echo.getBytes(Charsets.UTF_8));
-			}
-		})
-		.start(8080);
 	}
 	
 }
