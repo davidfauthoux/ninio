@@ -28,6 +28,9 @@ public final class HttpRequest {
 	}
 	
 	public static HttpRequest of(String url) {
+		return of(url, HttpMethod.GET, ImmutableMultimap.<String, String>of());
+	}
+	public static HttpRequest of(String url, HttpMethod method, ImmutableMultimap<String, String> headers) {
 		String protocol;
 		boolean secure;
 		int defaultPort;
@@ -45,8 +48,8 @@ public final class HttpRequest {
 
 		int i = url.indexOf(HttpSpecification.PATH_SEPARATOR, protocol.length());
 		if (i < 0) {
-			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, HttpMethod.GET, new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR)));
+			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, method, new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR)), headers);
 		}
-		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, HttpMethod.GET, new HttpPath(url.substring(i)));
+		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, method, new HttpPath(url.substring(i)), headers);
 	}
 }

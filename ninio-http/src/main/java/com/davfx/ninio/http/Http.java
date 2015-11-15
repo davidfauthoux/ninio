@@ -83,4 +83,33 @@ public final class Http {
 			}
 		});
 	}
+	public void post(String url, final ByteBuffer post, final Handler handler) {
+		final HttpClient client = client();
+		client.send(HttpRequest.of(url, HttpMethod.POST), new HttpClientHandler() {
+			@Override
+			public void failed(IOException e) {
+				client.close();
+				handler.failed(e);
+			}
+			@Override
+			public void close() {
+				client.close();
+				handler.close();
+			}
+			@Override
+			public void handle(Address address, ByteBuffer buffer) {
+				handler.handle(buffer);
+			}
+			@Override
+			public void received(HttpResponse response) {
+				handler.handle(response);
+			}
+			
+			@Override
+			public void ready(CloseableByteBufferHandler write) {
+				write.handle(null, post);
+				write.close();
+			}
+		});
+	}
 }

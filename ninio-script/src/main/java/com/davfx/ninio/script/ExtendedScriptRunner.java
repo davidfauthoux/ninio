@@ -9,6 +9,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.Http;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpClientHandler;
+import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpStatus;
@@ -21,6 +22,9 @@ import com.davfx.ninio.snmp.SnmpClientHandler;
 import com.davfx.script.AsyncScriptFunction;
 import com.davfx.script.ExecutorScriptRunner;
 import com.davfx.script.ScriptRunner;
+import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.net.HttpHeaders;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
@@ -132,8 +136,26 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 		runner.register("http", new AsyncScriptFunction() {
 			@Override
 			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
+				JsonObject r = request.getAsJsonObject();
+				String url = JsonUtils.getString(r, "url", null);
+				
+				ImmutableMultimap.Builder<String, String> headers = ImmutableMultimap.builder();
+
+				JsonElement postObject = r.get("post");
+				final String post;
+				if (postObject == null) {
+					post = null;
+				} else {
+					JsonObject o = postObject.getAsJsonObject();
+					post = JsonUtils.getString(o, "data", null);
+					String contentType = JsonUtils.getString(o, "contentType", null);
+					if (contentType != null) {
+						headers.put(HttpHeaders.CONTENT_TYPE, contentType);
+					}
+				}
+				
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
-				http.send(HttpRequest.of(JsonUtils.getString(request.getAsJsonObject(), "url", null)), new HttpClientHandler() {
+				http.send(HttpRequest.of(url, (post == null) ? HttpMethod.GET : HttpMethod.POST, headers.build()), new HttpClientHandler() {
 					private ByteBufferContainer content = new ByteBufferContainer();
 					
 					@Override
@@ -150,6 +172,10 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 					
 					@Override
 					public void ready(CloseableByteBufferHandler write) {
+						if (post != null) {
+							write.handle(null, ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)));
+							write.close();
+						}
 					}
 					
 					@Override
