@@ -27,4 +27,26 @@ public final class HttpRequest {
 		return "[address=" + address + ", secure=" + secure + ", method=" + method + ", path=" + path + ", headers=" + headers + "]";
 	}
 	
+	public static HttpRequest of(String url) {
+		String protocol;
+		boolean secure;
+		int defaultPort;
+		if (url.startsWith(HttpSpecification.PROTOCOL)) {
+			protocol = HttpSpecification.PROTOCOL;
+			secure = false;
+			defaultPort = HttpSpecification.DEFAULT_PORT;
+		} else if (url.startsWith(HttpSpecification.SECURE_PROTOCOL)) {
+			protocol = HttpSpecification.SECURE_PROTOCOL;
+			secure = true;
+			defaultPort = HttpSpecification.DEFAULT_SECURE_PORT;
+		} else {
+			throw new IllegalArgumentException("URL must starts with " + HttpSpecification.PROTOCOL + " or " + HttpSpecification.SECURE_PROTOCOL);
+		}
+
+		int i = url.indexOf(HttpSpecification.PATH_SEPARATOR, protocol.length());
+		if (i < 0) {
+			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, HttpMethod.GET, new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR)));
+		}
+		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, HttpMethod.GET, new HttpPath(url.substring(i)));
+	}
 }

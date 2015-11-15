@@ -2,7 +2,6 @@ package com.davfx.ninio.core;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -25,11 +24,11 @@ public final class Trust {
 	private final KeyStore ksKeys;
 	private final SSLContext sslContext;
 
-	public Trust(File keysTrust, String keysTrustPassPhrase) throws IOException {
+	public Trust(File keysTrust, String keysTrustPassPhrase) {
 		this(keysTrust, keysTrustPassPhrase, keysTrust, keysTrustPassPhrase);
 	}
 	
-	public Trust(File keys, String keysPassPhrase, File trust, String trustPassPhrase) throws IOException {
+	public Trust(File keys, String keysPassPhrase, File trust, String trustPassPhrase) {
 		try {
 			ksKeys = KeyStore.getInstance("JKS");
 			try (InputStream in = new FileInputStream(keys)) {
@@ -54,15 +53,15 @@ public final class Trust {
 			sslContext = SSLContext.getInstance("TLS");
 			sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 		} catch (Exception e) {
-			throw new IOException(e);
+			throw new RuntimeException(e);
 		}
 	}
 	
-	public Trust(String keysResourceName, String keysTrustPassPhrase) throws IOException {
+	public Trust(String keysResourceName, String keysTrustPassPhrase) {
 		this(keysResourceName, keysTrustPassPhrase, keysResourceName, keysTrustPassPhrase);
 	}
 	
-	public Trust(String keysResourceName, String keysPassPhrase, String trustResourceName, String trustPassPhrase) throws IOException {
+	public Trust(String keysResourceName, String keysPassPhrase, String trustResourceName, String trustPassPhrase) {
 		try {
 			ksKeys = KeyStore.getInstance("JKS");
 			try (InputStream in = Trust.class.getResourceAsStream(keysResourceName)) {
@@ -87,17 +86,17 @@ public final class Trust {
 			sslContext = SSLContext.getInstance("TLS");
 			sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 		} catch (Exception e) {
-			throw new IOException(e);
+			throw new RuntimeException(e);
 		}
 	}
 	
-	public Trust() throws IOException {
+	public Trust() {
 		ksKeys = null;
 		try {
 			sslContext = SSLContext.getInstance("TLS");
 			sslContext.init(null, null, null);
 		} catch (Exception e) {
-			throw new IOException(e);
+			throw new RuntimeException(e);
 		}
 	}
 	

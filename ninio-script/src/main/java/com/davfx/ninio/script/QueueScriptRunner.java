@@ -6,7 +6,7 @@ import com.davfx.script.ScriptRunner;
 import com.davfx.script.SyncScriptFunction;
 import com.google.gson.JsonElement;
 
-public final class QueueScriptRunner implements ScriptRunner {
+final class QueueScriptRunner implements ScriptRunner {
 	private final Queue queue;
 	private final ScriptRunner wrappee;
 

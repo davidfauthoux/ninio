@@ -10,10 +10,10 @@ import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.HttpPathParameter;
 import com.davfx.ninio.http.util.HttpQueryParameter;
 import com.davfx.ninio.http.util.HttpRoute;
-import com.davfx.ninio.http.util.HttpService;
 import com.davfx.ninio.http.util.HttpServiceResult;
 import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
+import com.google.common.reflect.ClassPath;
 
 public final class AnnotatedHttpServiceTest {
 
@@ -73,10 +73,22 @@ public final class AnnotatedHttpServiceTest {
 	}
 	
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		Wait wait = new Wait();
 		int port = 8080;
-		try (HttpService server = AnnotatedHttpService.service(AnnotatedHttpServiceTest.class.getClassLoader())) {
+		try (AnnotatedHttpService server = new AnnotatedHttpService()) {
+			ClassPath classPath = ClassPath.from(AnnotatedHttpServiceTest.class.getClassLoader());
+			
+			for (ClassPath.ClassInfo classInfo : classPath.getAllClasses()) {
+				Class<?> clazz;
+				try {
+					clazz = classInfo.load();
+				} catch (LinkageError e) {
+					continue;
+				}
+				server.register(clazz);
+			}
+
 			server.start(port);
 
 			// System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/?message=helloworld");

@@ -341,4 +341,87 @@ public class HttpServerTest {
 			}
 		}
 	}
+	
+	
+	@Test
+	public void testGetServerWithSimpleNinioClient() throws Exception {
+		try (HttpServer server = new HttpServer(GlobalQueue.get(), null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+			@Override
+			public void failed(IOException e) {
+			}
+			@Override
+			public void closed() {
+			}
+			
+			@Override
+			public HttpServerHandler create() {
+				return new HttpServerHandler() {
+					private HttpRequest request;
+					
+					@Override
+					public void failed(IOException e) {
+						LOGGER.warn("Failed", e);
+					}
+					@Override
+					public void close() {
+						LOGGER.debug("Closed");
+					}
+					
+					@Override
+					public void handle(HttpRequest request) {
+						LOGGER.debug("Request received: {}", request);
+						this.request = request;
+					}
+
+					@Override
+					public void handle(Address address, ByteBuffer buffer) {
+						LOGGER.debug("Post received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
+					}
+					
+					@Override
+					public void ready(Write write) {
+						LOGGER.debug("Ready to write response");
+						write.write(new HttpResponse());
+						write.handle(null, ByteBuffer.wrap(("hello:" + request.path).getBytes(Charsets.UTF_8)));
+						write.close();
+					}
+					
+				};
+			}
+			
+		})) {
+			
+			Thread.sleep(100);
+			
+			final Lock<String, IOException> lock = new Lock<>();
+			new Http().get("http://127.0.0.1:8080/test?a=b", new Http.Handler() {
+				private HttpResponse response;
+				
+				@Override
+				public void failed(IOException e) {
+					lock.fail(e);
+				}
+				
+				@Override
+				public void handle(HttpResponse response) {
+					LOGGER.debug("Response received: {}", response);
+					this.response = response;
+				}
+
+				@Override
+				public void handle(ByteBuffer buffer) {
+					String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+					LOGGER.debug("Received: {}", s);
+					lock.set(response.status + ":" + response.reason + ":" + s);
+				}
+				
+				@Override
+				public void close() {
+				}
+			});
+			
+			Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
+		}
+	}
+
 }

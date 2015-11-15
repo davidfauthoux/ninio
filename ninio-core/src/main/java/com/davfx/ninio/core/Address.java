@@ -40,6 +40,19 @@ public final class Address {
 		return new Address(h, p);
 	}
 
+	public static Address of(String hostPort, int defaultPort) {
+		int i = hostPort.indexOf(':');
+		if (i < 0) {
+			return new Address(hostPort, defaultPort);
+		}
+		String h = hostPort.substring(0, i);
+		if (h.isEmpty()) {
+			h = null;
+		}
+		int p = Integer.parseInt(hostPort.substring(i + 1));
+		return new Address(h, p);
+	}
+
 	@Override
 	public int hashCode() {
 		if (host == null) {
