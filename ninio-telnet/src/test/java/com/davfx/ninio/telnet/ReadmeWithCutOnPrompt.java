@@ -8,8 +8,8 @@ import com.davfx.ninio.core.Address;
 
 public final class ReadmeWithCutOnPrompt {
 	public static void main(String[] args) throws Exception {
-		final String login = "davidfauthoux"; //"<your-login>";
-		final String password = "orod,ove"; //"<your-password>";
+		final String login = "<your-login>";
+		final String password = "<your-password>";
 		
 		final Deque<String> prompts = new LinkedList<>();
 		prompts.add("login:");
@@ -19,7 +19,7 @@ public final class ReadmeWithCutOnPrompt {
 		commands.add(login);
 		commands.add(password);
 		commands.add("ls");
-		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), prompts.removeFirst(), new CutOnPromptClient.Handler() {
+		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), new CutOnPromptClient.Handler() {
 			private String command = null;
 			private final Object lock = new Object();
 			@Override
@@ -32,6 +32,7 @@ public final class ReadmeWithCutOnPrompt {
 			}
 			@Override
 			public void connected(final Write write) {
+				write.setPrompt(prompts.removeFirst());
 				new Thread(new Runnable() {
 					@Override
 					public void run() {
@@ -58,7 +59,7 @@ public final class ReadmeWithCutOnPrompt {
 								if (!prompts.isEmpty()) {
 									String prompt = prompts.removeFirst();
 									System.out.println("PROMPT CHANGED " + prompt);
-									write.changePrompt(prompt);
+									write.setPrompt(prompt);
 								}
 								System.out.println("--> " + c);
 								write.write(c);

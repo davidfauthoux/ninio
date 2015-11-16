@@ -14,7 +14,7 @@ public final class CutOnPromptClient {
 	
 	public static interface Handler extends Failable, Closeable {
 		interface Write extends Closeable {
-			void changePrompt(String prompt);
+			void setPrompt(String prompt);
 			void write(String command);
 		}
 		void connected(Write write);
@@ -23,7 +23,7 @@ public final class CutOnPromptClient {
 	
 	private final CutOnPromptReadyConnection connection;
 	
-	public CutOnPromptClient(TelnetReady client, String initialPrompt, final Handler handler) {
+	public CutOnPromptClient(TelnetReady client, final Handler handler) {
 		connection = new CutOnPromptReadyConnection(new ReadyConnection() {
 			@Override
 			public void failed(IOException e) {
@@ -44,7 +44,7 @@ public final class CutOnPromptClient {
 			public void connected(final FailableCloseableByteBufferHandler write) {
 				handler.connected(new Handler.Write() {
 					@Override
-					public void changePrompt(String prompt) {
+					public void setPrompt(String prompt) {
 						connection.setPrompt(ByteBuffer.wrap(prompt.getBytes(Charsets.UTF_8)));
 					}
 					@Override
@@ -58,7 +58,6 @@ public final class CutOnPromptClient {
 				});
 			}
 		});
-		connection.setPrompt(ByteBuffer.wrap(initialPrompt.getBytes(Charsets.UTF_8)));
 		client.connect(connection);
 	}
 }

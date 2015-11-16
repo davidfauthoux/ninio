@@ -98,9 +98,6 @@ public final class CutOnPromptReadyConnection implements ReadyConnection {
 	
 	@Override
 	public void handle(Address address, ByteBuffer buffer) {
-		if (currentPrompt == null) {
-			return;
-		}
 		while (true) {
 			if (previous == null) {
 				previous = new ArrayList<>();

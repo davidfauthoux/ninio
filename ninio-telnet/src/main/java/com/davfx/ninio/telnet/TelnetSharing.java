@@ -14,13 +14,22 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
-import com.davfx.ninio.core.Failable;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.util.QueueScheduled;
+import com.davfx.util.ConfigUtils;
+import com.davfx.util.DateUtils;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class TelnetSharing implements AutoCloseable, Closeable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(TelnetSharing.class);
-	
+
+	private static final Config CONFIG = ConfigFactory.load(TelnetSharing.class.getClassLoader());
+
+	private static final double CONNECTIONS_TIME_TO_LIVE = ConfigUtils.getDuration(CONFIG, "ninio.telnet.sharing.ttl");
+	private static final double CONNECTIONS_CHECK_TIME = ConfigUtils.getDuration(CONFIG, "ninio.telnet.sharing.check");
+
 	private static final class NextCommand {
 		public final String command;
 		public final String prompt;
@@ -53,12 +62,10 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 
 	private static final Queue DEFAULT_QUEUE = new Queue();
 
-	private final TelnetSharingReadyFactory factory;
 	private Queue queue = DEFAULT_QUEUE;
 	private final Map<Address, TelnetSharingHandlerManager> map = new HashMap<>();
 	
-	public TelnetSharing(TelnetSharingReadyFactory factory) {
-		this.factory = factory;
+	public TelnetSharing() {
 	}
 	
 	@Override
@@ -78,58 +85,72 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 		return this;
 	}
 	
-	private static final class TelnetSharingHandlerManager implements Failable, Closeable {
+	private static final class TelnetSharingHandlerManager {
 		private static enum State {
 			CONNECTING, CONNECTED, WAITING_RESPONSE, DISCONNECTED
 		}
 		private final Queue queue;
-		private final TelnetSharingReadyFactory factory;
 		private final Address address;
 		private State state = State.DISCONNECTED;
 		private CutOnPromptClient.Handler.Write write;
 		private final List<InitCommand> initCommands = new ArrayList<>();
 		private final Deque<NextCommand> commands = new LinkedList<>();
-		private int countOpen = 0;
+		private double closeDate = 0d;
+		private final Closeable closeable;
+		private boolean closed = false;
 		
-		public TelnetSharingHandlerManager(Queue queue, Address address, TelnetSharingReadyFactory factory) {
+		public TelnetSharingHandlerManager(Queue queue, Address address) {
 			this.queue = queue;
-			this.factory = factory;
 			this.address = address;
+			
+			closeable = QueueScheduled.schedule(queue, CONNECTIONS_CHECK_TIME, new Runnable() {
+				@Override
+				public void run() {
+					double now = DateUtils.now();
+					if ((state == State.CONNECTED) && (closeDate > 0d) && (closeDate <= now)) {
+						doClose(null);
+					}
+				}
+			});
 		}
 		
-		@Override
-		public void failed(IOException e) {
-			LOGGER.debug("Disconnected with error: {}", e.getMessage());
-			for (InitCommand i : initCommands) {
-				for (TelnetSharingHandler.Callback callback : i.callbacks) {
-					callback.failed(e);
+		void close() {
+			closed = true;
+			LOGGER.debug("Closed: {}", address);
+			closeable.close();
+			if (write != null) {
+				write.close();
+			}
+			doClose(null);
+		}
+		
+		private void doClose(IOException e) {
+			if (e != null) {
+				LOGGER.debug("Disconnected with error: {}", e.getMessage());
+				for (InitCommand i : initCommands) {
+					for (TelnetSharingHandler.Callback callback : i.callbacks) {
+						callback.failed(e);
+					}
+				}
+				for (NextCommand c : commands) {
+					c.callback.failed(e);
 				}
 			}
-			for (NextCommand c : commands) {
-				c.callback.failed(e);
-			}
+
 			initCommands.clear();
 			commands.clear();
-		}
-		
-		@Override
-		public void close() {
-			initCommands.clear();
-			commands.clear();
-			countOpen = 0;
+
 			state = State.DISCONNECTED;
 			write = null;
 			LOGGER.debug("Disconnected from: {}", address);
 		}
 		
-		public TelnetSharingHandler createHandler() {
+		public TelnetSharingHandler createHandler(final TelnetSharingReadyFactory factory) {
 			return new TelnetSharingHandler() {
-				private boolean open = false;
-				private boolean closed = false;
 				private int initIndex = 0;
 
 				@Override
-				public void init(String prompt, String command, Callback callback) {
+				public void init(String command, String prompt, Callback callback) {
 					if (state == State.DISCONNECTED) {
 						LOGGER.debug("Init command added: {}", command);
 						InitCommand i = new InitCommand(prompt, command);
@@ -155,155 +176,132 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 				}
 				
 				@Override
-				public void write(String prompt, String command, Callback callback) {
-					if (!open) {
-						open = true;
-						countOpen++;
-						if (state == State.DISCONNECTED) {
-							LOGGER.debug("Connecting to: {}", address);
-							state = State.CONNECTING;
-							if (initCommands.isEmpty()) {
-								throw new IllegalStateException("Init commands required");
-							}
-							if (initCommands.get(0).command != null) {
-								throw new IllegalStateException("The first init command must be null");
-							}
-
-							new CutOnPromptClient(factory.create(queue, address), initCommands.get(0).prompt, new CutOnPromptClient.Handler() {
-								private int writeIndex = 0;
-								
-								@Override
-								public void failed(IOException e) {
-									closed = true;
-									TelnetSharingHandlerManager.this.failed(e);
-									TelnetSharingHandlerManager.this.close();
-								}
-								@Override
-								public void close() {
-									closed = true;
-									TelnetSharingHandlerManager.this.failed(new IOException("Closed"));
-									TelnetSharingHandlerManager.this.close();
-								}
-								@Override
-								public void connected(Write write) {
-									TelnetSharingHandlerManager.this.write = write;
-									state = State.CONNECTED;
-								}
-								@Override
-								public void handle(String result) {
-									state = State.CONNECTED;
-									
-									if (writeIndex < initCommands.size()) {
-										InitCommand i = initCommands.get(writeIndex);
-										i.response = result;
-										for (TelnetSharingHandler.Callback callback : i.callbacks) {
-											callback.handle(result);
-										}
-										i.callbacks.clear();
-										
-										if (writeIndex < (initCommands.size() - 1)) {
-											InitCommand n = initCommands.get(writeIndex + 1);
-											state = State.WAITING_RESPONSE;
-											LOGGER.debug("Prompt: {}", n.prompt);
-											LOGGER.debug("Init command sent: {}", n.command);
-											write.changePrompt(n.prompt);
-											write.write(n.command);
-										} else if (!commands.isEmpty()) {
-											NextCommand n = commands.getFirst();
-											state = State.WAITING_RESPONSE;
-											LOGGER.debug("Prompt: {}", n.prompt);
-											LOGGER.debug("Command sent: {}", n.command);
-											write.changePrompt(n.prompt);
-											write.write(n.command);
-										}
-									} else {
-										NextCommand p = commands.removeFirst();
-										p.callback.handle(result);
-		
-										if (!commands.isEmpty()) {
-											NextCommand n = commands.getFirst();
-											state = State.WAITING_RESPONSE;
-											LOGGER.debug("Prompt: {}", n.prompt);
-											LOGGER.debug("Command sent: {}", n.command);
-											write.changePrompt(n.prompt);
-											write.write(n.command);
-										}
-									}
-									
-									writeIndex++;
-								}
-							});
+				public void write(String command, String prompt, Callback callback) {
+					if (state == State.DISCONNECTED) {
+						LOGGER.debug("Connecting to: {}", address);
+						state = State.CONNECTING;
+						if (initCommands.isEmpty()) {
+							throw new IllegalStateException("Init commands required");
 						}
+
+						new CutOnPromptClient(factory.create(queue, address), new CutOnPromptClient.Handler() {
+							private int writeIndex = 0;
+							
+							@Override
+							public void failed(IOException e) {
+								doClose(e);
+							}
+							@Override
+							public void close() {
+								doClose(new IOException("Closed"));
+							}
+							@Override
+							public void connected(Write write) {
+								if (closed) {
+									write.close();
+									return;
+								}
+								TelnetSharingHandlerManager.this.write = write;
+								state = State.CONNECTED;
+								LOGGER.debug("State: {}", state);
+
+								InitCommand n = initCommands.get(0);
+								LOGGER.debug("Prompt: {}", n.prompt);
+								LOGGER.debug("Init command sent: {}", n.command);
+								doWrite(n.prompt, n.command);
+							}
+							@Override
+							public void handle(String result) {
+								LOGGER.trace("Received: {}", result);
+								state = State.CONNECTED;
+								
+								if (writeIndex < initCommands.size()) {
+									InitCommand i = initCommands.get(writeIndex);
+									i.response = result;
+									for (TelnetSharingHandler.Callback callback : i.callbacks) {
+										callback.handle(result);
+									}
+									i.callbacks.clear();
+									
+									if (writeIndex < (initCommands.size() - 1)) {
+										InitCommand n = initCommands.get(writeIndex + 1);
+										LOGGER.debug("Prompt: {}", n.prompt);
+										LOGGER.debug("Init command sent: {}", n.command);
+										doWrite(n.prompt, n.command);
+									} else if (!commands.isEmpty()) {
+										NextCommand n = commands.getFirst();
+										LOGGER.debug("Prompt: {}", n.prompt);
+										LOGGER.debug("Command sent: {}", n.command);
+										doWrite(n.prompt, n.command);
+									}
+								} else {
+									NextCommand p = commands.removeFirst();
+									p.callback.handle(result);
+	
+									if (!commands.isEmpty()) {
+										NextCommand n = commands.getFirst();
+										LOGGER.debug("Prompt: {}", n.prompt);
+										LOGGER.debug("Command sent: {}", n.command);
+										doWrite(n.prompt, n.command);
+									}
+								}
+								
+								writeIndex++;
+							}
+						});
 					}
-					
-					commands.add(new NextCommand(prompt, command, callback));
+
+					LOGGER.debug("State: {}", state);
+
 					if ((state == State.CONNECTED) && commands.isEmpty()) {
+						commands.add(new NextCommand(prompt, command, callback));
 						LOGGER.debug("Stalled connection: {}", address);
 						LOGGER.debug("Prompt: {}", prompt);
 						LOGGER.debug("Command sent: {}", command);
-						write.changePrompt(prompt);
-						write.write(command);
+						doWrite(prompt, command);
+					} else {
+						commands.add(new NextCommand(prompt, command, callback));
 					}
 				}
 				
-				@Override
-				public void close() {
-					if (closed) {
-						LOGGER.debug("Already closed");
-						return;
-					}
-					
-					if (open) {
-						countOpen--;
-					}
-					if (countOpen == 0) {
-						LOGGER.debug("Closing");
-						write.close();
-						TelnetSharingHandlerManager.this.close();
-					} else {
-						LOGGER.debug("Close requested but there are other clients still connected");
+				private void doWrite(String prompt, String command) {
+					state = State.WAITING_RESPONSE;
+					closeDate = DateUtils.now() + CONNECTIONS_TIME_TO_LIVE;
+					write.setPrompt(prompt);
+					if (command != null) {
+						write.write(command);
 					}
 				}
 			};
 		}
 	}
 	
-	public TelnetSharingHandler client(Address address) {
+	public TelnetSharingHandler client(TelnetSharingReadyFactory factory, Address address) {
 		TelnetSharingHandlerManager m = map.get(address);
 		if (m == null) {
-			m = new TelnetSharingHandlerManager(queue, address, factory);
+			m = new TelnetSharingHandlerManager(queue, address);
 			map.put(address, m);
 		}
 		
-		final TelnetSharingHandler handler = m.createHandler();
+		final TelnetSharingHandler handler = m.createHandler(factory);
 		
 		return new TelnetSharingHandler() {
 			@Override
-			public void init(final String prompt, final String command, final Callback callback) {
+			public void init(final String command, final String prompt, final Callback callback) {
 				queue.post(new Runnable() {
 					@Override
 					public void run() {
-						handler.init(prompt, command, callback);
+						handler.init(command, prompt, callback);
 					}
 				});
 			}
 
 			@Override
-			public void write(final String prompt, final String command, final Callback callback) {
+			public void write(final String command, final String prompt, final Callback callback) {
 				queue.post(new Runnable() {
 					@Override
 					public void run() {
-						handler.write(prompt, command, callback);
-					}
-				});
-			}
-
-			@Override
-			public void close() {
-				queue.post(new Runnable() {
-					@Override
-					public void run() {
-						handler.close();
+						handler.write(command, prompt, callback);
 					}
 				});
 			}
