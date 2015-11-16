@@ -20,7 +20,7 @@ public final class ReadmeWithTelnetSharing {
 			}
 		};
 
-		try (TelnetSharing sharing = new TelnetSharing(new Telnet().sharing())) {
+		try (TelnetSharing sharing = new TelnetSharing(Telnet.sharing())) {
 			for (int i = 0; i < 2; i++) {
 				try (TelnetSharingHandler handler = sharing.client(new Address("127.0.0.1", Telnet.DEFAULT_PORT))) {
 					handler.init("login:", null, callback);
@@ -55,6 +55,7 @@ public final class ReadmeWithTelnetSharing {
 				Thread.sleep(2000);
 			}
 		}
-		Thread.sleep(200000);
+		
+		Thread.sleep(2000);
 	}
 }
