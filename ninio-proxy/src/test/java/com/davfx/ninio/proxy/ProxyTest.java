@@ -39,6 +39,8 @@ public class ProxyTest {
 		
 		try (Queue queue = new Queue(); ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
 			proxyServer.start();
+			Thread.sleep(100);
+
 			try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxyServerPort), new ProxyListener() {
 				@Override
 				public void failed(IOException e) {
@@ -126,6 +128,8 @@ public class ProxyTest {
 		
 		try (Queue queue = new Queue(); ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
 			proxyServer.start();
+			Thread.sleep(100);
+
 			try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxyServerPort), new ProxyListener() {
 				@Override
 				public void failed(IOException e) {
@@ -215,6 +219,8 @@ public class ProxyTest {
 		
 		try (Queue queue = new Queue(); ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
 			proxyServer.start();
+			Thread.sleep(100);
+
 			try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxyServerPort), new ProxyListener() {
 				@Override
 				public void failed(IOException e) {
@@ -256,9 +262,11 @@ public class ProxyTest {
 		
 		try (Queue queue = new Queue(); ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
 			proxy0Server.start();
+			Thread.sleep(100);
 			
 			try (ProxyServer proxy1Server = new ProxyServer(proxy1ServerPort, 1)) {
 				proxy1Server.start();
+				Thread.sleep(100);
 				
 				try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxy1ServerPort), new ProxyListener() {
 					@Override
@@ -351,7 +359,8 @@ public class ProxyTest {
 		
 		try (Queue queue = new Queue(); ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
 			proxy0Server.start();
-			
+			Thread.sleep(100);
+
 			try (ProxyServer proxy1Server = new ProxyServer(proxy1ServerPort, 1)) {
 				proxy1Server.override(ProxyCommons.Types.SOCKET, new ForwardServerSideConfigurator(new Address(Address.LOCALHOST, proxy0ServerPort), new ProxyListener() {
 					@Override
@@ -368,7 +377,8 @@ public class ProxyTest {
 					}
 				}));
 				proxy1Server.start();
-				
+				Thread.sleep(100);
+
 				try (ProxyClient proxyClient = new ProxyClient(new Address(Address.LOCALHOST, proxy1ServerPort), new ProxyListener() {
 					@Override
 					public void failed(IOException e) {

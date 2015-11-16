@@ -3,7 +3,7 @@ package com.davfx.ninio.snmp;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
-public class TestOid {
+public class OidTest {
 
 	@Test
 	public void test() throws Exception {

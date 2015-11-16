@@ -18,7 +18,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 import com.davfx.util.Lock;
 
-public class TestSnmpServer {
+public class SnmpServerTest {
 
 	private static final class InnerCount implements Count {
 		public long count = 0L;

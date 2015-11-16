@@ -11,9 +11,9 @@ import org.slf4j.LoggerFactory;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
 
-public class TestCore {
+public class CoreTest {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(TestCore.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(CoreTest.class);
 	
 	@Test
 	public void testDatagram() throws Exception {
