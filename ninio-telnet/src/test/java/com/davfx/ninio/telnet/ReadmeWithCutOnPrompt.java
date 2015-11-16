@@ -1,24 +1,27 @@
 package com.davfx.ninio.telnet;
 
 import java.io.IOException;
-import java.util.Iterator;
+import java.util.Deque;
 import java.util.LinkedList;
-import java.util.List;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.telnet.CutOnPromptClient.NextCommand;
 
 public final class ReadmeWithCutOnPrompt {
 	public static void main(String[] args) throws Exception {
-		final String login = "<your-login>";
-		final String password = "<your-password>";
+		final String login = "davidfauthoux"; //"<your-login>";
+		final String password = "orod,ove"; //"<your-password>";
 		
-		List<CutOnPromptClient.NextCommand> commands = new LinkedList<>();
-		commands.add(new CutOnPromptClient.NextCommand("login:", login));
-		commands.add(new CutOnPromptClient.NextCommand("Password:", password));
-		commands.add(new CutOnPromptClient.NextCommand(login + "$", "ls"));
-		final Iterator<CutOnPromptClient.NextCommand> commandsIterator = commands.iterator();
-		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), new CutOnPromptClient.Handler() {
+		final Deque<String> prompts = new LinkedList<>();
+		prompts.add("login:");
+		prompts.add("Password:");
+		prompts.add(login + "$");
+		final Deque<String> commands = new LinkedList<>();
+		commands.add(login);
+		commands.add(password);
+		commands.add("ls");
+		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), prompts.removeFirst(), new CutOnPromptClient.Handler() {
+			private String command = null;
+			private final Object lock = new Object();
 			@Override
 			public void failed(IOException e) {
 				e.printStackTrace();
@@ -28,16 +31,62 @@ public final class ReadmeWithCutOnPrompt {
 				System.out.println("Closed");
 			}
 			@Override
-			public NextCommand handle(String result) {
-				System.out.println(result);
-				if (commandsIterator.hasNext()) {
-					return commandsIterator.next();
+			public void connected(final Write write) {
+				new Thread(new Runnable() {
+					@Override
+					public void run() {
+						while (true) {
+							String c;
+							synchronized (lock) {
+								while (true) {
+									if (command != null) {
+										c = command;
+										command = null;
+										break;
+									}
+									try {
+										lock.wait();
+									} catch (InterruptedException e) {
+									}
+								}
+							}
+							if (c.isEmpty()) {
+								System.out.println("CLOSE");
+								write.close();
+								break;
+							} else {
+								if (!prompts.isEmpty()) {
+									String prompt = prompts.removeFirst();
+									System.out.println("PROMPT CHANGED " + prompt);
+									write.changePrompt(prompt);
+								}
+								System.out.println("--> " + c);
+								write.write(c);
+							}
+						}
+					}
+				}).start();
+			}
+			
+			@Override
+			public void handle(String result) {
+				System.out.println("<-- " + result);
+
+				if (commands.isEmpty()) {
+					synchronized (lock) {
+						command = "";
+						lock.notifyAll();
+					}
 				} else {
-					return null;
+					String c = commands.removeFirst();
+					synchronized (lock) {
+						command = c;
+						lock.notifyAll();
+					}
 				}
 			}
 		});
 
-		Thread.sleep(1000);
+		Thread.sleep(2000);
 	}
 }

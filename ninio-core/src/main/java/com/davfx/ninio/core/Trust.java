@@ -3,7 +3,6 @@ package com.davfx.ninio.core;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
-import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.PublicKey;
@@ -100,11 +99,19 @@ public final class Trust {
 		}
 	}
 	
-	public PrivateKey getPrivateKey(String alias, String password) throws GeneralSecurityException {
-		return (PrivateKey) ksKeys.getKey(alias, password.toCharArray());
+	public PrivateKey getPrivateKey(String alias, String password) {
+		try {
+			return (PrivateKey) ksKeys.getKey(alias, password.toCharArray());
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
-	public PublicKey getPublicKey(String alias) throws GeneralSecurityException {
-		return ksKeys.getCertificate(alias).getPublicKey();
+	public PublicKey getPublicKey(String alias) {
+		try {
+			return ksKeys.getCertificate(alias).getPublicKey();
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
 	}
 	
 	SSLEngine createEngine(boolean clientMode) {

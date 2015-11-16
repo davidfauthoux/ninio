@@ -15,7 +15,7 @@ import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 import com.google.common.reflect.ClassPath;
 
-public final class AnnotatedHttpServiceTest {
+public final class ReadmeWithAnnotatedHttpService {
 
 	/*
 	@HttpController()
@@ -77,7 +77,7 @@ public final class AnnotatedHttpServiceTest {
 		Wait wait = new Wait();
 		int port = 8080;
 		try (AnnotatedHttpService server = new AnnotatedHttpService()) {
-			ClassPath classPath = ClassPath.from(AnnotatedHttpServiceTest.class.getClassLoader());
+			ClassPath classPath = ClassPath.from(ReadmeWithAnnotatedHttpService.class.getClassLoader());
 			
 			for (ClassPath.ClassInfo classInfo : classPath.getAllClasses()) {
 				Class<?> clazz;

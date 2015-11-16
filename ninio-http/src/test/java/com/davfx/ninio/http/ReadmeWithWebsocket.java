@@ -16,9 +16,9 @@ import com.davfx.ninio.http.websocket.WebsocketHttpServerHandler;
 import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 
-public final class WebsocketTest {
+public final class ReadmeWithWebsocket {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketTest.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ReadmeWithWebsocket.class);
 	
 	public static void main(String[] args) {
 		Wait wait = new Wait();

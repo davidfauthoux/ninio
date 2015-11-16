@@ -10,7 +10,7 @@ import com.davfx.ninio.http.util.HttpServiceResult;
 import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 
-public final class HttpServiceTest {
+public final class ReadmeWithHttpService {
 	
 	public static void main(String[] args) {
 		Wait wait = new Wait();

@@ -4,7 +4,6 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
-import com.davfx.ninio.util.GlobalQueue;
 
 public final class Telnet {
 	
@@ -36,5 +35,14 @@ public final class Telnet {
 	
 	public TelnetClient client() {
 		return new TelnetClient(queue, readyFactory, address);
+	}
+	
+	public static TelnetSharingReadyFactory sharing() {
+		return new TelnetSharingReadyFactory() {
+			@Override
+			public TelnetReady create(Queue queue, Address address) {
+				return new TelnetClient(queue, new SocketReadyFactory(), address);
+			}
+		};
 	}
 }

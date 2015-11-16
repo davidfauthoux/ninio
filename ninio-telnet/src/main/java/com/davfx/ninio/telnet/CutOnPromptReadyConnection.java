@@ -3,41 +3,40 @@ package com.davfx.ninio.telnet;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.ReadyConnection;
 
 public final class CutOnPromptReadyConnection implements ReadyConnection {
-	private final ByteBufferAllocator promptAllocator;
 	private final ReadyConnection wrappee;
 	
 	private ByteBuffer currentPrompt;
 	private List<ByteBuffer> previous = null;
-	
-	public CutOnPromptReadyConnection(ByteBufferAllocator promptAllocator, ReadyConnection wrappee) {
-		this.promptAllocator = promptAllocator;
+	private final List<ByteBuffer> buffers = new LinkedList<>();
+
+	public CutOnPromptReadyConnection(ReadyConnection wrappee) {
 		this.wrappee = wrappee;
 	}
 	
-	private void allocatePrompt() {
-		currentPrompt = promptAllocator.allocate();
-		previous = null;
+	public void setPrompt(ByteBuffer prompt) {
+		currentPrompt = prompt;
 	}
 	
 	@Override
 	public void connected(FailableCloseableByteBufferHandler write) {
 		wrappee.connected(write);
-		allocatePrompt();
 	}
 	@Override
 	public void close() {
+		buffers.clear();
 		wrappee.close();
 	}
 	@Override
 	public void failed(IOException e) {
+		buffers.clear();
 		wrappee.failed(e);
 	}
 	
@@ -99,6 +98,9 @@ public final class CutOnPromptReadyConnection implements ReadyConnection {
 	
 	@Override
 	public void handle(Address address, ByteBuffer buffer) {
+		if (currentPrompt == null) {
+			return;
+		}
 		while (true) {
 			if (previous == null) {
 				previous = new ArrayList<>();
@@ -124,14 +126,32 @@ public final class CutOnPromptReadyConnection implements ReadyConnection {
 			previous = newPrevious;
 			
 			if (position < 0) {
-				wrappee.handle(address, buffer);
+				buffers.add(buffer);
 				return;
 			}
 			
 			ByteBuffer startBuffer = ByteBuffer.wrap(buffer.array(), buffer.position(), position);
 			buffer = ByteBuffer.wrap(buffer.array(), buffer.position() + position, buffer.remaining() - position);
-			wrappee.handle(address, startBuffer);
-			allocatePrompt();
+			buffers.add(startBuffer);
+
+			if (!buffers.isEmpty()) {
+				int l = 0;
+				for (ByteBuffer b : buffers) {
+					l += b.remaining();
+				}
+				byte[] buf = new byte[l];
+				int off = 0;
+				for (ByteBuffer b : buffers) {
+					int len = b.remaining();
+					b.get(buf, off, len);
+					off += len;
+				}
+	
+				buffers.clear();
+				wrappee.handle(address, ByteBuffer.wrap(buf));
+			}
+
+			previous = null;
 		}
 	}
 }
