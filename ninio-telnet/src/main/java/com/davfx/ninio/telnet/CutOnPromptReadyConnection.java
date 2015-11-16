@@ -12,12 +12,16 @@ import com.davfx.ninio.core.ReadyConnection;
 
 public final class CutOnPromptReadyConnection implements ReadyConnection {
 	private final ReadyConnection wrappee;
+	private FailableCloseableByteBufferHandler write;
 	
 	private ByteBuffer currentPrompt;
 	private List<ByteBuffer> previous = null;
 	private final List<ByteBuffer> buffers = new LinkedList<>();
+	private final int limit;
+	private int count = 0;
 
-	public CutOnPromptReadyConnection(ReadyConnection wrappee) {
+	public CutOnPromptReadyConnection(int limit, ReadyConnection wrappee) {
+		this.limit = limit;
 		this.wrappee = wrappee;
 	}
 	
@@ -27,16 +31,19 @@ public final class CutOnPromptReadyConnection implements ReadyConnection {
 	
 	@Override
 	public void connected(FailableCloseableByteBufferHandler write) {
+		this.write = write;
 		wrappee.connected(write);
 	}
 	@Override
 	public void close() {
 		buffers.clear();
+		count = 0;
 		wrappee.close();
 	}
 	@Override
 	public void failed(IOException e) {
 		buffers.clear();
+		count = 0;
 		wrappee.failed(e);
 	}
 	
@@ -124,6 +131,11 @@ public final class CutOnPromptReadyConnection implements ReadyConnection {
 			
 			if (position < 0) {
 				buffers.add(buffer);
+				count += buffer.remaining();
+				if ((limit > 0) && (count >= limit)) {
+					write.close();
+					wrappee.failed(new IOException("Overflow"));
+				}
 				return;
 			}
 			
@@ -145,6 +157,7 @@ public final class CutOnPromptReadyConnection implements ReadyConnection {
 				}
 	
 				buffers.clear();
+				count = 0;
 				wrappee.handle(address, ByteBuffer.wrap(buf));
 			}
 

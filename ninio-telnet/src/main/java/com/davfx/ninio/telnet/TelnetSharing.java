@@ -29,6 +29,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 
 	private static final double CONNECTIONS_TIME_TO_LIVE = ConfigUtils.getDuration(CONFIG, "ninio.telnet.sharing.ttl");
 	private static final double CONNECTIONS_CHECK_TIME = ConfigUtils.getDuration(CONFIG, "ninio.telnet.sharing.check");
+	private static final int BUFFERING_LIMIT = CONFIG.getBytes("ninio.telnet.sharing.limit").intValue();
 
 	private static final class NextCommand {
 		public final String command;
@@ -116,7 +117,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 		
 		void close() {
 			closed = true;
-			LOGGER.debug("Closed: {}", address);
+			LOGGER.trace("Closed: {}", address);
 			closeable.close();
 			if (write != null) {
 				write.close();
@@ -152,7 +153,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 				@Override
 				public void init(String command, String prompt, Callback callback) {
 					if (state == State.DISCONNECTED) {
-						LOGGER.debug("Init command added: {}", command);
+						LOGGER.trace("Init command added: {}", command);
 						InitCommand i = new InitCommand(prompt, command);
 						i.callbacks.add(callback);
 						initCommands.add(i);
@@ -178,13 +179,13 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 				@Override
 				public void write(String command, String prompt, Callback callback) {
 					if (state == State.DISCONNECTED) {
-						LOGGER.debug("Connecting to: {}", address);
+						LOGGER.trace("Connecting to: {}", address);
 						state = State.CONNECTING;
 						if (initCommands.isEmpty()) {
 							throw new IllegalStateException("Init commands required");
 						}
 
-						new CutOnPromptClient(factory.create(queue, address), new CutOnPromptClient.Handler() {
+						new CutOnPromptClient(factory.create(queue, address), BUFFERING_LIMIT, new CutOnPromptClient.Handler() {
 							private int writeIndex = 0;
 							
 							@Override
@@ -203,11 +204,11 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 								}
 								TelnetSharingHandlerManager.this.write = write;
 								state = State.CONNECTED;
-								LOGGER.debug("State: {}", state);
+								LOGGER.trace("State: {}", state);
 
 								InitCommand n = initCommands.get(0);
-								LOGGER.debug("Prompt: {}", n.prompt);
-								LOGGER.debug("Init command sent: {}", n.command);
+								LOGGER.trace("Prompt: {}", n.prompt);
+								LOGGER.trace("Init command sent: {}", n.command);
 								doWrite(n.prompt, n.command);
 							}
 							@Override
@@ -225,13 +226,13 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 									
 									if (writeIndex < (initCommands.size() - 1)) {
 										InitCommand n = initCommands.get(writeIndex + 1);
-										LOGGER.debug("Prompt: {}", n.prompt);
-										LOGGER.debug("Init command sent: {}", n.command);
+										LOGGER.trace("Prompt: {}", n.prompt);
+										LOGGER.trace("Init command sent: {}", n.command);
 										doWrite(n.prompt, n.command);
 									} else if (!commands.isEmpty()) {
 										NextCommand n = commands.getFirst();
-										LOGGER.debug("Prompt: {}", n.prompt);
-										LOGGER.debug("Command sent: {}", n.command);
+										LOGGER.trace("Prompt: {}", n.prompt);
+										LOGGER.trace("Command sent: {}", n.command);
 										doWrite(n.prompt, n.command);
 									}
 								} else {
@@ -240,8 +241,8 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 	
 									if (!commands.isEmpty()) {
 										NextCommand n = commands.getFirst();
-										LOGGER.debug("Prompt: {}", n.prompt);
-										LOGGER.debug("Command sent: {}", n.command);
+										LOGGER.trace("Prompt: {}", n.prompt);
+										LOGGER.trace("Command sent: {}", n.command);
 										doWrite(n.prompt, n.command);
 									}
 								}
@@ -251,13 +252,13 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 						});
 					}
 
-					LOGGER.debug("State: {}", state);
+					LOGGER.trace("State: {}", state);
 
 					if ((state == State.CONNECTED) && commands.isEmpty()) {
 						commands.add(new NextCommand(prompt, command, callback));
-						LOGGER.debug("Stalled connection: {}", address);
-						LOGGER.debug("Prompt: {}", prompt);
-						LOGGER.debug("Command sent: {}", command);
+						LOGGER.trace("Stalled connection: {}", address);
+						LOGGER.trace("Prompt: {}", prompt);
+						LOGGER.trace("Command sent: {}", command);
 						doWrite(prompt, command);
 					} else {
 						commands.add(new NextCommand(prompt, command, callback));
@@ -269,7 +270,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 					closeDate = DateUtils.now() + CONNECTIONS_TIME_TO_LIVE;
 					write.setPrompt(prompt);
 					if (command != null) {
-						write.write(command);
+						write.write(command + factory.eol());
 					}
 				}
 			};

@@ -40,6 +40,10 @@ public final class Telnet {
 	public static TelnetSharingReadyFactory sharing() {
 		return new TelnetSharingReadyFactory() {
 			@Override
+			public String eol() {
+				return TelnetClient.EOL;
+			}
+			@Override
 			public TelnetReady create(Queue queue, Address address) {
 				return new TelnetClient(queue, new SocketReadyFactory(), address);
 			}

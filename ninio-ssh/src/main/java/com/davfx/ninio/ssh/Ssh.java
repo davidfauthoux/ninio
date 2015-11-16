@@ -85,6 +85,10 @@ public final class Ssh {
 	public static TelnetSharingReadyFactory sharing(final String login, final String password) {
 		return new TelnetSharingReadyFactory() {
 			@Override
+			public String eol() {
+				return SshClient.EOL;
+			}
+			@Override
 			public TelnetReady create(Queue queue, Address address) {
 				return new SshClient(queue, new SocketReadyFactory(), address, login, password, null);
 			}
@@ -93,6 +97,10 @@ public final class Ssh {
 	public static TelnetSharingReadyFactory sharing(final String login, final PrivateKey privateKey, final PublicKey publicKey) {
 		return new TelnetSharingReadyFactory() {
 			@Override
+			public String eol() {
+				return SshClient.EOL;
+			}
+			@Override
 			public TelnetReady create(Queue queue, Address address) {
 				return new SshClient(queue, new SocketReadyFactory(), address, login, null, rsaKey(privateKey, publicKey));
 			}
@@ -100,6 +108,10 @@ public final class Ssh {
 	}
 	public static TelnetSharingReadyFactory sharing(final String login, final Trust trust, final String alias, final String password) {
 		return new TelnetSharingReadyFactory() {
+			@Override
+			public String eol() {
+				return SshClient.EOL;
+			}
 			@Override
 			public TelnetReady create(Queue queue, Address address) {
 				return new SshClient(queue, new SocketReadyFactory(), address, login, null, rsaKey(trust.getPrivateKey(alias, password), trust.getPublicKey(alias)));

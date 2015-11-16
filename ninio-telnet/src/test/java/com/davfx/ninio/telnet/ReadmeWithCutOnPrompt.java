@@ -19,7 +19,7 @@ public final class ReadmeWithCutOnPrompt {
 		commands.add(login);
 		commands.add(password);
 		commands.add("ls");
-		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), new CutOnPromptClient.Handler() {
+		new CutOnPromptClient(new Telnet().to(new Address("127.0.0.1", Telnet.DEFAULT_PORT)).client(), 0, new CutOnPromptClient.Handler() {
 			private String command = null;
 			private final Object lock = new Object();
 			@Override

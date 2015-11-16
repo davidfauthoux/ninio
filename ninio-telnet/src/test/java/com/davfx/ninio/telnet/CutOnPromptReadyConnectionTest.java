@@ -18,7 +18,7 @@ public class CutOnPromptReadyConnectionTest {
 
 	private List<String> test(List<String> content, String prompt) {
 		final List<String> result = new LinkedList<>();
-		CutOnPromptReadyConnection c = new CutOnPromptReadyConnection(new ReadyConnection() {
+		CutOnPromptReadyConnection c = new CutOnPromptReadyConnection(0, new ReadyConnection() {
 			@Override
 			public void failed(IOException e) {
 			}

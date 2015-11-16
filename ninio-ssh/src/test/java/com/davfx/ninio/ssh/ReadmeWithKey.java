@@ -6,15 +6,36 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.ReadyConnection;
+import com.davfx.ninio.core.Trust;
 import com.google.common.base.Charsets;
 
-///!\ NOT WORKING WITH Java7 ON UP-TO-DATE open-ssl SERVERS
+// /!\ NOT WORKING WITH Java7 ON UP-TO-DATE open-ssl SERVERS
 
-public final class Readme {
+//*** TO ADD THE PUBLIC KEY TO THE AUTHORIZED KEYS ON THE SERVER: *** 
+// keytool -importkeystore -srckeystore keystore.jks -destkeystore keystore.p12 -deststoretype PKCS12 -srcalias "test-alias" -deststorepass "test-password" -destkeypass "test-password"
+// openssl pkcs12 -in keystore.p12  -nokeys -out cert.pem
+// pkcs12 -in keystore.p12 -nocerts -out privateKey.pem
+// chmod 400 privateKey.pem
+// ssh-keygen -y -f privateKey.pem > publicKey.pub
+// cat publicKey.pub >> ~/.ssh/authorized_keys
+
+//*** ON MAC OS X El Capitan, TO CONFIGURE THE SSH SERVER: *** 
+// sudo nano /private/etc/ssh/sshd_config
+
+public final class ReadmeWithKey {
 	public static void main(String[] args) throws Exception {
+		/*
+			for (Provider p : Security.getProviders()) {
+				Security.removeProvider(p.getName());
+			}
+			Security.addProvider(new BouncyCastleProvider());
+		*/
+		
+		Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
+
 		new Ssh()
 			.withLogin("<your-login>")
-			.withPassword("<your-password>")
+			.withKey(trust, "test-alias", "test-password")
 		.to(new Address("127.0.0.1", Ssh.DEFAULT_PORT)).client().connect(new ReadyConnection() {
 			
 			private FailableCloseableByteBufferHandler write;
@@ -42,10 +63,10 @@ public final class Readme {
 			@Override
 			public void connected(FailableCloseableByteBufferHandler write) {
 				this.write = write;
-				send("echo TEST; ls; top");
+				send("echo TEST");
 			}
 		});
 		
-		Thread.sleep(10000);
+		Thread.sleep(1000);
 	}
 }

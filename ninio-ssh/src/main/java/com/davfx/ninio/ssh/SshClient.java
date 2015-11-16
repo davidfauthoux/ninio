@@ -144,9 +144,6 @@ public final class SshClient implements TelnetReady {
 									if (lengthToRead >= l) {
 										lengthToRead -= l;
 										clientHandler.handle(null, buffer);
-										if (lengthToRead == 0L) {
-											clientHandler.handle(null, ByteBuffer.wrap(new byte[] {}));
-										}
 										return;
 									}
 									ByteBuffer b = buffer.duplicate();
@@ -154,7 +151,6 @@ public final class SshClient implements TelnetReady {
 									lengthToRead = 0L;
 									clientHandler.handle(null, b);
 									buffer.position(buffer.position() + l);
-									clientHandler.handle(null, ByteBuffer.wrap(new byte[] {}));
 								}
 								
 								try {
@@ -162,7 +158,7 @@ public final class SshClient implements TelnetReady {
 	
 									int command = packet.readByte();
 
-									LOGGER.debug("Command: {}", command);
+									LOGGER.trace("Command: {}", command);
 									
 									if (command == SshUtils.SSH_MSG_KEXINIT) {
 										serverCookie = new byte[16];
@@ -294,12 +290,12 @@ public final class SshClient implements TelnetReady {
 										if (alg.equals("ssh-rsa")) {
 											byte[] ee = ksb.readBlob();
 											byte[] n = ksb.readBlob();
-
 											KeyFactory keyFactory = KeyFactory.getInstance("RSA");
 											RSAPublicKeySpec rsaPubKeySpec = new RSAPublicKeySpec(new BigInteger(n), new BigInteger(ee));
 											RSAPublicKey pubKey = (RSAPublicKey) keyFactory.generatePublic(rsaPubKeySpec);
+
 											if (!new RsaSshPublicKey(null, pubKey).verify(ByteBuffer.wrap(H), signed)) {
-												//TODO throw new IOException("Bad signature");
+												throw new IOException("Bad signature");
 											}
 										} else {
 											throw new IOException("Unknown key exchange algorithm: " + alg);
@@ -416,23 +412,20 @@ public final class SshClient implements TelnetReady {
 										b.writeInt(windowSize);
 										b.writeInt(maxPacketSize);
 										write.handle(null, b.finish());
-									} else if (command == SshUtils.SSH_MSG_CHANNEL_OPEN_CONFIRMATION) {
-										/*
-											int channelId = 0;
-											SshPacketBuilder b = new SshPacketBuilder(SshUtils.SSH_MSG_CHANNEL_REQUEST);
-											b.writeInt(channelId);
-											b.writeString("pty-req");
-											b.writeByte(1); // With reply
-											b.writeString("vt100");
-											b.writeInt(80);
-											b.writeInt(24);
-											b.writeInt(640);
-											b.writeInt(480);
-											b.writeString(""); // Terminal mode
-											write.handle(null, b.finish());
-										} else if (command == SshUtils.SSH_MSG_CHANNEL_SUCCESS) {
-										*/
-										
+									} else if (command == SshUtils.SSH_MSG_CHANNEL_OPEN_CONFIRMATION) { // Without this command, the shell would have no prompt
+										int channelId = 0;
+										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
+										b.writeInt(channelId);
+										b.writeString("pty-req");
+										b.writeByte(1); // With reply
+										b.writeString("vt100");
+										b.writeInt(80);
+										b.writeInt(24);
+										b.writeInt(640);
+										b.writeInt(480);
+										b.writeString(""); // Terminal mode
+										write.handle(null, b.finish());
+									} else if (command == SshUtils.SSH_MSG_CHANNEL_SUCCESS) {
 										int channelId = 0;
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
 										b.writeInt(channelId);
@@ -446,7 +439,7 @@ public final class SshClient implements TelnetReady {
 											b.writeString(exec);
 										}
 										write.handle(null, b.finish());
-										
+
 										clientHandler.connected(new FailableCloseableByteBufferHandler() {
 											@Override
 											public void close() {
@@ -470,13 +463,12 @@ public final class SshClient implements TelnetReady {
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_DATA) {
 										packet.readInt(); // Channel ID
 										lengthToRead = packet.readInt();
-										LOGGER.debug("Data length: {}", lengthToRead);
+										LOGGER.trace("Data length: {}", lengthToRead);
 										if (lengthToRead <= buffer.remaining()) {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
 											clientHandler.handle(null, b);
-											clientHandler.handle(null, ByteBuffer.wrap(new byte[] {}));
 										} else {
 											lengthToRead -= buffer.remaining();
 											clientHandler.handle(null, buffer);
@@ -484,15 +476,14 @@ public final class SshClient implements TelnetReady {
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_EXTENDED_DATA) {
 										packet.readInt(); // Channel ID
 										long code = packet.readInt(); // Code
-										LOGGER.debug("Extended data code: {}", code);
+										LOGGER.trace("Extended data code: {}", code);
 										lengthToRead = packet.readInt();
-										LOGGER.debug("Data length: {}", lengthToRead);
+										LOGGER.trace("Data length: {}", lengthToRead);
 										if (lengthToRead <= buffer.remaining()) {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
 											clientHandler.handle(null, b);
-											clientHandler.handle(null, ByteBuffer.wrap(new byte[] {}));
 										} else {
 											lengthToRead -= buffer.remaining();
 											clientHandler.handle(null, buffer);
@@ -612,4 +603,5 @@ public final class SshClient implements TelnetReady {
 		}
 		throw new IOException("No common configuration between server and client for index: " + index);
 	}
+
 }

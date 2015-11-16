@@ -23,8 +23,8 @@ public final class CutOnPromptClient {
 	
 	private final CutOnPromptReadyConnection connection;
 	
-	public CutOnPromptClient(TelnetReady client, final Handler handler) {
-		connection = new CutOnPromptReadyConnection(new ReadyConnection() {
+	public CutOnPromptClient(TelnetReady client, int limit, final Handler handler) {
+		connection = new CutOnPromptReadyConnection(limit, new ReadyConnection() {
 			@Override
 			public void failed(IOException e) {
 				handler.failed(e);
@@ -49,7 +49,7 @@ public final class CutOnPromptClient {
 					}
 					@Override
 					public void write(String command) {
-						write.handle(null, ByteBuffer.wrap((command + TelnetClient.EOL).getBytes(Charsets.UTF_8)));
+						write.handle(null, ByteBuffer.wrap(command.getBytes(Charsets.UTF_8)));
 					}
 					@Override
 					public void close() {

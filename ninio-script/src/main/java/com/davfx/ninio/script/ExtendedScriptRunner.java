@@ -261,7 +261,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 			public void call(JsonElement request, AsyncScriptFunction.Callback userCallback) {
 				JsonObject r = request.getAsJsonObject();
 				
-				Address address = new Address(JsonUtils.getString(r, "host"), JsonUtils.getInt(r, "port", Telnet.DEFAULT_PORT));
+				Address address = new Address(JsonUtils.getString(r, "host"), JsonUtils.getInt(r, "port", Ssh.DEFAULT_PORT));
 
 				TelnetSharingHandler handler = telnet.client(Ssh.sharing(JsonUtils.getString(r, "login"), JsonUtils.getString(r, "password")), address);
 				boolean first = true;
