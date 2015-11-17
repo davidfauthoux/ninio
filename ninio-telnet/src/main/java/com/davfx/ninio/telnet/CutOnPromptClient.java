@@ -65,7 +65,7 @@ public final class CutOnPromptClient {
 					}
 					@Override
 					public void write(String command) {
-						write.handle(null, ByteBuffer.wrap((command + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
+						write.handle(null, ByteBuffer.wrap(command.getBytes(Charsets.UTF_8)));
 					}
 					@Override
 					public void close() {

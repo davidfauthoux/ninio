@@ -6,15 +6,10 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 
 final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandler {
-	private static final Logger LOGGER = LoggerFactory.getLogger(CuttingByteBufferHandler.class);
-
 	private final FailableCloseableByteBufferHandler wrappee;
 	
 	private ByteBuffer currentPrompt;
@@ -102,6 +97,7 @@ final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandl
 		return -1;
 	}
 	
+	/*
 	private static void debug(List<ByteBuffer> buffers) {
 		StringBuilder b = new StringBuilder();
 		for (ByteBuffer bb : buffers) {
@@ -109,17 +105,18 @@ final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandl
 		}
 		LOGGER.debug("Checking: {}", b.toString());
 	}
+	*/
 	
 	@Override
 	public void handle(Address address, ByteBuffer buffer) {
-		LOGGER.debug("Received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
+		// LOGGER.debug("Received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
 		while (true) {
 			if (previous == null) {
-				LOGGER.debug("No previous");
+				// LOGGER.debug("No previous");
 				previous = new ArrayList<>();
 			}
 			previous.add(buffer.duplicate());
-			debug(previous);
+			// debug(previous);
 			int position = find(currentPrompt, previous);
 			
 			int lengthToKeep = currentPrompt.remaining() - 1;
@@ -138,7 +135,7 @@ final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandl
 				index--;
 			}
 			previous = newPrevious;
-			debug(previous);
+			// debug(previous);
 
 			if (position < 0) {
 				buffers.add(buffer);
@@ -151,6 +148,7 @@ final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandl
 			
 			ByteBuffer startBuffer = ByteBuffer.wrap(buffer.array(), buffer.position(), position);
 			buffer = ByteBuffer.wrap(buffer.array(), buffer.position() + position, buffer.remaining() - position);
+			// LOGGER.debug("Cut with prompt: {} --> /{}/ <> /{}/", new String(currentPrompt.array(), currentPrompt.position(), currentPrompt.remaining(), TelnetSpecification.CHARSET), new String(startBuffer.array(), startBuffer.position(), startBuffer.remaining(), TelnetSpecification.CHARSET), new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
 			buffers.add(startBuffer);
 
 			if (!buffers.isEmpty()) {

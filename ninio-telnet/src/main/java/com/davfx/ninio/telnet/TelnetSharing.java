@@ -270,7 +270,9 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 					closeDate = DateUtils.now() + CONNECTIONS_TIME_TO_LIVE;
 					write.setPrompt(prompt);
 					if (command != null) {
-						write.write(command + factory.eol());
+						String s = command + factory.eol();
+						LOGGER.trace("Sent: /{}/", s);
+						write.write(s);
 					}
 				}
 			};

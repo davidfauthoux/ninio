@@ -118,7 +118,9 @@ final class TelnetResponseReader {
 		}
 
 		if (r.length() > 0) {
-			wrappee.handle(address, ByteBuffer.wrap(r.toString().getBytes(TelnetSpecification.CHARSET)));
+			String s = r.toString();
+			// LOGGER.debug("Core received: /{}/", s);
+			wrappee.handle(address, ByteBuffer.wrap(s.getBytes(TelnetSpecification.CHARSET)));
 		}
 	}
 }

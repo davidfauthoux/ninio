@@ -92,78 +92,8 @@ public class CoreTest {
 	
 	// This test is exactly the same as above, but it is used to check a new DatagramReady can be open another time, maybe in the same JVM
 	@Test
-	public void testDatagramSame() throws Exception {
-		final Lock<String, IOException> lock = new Lock<>();
-		
-		try (Queue queue = new Queue()) {
-			
-			final int port = 8080;
-	
-			{
-				Ready ready = new DatagramReady(queue.getSelector(), queue.allocator()).bind();
-		
-				new QueueReady(queue, ready).connect(new Address(null, port), new ReadyConnection() {
-					private CloseableByteBufferHandler write;
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.debug("Received {} <--: {}", address, s);
-						lock.set(s);
-						write.close();
-					}
-					
-					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
-						LOGGER.debug("Connected <--");
-						this.write = write;
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed <--");
-						lock.fail(new IOException("Closed"));
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed <--", e);
-						lock.fail(e);
-					}
-				});
-			}
-			Thread.sleep(100);
-			{
-				Ready ready = new DatagramReady(queue.getSelector(), queue.allocator());
-		
-				new QueueReady(queue, ready).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.warn("Received {} -->: {}", address, s);
-					}
-					
-					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
-						LOGGER.debug("Connected -->");
-						write.handle(new Address(Address.LOCALHOST, port), ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed -->");
-						lock.fail(new IOException("Closed"));
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed -->", e);
-						lock.fail(e);
-					}
-				});
-			}
-			
-			Assertions.assertThat(lock.waitFor()).isEqualTo("test");
-		}
+	public void testDatagramSameToCheckClose() throws Exception {
+		testDatagram();
 	}
 	
 	@Test
@@ -259,6 +189,11 @@ public class CoreTest {
 			Assertions.assertThat(lock.waitFor()).isEqualTo("test");
 			Assertions.assertThat(lockEcho.waitFor()).isEqualTo("echo");
 		}
+	}
+
+	@Test
+	public void testSocketSameToCheckClose() throws Exception {
+		testSocket();
 	}
 
 	@Test

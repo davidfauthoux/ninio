@@ -47,14 +47,14 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 				if (closed) {
 					listening.close();
 				} else {
-					LOGGER.debug("Listening");
+					LOGGER.trace("Listening");
 					CommandTelnetServer.this.listening = listening;
 				}
 			}
 			
 			@Override
 			public CloseableByteBufferHandler connected(Address address, final CloseableByteBufferHandler connection) {
-				LOGGER.debug("Connected: {}", address);
+				LOGGER.trace("Connected: {}", address);
 				connection.handle(address, ByteBuffer.wrap(header.getBytes(TelnetSpecification.CHARSET)));
 				
 				return new CuttingByteBufferHandler(BUFFERING_LIMIT, new FailableCloseableByteBufferHandler() {
@@ -71,7 +71,8 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 					
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
-						String result = commandHandler.apply(new String(buffer.array(), buffer.position(), buffer.remaining() - TelnetSpecification.EOL.length(), TelnetSpecification.CHARSET));
+						// LOGGER.debug("Handle: /{}/{}/", new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET), new String(buffer.array(), buffer.position(), buffer.remaining() - cut.length(), TelnetSpecification.CHARSET));
+						String result = commandHandler.apply(new String(buffer.array(), buffer.position(), buffer.remaining() - cut.length(), TelnetSpecification.CHARSET));
 						if (result == null) {
 							connection.close();
 							return;
@@ -88,7 +89,7 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				LOGGER.debug("Closing");
+				LOGGER.trace("Closing");
 				closed = true;
 				if (listening != null) {
 					listening.close();

@@ -12,7 +12,7 @@ public final class ReadmeWithCutOnPrompt {
 		final String password = "orod,ove"; //"<your-password>";
 		
 		final Deque<String> prompts = new LinkedList<>();
-		prompts.add("login:");
+		prompts.add("login: ");
 		prompts.add("Password:");
 		prompts.add(login + "$");
 		final Deque<String> commands = new LinkedList<>();
@@ -62,7 +62,7 @@ public final class ReadmeWithCutOnPrompt {
 									write.setPrompt(prompt);
 								}
 								System.out.println("--> " + c);
-								write.write(c);
+								write.write(c + TelnetSpecification.EOL);
 							}
 						}
 					}

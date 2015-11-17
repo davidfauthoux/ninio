@@ -19,17 +19,17 @@ public class TelnetTest {
 	public void test() throws Exception {
 		int port = 8080;
 		try (Queue queue = new Queue()) {
-			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address(Address.LOCALHOST, port), "Tell me (end by $EOL): ", "$" + TelnetSpecification.EOL, new Function<String, String>() {
+			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address(Address.LOCALHOST, port), "Tell me: ", TelnetSpecification.EOL, new Function<String, String>() {
 				@Override
 				public String apply(String input) {
 					LOGGER.debug("--> {}", input);
 					String result;
-					if (input.equals("Hello$")) {
-						result = "World!$$";
-					} else if (input.equals("Bye$")) {
+					if (input.equals("Hello")) {
+						result = "World!";
+					} else if (input.equals("Bye")) {
 						result = null;
 					} else {
-						result = "Did you say " + input + "?$$";
+						result = "Did you say " + input + "?";
 					}
 					LOGGER.debug("<-- {}", result);
 					return result;
@@ -52,7 +52,7 @@ public class TelnetTest {
 							LOGGER.debug("1/ RECEIVED /" + response + "/");
 						}
 					});
-					handler.init("Hello$", "World!$$", new TelnetSharingHandler.Callback() {
+					handler.init("Hello", "World!", new TelnetSharingHandler.Callback() {
 						@Override
 						public void failed(IOException e) {
 							lock.fail(e);
@@ -62,17 +62,7 @@ public class TelnetTest {
 							LOGGER.debug("2/ RECEIVED /" + response + "/");
 						}
 					});
-					handler.init("Hello$", "World!$$", new TelnetSharingHandler.Callback() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void handle(String response) {
-							LOGGER.debug("2/ RECEIVED /" + response + "/");
-						}
-					});
-					handler.write("Hey$", "?$$", new TelnetSharingHandler.Callback() {
+					handler.write("Hello", "World!", new TelnetSharingHandler.Callback() {
 						@Override
 						public void failed(IOException e) {
 							lock.fail(e);
@@ -80,6 +70,16 @@ public class TelnetTest {
 						@Override
 						public void handle(String response) {
 							LOGGER.debug("3/ RECEIVED /" + response + "/");
+						}
+					});
+					handler.write("Hey", "?", new TelnetSharingHandler.Callback() {
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+						@Override
+						public void handle(String response) {
+							LOGGER.debug("4/ RECEIVED /" + response + "/");
 							lock.set(response);
 						}
 					});
@@ -91,5 +91,10 @@ public class TelnetTest {
 			}
 			Thread.sleep(100);
 		}
+	}
+	
+	@Test
+	public void testSameToCheckClose() throws Exception {
+		test();
 	}
 }
