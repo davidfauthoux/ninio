@@ -9,15 +9,15 @@ public class HttpPathTest {
 	@Test
 	public void test() {
 		HttpPath p = new HttpPath("/a/b/c?k=v&kk=vv#skip");
-		Assertions.assertThat(p.path).isEqualTo("a/b/c");
+		Assertions.assertThat(p.path.toString()).isEqualTo("/a/b/c");
 		Assertions.assertThat(p.parameters).isEqualTo(ImmutableMultimap.<String, String>of("k", "v", "kk", "vv"));
 
 		p = new HttpPath("/a?k=v&kk=vv#skip");
-		Assertions.assertThat(p.path).isEqualTo("a");
+		Assertions.assertThat(p.path.toString()).isEqualTo("/a");
 		Assertions.assertThat(p.parameters).isEqualTo(ImmutableMultimap.<String, String>of("k", "v", "kk", "vv"));
 
 		p = new HttpPath("/?k=v&kk=vv#skip");
-		Assertions.assertThat(p.path).isEqualTo("");
+		Assertions.assertThat(p.path.toString()).isEqualTo("/");
 		Assertions.assertThat(p.parameters).isEqualTo(ImmutableMultimap.<String, String>of("k", "v", "kk", "vv"));
 	}
 }

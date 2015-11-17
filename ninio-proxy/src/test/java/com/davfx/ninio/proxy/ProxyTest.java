@@ -60,8 +60,10 @@ public class ProxyTest {
 				
 				Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
 				new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
+					private Closeable closeable;
 					@Override
 					public void listening(Closeable closeable) {
+						this.closeable = closeable;
 					}
 					
 					@Override
@@ -75,6 +77,7 @@ public class ProxyTest {
 							public void handle(Address address, ByteBuffer buffer) {
 								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 								connection.handle(address, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
+								closeable.close();
 							}
 						};
 					}
@@ -94,6 +97,7 @@ public class ProxyTest {
 				socketReadyFactory = proxyClient.socket();
 				
 				Ready socketReady = socketReadyFactory.create(queue);
+				final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 				socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -108,6 +112,7 @@ public class ProxyTest {
 					
 					@Override
 					public void connected(FailableCloseableByteBufferHandler write) {
+						w[0] = write;
 						write.handle(null, ByteBuffer.wrap("hello".getBytes(Charsets.UTF_8)));
 					}
 					
@@ -118,6 +123,7 @@ public class ProxyTest {
 				});
 				
 				Assertions.assertThat(lock.waitFor()).isEqualTo("echo hello");
+				w[0].close();
 			}
 		}
 	}
@@ -183,6 +189,7 @@ public class ProxyTest {
 				socketReadyFactory = proxyClient.datagram();
 				
 				Ready socketReady = socketReadyFactory.create(queue);
+				final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 				socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -198,6 +205,7 @@ public class ProxyTest {
 					
 					@Override
 					public void connected(FailableCloseableByteBufferHandler write) {
+						w[0] = write;
 						LOGGER.debug("Client connected ->");
 						write.handle(null, ByteBuffer.wrap("hello".getBytes(Charsets.UTF_8)));
 					}
@@ -209,6 +217,7 @@ public class ProxyTest {
 				});
 		
 				Assertions.assertThat(lock.waitFor()).isEqualTo("echo hello");
+				w[0].close();
 			}
 		}
 	}
@@ -289,8 +298,10 @@ public class ProxyTest {
 					
 					Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
 					new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
+						private Closeable closeable;
 						@Override
 						public void listening(Closeable closeable) {
+							this.closeable = closeable;
 						}
 						
 						@Override
@@ -304,6 +315,7 @@ public class ProxyTest {
 								public void handle(Address address, ByteBuffer buffer) {
 									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 									connection.handle(address, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
+									closeable.close();
 								}
 							};
 						}
@@ -323,6 +335,7 @@ public class ProxyTest {
 					socketReadyFactory = proxyClient.hop();
 					
 					Ready socketReady = socketReadyFactory.create(queue);
+					final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 					socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
@@ -337,6 +350,7 @@ public class ProxyTest {
 						
 						@Override
 						public void connected(FailableCloseableByteBufferHandler write) {
+							w[0] = write;
 							write.handle(null, ByteBuffer.wrap("hello".getBytes(Charsets.UTF_8)));
 						}
 						
@@ -347,6 +361,7 @@ public class ProxyTest {
 					});
 					
 					Assertions.assertThat(lock.waitFor()).isEqualTo("echo hello");
+					w[0].close();
 				}
 			}
 		}
@@ -398,8 +413,10 @@ public class ProxyTest {
 					
 					Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
 					new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
+						private Closeable closeable;
 						@Override
 						public void listening(Closeable closeable) {
+							this.closeable = closeable;
 						}
 						
 						@Override
@@ -413,6 +430,7 @@ public class ProxyTest {
 								public void handle(Address address, ByteBuffer buffer) {
 									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 									connection.handle(address, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
+									closeable.close();
 								}
 							};
 						}
@@ -432,6 +450,7 @@ public class ProxyTest {
 					socketReadyFactory = proxyClient.socket();
 					
 					Ready socketReady = socketReadyFactory.create(queue);
+					final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 					socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
@@ -446,6 +465,7 @@ public class ProxyTest {
 						
 						@Override
 						public void connected(FailableCloseableByteBufferHandler write) {
+							w[0] = write;
 							write.handle(null, ByteBuffer.wrap("hello".getBytes(Charsets.UTF_8)));
 						}
 						
@@ -456,6 +476,7 @@ public class ProxyTest {
 					});
 					
 					Assertions.assertThat(lock.waitFor()).isEqualTo("echo hello");
+					w[0].close();
 				}
 			}
 		}
