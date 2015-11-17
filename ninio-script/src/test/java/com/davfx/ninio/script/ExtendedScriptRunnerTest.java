@@ -20,10 +20,13 @@ import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.SnmpServer;
 import com.davfx.ninio.snmp.SnmpServerUtils;
+import com.davfx.ninio.telnet.CommandTelnetServer;
+import com.davfx.ninio.telnet.TelnetSpecification;
 import com.davfx.script.ScriptRunner;
 import com.davfx.script.SyncScriptFunction;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
+import com.google.common.base.Function;
 import com.google.gson.JsonElement;
 
 public class ExtendedScriptRunnerTest {
@@ -157,4 +160,41 @@ public class ExtendedScriptRunnerTest {
 		}
 	}
 
+	@Test
+	public void testTelnet() throws Exception {
+		int port = 8080;
+		try (Queue queue = new Queue()) {
+			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address(Address.LOCALHOST, port), "Tell me: ", TelnetSpecification.EOL, new Function<String, String>() {
+				@Override
+				public String apply(String input) {
+					LOGGER.debug("--> {}", input);
+					String result = "Did you say " + input + "?";
+					LOGGER.debug("<-- {}", result);
+					return result;
+				}
+			})) {
+
+				Thread.sleep(100);
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner()) {
+					final Lock<JsonElement, Exception> lock = new Lock<>();
+					ScriptRunner.Engine engine = runner.runner.engine();
+					engine.register("out", new SyncScriptFunction() {
+						@Override
+						public JsonElement call(JsonElement request) {
+							lock.set(request);
+							return null;
+						}
+					});
+					engine.eval("telnet({host:'127.0.0.1', port:8080, init:[{prompt:': '}], command:'Hey', prompt:'?'}, function(r) { console.debug(r); out(r); });", null);
+					Assertions.assertThat(lock.waitFor().getAsString()).isEqualTo("Did you say Hey?");
+				}
+			}
+			Thread.sleep(100);
+		}
+	}
+	
+	@Test
+	public void testTelnetSame() throws Exception {
+		testTelnet();
+	}
 }

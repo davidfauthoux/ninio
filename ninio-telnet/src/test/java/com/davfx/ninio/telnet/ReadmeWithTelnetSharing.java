@@ -7,8 +7,8 @@ import com.davfx.ninio.core.Address;
 public final class ReadmeWithTelnetSharing {
 	
 	public static void main(String[] args) throws Exception {
-		final String login = "davidfauthoux";// "<your-login>";
-		final String password = "orod,ove"; //"<your-password>";
+		final String login = "<your-login>";
+		final String password = "<your-password>";
 
 		try (TelnetSharing sharing = new TelnetSharing()) {
 			TelnetSharingHandler handler = sharing.client(Telnet.sharing(), new Address("127.0.0.1", Telnet.DEFAULT_PORT));
