@@ -19,42 +19,70 @@ public class TelnetTest {
 	public void test() throws Exception {
 		int port = 8080;
 		try (Queue queue = new Queue()) {
-			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address(Address.LOCALHOST, port), "Alright!", new Function<String, String>() {
+			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address(Address.LOCALHOST, port), "Tell me (end by $EOL): ", "$" + TelnetSpecification.EOL, new Function<String, String>() {
 				@Override
 				public String apply(String input) {
 					LOGGER.debug("--> {}", input);
 					String result;
-					if (input.equals("Hello")) {
-						result = "World!";
-					} else if (input.equals("Bye")) {
+					if (input.equals("Hello$")) {
+						result = "World!$$";
+					} else if (input.equals("Bye$")) {
 						result = null;
 					} else {
-						result = "Did you say " + input + "?";
+						result = "Did you say " + input + "?$$";
 					}
 					LOGGER.debug("<-- {}", result);
 					return result;
 				}
 			})) {
 
-				Thread.sleep(1000);
+				Thread.sleep(100);
 
 				final Lock<String, IOException> lock = new Lock<>();
 				
 				try (TelnetSharing sharing = new TelnetSharing()) {
 					TelnetSharingHandler handler = sharing.client(Telnet.sharing(), new Address(Address.LOCALHOST, port));
-					TelnetSharingHandler.Callback callback = new TelnetSharingHandler.Callback() {
+					handler.init(null, ": ", new TelnetSharingHandler.Callback() {
 						@Override
 						public void failed(IOException e) {
 							lock.fail(e);
 						}
 						@Override
 						public void handle(String response) {
+							LOGGER.debug("1/ RECEIVED /" + response + "/");
+						}
+					});
+					handler.init("Hello$", "World!$$", new TelnetSharingHandler.Callback() {
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+						@Override
+						public void handle(String response) {
+							LOGGER.debug("2/ RECEIVED /" + response + "/");
+						}
+					});
+					handler.init("Hello$", "World!$$", new TelnetSharingHandler.Callback() {
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+						@Override
+						public void handle(String response) {
+							LOGGER.debug("2/ RECEIVED /" + response + "/");
+						}
+					});
+					handler.write("Hey$", "?$$", new TelnetSharingHandler.Callback() {
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+						@Override
+						public void handle(String response) {
+							LOGGER.debug("3/ RECEIVED /" + response + "/");
 							lock.set(response);
 						}
-					};
-					handler.init(null, "Alright!" + TelnetSpecification.EOL, callback);
-					handler.init("Hello", "World!" + TelnetSpecification.EOL, callback);
-					handler.init("Hey", TelnetSpecification.EOL, callback);
+					});
 
 					LOGGER.debug("Waiting for result");
 					

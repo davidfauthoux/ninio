@@ -11,14 +11,14 @@ public final class ReadmeCommandServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ReadmeCommandServer.class);
 	public static void main(String[] args) throws Exception {
 		try (Queue queue = new Queue()) {
-			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address("127.0.0.1", 8080), "Alright!", new Function<String, String>() {
+			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address("127.0.0.1", 8080), "Alright! Tell me (end by $EOL): ", "$" + TelnetSpecification.EOL, new Function<String, String>() {
 				@Override
 				public String apply(String input) {
 					LOGGER.debug("--> {}", input);
 					String result;
-					if (input.equals("Hello")) {
+					if (input.equals("Hello$")) {
 						result = "World!";
-					} else if (input.equals("Bye")) {
+					} else if (input.equals("Bye$")) {
 						result = null;
 					} else {
 						result = "Did you say " + input + "?";

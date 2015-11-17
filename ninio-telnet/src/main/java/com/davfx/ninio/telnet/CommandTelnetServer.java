@@ -28,9 +28,9 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 	private boolean closed = false;
 	private Closeable listening = null;
 	
-	public CommandTelnetServer(Queue queue, Address address, final String header, final Function<String, String> commandHandler) {
+	public CommandTelnetServer(Queue queue, Address address, final String header, final String cut, final Function<String, String> commandHandler) {
 		this.queue = queue;
-		new TelnetServer(queue, new Address("127.0.0.1", 8080), new SocketListening() {
+		new TelnetServer(queue, address, new SocketListening() {
 			
 			@Override
 			public void failed(IOException e) {
@@ -55,7 +55,7 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 			@Override
 			public CloseableByteBufferHandler connected(Address address, final CloseableByteBufferHandler connection) {
 				LOGGER.debug("Connected: {}", address);
-				connection.handle(address, ByteBuffer.wrap((header + TelnetSpecification.EOL).getBytes(TelnetSpecification.CHARSET)));
+				connection.handle(address, ByteBuffer.wrap(header.getBytes(TelnetSpecification.CHARSET)));
 				
 				return new CuttingByteBufferHandler(BUFFERING_LIMIT, new FailableCloseableByteBufferHandler() {
 					@Override
@@ -76,9 +76,9 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 							connection.close();
 							return;
 						}
-						connection.handle(address, ByteBuffer.wrap((result + TelnetSpecification.EOL).getBytes(TelnetSpecification.CHARSET)));
+						connection.handle(address, ByteBuffer.wrap(result.getBytes(TelnetSpecification.CHARSET)));
 					}
-				}).setPrompt(ByteBuffer.wrap(TelnetSpecification.EOL.getBytes(TelnetSpecification.CHARSET)));
+				}).setPrompt(ByteBuffer.wrap(cut.getBytes(TelnetSpecification.CHARSET)));
 			}
 		});
 	}
