@@ -29,12 +29,12 @@ public final class Readme {
 			}
 			
 			private void send(String line) {
-				write.handle(null, ByteBuffer.wrap((line + TelnetClient.EOL).getBytes(TelnetClient.CHARSET)));
+				write.handle(null, ByteBuffer.wrap((line + TelnetSpecification.EOL).getBytes(TelnetSpecification.CHARSET)));
 			}
 			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
-				String s = new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetClient.CHARSET);
+				String s = new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET);
 				received.append(s);
 				System.out.print(s);
 				

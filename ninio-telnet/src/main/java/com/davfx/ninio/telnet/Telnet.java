@@ -41,7 +41,7 @@ public final class Telnet {
 		return new TelnetSharingReadyFactory() {
 			@Override
 			public String eol() {
-				return TelnetClient.EOL;
+				return TelnetSpecification.EOL;
 			}
 			@Override
 			public TelnetReady create(Queue queue, Address address) {
