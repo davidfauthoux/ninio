@@ -51,7 +51,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 			@Override
 			public void connect(Address ignoredInternalServerAddress, final ReadyConnection connection) {
 				connection.connected(new FailableCloseableByteBufferHandler() {
-					private volatile boolean closed = false;
+					private boolean closed = false;
 					
 					@Override
 					public void close() {
@@ -74,10 +74,6 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 						ping(host, new PingCallback() {
 							@Override
 							public void handle(double elapsed) {
-								if (closed) {
-									return;
-								}
-
 								final ByteBuffer s = ByteBuffer.allocate(Longs.BYTES + Doubles.BYTES);
 								s.putLong(id);
 								s.putDouble(elapsed);
@@ -85,6 +81,10 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 						
 								queue.post(new Runnable() {
 									public void run() {
+										if (closed) {
+											return;
+										}
+
 										connection.handle(null, s);
 									}
 								});

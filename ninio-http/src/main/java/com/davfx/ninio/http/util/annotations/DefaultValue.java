@@ -5,11 +5,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import com.davfx.ninio.http.HttpMethod;
-
-@Target(ElementType.METHOD)
+@Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Route {
-	HttpMethod method();
-    String path() default "";
+public @interface DefaultValue {
+    String value();
 }

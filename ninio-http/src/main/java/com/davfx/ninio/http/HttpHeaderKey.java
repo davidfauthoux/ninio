@@ -1,6 +1,6 @@
 package com.davfx.ninio.http;
 
-interface HttpHeaderKey {
+public interface HttpHeaderKey {
 	String CONTENT_LENGTH = "Content-Length";
 	String CONTENT_ENCODING = "Content-Encoding";
 	String CONTENT_TYPE = "Content-Type";

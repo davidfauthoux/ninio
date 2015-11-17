@@ -4,6 +4,7 @@ import java.io.OutputStream;
 
 public interface HttpServiceResult {
 	HttpServiceResult contentType(String contentType);
-	void success(String content);
-	OutputStream success();
+	HttpServiceResult status(int status, String reason);
+	void out(String content);
+	OutputStream out();
 }

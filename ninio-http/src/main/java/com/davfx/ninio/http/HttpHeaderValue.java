@@ -1,6 +1,6 @@
 package com.davfx.ninio.http;
 
-interface HttpHeaderValue {
+public interface HttpHeaderValue {
 	
 	String GZIP = "gzip";
 	String CLOSE = "close";

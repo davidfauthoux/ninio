@@ -15,7 +15,7 @@ public final class QueueScheduled {
 	}
 	
 	private static final class InnerCloseable implements Closeable {
-		private volatile boolean closed = false;
+		private boolean closed = false;
 		@Override
 		public void close() {
 			closed = true;

@@ -18,7 +18,7 @@ public final class HttpServer implements AutoCloseable, Closeable {
 
 	private final Queue queue;
 	private Closeable closeable = null;
-	private volatile boolean closed = false;
+	private boolean closed = false;
 	
 	public HttpServer(final Queue queue, final Trust trust, final Address address, final HttpServerHandlerFactory factory) {
 		this.queue = queue;
