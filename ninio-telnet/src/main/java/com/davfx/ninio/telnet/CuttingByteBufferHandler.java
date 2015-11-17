@@ -6,10 +6,15 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 
 final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandler {
+	private static final Logger LOGGER = LoggerFactory.getLogger(CuttingByteBufferHandler.class);
+
 	private final FailableCloseableByteBufferHandler wrappee;
 	
 	private ByteBuffer currentPrompt;
@@ -97,13 +102,24 @@ final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandl
 		return -1;
 	}
 	
+	private static void debug(List<ByteBuffer> buffers) {
+		StringBuilder b = new StringBuilder();
+		for (ByteBuffer bb : buffers) {
+			b.append(new String(bb.array(), bb.position(), bb.remaining(), TelnetSpecification.CHARSET));
+		}
+		LOGGER.debug("Checking: {}", b.toString());
+	}
+	
 	@Override
 	public void handle(Address address, ByteBuffer buffer) {
+		LOGGER.debug("Received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
 		while (true) {
 			if (previous == null) {
+				LOGGER.debug("No previous");
 				previous = new ArrayList<>();
 			}
 			previous.add(buffer.duplicate());
+			debug(previous);
 			int position = find(currentPrompt, previous);
 			
 			int lengthToKeep = currentPrompt.remaining() - 1;
@@ -122,7 +138,8 @@ final class CuttingByteBufferHandler implements FailableCloseableByteBufferHandl
 				index--;
 			}
 			previous = newPrevious;
-			
+			debug(previous);
+
 			if (position < 0) {
 				buffers.add(buffer);
 				count += buffer.remaining();

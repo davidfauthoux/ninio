@@ -11,35 +11,33 @@ import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.core.ReadyConnection;
 import com.google.common.base.Charsets;
 
 public class CutOnPromptReadyConnectionTest {
 
 	private List<String> test(List<String> content, String prompt) {
 		final List<String> result = new LinkedList<>();
-		CutOnPromptReadyConnection c = new CutOnPromptReadyConnection(0, new ReadyConnection() {
+		CuttingByteBufferHandler c = new CuttingByteBufferHandler(0, new FailableCloseableByteBufferHandler() {
 			@Override
 			public void failed(IOException e) {
 			}
 			@Override
 			public void close() {
 			}
+			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
 				String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 				result.add(s);
 			}
-			@Override
-			public void connected(FailableCloseableByteBufferHandler write) {
-			}
 		});
 		
 		c.setPrompt(ByteBuffer.wrap(prompt.getBytes(Charsets.UTF_8)));
-		c.connected(null);
+		
 		for (String contentString : content) {
 			c.handle(null, ByteBuffer.wrap(contentString.getBytes(Charsets.UTF_8)));
 		}
+		
 		return result;
 	}
 

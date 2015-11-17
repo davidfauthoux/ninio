@@ -8,8 +8,8 @@ import com.davfx.ninio.core.Address;
 
 public final class ReadmeWithCutOnPrompt {
 	public static void main(String[] args) throws Exception {
-		final String login = "<your-login>";
-		final String password = "<your-password>";
+		final String login = "davidfauthoux";// "<your-login>";
+		final String password = "orod,ove"; //"<your-password>";
 		
 		final Deque<String> prompts = new LinkedList<>();
 		prompts.add("login:");
@@ -88,6 +88,6 @@ public final class ReadmeWithCutOnPrompt {
 			}
 		});
 
-		Thread.sleep(2000);
+		Thread.sleep(10000);
 	}
 }

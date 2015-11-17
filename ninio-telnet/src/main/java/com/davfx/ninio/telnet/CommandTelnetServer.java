@@ -47,6 +47,7 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 				if (closed) {
 					listening.close();
 				} else {
+					LOGGER.debug("Listening");
 					CommandTelnetServer.this.listening = listening;
 				}
 			}
@@ -87,6 +88,7 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
+				LOGGER.debug("Closing");
 				closed = true;
 				if (listening != null) {
 					listening.close();

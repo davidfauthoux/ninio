@@ -21,10 +21,10 @@ public final class CutOnPromptClient {
 		void handle(String result);
 	}
 	
-	private final CutOnPromptReadyConnection connection;
-	
-	public CutOnPromptClient(TelnetReady client, int limit, final Handler handler) {
-		connection = new CutOnPromptReadyConnection(limit, new ReadyConnection() {
+	public CutOnPromptClient(TelnetReady client, final int limit, final Handler handler) {
+		client.connect(new ReadyConnection() {
+			private CuttingByteBufferHandler cuttingHandler;
+			
 			@Override
 			public void failed(IOException e) {
 				handler.failed(e);
@@ -37,19 +37,35 @@ public final class CutOnPromptClient {
 			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
-				handler.handle(new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
+				cuttingHandler.handle(address, buffer);
 			}
 			
 			@Override
 			public void connected(final FailableCloseableByteBufferHandler write) {
+				cuttingHandler = new CuttingByteBufferHandler(limit, new FailableCloseableByteBufferHandler() {
+					@Override
+					public void failed(IOException e) {
+						handler.failed(e);
+					}
+					@Override
+					public void close() {
+						handler.close();
+					}
+					
+					@Override
+					public void handle(Address address, ByteBuffer buffer) {
+						handler.handle(new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
+					}
+				});
+				
 				handler.connected(new Handler.Write() {
 					@Override
 					public void setPrompt(String prompt) {
-						connection.setPrompt(ByteBuffer.wrap(prompt.getBytes(Charsets.UTF_8)));
+						cuttingHandler.setPrompt(ByteBuffer.wrap(prompt.getBytes(Charsets.UTF_8)));
 					}
 					@Override
 					public void write(String command) {
-						write.handle(null, ByteBuffer.wrap(command.getBytes(Charsets.UTF_8)));
+						write.handle(null, ByteBuffer.wrap((command + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
 					}
 					@Override
 					public void close() {
@@ -58,6 +74,5 @@ public final class CutOnPromptClient {
 				});
 			}
 		});
-		client.connect(connection);
 	}
 }
