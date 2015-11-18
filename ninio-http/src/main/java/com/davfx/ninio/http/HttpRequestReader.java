@@ -168,7 +168,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 							break;
 						}
 						if (contentLength < 0) {
-							//TODO transfer coding chunked??
+							//TODO [Not required] Chunked transfer coding
 							throw new IOException("Content-Length required");
 						}
 					} else {
