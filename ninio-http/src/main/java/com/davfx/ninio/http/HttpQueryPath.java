@@ -51,6 +51,9 @@ public final class HttpQueryPath {
 		String s = p.substring(1);
 		Deque<String> l = new LinkedList<>();
 		for (String k : Splitter.on(HttpSpecification.PATH_SEPARATOR).splitToList(s)) {
+			if (k.isEmpty()) {
+				continue;
+			}
 			if (k.equals(".")) {
 				continue;
 			}

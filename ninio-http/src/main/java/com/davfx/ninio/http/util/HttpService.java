@@ -47,10 +47,11 @@ public final class HttpService implements AutoCloseable, Closeable {
 
 	private final HttpRequestFunctionContainer dispatch;
 	private HttpServer server = null;
-	private final Queue queue = new Queue();
+	private final Queue queue;
 	private final ExecutorService executor = Executors.newFixedThreadPool(THREADS, new ClassThreadFactory(HttpService.class));
 	
-	public HttpService(Address address) {
+	public HttpService(Queue queue, Address address) {
+		this.queue = queue;
 		dispatch = new HttpRequestFunctionContainer();
 		server = new HttpServer(queue, null, address, new HttpServerHandlerFactory() {
 			@Override
@@ -73,18 +74,18 @@ public final class HttpService implements AutoCloseable, Closeable {
 	@Override
 	public void close() {
 		executor.shutdown();
-		if (server != null) {
-			server.close();
-		}
+		server.close();
 	}
 	
 	public HttpService register(final HttpRequestFilter filter, final HttpServiceHandler handler) {
 		final HttpServerHandler h = new HttpServerHandler() {
 			@Override
 			public void failed(IOException e) {
+				LOGGER.debug("Handler failed", e);
 			}
 			@Override
 			public void close() {
+				LOGGER.debug("Handler closed");
 			}
 			
 			private HttpController.Http http;
@@ -199,7 +200,15 @@ public final class HttpService implements AutoCloseable, Closeable {
 					write.handle(null, ByteBuffer.wrap(error.getMessage().getBytes(Charsets.UTF_8)));
 					write.close();
 				} else {
-					write.write(new HttpResponse(http.status, http.reason, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, http.contentType)));
+					ImmutableMultimap.Builder<String, String> headers = ImmutableMultimap.builder();
+					if (http.contentType != null) {
+						headers.put(HttpHeaders.CONTENT_TYPE, http.contentType);
+					}
+					if (http.contentLength >= 0L) {
+						headers.put(HttpHeaders.CONTENT_LENGTH, String.valueOf(http.contentLength));
+					}
+					write.write(new HttpResponse(http.status, http.reason, headers.build()));
+					
 					if (http.stream == null) {
 						if (http.content != null) {
 							write.handle(null, ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)));
@@ -212,39 +221,32 @@ public final class HttpService implements AutoCloseable, Closeable {
 							@Override
 							public void run() {
 								try {
-									stream.produce(new HttpController.HttpStream.OutputStreamFactory() {
+									stream.produce(new OutputStream() {
 										@Override
-										public OutputStream open() throws IOException {
-											return new OutputStream() {
-												@Override
-												public void write(byte[] b, int off, int len) throws IOException {
-													w.handle(null, ByteBuffer.wrap(b, off, len));
-												}
-												@Override
-												public void write(byte[] b) throws IOException {
-													write(b, 0, b.length);
-												}
-												@Override
-												public void write(int b) throws IOException {
-													byte[] bb = new byte[] { (byte) (b & 0xFF) };
-													write(bb);
-												}
-												@Override
-												public void flush() throws IOException {
-												}
-												@Override
-												public void close() throws IOException {
-													w.close();
-												}
-											};
+										public void write(byte[] b, int off, int len) {
+											w.handle(null, ByteBuffer.wrap(b, off, len));
+										}
+										@Override
+										public void write(byte[] b) {
+											write(b, 0, b.length);
+										}
+										@Override
+										public void write(int b) {
+											byte[] bb = new byte[] { (byte) (b & 0xFF) };
+											write(bb);
+										}
+										@Override
+										public void flush() {
+										}
+										@Override
+										public void close() {
+											w.close();
 										}
 									});
 								} catch (Exception e) {
 									LOGGER.error("Internal server error", e);
-									w.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
-									w.handle(null, ByteBuffer.wrap(e.getMessage().getBytes(Charsets.UTF_8)));
-									w.close();
 								}
+								w.close();
 							}
 						});
 					}

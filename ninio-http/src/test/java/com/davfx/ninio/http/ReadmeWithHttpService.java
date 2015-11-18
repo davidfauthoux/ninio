@@ -3,6 +3,7 @@ package com.davfx.ninio.http;
 import java.io.OutputStream;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.HttpPost;
 import com.davfx.ninio.http.util.HttpService;
@@ -26,7 +27,7 @@ public final class ReadmeWithHttpService {
 	public static void main(String[] args) {
 		Wait wait = new Wait();
 		int port = 8080;
-		try (HttpService server = new HttpService(new Address(Address.ANY, port))) {
+		try (HttpService server = new HttpService(new Queue(), new Address(Address.ANY, port))) {
 			server
 			.register(new SubPathHttpRequestFilter(HttpQueryPath.of("/echo/string")), new HttpServiceHandler() {
 				@Override
@@ -41,10 +42,8 @@ public final class ReadmeWithHttpService {
 					sleep();
 					return HttpController.Http.ok().stream(new HttpController.HttpStream() {
 						@Override
-						public void produce(OutputStreamFactory output) throws Exception {
-							try (OutputStream out = output.open()) {
-								out.write(("echo/stream " + request.path.parameters.get("message").iterator().next()).getBytes(Charsets.UTF_8));
-							}
+						public void produce(OutputStream out) throws Exception {
+							out.write(("echo/stream " + request.path.parameters.get("message").iterator().next()).getBytes(Charsets.UTF_8));
 						}
 					});
 				}

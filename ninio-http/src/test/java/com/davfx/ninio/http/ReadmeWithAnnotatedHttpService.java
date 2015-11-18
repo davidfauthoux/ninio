@@ -5,12 +5,14 @@ import java.io.OutputStream;
 import java.util.Arrays;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.util.AnnotatedHttpService;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.HttpPost;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
-import com.davfx.ninio.http.util.annotations.Header;
+import com.davfx.ninio.http.util.annotations.Directory;
+import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
@@ -95,12 +97,10 @@ public final class ReadmeWithAnnotatedHttpService {
 		public Http echo(final @PathParameter("message") String message, final @PathParameter("to") String to, final @QueryParameter("n") String n) throws IOException {
 			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new HttpStream() {
 				@Override
-				public void produce(OutputStreamFactory output) throws Exception {
+				public void produce(OutputStream out) throws Exception {
 					int nn = Integer.parseInt(n);
-					try (OutputStream out = output.open()) {
-						for (int i = 0; i < nn; i++) {
-							out.write((message + " " + to + "\n").getBytes(Charsets.UTF_8));
-						}
+					for (int i = 0; i < nn; i++) {
+						out.write((message + " " + to + "\n").getBytes(Charsets.UTF_8));
 					}
 				}
 			});
@@ -110,7 +110,7 @@ public final class ReadmeWithAnnotatedHttpService {
 	@Path("/header")
 	public static final class EchoHeaderController implements HttpController {
 		@Route(method = HttpMethod.GET)
-		public Http echo(@Header("Host") String host) throws IOException {
+		public Http echo(@HeaderParameter("Host") String host) throws IOException {
 			return Http.ok().content(host);
 		}
 	}
@@ -118,15 +118,20 @@ public final class ReadmeWithAnnotatedHttpService {
 	@Path("/headerWithDefaultValue")
 	public static final class EchoHeaderWithDefaultValueController implements HttpController {
 		@Route(method = HttpMethod.GET)
-		public Http echo(@Header("Host2") @DefaultValue("default") String host) throws IOException {
+		public Http echo(@HeaderParameter("Host2") @DefaultValue("default") String host) throws IOException {
 			return Http.ok().content(host);
 		}
+	}
+
+	@Path("/files")
+	@Directory(root = "src/test/resources")
+	public static final class FileController implements HttpController {
 	}
 
 	public static void main(String[] args) throws Exception {
 		Wait wait = new Wait();
 		int port = 8080;
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, port))) {
+		try (AnnotatedHttpService server = new AnnotatedHttpService(new Queue(), new Address(Address.ANY, port))) {
 			ClassPath classPath = ClassPath.from(ReadmeWithAnnotatedHttpService.class.getClassLoader());
 			
 			for (ClassPath.ClassInfo classInfo : classPath.getAllClasses()) {
@@ -151,6 +156,7 @@ public final class ReadmeWithAnnotatedHttpService {
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/header");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/headerWithDefaultValue");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/post/s");
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files/testws.html");
 			wait.waitFor();
 		}
 	}

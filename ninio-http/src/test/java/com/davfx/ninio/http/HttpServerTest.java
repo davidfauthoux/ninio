@@ -8,6 +8,9 @@ import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
+import java.util.Deque;
+import java.util.Iterator;
+import java.util.LinkedList;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
@@ -41,7 +44,8 @@ public class HttpServerTest {
 				public HttpServerHandler create() {
 					return new HttpServerHandler() {
 						private HttpRequest request;
-						
+						private final InMemoryBuffers b = new InMemoryBuffers();
+
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Failed", e);
@@ -59,11 +63,12 @@ public class HttpServerTest {
 	
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							LOGGER.debug("Post received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
+							b.add(buffer);
 						}
 						
 						@Override
 						public void ready(Write write) {
+							LOGGER.debug("Post received: {}", b.toString());
 							LOGGER.debug("Ready to write");
 							write.write(new HttpResponse());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path).getBytes(Charsets.UTF_8)));
@@ -75,7 +80,7 @@ public class HttpServerTest {
 				
 			})) {
 				
-				Thread.sleep(100);
+				queue.finish().waitFor();
 				
 				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/test?a=b").openConnection();
 				StringBuilder b = new StringBuilder();
@@ -91,7 +96,8 @@ public class HttpServerTest {
 				c.disconnect();
 				Assertions.assertThat(b.toString()).isEqualTo("hello:/test?a=b\n");
 			}
-			Thread.sleep(100);
+			
+			queue.finish().waitFor();
 		}
 	}
 	
@@ -111,7 +117,7 @@ public class HttpServerTest {
 				public HttpServerHandler create() {
 					return new HttpServerHandler() {
 						private HttpRequest request;
-						private String post;
+						private final InMemoryBuffers b = new InMemoryBuffers();
 						
 						@Override
 						public void failed(IOException e) {
@@ -130,12 +136,13 @@ public class HttpServerTest {
 	
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							post = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-							LOGGER.debug("Post received: {}", post);
+							b.add(buffer);
 						}
 						
 						@Override
 						public void ready(Write write) {
+							String post = b.toString();
+							LOGGER.debug("Post received: {}", post);
 							LOGGER.debug("Ready to write");
 							write.write(new HttpResponse());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path + ":" + post).getBytes(Charsets.UTF_8)));
@@ -147,7 +154,7 @@ public class HttpServerTest {
 				
 			})) {
 				
-				Thread.sleep(100);
+				queue.finish().waitFor();
 				
 				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/test?a=b").openConnection();
 				c.setDoOutput(true);
@@ -167,7 +174,8 @@ public class HttpServerTest {
 				c.disconnect();
 				Assertions.assertThat(b.toString()).isEqualTo("hello:/test?a=b:post\n");
 			}
-			Thread.sleep(100);
+
+			queue.finish().waitFor();
 		}
 	}
 	
@@ -187,6 +195,7 @@ public class HttpServerTest {
 				public HttpServerHandler create() {
 					return new HttpServerHandler() {
 						private HttpRequest request;
+						private final InMemoryBuffers b = new InMemoryBuffers();
 						
 						@Override
 						public void failed(IOException e) {
@@ -205,11 +214,12 @@ public class HttpServerTest {
 	
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							LOGGER.debug("Post received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
+							b.add(buffer);
 						}
 						
 						@Override
 						public void ready(Write write) {
+							LOGGER.debug("Post received: {}", b.toString());
 							LOGGER.debug("Ready to write response");
 							write.write(new HttpResponse());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path).getBytes(Charsets.UTF_8)));
@@ -221,12 +231,13 @@ public class HttpServerTest {
 				
 			})) {
 				
-				Thread.sleep(100);
+				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
 				new Http().client().send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, new HttpPath("/test?a=b")), new HttpClientHandler() {
 					private HttpResponse response;
-					
+					private final InMemoryBuffers b = new InMemoryBuffers();
+
 					@Override
 					public void failed(IOException e) {
 						lock.fail(e);
@@ -245,19 +256,21 @@ public class HttpServerTest {
 	
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.debug("Received: {}", s);
-						lock.set(response.status + ":" + response.reason + ":" + s);
+						b.add(buffer);
 					}
 					
 					@Override
 					public void close() {
+						String s = b.toString();
+						LOGGER.debug("Received: {}", s);
+						lock.set(response.status + ":" + response.reason + ":" + s);
 					}
 				});
 				
 				Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
 			}
-			Thread.sleep(100);
+
+			queue.finish().waitFor();
 		}
 	}
 	
@@ -278,7 +291,7 @@ public class HttpServerTest {
 				public HttpServerHandler create() {
 					return new HttpServerHandler() {
 						private HttpRequest request;
-						private String post;
+						private final InMemoryBuffers b = new InMemoryBuffers();
 						
 						@Override
 						public void failed(IOException e) {
@@ -297,12 +310,13 @@ public class HttpServerTest {
 	
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							post = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-							LOGGER.debug("Post received: {}", post);
+							b.add(buffer);
 						}
 						
 						@Override
 						public void ready(Write write) {
+							String post = b.toString();
+							LOGGER.debug("Post received: {}", post);
 							LOGGER.debug("Ready to write");
 							write.write(new HttpResponse());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path + ":" + post).getBytes(Charsets.UTF_8)));
@@ -314,14 +328,15 @@ public class HttpServerTest {
 				
 			})) {
 				
-				Thread.sleep(100);
+				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
 				final String post = "post";
 				try (HttpClient client = new Http().client()) {
 					client.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, new HttpPath("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(post.length()))), new HttpClientHandler() {
 						private HttpResponse response;
-						
+						private final InMemoryBuffers b = new InMemoryBuffers();
+
 						@Override
 						public void failed(IOException e) {
 							lock.fail(e);
@@ -341,20 +356,22 @@ public class HttpServerTest {
 		
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-							LOGGER.debug("Received: {}", s);
-							lock.set(response.status + ":" + response.reason + ":" + s);
+							b.add(buffer);
 						}
 						
 						@Override
 						public void close() {
+							String s = b.toString();
+							LOGGER.debug("Received: {}", s);
+							lock.set(response.status + ":" + response.reason + ":" + s);
 						}
 					});
 				
 					Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b:" + post);
 				}
 			}
-			Thread.sleep(100);
+
+			queue.finish().waitFor();
 		}
 	}
 	
@@ -375,7 +392,8 @@ public class HttpServerTest {
 				public HttpServerHandler create() {
 					return new HttpServerHandler() {
 						private HttpRequest request;
-						
+						private final InMemoryBuffers b = new InMemoryBuffers();
+
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Failed", e);
@@ -393,11 +411,12 @@ public class HttpServerTest {
 	
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							LOGGER.debug("Post received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
+							b.add(buffer);
 						}
 						
 						@Override
 						public void ready(Write write) {
+							LOGGER.debug("Post received: {}", b.toString());
 							LOGGER.debug("Ready to write response");
 							write.write(new HttpResponse());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path).getBytes(Charsets.UTF_8)));
@@ -409,11 +428,12 @@ public class HttpServerTest {
 				
 			})) {
 				
-				Thread.sleep(100);
+				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
 				new Http().get("http://127.0.0.1:8080/test?a=b", new Http.Handler() {
 					private HttpResponse response;
+					private final InMemoryBuffers b = new InMemoryBuffers();
 					
 					@Override
 					public void failed(IOException e) {
@@ -428,20 +448,67 @@ public class HttpServerTest {
 	
 					@Override
 					public void handle(ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.debug("Received: {}", s);
-						lock.set(response.status + ":" + response.reason + ":" + s);
+						b.add(buffer);
 					}
 					
 					@Override
 					public void close() {
+						String s = b.toString();
+						LOGGER.debug("Received: {}", s);
+						lock.set(response.status + ":" + response.reason + ":" + s);
 					}
 				});
 				
 				Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
 			}
-			Thread.sleep(100);
+
+			queue.finish().waitFor();
 		}
 	}
 
+	private static final class InMemoryBuffers implements Iterable<ByteBuffer> {
+		private final Deque<ByteBuffer> buffers = new LinkedList<>();
+		
+		public InMemoryBuffers() {
+		}
+		
+		@Override
+		public Iterator<ByteBuffer> iterator() {
+			return buffers.iterator();
+		}
+		
+		public void add(ByteBuffer buffer) {
+			if (!buffer.hasRemaining()) {
+				return;
+			}
+			buffers.addLast(buffer);
+		}
+		
+		public int getSize() {
+			int l = 0;
+			for (ByteBuffer b : buffers) {
+				l += b.remaining();
+			}
+			return l;
+		}
+		
+		public byte[] toByteArray() {
+			byte[] b = new byte[getSize()];
+			int off = 0;
+			for (ByteBuffer bb : buffers) {
+				int pos = bb.position();
+				int r = bb.remaining();
+				bb.get(b, off, bb.remaining());
+				off += r;
+				bb.position(pos);
+			}
+			return b;
+		}
+		
+		@Override
+		public String toString() {
+			byte[] b = toByteArray();
+			return new String(b, 0, b.length, Charsets.UTF_8);
+		}
+	}
 }

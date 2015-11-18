@@ -11,5 +11,5 @@ import com.davfx.ninio.http.HttpMethod;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Route {
 	HttpMethod method();
-    String path() default "";
+	String path() default "";
 }

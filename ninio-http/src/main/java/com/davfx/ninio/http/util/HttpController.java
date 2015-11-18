@@ -1,6 +1,5 @@
 package com.davfx.ninio.http.util;
 
-import java.io.IOException;
 import java.io.OutputStream;
 
 import com.davfx.ninio.http.HttpContentType;
@@ -9,15 +8,13 @@ import com.davfx.ninio.http.HttpStatus;
 
 public interface HttpController {
 	interface HttpStream {
-		interface OutputStreamFactory {
-			OutputStream open() throws IOException;
-		}
-		void produce(OutputStreamFactory output) throws Exception;
+		void produce(OutputStream output) throws Exception;
 	}
 	final class Http {
 		final int status;
 		final String reason;
 		String contentType = HttpContentType.plainText();
+		long contentLength = -1L;
 		String content = null;
 		HttpStream stream = null;
 		
@@ -28,6 +25,10 @@ public interface HttpController {
 
 		public Http contentType(String contentType) {
 			this.contentType = contentType;
+			return this;
+		}
+		public Http contentLength(long contentLength) {
+			this.contentLength = contentLength;
 			return this;
 		}
 		
@@ -47,6 +48,9 @@ public interface HttpController {
 		}
 		public static Http internalServerError() {
 			return new Http(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR);
+		}
+		public static Http notFound() {
+			return new Http(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND);
 		}
 	}
 }

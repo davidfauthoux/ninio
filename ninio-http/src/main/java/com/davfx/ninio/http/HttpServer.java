@@ -3,6 +3,9 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
@@ -16,19 +19,25 @@ import com.davfx.ninio.core.Trust;
 
 public final class HttpServer implements AutoCloseable, Closeable {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
+	
 	private final Queue queue;
 	private Closeable closeable = null;
 	private boolean closed = false;
 	
 	public HttpServer(final Queue queue, final Trust trust, final Address address, final HttpServerHandlerFactory factory) {
 		this.queue = queue;
-		
+
+		LOGGER.debug("Creating http server");
+
 		SocketListening listening = new SocketListening() {
 			@Override
 			public void listening(Closeable closeable) {
 				if (closed) {
+					LOGGER.debug("Http server internally closed");
 					closeable.close();
 				} else {
+					LOGGER.debug("Http server created");
 					HttpServer.this.closeable = closeable;
 				}
 			}
@@ -80,11 +89,13 @@ public final class HttpServer implements AutoCloseable, Closeable {
 	
 	@Override
 	public void close() {
+		LOGGER.debug("Closing http server");
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
 				closed = true;
 				if (closeable != null) {
+					LOGGER.debug("Http server closed");
 					closeable.close();
 				}
 			}

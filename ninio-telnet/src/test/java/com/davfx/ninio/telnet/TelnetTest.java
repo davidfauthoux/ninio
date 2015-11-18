@@ -36,7 +36,7 @@ public class TelnetTest {
 				}
 			})) {
 
-				Thread.sleep(100);
+				queue.finish().waitFor();
 
 				final Lock<String, IOException> lock = new Lock<>();
 				
@@ -89,7 +89,7 @@ public class TelnetTest {
 					Assertions.assertThat(lock.waitFor()).isEqualTo("Did you say Hey?");
 				}
 			}
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 	

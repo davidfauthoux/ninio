@@ -101,6 +101,7 @@ public final class Queue implements AutoCloseable {
 		}
 	}
 	public Wait finish() {
+		LOGGER.trace("Finishing queue");
 		Wait wait = new Wait();
 		post(wait);
 		return wait;

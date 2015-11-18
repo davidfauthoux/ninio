@@ -66,7 +66,7 @@ public class WebsocketTest {
 				
 			})) {
 				
-				Thread.sleep(100);
+				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
 				new WebsocketReady(new Http().client()).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
@@ -107,7 +107,7 @@ public class WebsocketTest {
 				
 				Assertions.assertThat(lock.waitFor()).isEqualTo("echo test3");
 			}
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 }

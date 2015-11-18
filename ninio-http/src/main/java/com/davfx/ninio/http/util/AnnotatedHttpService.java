@@ -1,5 +1,6 @@
 package com.davfx.ninio.http.util;
 
+import java.io.File;
 import java.io.IOException;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
@@ -14,6 +15,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpQueryPath;
@@ -21,7 +23,9 @@ import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpRequestFilter;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
+import com.davfx.ninio.http.util.annotations.Directory;
 import com.davfx.ninio.http.util.annotations.Header;
+import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
@@ -63,8 +67,8 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 
 	public final HttpService service;
 
-	public AnnotatedHttpService(Address address) {
-		service = new HttpService(address);
+	public AnnotatedHttpService(Queue queue, Address address) {
+		service = new HttpService(queue, address);
 	}
 	
 	@Override
@@ -74,8 +78,8 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	
 	public AnnotatedHttpService register(Class<? extends HttpController> clazz) {
 		LOGGER.debug("Service class: {}", clazz);
-		Path controller = (Path) clazz.getAnnotation(Path.class);
-		HttpQueryPath pathPrefix = (controller == null) ? null : HttpQueryPath.of(controller.value());
+		Path controllerPath = (Path) clazz.getAnnotation(Path.class);
+		HttpQueryPath pathPrefix = (controllerPath == null) ? null : HttpQueryPath.of(controllerPath.value());
 		List<PathComponent> pathComponents = new LinkedList<>();
 		int pathVariableIndex = 0;
 		if (pathPrefix != null) {
@@ -84,6 +88,11 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				pathVariableIndex++;
 			}
 		}
+		
+		Header controllerHeader = (Header) clazz.getAnnotation(Header.class);
+		final String controllerHeaderKey = (controllerHeader == null) ? null : controllerHeader.key();
+		final String controllerHeaderValue = (controllerHeader == null) ? null : controllerHeader.value();
+
 		for (final Method method : clazz.getMethods()) {
             Route route = (Route) method.getAnnotation(Route.class);
 			if (route != null) {
@@ -144,8 +153,8 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 						if (a.annotationType() == PathParameter.class) {
 							q = new MethodParameter(((PathParameter) a).value(), MethodParameter.From.PATH);
 						}
-						if (a.annotationType() == Header.class) {
-							q = new MethodParameter(((Header) a).value(), MethodParameter.From.HEADER);
+						if (a.annotationType() == HeaderParameter.class) {
+							q = new MethodParameter(((HeaderParameter) a).value(), MethodParameter.From.HEADER);
 						}
 						if (a.annotationType() == BodyParameter.class) {
 							q = new MethodParameter(((BodyParameter) a).value(), MethodParameter.From.BODY);
@@ -257,56 +266,108 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				service.register(new HttpRequestFilter() {
 					@Override
 					public boolean accept(HttpRequest request) {
+						if (!filterHeader(request, controllerHeaderKey, controllerHeaderValue)) {
+							return false;
+						}
+						
 						if (request.method != routeMethod) {
 							return false;
 						}
 						
-						if (pathParameters != null) {
-							for (Map.Entry<String, Optional<String>> e : pathParameters.entries()) {
-								String k = e.getKey();
-								Optional<String> v = e.getValue();
-								if (v.isPresent()) {
-									String vv = v.get();
-									boolean found = false;
-									for (Optional<String> o : request.path.parameters.get(k)) {
-										if (o.isPresent() && o.get().equals(vv)) {
-											found = true;
-											break;
-										}
-									}
-									if (!found) {
-										return false;
-									}
-								} else {
-									if (request.path.parameters.get(k).isEmpty()) {
-										return false;
-									}
-								}
-							}
+						if (!filterPathParameter(request, pathParameters)) {
+							return false;
 						}
-						
-						HttpQueryPath p = request.path.path;
-						Iterator<String> i = p.path.iterator();
-						Iterator<PathComponent> j = routePathComponents.iterator();
-						while (i.hasNext()) {
-							if (!j.hasNext()) {
-								return true;
-							}
-							String s = i.next();
-							PathComponent t = j.next();
-							if (t.variableIndex >= 0) {
-								continue;
-							}
-							if (!s.equals(t.name)) {
-								return false;
-							}
-						}
-						return !j.hasNext();
+
+						return filterPath(request, routePathComponents);
 					}
 				}, handler);
 			}
 		}
+
+        Directory directory = (Directory) clazz.getAnnotation(Directory.class);
+        if (directory != null) {
+			HttpServiceHandler handler = new FileHttpServiceHandler(new File(directory.root()), directory.index(), pathPrefix);
+			final List<PathComponent> routePathComponents = pathComponents;
+
+			service.register(new HttpRequestFilter() {
+				@Override
+				public boolean accept(HttpRequest request) {
+					if (!filterHeader(request, controllerHeaderKey, controllerHeaderValue)) {
+						return false;
+					}
+					
+					if (request.method != HttpMethod.GET) {
+						return false;
+					}
+					
+					return filterPath(request, routePathComponents);
+				}
+			}, handler);
+		}
 		
 		return this;
+	}
+	
+	private static boolean filterHeader(HttpRequest request, String controllerHeaderKey, String controllerHeaderValue) {
+		if ((controllerHeaderKey != null) && (controllerHeaderValue != null)) {
+			boolean found = false;
+			for (String v : request.headers.get(controllerHeaderKey)) {
+				if (v.equals(controllerHeaderValue)) {
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	private static boolean filterPathParameter(HttpRequest request, ImmutableMultimap<String, Optional<String>> pathParameters) {
+		if (pathParameters != null) {
+			for (Map.Entry<String, Optional<String>> e : pathParameters.entries()) {
+				String k = e.getKey();
+				Optional<String> v = e.getValue();
+				if (v.isPresent()) {
+					String vv = v.get();
+					boolean found = false;
+					for (Optional<String> o : request.path.parameters.get(k)) {
+						if (o.isPresent() && o.get().equals(vv)) {
+							found = true;
+							break;
+						}
+					}
+					if (!found) {
+						return false;
+					}
+				} else {
+					if (request.path.parameters.get(k).isEmpty()) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
+	
+	private static boolean filterPath(HttpRequest request, List<PathComponent> routePathComponents) {
+		HttpQueryPath p = request.path.path;
+		Iterator<String> i = p.path.iterator();
+		Iterator<PathComponent> j = routePathComponents.iterator();
+		while (i.hasNext()) {
+			if (!j.hasNext()) {
+				return true;
+			}
+			String s = i.next();
+			PathComponent t = j.next();
+			if (t.variableIndex >= 0) {
+				continue;
+			}
+			if (!s.equals(t.name)) {
+				return false;
+			}
+		}
+		return !j.hasNext();
 	}
 }

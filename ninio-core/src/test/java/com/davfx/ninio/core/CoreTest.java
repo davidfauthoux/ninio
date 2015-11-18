@@ -55,7 +55,7 @@ public class CoreTest {
 					}
 				});
 			}
-			Thread.sleep(100);
+			queue.finish().waitFor();
 			{
 				Ready ready = new DatagramReady(queue.getSelector(), queue.allocator());
 		
@@ -87,6 +87,7 @@ public class CoreTest {
 			}
 			
 			Assertions.assertThat(lock.waitFor()).isEqualTo("test");
+			queue.finish().waitFor();
 		}
 	}
 	
@@ -152,7 +153,7 @@ public class CoreTest {
 					}
 				});
 			}
-			Thread.sleep(100);
+			queue.finish().waitFor();
 			{
 				Ready ready = new SocketReady(queue.getSelector(), queue.allocator());
 		
@@ -188,6 +189,7 @@ public class CoreTest {
 			
 			Assertions.assertThat(lock.waitFor()).isEqualTo("test");
 			Assertions.assertThat(lockEcho.waitFor()).isEqualTo("echo");
+			queue.finish().waitFor();
 		}
 	}
 
@@ -257,7 +259,7 @@ public class CoreTest {
 					}
 				}));
 			}
-			Thread.sleep(100);
+			queue.finish().waitFor();
 			{
 				Ready ready = new SslReady(trust, queue.allocator(), new SocketReady(queue.getSelector(), queue.allocator()));
 		
@@ -293,6 +295,7 @@ public class CoreTest {
 			
 			Assertions.assertThat(lock.waitFor()).isEqualTo("test");
 			Assertions.assertThat(lockEcho.waitFor()).isEqualTo("echo");
+			queue.finish().waitFor();
 		}
 	}
 }

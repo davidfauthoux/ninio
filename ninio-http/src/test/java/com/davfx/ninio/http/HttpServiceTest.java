@@ -10,14 +10,18 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import org.assertj.core.api.Assertions;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.util.AnnotatedHttpService;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
+import com.davfx.ninio.http.util.annotations.Directory;
 import com.davfx.ninio.http.util.annotations.Header;
+import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
@@ -50,7 +54,7 @@ public class HttpServiceTest {
 	@Path("/getheader")
 	public static final class TestGetWithHeaderController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/hello")
-		public Http echo(@Header("Host") String host) {
+		public Http echo(@HeaderParameter("Host") String host) {
 			return Http.ok().content("GET Host:" + host);
 		}
 	}
@@ -97,322 +101,465 @@ public class HttpServiceTest {
 		public Http echo(final @PathParameter("message") String message, final @PathParameter("to") String to, final @QueryParameter("n") String n) throws IOException {
 			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new HttpStream() {
 				@Override
-				public void produce(OutputStreamFactory output) throws Exception {
+				public void produce(OutputStream out) throws Exception {
 					int nn = Integer.parseInt(n);
-					try (OutputStream out = output.open()) {
-						for (int i = 0; i < nn; i++) {
-							out.write(("GET " + message + ":" + to + "\n").getBytes(Charsets.UTF_8));
-						}
+					for (int i = 0; i < nn; i++) {
+						out.write(("GET " + message + ":" + to + "\n").getBytes(Charsets.UTF_8));
 					}
 				}
 			});
 		}
 	}
+	@Path("/getfilterbyheader")
+	@Header(key = "Host", value = "127.0.0.1:8080")
+	public static final class TestGetWithHostFilterController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
+			return Http.ok().content("GET hello:" + message + " " + host);
+		}
+	}
+	@Path("/getfilterbyheader2")
+	@Header(key = "Host", value = "127.0.0.1:8081")
+	public static final class TestGetWithHostFilterController2 implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
+			return Http.ok().content("GET hello:" + message + " " + host);
+		}
+	}
+	@Path("/files")
+	@Directory(root = "src/test/resources")
+	public static final class FileController implements HttpController {
+	}
+
 
 	@Test
 	public void testGetWithQueryParameter() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=world").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
-			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
 
-			Thread.sleep(100);
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=world").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
+			}
+			queue.finish().waitFor();
 		}
 	}
 	
 	@Test
 	public void testGetWithPathParameter() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getpath/hello/world/a").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getpath/hello/world/a").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
-
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 	
 	@Test
 	public void testPostWithBodyParameter() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/post/hello").openConnection();
-			c.setDoOutput(true);
-			try (Writer w = new OutputStreamWriter(c.getOutputStream())) {
-				w.write("message=world");
-			}
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
+
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/post/hello").openConnection();
+				c.setDoOutput(true);
+				try (Writer w = new OutputStreamWriter(c.getOutputStream())) {
+					w.write("message=world");
+				}
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("POST hello:world\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("POST hello:world\n");
-			
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 
 	@Test
 	public void testGetWithHeader() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getheader/hello").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getheader/hello").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET Host:127.0.0.1:8080\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET Host:127.0.0.1:8080\n");
-
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 
 	@Test
 	public void testGetWithQueryParameterDefaultValue() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getwithdefault/hello").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getwithdefault/hello").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET hello:www\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET hello:www\n");
-
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 
 	@Test
 	public void testGetForkParameter() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getfork/hello/world/fork1").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
-			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET1 hello:world\n");
-
-			c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getfork/hello/world/fork0").openConnection();
-			b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getfork/hello/world/fork1").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
 					}
-					b.append(line).append('\n');
 				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET1 hello:world\n");
+	
+				c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getfork/hello/world/fork0").openConnection();
+				b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET0 hello:world\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET0 hello:world\n");
-
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 	
 	@Test
 	public void testGetForkWithQueryParameter() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork1").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
-			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET1 hello:world\n");
-
-			c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork0").openConnection();
-			b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork1").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
 					}
-					b.append(line).append('\n');
 				}
-			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET0 hello:world\n");
-
-			c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork0=f").openConnection();
-			b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET1 hello:world\n");
+	
+				c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork0").openConnection();
+				b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
 					}
-					b.append(line).append('\n');
 				}
-			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET0 hello:world\n");
-
-			c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork2=f").openConnection();
-			b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET0 hello:world\n");
+	
+				c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork0=f").openConnection();
+				b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
 					}
-					b.append(line).append('\n');
 				}
-			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET2f hello:world\n");
-
-			c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork2=g").openConnection();
-			b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET0 hello:world\n");
+	
+				c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork2=f").openConnection();
+				b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
 					}
-					b.append(line).append('\n');
 				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET2f hello:world\n");
+	
+				c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getparamfork/hello/world?fork2=g").openConnection();
+				b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET2g hello:world\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET2g hello:world\n");
-
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 	
 	@Test
 	public void testGetStreamParameter() throws Exception {
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, 8080))) {
-			for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
-		    	@SuppressWarnings("unchecked")
-				Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
-				server.register(c);
-			}
-			
-			Thread.sleep(100);
-			
-			HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getstream/hello/world?n=3").openConnection();
-			StringBuilder b = new StringBuilder();
-			try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-				while (true) {
-					String line = r.readLine();
-					if (line == null) {
-						break;
-					}
-					b.append(line).append('\n');
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
 				}
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getstream/hello/world?n=3").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\nGET hello:world\nGET hello:world\n");
 			}
-			c.disconnect();
-			Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\nGET hello:world\nGET hello:world\n");
-
-			Thread.sleep(100);
+			queue.finish().waitFor();
 		}
 	}
 	
+	@Test
+	public void testGetWithHostFilter() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+				
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/getfilterbyheader/hello?message=world").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world 127.0.0.1:8080\n");
+	
+				try (PortRouter router = new PortRouter(new Queue(), new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					c = (HttpURLConnection) new URL("http://127.0.0.1:8081/getfilterbyheader2/hello?message=world").openConnection();
+					b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					c.disconnect();
+					Assertions.assertThat(b.toString()).isEqualTo("GET hello:world 127.0.0.1:8081\n");
+				}
+			}
+			queue.finish().waitFor();
+		}
+	}
+	
+	@Test
+	public void testGetWithHostFilterSame() throws Exception {
+		testGetWithHostFilter();
+	}
+	
+	@Test
+	public void testFiles() throws Exception {
+		int port = 8080;
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, port))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+
+				queue.finish().waitFor();
+				
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:" + port + "/files/index.html").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("<!doctype html><html><head><meta charset=\"utf-8\" /></head><body><div>Hello</div></body>\n");
+			}
+			queue.finish().waitFor();
+		}
+	}
+	
+	@Ignore
+	@Test
+	public void testFilesWithPortRouting() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+
+				queue.finish().waitFor();
+				
+				try (PortRouter router = new PortRouter(queue, new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					queue.finish().waitFor();
+					Thread.sleep(100);
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8081/files/").openConnection();
+					StringBuilder b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					c.disconnect();
+					Assertions.assertThat(b.toString()).isEqualTo("<!doctype html><html><head><meta charset=\"utf-8\" /></head><body><div>Hello</div></body>\n");
+				}
+			}
+			queue.finish().waitFor();
+		}
+	}
 }
