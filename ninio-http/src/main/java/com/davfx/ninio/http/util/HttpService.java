@@ -50,20 +50,9 @@ public final class HttpService implements AutoCloseable, Closeable {
 	private final Queue queue = new Queue();
 	private final ExecutorService executor = Executors.newFixedThreadPool(THREADS, new ClassThreadFactory(HttpService.class));
 	
-	public HttpService() {
+	public HttpService(Address address) {
 		dispatch = new HttpRequestFunctionContainer();
-	}
-	
-	@Override
-	public void close() {
-		executor.shutdown();
-		if (server != null) {
-			server.close();
-		}
-	}
-	
-	public HttpService start(int port) {
-		server = new HttpServer(queue, null, new Address(Address.ANY, port), new HttpServerHandlerFactory() {
+		server = new HttpServer(queue, null, address, new HttpServerHandlerFactory() {
 			@Override
 			public void failed(IOException e) {
 				LOGGER.error("Failed", e);
@@ -79,11 +68,18 @@ public final class HttpService implements AutoCloseable, Closeable {
 				return new DispatchHttpServerHandler(dispatch);
 			}
 		});
-		return this;
 	}
 	
-	public HttpService register(HttpRequestFilter filter, final HttpServiceHandler handler) {
-		HttpServerHandler h = new HttpServerHandler() {
+	@Override
+	public void close() {
+		executor.shutdown();
+		if (server != null) {
+			server.close();
+		}
+	}
+	
+	public HttpService register(final HttpRequestFilter filter, final HttpServiceHandler handler) {
+		final HttpServerHandler h = new HttpServerHandler() {
 			@Override
 			public void failed(IOException e) {
 			}
@@ -260,7 +256,12 @@ public final class HttpService implements AutoCloseable, Closeable {
 			}
 		};
 		
-		dispatch.add(filter, h);
+		queue.post(new Runnable() {
+			@Override
+			public void run() {
+				dispatch.add(filter, h);
+			}
+		});
 		
 		return this;
 	}

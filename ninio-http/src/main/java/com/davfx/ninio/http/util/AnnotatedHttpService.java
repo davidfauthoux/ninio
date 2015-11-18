@@ -12,6 +12,7 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpPath;
@@ -60,14 +61,10 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		}
 	}
 
-	public final HttpService service = new HttpService();
+	public final HttpService service;
 
-	public AnnotatedHttpService() {
-	}
-	
-	public AnnotatedHttpService start(int port) {
-		service.start(port);
-		return this;
+	public AnnotatedHttpService(Address address) {
+		service = new HttpService(address);
 	}
 	
 	@Override
@@ -269,7 +266,15 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 								String k = e.getKey();
 								Optional<String> v = e.getValue();
 								if (v.isPresent()) {
-									if (!request.path.parameters.get(k).contains(v.get())) {
+									String vv = v.get();
+									boolean found = false;
+									for (Optional<String> o : request.path.parameters.get(k)) {
+										if (o.isPresent() && o.get().equals(vv)) {
+											found = true;
+											break;
+										}
+									}
+									if (!found) {
 										return false;
 									}
 								} else {

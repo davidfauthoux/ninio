@@ -26,7 +26,7 @@ public final class ReadmeWithHttpService {
 	public static void main(String[] args) {
 		Wait wait = new Wait();
 		int port = 8080;
-		try (HttpService server = new HttpService()) {
+		try (HttpService server = new HttpService(new Address(Address.ANY, port))) {
 			server
 			.register(new SubPathHttpRequestFilter(HttpQueryPath.of("/echo/string")), new HttpServiceHandler() {
 				@Override
@@ -49,7 +49,7 @@ public final class ReadmeWithHttpService {
 					});
 				}
 			})
-			.start(port);
+			;
 
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/string?message=helloworld");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/stream?message=helloworld");

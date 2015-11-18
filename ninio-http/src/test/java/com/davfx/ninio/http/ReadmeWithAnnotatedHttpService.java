@@ -55,7 +55,7 @@ public final class ReadmeWithAnnotatedHttpService {
 		public Http echoPostAll(@BodyParameter("text") String text, HttpPost post) {
 			return Http.ok().content("post " + text + " " + post + " " + post.parameters());
 		}
-		@Route(method = HttpMethod.GET, path = "/r?submit")
+		@Route(method = HttpMethod.GET, path = "/r?submit=Submit")
 		public Http echoGetAll(HttpRequest r) {
 			return Http.ok().content("GET " + r);
 		}
@@ -126,7 +126,7 @@ public final class ReadmeWithAnnotatedHttpService {
 	public static void main(String[] args) throws Exception {
 		Wait wait = new Wait();
 		int port = 8080;
-		try (AnnotatedHttpService server = new AnnotatedHttpService()) {
+		try (AnnotatedHttpService server = new AnnotatedHttpService(new Address(Address.ANY, port))) {
 			ClassPath classPath = ClassPath.from(ReadmeWithAnnotatedHttpService.class.getClassLoader());
 			
 			for (ClassPath.ClassInfo classInfo : classPath.getAllClasses()) {
@@ -143,8 +143,6 @@ public final class ReadmeWithAnnotatedHttpService {
 				}
 			}
 
-			server.start(port);
-
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/a/echo?message=helloworld");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/b?message=helloworld");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/e/Hello/World");
@@ -152,7 +150,7 @@ public final class ReadmeWithAnnotatedHttpService {
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/hello/world?n=100");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/header");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/headerWithDefaultValue");
-			System.out.println("POST http://" + new Address(Address.LOCALHOST, port) + "/post");
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/post/s");
 			wait.waitFor();
 		}
 	}
