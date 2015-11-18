@@ -59,13 +59,12 @@ public final class WebsocketHttpServerHandler implements HttpServerHandler {
 			.put("Connection", "Upgrade")
 			.put("Upgrade", "websocket")
 			.put("Sec-WebSocket-Accept", BaseEncoding.base64().encode(Hashing.sha1().hashBytes((wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(Charsets.UTF_8)).asBytes()))
-			// We don't need this hack anymore // .put(HttpHeaders.TRANSFER_ENCODING, "none")
 			.build()
 		);
 
 		write.write(response);
 
-		LOGGER.debug("Client connected");
+		LOGGER.trace("Client connected");
 		
 		wrappee.connected(new FailableCloseableByteBufferHandler() {
 			@Override

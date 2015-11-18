@@ -9,7 +9,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.DatagramReadyFactory;
@@ -61,10 +60,10 @@ public class ProxyTest {
 					
 					Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
 					new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
-						private Closeable closeable;
+						private Listening listening;
 						@Override
-						public void listening(Closeable closeable) {
-							this.closeable = closeable;
+						public void listening(Listening listening) {
+							this.listening = listening;
 						}
 						
 						@Override
@@ -78,7 +77,7 @@ public class ProxyTest {
 								public void handle(Address address, ByteBuffer buffer) {
 									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 									connection.handle(address, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
-									closeable.close();
+									listening.close();
 								}
 							};
 						}
@@ -308,10 +307,10 @@ public class ProxyTest {
 						
 						Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
 						new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
-							private Closeable closeable;
+							private Listening listening;
 							@Override
-							public void listening(Closeable closeable) {
-								this.closeable = closeable;
+							public void listening(Listening listening) {
+								this.listening = listening;
 							}
 							
 							@Override
@@ -325,7 +324,7 @@ public class ProxyTest {
 									public void handle(Address address, ByteBuffer buffer) {
 										String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 										connection.handle(address, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
-										closeable.close();
+										listening.close();
 									}
 								};
 							}
@@ -426,10 +425,10 @@ public class ProxyTest {
 						
 						Listen socketListen = new SocketListen(queue.getSelector(), queue.allocator());
 						new QueueListen(queue, socketListen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
-							private Closeable closeable;
+							private Listening listening;
 							@Override
-							public void listening(Closeable closeable) {
-								this.closeable = closeable;
+							public void listening(Listening listening) {
+								this.listening = listening;
 							}
 							
 							@Override
@@ -443,7 +442,7 @@ public class ProxyTest {
 									public void handle(Address address, ByteBuffer buffer) {
 										String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 										connection.handle(address, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
-										closeable.close();
+										listening.close();
 									}
 								};
 							}

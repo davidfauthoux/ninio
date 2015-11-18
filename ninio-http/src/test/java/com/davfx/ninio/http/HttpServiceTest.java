@@ -10,7 +10,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -30,6 +29,10 @@ import com.google.common.base.Charsets;
 
 public class HttpServiceTest {
 	
+	static {
+		System.setProperty("http.keepAlive", "false");
+	}
+	
 	@Path("/get")
 	public static final class TestGetWithQueryParameterController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/hello")
@@ -37,110 +40,18 @@ public class HttpServiceTest {
 			return Http.ok().content("GET hello:" + message);
 		}
 	}
-	@Path("/getpath")
-	public static final class TestGetWithPathParameterController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello/{message}/a")
-		public Http echo(@PathParameter("message") String message) {
-			return Http.ok().content("GET hello:" + message);
-		}
-	}
-	@Path("/post")
-	public static final class TestPostWithBodyParameterController implements HttpController {
-		@Route(method = HttpMethod.POST, path = "/hello")
-		public Http echo(@BodyParameter("message") String message) {
-			return Http.ok().content("POST hello:" + message);
-		}
-	}
-	@Path("/getheader")
-	public static final class TestGetWithHeaderController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello")
-		public Http echo(@HeaderParameter("Host") String host) {
-			return Http.ok().content("GET Host:" + host);
-		}
-	}
-	@Path("/getwithdefault")
-	public static final class TestGetWithQueryParameterDefaultValueController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello")
-		public Http echo(@QueryParameter("message") @DefaultValue("www") String message) {
-			return Http.ok().content("GET hello:" + message);
-		}
-	}
-	@Path("/getfork")
-	public static final class TestGetForkController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello/{a}/fork0")
-		public Http echo0(@PathParameter("a") String a) {
-			return Http.ok().content("GET0 hello:" + a);
-		}
-		@Route(method = HttpMethod.GET, path = "/hello/{a}/fork1")
-		public Http echo1(@PathParameter("a") String a) {
-			return Http.ok().content("GET1 hello:" + a);
-		}
-	}
-	@Path("/getparamfork")
-	public static final class TestGetForkWithQueryController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork0")
-		public Http echo0(@PathParameter("a") String a) {
-			return Http.ok().content("GET0 hello:" + a);
-		}
-		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork1")
-		public Http echo1(@PathParameter("a") String a) {
-			return Http.ok().content("GET1 hello:" + a);
-		}
-		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork2=f")
-		public Http echo2(@PathParameter("a") String a) {
-			return Http.ok().content("GET2f hello:" + a);
-		}
-		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork2=g")
-		public Http echo3(@PathParameter("a") String a) {
-			return Http.ok().content("GET2g hello:" + a);
-		}
-	}
-	@Path("/getstream")
-	public static final class TestGetStreamController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/{message}/{to}")
-		public Http echo(final @PathParameter("message") String message, final @PathParameter("to") String to, final @QueryParameter("n") String n) throws IOException {
-			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new HttpStream() {
-				@Override
-				public void produce(OutputStream out) throws Exception {
-					int nn = Integer.parseInt(n);
-					for (int i = 0; i < nn; i++) {
-						out.write(("GET " + message + ":" + to + "\n").getBytes(Charsets.UTF_8));
-					}
-				}
-			});
-		}
-	}
-	@Path("/getfilterbyheader")
-	@Header(key = "Host", value = "127.0.0.1:8080")
-	public static final class TestGetWithHostFilterController implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello")
-		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
-			return Http.ok().content("GET hello:" + message + " " + host);
-		}
-	}
-	@Path("/getfilterbyheader2")
-	@Header(key = "Host", value = "127.0.0.1:8081")
-	public static final class TestGetWithHostFilterController2 implements HttpController {
-		@Route(method = HttpMethod.GET, path = "/hello")
-		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
-			return Http.ok().content("GET hello:" + message + " " + host);
-		}
-	}
-	@Path("/files")
-	@Directory(root = "src/test/resources")
-	public static final class FileController implements HttpController {
-	}
-
-
 	@Test
 	public void testGetWithQueryParameter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetWithQueryParameterController.class);
 
 				queue.finish().waitFor();
 				
@@ -162,15 +73,26 @@ public class HttpServiceTest {
 		}
 	}
 	
+	@Path("/getpath")
+	public static final class TestGetWithPathParameterController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello/{message}/a")
+		public Http echo(@PathParameter("message") String message) {
+			return Http.ok().content("GET hello:" + message);
+		}
+	}
+
 	@Test
 	public void testGetWithPathParameter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetWithPathParameterController.class);
 				
 				queue.finish().waitFor();
 				
@@ -192,15 +114,26 @@ public class HttpServiceTest {
 		}
 	}
 	
+	@Path("/post")
+	public static final class TestPostWithBodyParameterController implements HttpController {
+		@Route(method = HttpMethod.POST, path = "/hello")
+		public Http echo(@BodyParameter("message") String message) {
+			return Http.ok().content("POST hello:" + message);
+		}
+	}
+
 	@Test
 	public void testPostWithBodyParameter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestPostWithBodyParameterController.class);
 
 				queue.finish().waitFor();
 				
@@ -226,15 +159,25 @@ public class HttpServiceTest {
 		}
 	}
 
+	@Path("/getheader")
+	public static final class TestGetWithHeaderController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@HeaderParameter("Host") String host) {
+			return Http.ok().content("GET Host:" + host);
+		}
+	}
 	@Test
 	public void testGetWithHeader() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetWithHeaderController.class);
 				
 				queue.finish().waitFor();
 				
@@ -256,15 +199,26 @@ public class HttpServiceTest {
 		}
 	}
 
+	@Path("/getwithdefault")
+	public static final class TestGetWithQueryParameterDefaultValueController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") @DefaultValue("www") String message) {
+			return Http.ok().content("GET hello:" + message);
+		}
+	}
+
 	@Test
 	public void testGetWithQueryParameterDefaultValue() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetWithQueryParameterDefaultValueController.class);
 				
 				queue.finish().waitFor();
 				
@@ -286,15 +240,30 @@ public class HttpServiceTest {
 		}
 	}
 
+	@Path("/getfork")
+	public static final class TestGetForkController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello/{a}/fork0")
+		public Http echo0(@PathParameter("a") String a) {
+			return Http.ok().content("GET0 hello:" + a);
+		}
+		@Route(method = HttpMethod.GET, path = "/hello/{a}/fork1")
+		public Http echo1(@PathParameter("a") String a) {
+			return Http.ok().content("GET1 hello:" + a);
+		}
+	}
+
 	@Test
 	public void testGetForkParameter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetForkController.class);
 				
 				queue.finish().waitFor();
 				
@@ -330,15 +299,38 @@ public class HttpServiceTest {
 		}
 	}
 	
+	@Path("/getparamfork")
+	public static final class TestGetForkWithQueryController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork0")
+		public Http echo0(@PathParameter("a") String a) {
+			return Http.ok().content("GET0 hello:" + a);
+		}
+		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork1")
+		public Http echo1(@PathParameter("a") String a) {
+			return Http.ok().content("GET1 hello:" + a);
+		}
+		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork2=f")
+		public Http echo2(@PathParameter("a") String a) {
+			return Http.ok().content("GET2f hello:" + a);
+		}
+		@Route(method = HttpMethod.GET, path = "/hello/{a}?fork2=g")
+		public Http echo3(@PathParameter("a") String a) {
+			return Http.ok().content("GET2g hello:" + a);
+		}
+	}
+
 	@Test
 	public void testGetForkWithQueryParameter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetForkWithQueryController.class);
 				
 				queue.finish().waitFor();
 				
@@ -416,15 +408,34 @@ public class HttpServiceTest {
 		}
 	}
 	
+	@Path("/getstream")
+	public static final class TestGetStreamController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/{message}/{to}")
+		public Http echo(final @PathParameter("message") String message, final @PathParameter("to") String to, final @QueryParameter("n") String n) throws IOException {
+			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new HttpStream() {
+				@Override
+				public void produce(OutputStream out) throws Exception {
+					int nn = Integer.parseInt(n);
+					for (int i = 0; i < nn; i++) {
+						out.write(("GET " + message + ":" + to + "\n").getBytes(Charsets.UTF_8));
+					}
+				}
+			});
+		}
+	}
+
 	@Test
 	public void testGetStreamParameter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetStreamController.class);
 				
 				queue.finish().waitFor();
 				
@@ -446,15 +457,36 @@ public class HttpServiceTest {
 		}
 	}
 	
+	@Path("/getfilterbyheader")
+	@Header(key = "Host", value = "127.0.0.1:8080")
+	public static final class TestGetWithHostFilterController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
+			return Http.ok().content("GET hello:" + message + " " + host);
+		}
+	}
+	@Path("/getfilterbyheader2")
+	@Header(key = "Host", value = "127.0.0.1:8081")
+	public static final class TestGetWithHostFilterController2 implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
+			return Http.ok().content("GET hello:" + message + " " + host);
+		}
+	}
+
 	@Test
 	public void testGetWithHostFilter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(TestGetWithHostFilterController.class);
+				server.register(TestGetWithHostFilterController2.class);
 				
 				queue.finish().waitFor();
 				
@@ -497,16 +529,24 @@ public class HttpServiceTest {
 		testGetWithHostFilter();
 	}
 	
+	@Path("/files")
+	@Directory(root = "src/test/resources")
+	public static final class FileController implements HttpController {
+	}
+
 	@Test
 	public void testFiles() throws Exception {
 		int port = 8080;
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, port))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(FileController.class);
 
 				queue.finish().waitFor();
 				
@@ -527,17 +567,19 @@ public class HttpServiceTest {
 			queue.finish().waitFor();
 		}
 	}
-	
-	@Ignore
+
 	@Test
 	public void testFilesWithPortRouting() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
 					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
 					server.register(c);
 				}
+				*/
+				server.register(FileController.class);
 
 				queue.finish().waitFor();
 				

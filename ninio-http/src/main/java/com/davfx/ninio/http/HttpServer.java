@@ -22,23 +22,24 @@ public final class HttpServer implements AutoCloseable, Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServer.class);
 	
 	private final Queue queue;
-	private Closeable closeable = null;
+	private SocketListening.Listening listening = null;
 	private boolean closed = false;
 	
 	public HttpServer(final Queue queue, final Trust trust, final Address address, final HttpServerHandlerFactory factory) {
 		this.queue = queue;
 
-		LOGGER.debug("Creating http server");
+		LOGGER.trace("Creating http server");
 
 		SocketListening listening = new SocketListening() {
 			@Override
-			public void listening(Closeable closeable) {
+			public void listening(Listening listening) {
 				if (closed) {
-					LOGGER.debug("Http server internally closed");
-					closeable.close();
+					LOGGER.trace("Http server internally closed");
+					listening.disconnect();
+					listening.close();
 				} else {
-					LOGGER.debug("Http server created");
-					HttpServer.this.closeable = closeable;
+					LOGGER.trace("Http server created");
+					HttpServer.this.listening = listening;
 				}
 			}
 			
@@ -89,14 +90,15 @@ public final class HttpServer implements AutoCloseable, Closeable {
 	
 	@Override
 	public void close() {
-		LOGGER.debug("Closing http server");
+		LOGGER.trace("Closing http server");
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
 				closed = true;
-				if (closeable != null) {
-					LOGGER.debug("Http server closed");
-					closeable.close();
+				if (listening != null) {
+					LOGGER.trace("Http server closed");
+					listening.disconnect();
+					listening.close();
 				}
 			}
 		});

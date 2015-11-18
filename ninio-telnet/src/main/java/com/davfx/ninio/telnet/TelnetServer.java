@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.Listen;
 import com.davfx.ninio.core.Queue;
@@ -14,31 +13,31 @@ import com.davfx.ninio.core.SocketListening;
 
 public final class TelnetServer {
 
-	public TelnetServer(final Queue queue, Address address, final SocketListening listening) {
+	public TelnetServer(final Queue queue, Address address, final SocketListening socketListening) {
 		Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
 		
 		new QueueListen(queue, listen).listen(address, new SocketListening() {
 			
 			@Override
-			public void listening(Closeable closeable) {
-				listening.listening(closeable);
+			public void listening(Listening listening) {
+				socketListening.listening(listening);
 			}
 			
 			@Override
 			public void close() {
-				listening.close();
+				socketListening.close();
 			}
 			
 			@Override
 			public void failed(IOException e) {
-				listening.failed(e);
+				socketListening.failed(e);
 			}
 			
 			@Override
 			public CloseableByteBufferHandler connected(Address address, final CloseableByteBufferHandler connection) {
 				final TelnetResponseReader reader = new TelnetResponseReader();
 
-				final CloseableByteBufferHandler listeningConnection = listening.connected(address, new CloseableByteBufferHandler() {
+				final CloseableByteBufferHandler listeningConnection = socketListening.connected(address, new CloseableByteBufferHandler() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
 						connection.handle(address, buffer);

@@ -1,6 +1,9 @@
 package com.davfx.ninio.core;
 
 public interface SocketListening extends Closeable, Failable {
-	void listening(Closeable closeable);
+	interface Listening extends Closeable {
+		void disconnect();
+	}
+	void listening(Listening listening);
 	CloseableByteBufferHandler connected(Address address, CloseableByteBufferHandler connection);
 }

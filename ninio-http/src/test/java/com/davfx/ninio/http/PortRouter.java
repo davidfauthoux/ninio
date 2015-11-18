@@ -57,19 +57,20 @@ public final class PortRouter implements AutoCloseable, Closeable {
 	
 	private final Queue queue;
 	private boolean closed = false;
-	private Closeable closeable = null;
+	private SocketListening.Listening listening = null;
 	
 	public PortRouter(final Queue queue, final Address bindAddress, final Address toAddress, Trust trust) {
 		this.queue = queue;
 		SocketListening listening = new SocketListening() {
 			@Override
-			public void listening(Closeable closeable) {
+			public void listening(Listening listening) {
 				if (closed) {
-					LOGGER.debug("Port router internally closed");
-					closeable.close();
+					LOGGER.trace("Port router internally closed");
+					listening.disconnect();
+					listening.close();
 				} else {
-					LOGGER.debug("Port router created");
-					PortRouter.this.closeable = closeable;
+					LOGGER.trace("Port router created");
+					PortRouter.this.listening = listening;
 				}
 			}
 			@Override
@@ -129,14 +130,15 @@ public final class PortRouter implements AutoCloseable, Closeable {
 	
 	@Override
 	public void close() {
-		LOGGER.debug("Closing port router");
+		LOGGER.trace("Closing port router");
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
 				closed = true;
-				if (closeable != null) {
-					LOGGER.debug("Port router closed");
-					closeable.close();
+				if (listening != null) {
+					LOGGER.trace("Port router closed");
+					listening.disconnect();
+					listening.close();
 				}
 			}
 		});

@@ -1,5 +1,6 @@
 package com.davfx.ninio.http.util;
 
+import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -44,7 +45,8 @@ public final class HttpService implements AutoCloseable, Closeable {
 	
 	private static final Config CONFIG = ConfigFactory.load(HttpService.class.getClassLoader());
 	private static final int THREADS = CONFIG.getInt("ninio.http.service.threads");
-
+	private static final int STREAM_BUFFERING_SIZE = CONFIG.getBytes("ninio.http.service.stream.buffer").intValue();
+	
 	private final HttpRequestFunctionContainer dispatch;
 	private HttpServer server = null;
 	private final Queue queue;
@@ -81,11 +83,11 @@ public final class HttpService implements AutoCloseable, Closeable {
 		final HttpServerHandler h = new HttpServerHandler() {
 			@Override
 			public void failed(IOException e) {
-				LOGGER.debug("Handler failed", e);
+				LOGGER.trace("Handler failed", e);
 			}
 			@Override
 			public void close() {
-				LOGGER.debug("Handler closed");
+				LOGGER.trace("Handler closed");
 			}
 			
 			private HttpController.Http http;
@@ -221,10 +223,18 @@ public final class HttpService implements AutoCloseable, Closeable {
 							@Override
 							public void run() {
 								try {
-									stream.produce(new OutputStream() {
+									try (OutputStream out = new BufferedOutputStream(new OutputStream() {
 										@Override
 										public void write(byte[] b, int off, int len) {
-											w.handle(null, ByteBuffer.wrap(b, off, len));
+											byte[] copy = new byte[len];
+											System.arraycopy(b, off, copy, 0, len);
+											final ByteBuffer bb = ByteBuffer.wrap(copy);
+											queue.post(new Runnable() {
+												@Override
+												public void run() {
+													w.handle(null, bb);
+												}
+											});
 										}
 										@Override
 										public void write(byte[] b) {
@@ -240,13 +250,25 @@ public final class HttpService implements AutoCloseable, Closeable {
 										}
 										@Override
 										public void close() {
-											w.close();
+											queue.post(new Runnable() {
+												@Override
+												public void run() {
+													w.close();
+												}
+											});
 										}
-									});
+									}, STREAM_BUFFERING_SIZE)) {
+										stream.produce(out);
+									}
 								} catch (Exception e) {
 									LOGGER.error("Internal server error", e);
 								}
-								w.close();
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										w.close();
+									}
+								});
 							}
 						});
 					}

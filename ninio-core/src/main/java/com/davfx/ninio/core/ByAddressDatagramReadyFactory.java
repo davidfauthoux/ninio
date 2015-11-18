@@ -42,205 +42,203 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 		queue = globalQueue;
 		final Selector selector = queue.getSelector();
 		final ByteBufferAllocator byteBufferAllocator = queue.allocator();
-		if (selector != null) {
-			queue.post(new Runnable() {
-				private final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
-				private long toWriteLength = 0L;
-				@Override
-				public void run() {
-					final DatagramChannel channel;
-					final SelectionKey selectionKey;
+		queue.post(new Runnable() {
+			private final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
+			private long toWriteLength = 0L;
+			@Override
+			public void run() {
+				final DatagramChannel channel;
+				final SelectionKey selectionKey;
+				try {
+					channel = DatagramChannel.open();
 					try {
-						channel = DatagramChannel.open();
-						try {
-							channel.configureBlocking(false);
-							channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
-							channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
-							selectionKey = channel.register(selector, 0);
-							
-							selectionKey.attach(new SelectionKeyVisitor() {
-								@Override
-								public void visit(final SelectionKey key) {
-									if (!channel.isOpen()) {
-										return;
-									}
-									if (key.isReadable()) {
-										ByteBuffer readBuffer = byteBufferAllocator.allocate();
-										try {
-											InetSocketAddress from = (InetSocketAddress) channel.receive(readBuffer);
-											if (from != null) {
-												readBuffer.flip();
-												Address fromAddress = new Address(from.getHostString(), from.getPort());
-												ReadyConnection connection = connections.get(fromAddress);
-												if (connection != null) {
-													connection.handle(fromAddress, readBuffer);
-												} else {
-													LOGGER.trace("Packet received but no match: {} / {}", fromAddress, connections.keySet());
-												}
+						channel.configureBlocking(false);
+						channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
+						channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
+						selectionKey = channel.register(selector, 0);
+						
+						selectionKey.attach(new SelectionKeyVisitor() {
+							@Override
+							public void visit(final SelectionKey key) {
+								if (!channel.isOpen()) {
+									return;
+								}
+								if (key.isReadable()) {
+									ByteBuffer readBuffer = byteBufferAllocator.allocate();
+									try {
+										InetSocketAddress from = (InetSocketAddress) channel.receive(readBuffer);
+										if (from != null) {
+											readBuffer.flip();
+											Address fromAddress = new Address(from.getHostString(), from.getPort());
+											ReadyConnection connection = connections.get(fromAddress);
+											if (connection != null) {
+												connection.handle(fromAddress, readBuffer);
+											} else {
+												LOGGER.trace("Packet received but no match: {} / {}", fromAddress, connections.keySet());
 											}
-										} catch (IOException e) {
+										}
+									} catch (IOException e) {
+										try {
+											channel.close();
+										} catch (IOException ee) {
+										}
+										closed = true;
+										for (ReadyConnection connection : connections.values()) {
+											connection.close();
+										}
+										connections.clear();
+									}
+								} else if (key.isWritable()) {
+									while (!toWriteQueue.isEmpty()) {
+										AddressedByteBuffer b = toWriteQueue.getFirst();
+										if (b == null) {
 											try {
 												channel.close();
 											} catch (IOException ee) {
 											}
-											closed = true;
-											for (ReadyConnection connection : connections.values()) {
-												connection.close();
+											return;
+										} else {
+											InetSocketAddress a;
+											try {
+												a = AddressUtils.toConnectableInetSocketAddress(b.address);
+											} catch (IOException e) {
+												LOGGER.warn("Invalid address: {}", b.address);
+												b.buffer.position(b.buffer.position() + b.buffer.remaining());
+												a = null;
 											}
-											connections.clear();
-										}
-									} else if (key.isWritable()) {
-										while (!toWriteQueue.isEmpty()) {
-											AddressedByteBuffer b = toWriteQueue.getFirst();
-											if (b == null) {
+											
+											if (a != null) {
+												long before = b.buffer.remaining();
 												try {
-													channel.close();
-												} catch (IOException ee) {
-												}
-												return;
-											} else {
-												InetSocketAddress a;
-												try {
-													a = AddressUtils.toConnectableInetSocketAddress(b.address);
+													channel.send(b.buffer, a);
+													toWriteLength -= before - b.buffer.remaining();
 												} catch (IOException e) {
-													LOGGER.warn("Invalid address: {}", b.address);
-													b.buffer.position(b.buffer.position() + b.buffer.remaining());
-													a = null;
+													LOGGER.debug("Error trying to send to {}", b.address, e);
+													b = null;
 												}
-												
-												if (a != null) {
-													long before = b.buffer.remaining();
-													try {
-														channel.send(b.buffer, a);
-														toWriteLength -= before - b.buffer.remaining();
-													} catch (IOException e) {
-														LOGGER.debug("Error trying to send to {}", b.address, e);
-														b = null;
-													}
-												}
-												
-												if ((b != null) && b.buffer.hasRemaining()) {
-													return;
-												}
-												
-												toWriteQueue.removeFirst();
 											}
+											
+											if ((b != null) && b.buffer.hasRemaining()) {
+												return;
+											}
+											
+											toWriteQueue.removeFirst();
 										}
-										if (!selector.isOpen()) {
-											return;
-										}
-										if (!channel.isOpen()) {
-											return;
-										}
-										if (!selectionKey.isValid()) {
-											return;
-										}
-										selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
 									}
+									if (!selector.isOpen()) {
+										return;
+									}
+									if (!channel.isOpen()) {
+										return;
+									}
+									if (!selectionKey.isValid()) {
+										return;
+									}
+									selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
 								}
-							});
-				
-							selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_READ);
-							
-							/*%%
-							try {
-								if (bind) {
-									InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
-									if (a == null) {
-										throw new IOException("Invalid address");
-									}
-									channel.socket().bind(a);
-								} else {
-									InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
-									if (a == null) {
-										throw new IOException("Invalid address");
-									}
-									channel.connect(a);
-								}
-							} catch (IOException e) {
-								selectionKey.cancel();
-								throw e;
 							}
-							*/
-				
+						});
+			
+						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_READ);
+						
+						/*%%
+						try {
+							if (bind) {
+								InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
+								if (a == null) {
+									throw new IOException("Invalid address");
+								}
+								channel.socket().bind(a);
+							} else {
+								InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
+								if (a == null) {
+									throw new IOException("Invalid address");
+								}
+								channel.connect(a);
+							}
 						} catch (IOException e) {
-							try {
-								channel.close();
-							} catch (IOException ee) {
-							}
+							selectionKey.cancel();
 							throw e;
 						}
+						*/
+			
 					} catch (IOException e) {
-						write = null;
-						error = e;
-						for (ReadyConnection connection : toConnect) {
-							connection.failed(e);
+						try {
+							channel.close();
+						} catch (IOException ee) {
 						}
-						toConnect.clear();
-						return;
+						throw e;
 					}
-					
-					write = new FailableCloseableByteBufferHandler() {
-						@Override
-						public void handle(Address address, ByteBuffer buffer) {
-							if (address == null) {
-								LOGGER.warn("Packet address is null, dropping");
-								return;
-							}
-							//%% if (address.getHost().equals("null")) {
-							//%% return;
-							//%% }
-	
-							if (!selector.isOpen()) {
-								return;
-							}
-							if (!channel.isOpen()) {
-								return;
-							}
-							if (!selectionKey.isValid()) {
-								return;
-							}
-							
-							AddressedByteBuffer b = new AddressedByteBuffer();
-							b.address = address;
-							b.buffer = buffer;
-							toWriteQueue.addLast(b);
-							toWriteLength += b.buffer.remaining();
-							while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-								AddressedByteBuffer r = toWriteQueue.removeFirst();
-								long l = r.buffer.remaining();
-								toWriteLength -= l;
-								LOGGER.warn("Dropping {} bytes that should have been sent to {}", l, r.address);
-							}
-							selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-						}
-						@Override
-						public void close() {
-							if (!selector.isOpen()) {
-								return;
-							}
-							if (!channel.isOpen()) {
-								return;
-							}
-							if (!selectionKey.isValid()) {
-								return;
-							}
-							toWriteQueue.addLast(null);
-							selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-						}
-						@Override
-						public void failed(IOException e) {
-							close();
-						}
-					};
-	
+				} catch (IOException e) {
+					write = null;
+					error = e;
 					for (ReadyConnection connection : toConnect) {
-						connection.connected(write);
+						connection.failed(e);
 					}
 					toConnect.clear();
+					return;
 				}
-			});
-		}
+				
+				write = new FailableCloseableByteBufferHandler() {
+					@Override
+					public void handle(Address address, ByteBuffer buffer) {
+						if (address == null) {
+							LOGGER.warn("Packet address is null, dropping");
+							return;
+						}
+						//%% if (address.getHost().equals("null")) {
+						//%% return;
+						//%% }
+
+						if (!selector.isOpen()) {
+							return;
+						}
+						if (!channel.isOpen()) {
+							return;
+						}
+						if (!selectionKey.isValid()) {
+							return;
+						}
+						
+						AddressedByteBuffer b = new AddressedByteBuffer();
+						b.address = address;
+						b.buffer = buffer;
+						toWriteQueue.addLast(b);
+						toWriteLength += b.buffer.remaining();
+						while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+							AddressedByteBuffer r = toWriteQueue.removeFirst();
+							long l = r.buffer.remaining();
+							toWriteLength -= l;
+							LOGGER.warn("Dropping {} bytes that should have been sent to {}", l, r.address);
+						}
+						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+					}
+					@Override
+					public void close() {
+						if (!selector.isOpen()) {
+							return;
+						}
+						if (!channel.isOpen()) {
+							return;
+						}
+						if (!selectionKey.isValid()) {
+							return;
+						}
+						toWriteQueue.addLast(null);
+						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+					}
+					@Override
+					public void failed(IOException e) {
+						close();
+					}
+				};
+
+				for (ReadyConnection connection : toConnect) {
+					connection.connected(write);
+				}
+				toConnect.clear();
+			}
+		});
 	}
 	
 	@Override

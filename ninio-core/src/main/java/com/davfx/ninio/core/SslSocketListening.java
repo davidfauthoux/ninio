@@ -36,8 +36,8 @@ public final class SslSocketListening implements SocketListening {
 	}
 	
 	@Override
-	public void listening(Closeable closeable) {
-		wrappee.listening(closeable);
+	public void listening(Listening listening) {
+		wrappee.listening(listening);
 	}
 	
 	@Override

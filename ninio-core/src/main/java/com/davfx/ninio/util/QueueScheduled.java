@@ -44,4 +44,13 @@ public final class QueueScheduled {
 		}, 0, (long) (repeatTime * 1000d), TimeUnit.MILLISECONDS);
 		return closeable;
 	}
+
+	public static void run(final Queue queue, double time, final Runnable task) {
+		REPEAT_EXECUTOR.schedule(new Runnable() {
+			@Override
+			public void run() {
+				queue.post(task);
+			}
+		}, (long) (time * 1000d), TimeUnit.MILLISECONDS);
+	}
 }

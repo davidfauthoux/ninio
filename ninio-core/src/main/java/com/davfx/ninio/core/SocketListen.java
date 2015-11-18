@@ -7,20 +7,38 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.davfx.ninio.core.SocketListening.Listening;
 
 public final class SocketListen implements Listen {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SocketListen.class);
 
 	private final Selector selector;
 	private final ByteBufferAllocator byteBufferAllocator;
+	private final Set<SocketChannel> outboundChannels = new HashSet<>();
 	
 	public SocketListen(Selector selector, ByteBufferAllocator byteBufferAllocator) {
 		this.byteBufferAllocator = byteBufferAllocator;
 		this.selector = selector;
+	}
+	
+	private void accepted(SocketChannel outboundChannel) {
+		outboundChannels.add(outboundChannel);
+		LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
+	}
+	private void removed(SocketChannel outboundChannel) {
+		try {
+			outboundChannel.close();
+		} catch (IOException ee) {
+		}
+		outboundChannels.remove(outboundChannel);
+		LOGGER.debug("<- Clients connected: {}", outboundChannels.size());
 	}
 	
 	@Override
@@ -41,6 +59,7 @@ public final class SocketListen implements Listen {
 					ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
 					try {
 						final SocketChannel outboundChannel = ssc.accept();
+						accepted(outboundChannel);
 						try {
 							outboundChannel.configureBlocking(false);
 							// not so useful because it's 2 hours timeout :(
@@ -88,10 +107,7 @@ public final class SocketListen implements Listen {
 											int r = outboundChannel.read(readBuffer);
 											if (r < 0) {
 												LOGGER.debug("Closing client socket");
-												try {
-													outboundChannel.close();
-												} catch (IOException ee) {
-												}
+												removed(outboundChannel);
 												read.close();
 											} else {
 												// LOGGER.debug("Received packet of {} bytes", r);
@@ -100,30 +116,21 @@ public final class SocketListen implements Listen {
 											}
 										} catch (IOException e) {
 											LOGGER.debug("Error on client socket", e);
-											try {
-												outboundChannel.close();
-											} catch (IOException ee) {
-											}
+											removed(outboundChannel);
 											read.close();
 										}
 									} else if (key.isWritable()) {
 										while (!toWriteQueue.isEmpty()) {
 											ByteBuffer b = toWriteQueue.getFirst();
 											if (b == null) {
-												try {
-													outboundChannel.close();
-												} catch (IOException ee) {
-												}
+												removed(outboundChannel);
 												return;
 											} else {
 												// LOGGER.debug("Sending packet of {} bytes", b.remaining());
 												try {
 													outboundChannel.write(b);
 												} catch (IOException e) {
-													try {
-														outboundChannel.close();
-													} catch (IOException ee) {
-													}
+													removed(outboundChannel);
 													read.close();
 													return;
 												}
@@ -148,10 +155,7 @@ public final class SocketListen implements Listen {
 		
 							selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_READ);
 						} catch (IOException e) {
-							try {
-								outboundChannel.close();
-							} catch (IOException ee) {
-							}
+							removed(outboundChannel);
 						}
 					} catch (IOException e) {
 						try {
@@ -164,9 +168,21 @@ public final class SocketListen implements Listen {
 			
 			acceptSelectionKey.interestOps(acceptSelectionKey.interestOps() | SelectionKey.OP_ACCEPT);
 
-			listening.listening(new Closeable() {
+			listening.listening(new Listening() {
+				@Override
+				public void disconnect() {
+					LOGGER.debug("Disconnecting clients");
+					for (SocketChannel s : outboundChannels) {
+						try {
+							s.close();
+						} catch (IOException e) {
+						}
+					}
+					outboundChannels.clear();
+				}
 				@Override
 				public void close() {
+					LOGGER.debug("Server socket closed");
 					try {
 						serverChannel.close();
 					} catch (IOException e) {

@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SocketListening;
@@ -28,7 +27,7 @@ public final class ReadmeServer {
 			}
 			
 			@Override
-			public void listening(Closeable closeable) {
+			public void listening(Listening listening) {
 				LOGGER.debug("Listening");
 			}
 			

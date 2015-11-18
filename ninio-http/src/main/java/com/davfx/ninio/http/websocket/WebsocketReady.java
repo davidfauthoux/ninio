@@ -67,7 +67,7 @@ public final class WebsocketReady implements Ready {
 			
 			@Override
 			public void received(HttpResponse response) {
-				LOGGER.debug("Response received: {} {}", response.status, response.reason);
+				LOGGER.trace("Response received: {} {}", response.status, response.reason);
 				// We should check everything here (status code, header Sec-WebSocket-Accept, ...)
 			}
 			
@@ -76,19 +76,19 @@ public final class WebsocketReady implements Ready {
 				websocketFrameReader = new WebsocketFrameReader(new WebsocketFrameReader.Handler() {
 					@Override
 					public void failed(IOException e) {
-						LOGGER.debug("Failed", e);
+						LOGGER.trace("Failed", e);
 						connection.failed(e);
 					}
 					@Override
 					public void handle(int opcode, long frameLength, ByteBuffer partialBuffer) {
 						if (opcode == 0x02) {
-							LOGGER.debug("Received with opcode {}", opcode);
+							LOGGER.trace("Received with opcode {}", opcode);
 							connection.handle(null, partialBuffer);
 							return;
 						}
 
 						if (opcode == 0x08) {
-							LOGGER.debug("Connection closed");
+							LOGGER.trace("Connection closed");
 							connection.close();
 							return;
 						}

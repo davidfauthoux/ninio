@@ -30,6 +30,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 	private final Multimap<String, String> headers = HashMultimap.create();
 	private boolean failClose = false;
 	private boolean closed = false;
+	private boolean ready = false;
 	private final Address address;
 	private final boolean secure;
 
@@ -97,7 +98,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 	
 	@Override
 	public void close() {
-		LOGGER.debug("Closing");
+		LOGGER.trace("Closing");
 		if (failClose) {
 			if (!closed) {
 				closed = true;
@@ -155,19 +156,23 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 					}
 					
 					handler.handle(new HttpRequest(address, secure, requestMethod, new HttpPath(requestPath), ImmutableMultimap.copyOf(headers)));
-					
-					contentLength = 0;
-					for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
-						try {
-							contentLength = Long.parseLong(contentLengthValue);
-						} catch (NumberFormatException e) {
-							throw new IOException("Invalid Content-Length: " + contentLengthValue);
-						}
-						break;
-					}
 
-					if (contentLength == 0) {
-						handler.ready(new InnerWrite()); // Yes, can be so cool for ws://
+					if (requestMethod == HttpMethod.POST) {
+						contentLength = -1;
+						for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
+							try {
+								contentLength = Long.parseLong(contentLengthValue);
+							} catch (NumberFormatException e) {
+								throw new IOException("Invalid Content-Length: " + contentLengthValue);
+							}
+							break;
+						}
+						if (contentLength < 0) {
+							//TODO transfer coding chunked??
+							throw new IOException("Content-Length required");
+						}
+					} else {
+						contentLength = 0;
 					}
 				} else {
 					LOGGER.trace("Header line: {}", line);
@@ -175,33 +180,37 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				}
 			}
 
-			if (contentLength == 0) {
+			LOGGER.trace("Content length = {}, buffer size = {}", contentLength, buffer.remaining());
+
+			if (countRead < contentLength) {
 				if (buffer.hasRemaining()) {
-					handler.handle(null, buffer);
-				}
-			} else {
-				if (countRead < contentLength) {
-					if (buffer.hasRemaining()) {
-						ByteBuffer d = buffer;
-						long toRead = contentLength - countRead;
-						if (buffer.remaining() > toRead) {
-							d = buffer.duplicate();
-							d.limit((int) (buffer.position() + toRead));
-							buffer.position((int) (buffer.position() + toRead));
-						}
-						countRead += d.remaining();
-						handler.handle(null, d);
+					ByteBuffer d;
+					long toRead = contentLength - countRead;
+					if (buffer.remaining() > toRead) {
+						d = buffer.duplicate();
+						d.limit((int) (buffer.position() + toRead));
+						buffer.position((int) (buffer.position() + toRead));
+					} else {
+						d = buffer.duplicate();
+						buffer.position(buffer.position() + buffer.remaining());
 					}
-				}
-		
-				if (countRead == contentLength) {
-					failClose = false;
-					countRead = 0;
-					requestLineRead = false; // another connection possible
-					headersRead = false;
-					handler.ready(new InnerWrite());
+					countRead += d.remaining();
+					handler.handle(null, d);
 				}
 			}
+	
+			if (!ready && (countRead == contentLength)) {
+				ready = true;
+				LOGGER.trace("Ready");
+				handler.ready(new InnerWrite());
+			}
+			
+			if (buffer.hasRemaining()) {
+				countRead += buffer.remaining();
+				handler.handle(null, buffer);
+			}
+
+			//%% }
 		} catch (IOException e) {
 			if (!closed) {
 				closed = true;
@@ -223,6 +232,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 		
 		@Override
 		public void close() {
+			LOGGER.trace("Closing");
 			if (innerClosed) {
 				return;
 			}
@@ -237,20 +247,22 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				if (chunked) {
 					write.handle(address, LineReader.toBuffer(Integer.toHexString(0)));
 					write.handle(address, LineReader.toBuffer(""));
-					return;
 				}
 				
-				if ((writeContentLength >= 0) && (countWrite == writeContentLength)) {
+				if (chunked || ((writeContentLength >= 0) && (countWrite == writeContentLength))) {
 					failClose = false;
 					countRead = 0;
 					requestLineRead = false; // another connection possible
 					headersRead = false;
+					ready = false;
+					LOGGER.trace("Keep alive");
 					return; // keep alive
 				}
 			}
 			
 			closed = true;
 			
+			LOGGER.trace("Actually closed");
 			write.close();
 		}
 		
@@ -286,12 +298,23 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				}
 				
 				if (gzipWriter == null) {
+					boolean keepAlive = true;
+					for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
+						if (!HttpHeaderValue.KEEP_ALIVE.equalsIgnoreCase(connectionValue)) {
+							keepAlive = false;
+						}
+						break;
+					}
+
+					chunked = keepAlive;
 					for (String transferEncodingValue : response.headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
 						chunked = HttpHeaderValue.CHUNKED.equalsIgnoreCase(transferEncodingValue);
 						break;
 					}
+					LOGGER.trace("No gzip, chunked = {}", chunked);
 				} else {
 					chunked = true;
+					LOGGER.trace("Gzip, chunked = {}", chunked);
 					// deflated length != source length
 				}
 			}

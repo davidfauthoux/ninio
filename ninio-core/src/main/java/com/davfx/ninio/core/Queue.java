@@ -22,6 +22,8 @@ public final class Queue implements AutoCloseable {
 	private static final Config CONFIG = ConfigFactory.load(Queue.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.queue.buffer").intValue();
 	
+	private static final double WAIT_ON_SELECTOR_ERROR = 0.5d;
+	
 	private final long threadId;
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
@@ -31,7 +33,7 @@ public final class Queue implements AutoCloseable {
 			return SelectorProvider.provider().openSelector();
 		} catch (IOException ioe) {
 			LOGGER.error("Could not create selector", ioe);
-			return null;
+			throw new RuntimeException(ioe);
 		}
 	}
 	
@@ -46,28 +48,28 @@ public final class Queue implements AutoCloseable {
 			public void run() {
 				while (true) {
 					try {
-						if (selector == null) {
-							throw new IOException("Selector could not be created");
-						}
 						if (!selector.isOpen()) {
 							break;
 						}
 						selector.select();
-						if (!selector.isOpen()) {
-							break;
-						}
-						Set<SelectionKey> s = selector.selectedKeys();
-						for (SelectionKey key : s) {
-							try {
-								((SelectionKeyVisitor) key.attachment()).visit(key);
-							} catch (Throwable e) {
-								LOGGER.error("Error in event handling", e);
+
+						if (selector.isOpen()) {
+							Set<SelectionKey> s = selector.selectedKeys();
+							for (SelectionKey key : s) {
+								try {
+									((SelectionKeyVisitor) key.attachment()).visit(key);
+								} catch (Throwable e) {
+									LOGGER.error("Error in event handling", e);
+								}
 							}
+							s.clear();
 						}
-						s.clear();
-					} catch (IOException e) {
-						LOGGER.error("Error in queue", e);
-						break;
+					} catch (Throwable e) {
+						LOGGER.error("Error in selector", e);
+						try {
+							Thread.sleep((long) (WAIT_ON_SELECTOR_ERROR * 1000d));
+						} catch (InterruptedException ie) {
+						}
 					}
 					
 					while (!toRun.isEmpty()) {
@@ -113,10 +115,11 @@ public final class Queue implements AutoCloseable {
 			return;
 		}
 		
-		if (selector == null) {
+		toRun.add(r);
+		if (!selector.isOpen()) {
+			LOGGER.warn("Selector closed");
 			return;
 		}
-		toRun.add(r);
 		selector.wakeup();
 	}
 	
@@ -131,9 +134,6 @@ public final class Queue implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		if (selector == null) {
-			return;
-		}
 		try {
 			selector.close();
 		} catch (IOException e) {

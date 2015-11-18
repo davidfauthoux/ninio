@@ -152,13 +152,8 @@ final class HttpResponseReader {
 						break;
 					}
 
-					for (String transferEncodingValue : headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-						chunked = HttpHeaderValue.CHUNKED.equalsIgnoreCase(transferEncodingValue);
-						break;
-					}
-					
 					if (http11) {
-						keepAlive = true;
+						keepAlive = (contentLength >= 0); // Websocket ready!
 					}
 					for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
 						if (HttpHeaderValue.CLOSE.equalsIgnoreCase(connectionValue)) {
@@ -168,6 +163,7 @@ final class HttpResponseReader {
 						}
 						break;
 					}
+					LOGGER.trace("Keep alive = {}", keepAlive);
 					
 					handler.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
 				} else {

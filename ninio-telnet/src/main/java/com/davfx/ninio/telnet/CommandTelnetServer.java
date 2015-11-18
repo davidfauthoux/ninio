@@ -26,7 +26,7 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 
 	private final Queue queue;
 	private boolean closed = false;
-	private Closeable listening = null;
+	private SocketListening.Listening listening = null;
 	
 	public CommandTelnetServer(Queue queue, Address address, final String header, final String cut, final Function<String, String> commandHandler) {
 		this.queue = queue;
@@ -43,8 +43,9 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 			}
 			
 			@Override
-			public void listening(Closeable listening) {
+			public void listening(Listening listening) {
 				if (closed) {
+					listening.disconnect();
 					listening.close();
 				} else {
 					LOGGER.trace("Listening");
@@ -92,6 +93,7 @@ public final class CommandTelnetServer implements AutoCloseable, Closeable {
 				LOGGER.trace("Closing");
 				closed = true;
 				if (listening != null) {
+					listening.disconnect();
 					listening.close();
 				}
 			}

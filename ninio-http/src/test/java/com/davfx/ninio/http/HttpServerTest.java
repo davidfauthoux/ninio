@@ -28,6 +28,10 @@ public class HttpServerTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServerTest.class);
 	
+	static {
+		System.setProperty("http.keepAlive", "false");
+	}
+	
 	@Test
 	public void testGetServerWithJavaClient() throws Exception {
 		try (Queue queue = new Queue()) {

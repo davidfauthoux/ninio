@@ -45,10 +45,6 @@ public final class DatagramReady implements Ready {
 	
 	@Override
 	public void connect(Address address, final ReadyConnection connection) {
-		if (selector == null) {
-			connection.failed(new IOException("Selector error"));
-			return;
-		}
 		try {
 			final DatagramChannel channel = DatagramChannel.open();
 			try {

@@ -11,7 +11,7 @@ public final class QueueListen implements Listen {
 	}
 	
 	@Override
-	public void listen(final Address address, final SocketListening listening) {
+	public void listen(final Address address, final SocketListening socketListening) {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
@@ -19,22 +19,41 @@ public final class QueueListen implements Listen {
 					
 					@Override
 					public void failed(IOException e) {
-						listening.failed(e);
+						socketListening.failed(e);
 					}
 					
 					@Override
 					public void close() {
-						listening.close();
+						socketListening.close();
 					}
 					
 					@Override
-					public void listening(Closeable closeable) {
-						listening.listening(closeable);
+					public void listening(final Listening listening) {
+						socketListening.listening(new Listening() {
+							@Override
+							public void disconnect() {
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										listening.disconnect();
+									}
+								});
+							}
+							@Override
+							public void close() {
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										listening.close();
+									}
+								});
+							}
+						});
 					}
 					
 					@Override
 					public CloseableByteBufferHandler connected(Address address, CloseableByteBufferHandler connection) {
-						return listening.connected(address, new QueueCloseableByteBufferHandler(queue, connection));
+						return socketListening.connected(address, new QueueCloseableByteBufferHandler(queue, connection));
 					}
 				});
 			}

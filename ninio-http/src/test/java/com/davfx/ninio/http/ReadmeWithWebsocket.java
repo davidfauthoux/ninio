@@ -13,6 +13,7 @@ import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.http.websocket.WebsocketHttpServerHandler;
+import com.davfx.ninio.util.QueueScheduled;
 import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 
@@ -41,7 +42,17 @@ public final class ReadmeWithWebsocket {
 							public void handle(Address address, ByteBuffer buffer) {
 								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 								LOGGER.debug("Received {} <--: {}", address, s);
+								echo(s);
+							}
+							
+							private void echo(final String s) {
 								write.handle(null, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
+								QueueScheduled.run(queue, 1d, new Runnable() {
+									@Override
+									public void run() {
+										echo(s);
+									}
+								});
 							}
 							
 							@Override

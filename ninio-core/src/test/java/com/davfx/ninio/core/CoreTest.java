@@ -110,10 +110,10 @@ public class CoreTest {
 				Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
 		
 				new QueueListen(queue, listen).listen(new Address(Address.LOCALHOST, port), new SocketListening() {
-					private Closeable closeable;
+					private Listening listening;
 					@Override
-					public void listening(Closeable closeable) {
-						this.closeable = closeable;
+					public void listening(Listening listening) {
+						this.listening = listening;
 					}
 					
 					@Override
@@ -133,7 +133,7 @@ public class CoreTest {
 								LOGGER.debug("Received {} <--: {}", address, s);
 								connection.handle(null, ByteBuffer.wrap("echo".getBytes(Charsets.UTF_8)));
 								lock.set(s);
-								closeable.close();
+								listening.close();
 							}
 						};
 					}
@@ -216,10 +216,10 @@ public class CoreTest {
 				Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
 		
 				new QueueListen(queue, listen).listen(new Address(Address.LOCALHOST, port), new SslSocketListening(trust, queue.allocator(), new SocketListening() {
-					private Closeable closeable;
+					private Listening listening;
 					@Override
-					public void listening(Closeable closeable) {
-						this.closeable = closeable;
+					public void listening(Listening listening) {
+						this.listening = listening;
 					}
 					
 					@Override
@@ -239,7 +239,7 @@ public class CoreTest {
 								LOGGER.debug("Received {} <--: {}", address, s);
 								connection.handle(null, ByteBuffer.wrap("echo".getBytes(Charsets.UTF_8)));
 								lock.set(s);
-								closeable.close();
+								listening.close();
 							}
 						};
 					}

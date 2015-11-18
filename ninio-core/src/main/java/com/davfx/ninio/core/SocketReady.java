@@ -33,10 +33,6 @@ public final class SocketReady implements Ready {
 	
 	@Override
 	public void connect(final Address address, final ReadyConnection connection) {
-		if (selector == null) {
-			connection.failed(new IOException("Selector error"));
-			return;
-		}
 		try {
 			final SocketChannel channel = SocketChannel.open();
 			try {

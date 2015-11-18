@@ -8,8 +8,7 @@ import com.davfx.ninio.core.ByteBufferHandler;
 import com.davfx.ninio.core.Failable;
 
 final class WebsocketFrameReader implements ByteBufferHandler {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketFrameReader.class);
-
+	
 	public static interface Handler extends Failable {
 		void handle(int opcode, long frameLength, ByteBuffer partialBuffer);
 	}
