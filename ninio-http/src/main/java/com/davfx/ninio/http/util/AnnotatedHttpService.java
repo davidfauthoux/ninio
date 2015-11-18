@@ -14,14 +14,19 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.http.HttpMethod;
+import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpQueryPath;
 import com.davfx.ninio.http.HttpRequest;
+import com.davfx.ninio.http.HttpRequestFilter;
+import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
 import com.davfx.ninio.http.util.annotations.Header;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
+import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableMultimap;
 
 public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	
@@ -29,7 +34,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	
 	private static final class MethodParameter {
 		public static enum From {
-			QUERY, PATH, HEADER
+			QUERY, PATH, HEADER, BODY
 		}
 		public final String name;
 		public final From from;
@@ -87,17 +92,19 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 			if (route != null) {
 				final HttpMethod routeMethod = route.method();
 				
-				HttpQueryPath pathSuffix = route.path().isEmpty() ? null : HttpQueryPath.of(route.path());
+				HttpPath pathSuffix = route.path().isEmpty() ? null : new HttpPath(route.path());
 				
 				final List<PathComponent> routePathComponents = new LinkedList<>();
 				routePathComponents.addAll(pathComponents);
 				if (pathSuffix != null) {
 					int routePathVariableIndex = pathVariableIndex;
-					for (String p : pathSuffix.path) {
+					for (String p : pathSuffix.path.path) {
 						routePathComponents.add(PathComponent.of(p, routePathVariableIndex));
 						routePathVariableIndex++;
 					}
 				}
+				
+				final ImmutableMultimap<String, Optional<String>> pathParameters = (pathSuffix == null) ? null : pathSuffix.parameters;
 				
 				final Object object;
 				try {
@@ -113,7 +120,6 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				final String[] defaultValues = new String[parameterAnnotations.length];
 				int requestParameterIndexToSet = -1;
 				int postParameterIndexToSet = -1;
-				int resultParameterIndexToSet = -1;
 				for (int i = 0; i < parameterAnnotations.length; i++) {
 					if (parameterTypes[i] == HttpRequest.class) {
 						requestParameterIndexToSet = i;
@@ -123,12 +129,6 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 					
 					if (parameterTypes[i] == HttpPost.class) {
 						postParameterIndexToSet = i;
-						parameters[i] = null;
-						continue;
-					}
-
-					if (parameterTypes[i] == HttpServiceResult.class) {
-						resultParameterIndexToSet = i;
 						parameters[i] = null;
 						continue;
 					}
@@ -150,6 +150,9 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 						if (a.annotationType() == Header.class) {
 							q = new MethodParameter(((Header) a).value(), MethodParameter.From.HEADER);
 						}
+						if (a.annotationType() == BodyParameter.class) {
+							q = new MethodParameter(((BodyParameter) a).value(), MethodParameter.From.BODY);
+						}
 						if (q != null) {
 							if (p != null) {
 								LOGGER.warn("Multiple annotations clash: {} / {}", p, q);
@@ -163,7 +166,6 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				
 				final int requestParameterIndex = requestParameterIndexToSet;
 				final int postParameterIndex = postParameterIndexToSet;
-				final int resultParameterIndex = resultParameterIndexToSet;
 
 				final Map<String, Integer> pathComponentNameToIndex = new HashMap<>();
 				int pathComponentIndex = 0;
@@ -174,8 +176,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				
 				HttpServiceHandler handler = new HttpServiceHandler() {
 					@Override
-					public void handle(HttpRequest request, HttpPost post, HttpServiceResult result) throws IOException {
-						
+					public HttpController.Http handle(HttpRequest request, HttpPost post) throws Exception {
 						Object[] args = new Object[parameters.length];
 						for (int i = 0; i < parameters.length; i++) {
 							if (i == requestParameterIndex) {
@@ -184,10 +185,6 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 							}
 							if (i == postParameterIndex) {
 								args[i] = post;
-								continue;
-							}
-							if (i == resultParameterIndex) {
-								args[i] = result;
 								continue;
 							}
 							
@@ -199,11 +196,16 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 								String v;
 								switch (p.from) {
 								case QUERY: {
-									Iterator<String> it = request.path.parameters.get(p.name).iterator();
+									Iterator<Optional<String>> it = request.path.parameters.get(p.name).iterator();
 									if (!it.hasNext()) {
 										v = defaultValue;
 									} else {
-										v = it.next();
+										Optional<String> o = it.next();
+										if (o.isPresent()) {
+											v = o.get();
+										} else {
+											v = null;
+										}
 									}
 									break;
 								}
@@ -225,6 +227,20 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 									}
 									break;
 								}
+								case BODY: {
+									Iterator<Optional<String>> it = post.parameters().get(p.name).iterator();
+									if (!it.hasNext()) {
+										v = defaultValue;
+									} else {
+										Optional<String> o = it.next();
+										if (o.isPresent()) {
+											v = o.get();
+										} else {
+											v = null;
+										}
+									}
+									break;
+								}
 								default:
 									v = defaultValue;
 									break;
@@ -234,21 +250,36 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 						}
 
 						try {
-							method.invoke(object, args);
+							return (HttpController.Http) method.invoke(object, args);
 						} catch (Exception e) {
-							e.printStackTrace();
 							throw new IOException(e);
 						}
 					}
 				};
 				
-				//TODO Order register by most specific query path
 				service.register(new HttpRequestFilter() {
 					@Override
 					public boolean accept(HttpRequest request) {
 						if (request.method != routeMethod) {
 							return false;
 						}
+						
+						if (pathParameters != null) {
+							for (Map.Entry<String, Optional<String>> e : pathParameters.entries()) {
+								String k = e.getKey();
+								Optional<String> v = e.getValue();
+								if (v.isPresent()) {
+									if (!request.path.parameters.get(k).contains(v.get())) {
+										return false;
+									}
+								} else {
+									if (request.path.parameters.get(k).isEmpty()) {
+										return false;
+									}
+								}
+							}
+						}
+						
 						HttpQueryPath p = request.path.path;
 						Iterator<String> i = p.path.iterator();
 						Iterator<PathComponent> j = routePathComponents.iterator();

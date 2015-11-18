@@ -10,13 +10,13 @@ public final class HttpContentType {
 	}
 	
 	public static String plainText(Charset c) {
-		return "text/plain; charset=" + c.name();
+		return "text/plain" + HttpHeaderExtension.append(HttpHeaderKey.CHARSET, c.name());
 	}
 	public static String plainText() {
 		return plainText(Charsets.UTF_8);
 	}
 	public static String json(Charset c) {
-		return "application/json; charset=" + c.name();
+		return "application/json" + HttpHeaderExtension.append(HttpHeaderKey.CHARSET, c.name());
 	}
 	public static String json() {
 		return json(Charsets.UTF_8);

@@ -2,8 +2,6 @@ package com.davfx.ninio.http;
 
 import java.util.Iterator;
 
-import com.davfx.ninio.http.util.HttpRequestFilter;
-
 public final class SubPathHttpRequestFilter implements HttpRequestFilter {
 
 	private final HttpQueryPath parent;

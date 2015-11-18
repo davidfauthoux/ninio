@@ -1,16 +1,11 @@
 package com.davfx.ninio.http.util;
 
 import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
-import java.nio.file.Files;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -22,18 +17,22 @@ import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.DispatchHttpServerHandler;
 import com.davfx.ninio.http.HttpContentType;
+import com.davfx.ninio.http.HttpHeaderExtension;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.davfx.ninio.http.HttpMessage;
+import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpRequest;
+import com.davfx.ninio.http.HttpRequestFilter;
 import com.davfx.ninio.http.HttpRequestFunctionContainer;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
+import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
-import com.google.common.base.Splitter;
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.net.HttpHeaders;
 import com.typesafe.config.Config;
@@ -45,7 +44,6 @@ public final class HttpService implements AutoCloseable, Closeable {
 	
 	private static final Config CONFIG = ConfigFactory.load(HttpService.class.getClassLoader());
 	private static final int THREADS = CONFIG.getInt("ninio.http.service.threads");
-	private static final int POST_LIMIT = CONFIG.getBytes("ninio.http.service.post.limit").intValue();
 
 	private final HttpRequestFunctionContainer dispatch;
 	private HttpServer server = null;
@@ -86,11 +84,6 @@ public final class HttpService implements AutoCloseable, Closeable {
 	
 	public HttpService register(HttpRequestFilter filter, final HttpServiceHandler handler) {
 		HttpServerHandler h = new HttpServerHandler() {
-			private HttpRequest request;
-			private File postFile = null;
-			private OutputStream postOutputStream = null;
-			private boolean postError = false;
-
 			@Override
 			public void failed(IOException e) {
 			}
@@ -98,166 +91,172 @@ public final class HttpService implements AutoCloseable, Closeable {
 			public void close() {
 			}
 			
+			private HttpController.Http http;
+			private Exception error;
+			private ByteBufferHandlerInputStream postInOut;
+			private Write write = null;
+			
 			@Override
-			public void handle(HttpRequest request) {
-				this.request = request;
+			public void handle(final HttpRequest request) {
+				postInOut = new ByteBufferHandlerInputStream();
+				final ByteBufferHandlerInputStream post = postInOut;
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						HttpController.Http result;
+						Exception err;
+						try {
+							result = handler.handle(request, new HttpPost() {
+								private String string = null;
+								private ImmutableMultimap<String, Optional<String>> parameters = null;
+								
+								@Override
+								public InputStream stream() {
+									if (string != null) {
+										return null;
+									}
+									return post;
+								}
+								@Override
+								public String toString() {
+									if (string != null) {
+										return string;
+									}
+									Charset charset = Charsets.UTF_8;
+									for (String h : request.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
+										String c = HttpHeaderExtension.extract(h, HttpHeaderKey.CHARSET);
+										if (c != null) {
+											charset = Charset.forName(c);
+											break;
+										}
+									}
+									int l = post.waitFor();
+									byte[] b = new byte[l];
+									try {
+										try (DataInputStream in = new DataInputStream(post)) {
+											in.readFully(b, 0, b.length);
+										}
+									} catch (IOException ioe) {
+										LOGGER.error("Could not read post", ioe);
+										return null;
+									}
+									string = new String(b, charset);
+									return string;
+								}
+								@Override
+								public ImmutableMultimap<String, Optional<String>> parameters() {
+									if (parameters != null) {
+										return parameters;
+									}
+									parameters = new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR) + HttpSpecification.PARAMETERS_START + toString()).parameters;
+									return parameters;
+								}
+							});
+							if (result == null) {
+								throw new NullPointerException();
+							}
+							err = null;
+						} catch (Exception e) {
+							LOGGER.error("Internal server error", e);
+							err = e;
+							result = null;
+						}
+						
+						post.close();
+						
+						final HttpController.Http r = result;
+						final Exception e = err;
+						queue.post(new Runnable() {
+							@Override
+							public void run() {
+								http = r;
+								error = e;
+								
+								if (write != null) {
+									write();
+								}
+							}
+						});
+					}
+				});
 			}
 			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
-				if (!postError && (postOutputStream == null)) {
-					try {
-						postFile = Files.createTempFile("post", ".data").toFile();
-					} catch (IOException ioe) {
-						LOGGER.error("Could not open post file: {}", postFile.getAbsolutePath(), ioe);
-						postFile = null;
-						postError = true;
-					}
-					if (postFile != null) {
-						postFile.deleteOnExit();
-						try {
-							postOutputStream = new FileOutputStream(postFile);
-						} catch (IOException ioe) {
-							LOGGER.error("Could not write post to: {}", postFile.getAbsolutePath(), ioe);
-							postFile = null;
-							postError = true;
-						}
-					}
-				}
-				
-				if (postOutputStream != null) {
-					try {
-						postOutputStream.write(buffer.array(), buffer.position(), buffer.remaining());
-					} catch (IOException ioe) {
-						LOGGER.error("Could not write post to: {}", postFile.getAbsolutePath(), ioe);
-						try {
-							postOutputStream.close();
-						} catch (IOException e) {
-						}
-						postOutputStream = null;
-						postFile = null;
-						postError = true;
-					}
-				}
+				postInOut.handler.handle(address, buffer);
 			}
 			
 			@Override
-			public void ready(final Write write) {
-				if (postOutputStream != null) {
-					try {
-						postOutputStream.close();
-					} catch (IOException ioe) {
-						LOGGER.error("Could not close post file: {}", postFile.getAbsolutePath(), ioe);
-						postFile = null;
-					}
-					postOutputStream = null;
-				}
+			public void ready(Write w) {
+				postInOut.handler.close();
+				postInOut = null;
 				
-				final File f = postFile;
-				final HttpRequest r = request;
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						try {
-							handler.handle(r, new HttpPost() {
-								@Override
-								public InputStream open() throws IOException {
-									if (f == null) {
-										return null;
-									}
-									return new FileInputStream(f);
-								}
-								@Override
-								public String toString() {
-									if (f == null) {
-										return null;
-									}
-									Charset charset = Charsets.UTF_8;
-									for (String h : r.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
-										int i = h.indexOf(';');
-										if (i >= 0) {
-											List<String> l = Splitter.on('=').splitToList(h.substring(i).trim());
-											if ((l.size() == 2) && (l.get(0).equals("charset"))) {
-												charset = Charset.forName(l.get(0).trim());
-											}
-										}
-									}
-									long l = f.length();
-									if (l >= POST_LIMIT) {
-										return null;
-									}
-									byte[] b = new byte[(int) l];
-									try {
-										try (DataInputStream in = new DataInputStream(new FileInputStream(f))) {
-											in.readFully(b, 0, b.length);
-										}
-									} catch (IOException ioe) {
-										LOGGER.error("Could not read back post: {}", postFile, ioe);
-										return null;
-									}
-									return new String(b, charset);
-								}
-							}, new HttpServiceResult() {
-								private String contentType = HttpContentType.plainText();
-								private int status = HttpStatus.OK;
-								private String reason = HttpMessage.OK;
-								@Override
-								public HttpServiceResult contentType(String contentType) {
-									this.contentType = contentType;
-									return this;
-								}
-								@Override
-								public HttpServiceResult status(int status, String reason) {
-									this.status = status;
-									this.reason = reason;
-									return this;
-								}
-								@Override
-								public void out(String content) {
-									write.write(new HttpResponse(status, reason, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, contentType)));
-									write.handle(null, ByteBuffer.wrap(content.getBytes(Charsets.UTF_8)));
-								}
-								@Override
-								public OutputStream out() {
-									write.write(new HttpResponse(status, reason, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, contentType)));
-									return new OutputStream() {
-										@Override
-										public void write(byte[] b, int off, int len) throws IOException {
-											write.handle(null, ByteBuffer.wrap(b, off, len));
-										}
-										@Override
-										public void write(byte[] b) throws IOException {
-											write(b, 0, b.length);
-										}
-										@Override
-										public void write(int b) throws IOException {
-											byte[] bb = new byte[] { (byte) (b & 0xFF) };
-											write(bb);
-										}
-										@Override
-										public void flush() throws IOException {
-										}
-										@Override
-										public void close() throws IOException {
-										}
-									};
-								}
-							});
-						} catch (IOException ioe) {
-							write.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
-							write.handle(null, ByteBuffer.wrap(ioe.getMessage().getBytes(Charsets.UTF_8)));
+				write = w;
+				if ((http != null) || (error != null)) {
+					write();
+				}
+			}
+			
+			private void write() {
+				if (http == null) {
+					write.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
+					write.handle(null, ByteBuffer.wrap(error.getMessage().getBytes(Charsets.UTF_8)));
+					write.close();
+				} else {
+					write.write(new HttpResponse(http.status, http.reason, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, http.contentType)));
+					if (http.stream == null) {
+						if (http.content != null) {
+							write.handle(null, ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)));
 						}
 						write.close();
-						
-						if (f != null) {
-							f.delete();
-						}
+					} else {
+						final HttpController.HttpStream stream = http.stream;
+						final Write w = write;
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								try {
+									stream.produce(new HttpController.HttpStream.OutputStreamFactory() {
+										@Override
+										public OutputStream open() throws IOException {
+											return new OutputStream() {
+												@Override
+												public void write(byte[] b, int off, int len) throws IOException {
+													w.handle(null, ByteBuffer.wrap(b, off, len));
+												}
+												@Override
+												public void write(byte[] b) throws IOException {
+													write(b, 0, b.length);
+												}
+												@Override
+												public void write(int b) throws IOException {
+													byte[] bb = new byte[] { (byte) (b & 0xFF) };
+													write(bb);
+												}
+												@Override
+												public void flush() throws IOException {
+												}
+												@Override
+												public void close() throws IOException {
+													w.close();
+												}
+											};
+										}
+									});
+								} catch (Exception e) {
+									LOGGER.error("Internal server error", e);
+									w.write(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
+									w.handle(null, ByteBuffer.wrap(e.getMessage().getBytes(Charsets.UTF_8)));
+									w.close();
+								}
+							}
+						});
 					}
-				});
+				}
 				
-				postFile = null;
-				postError = false;
-				request = null;
+				write = null;
+				http = null;
+				error = null;
 			}
 		};
 		

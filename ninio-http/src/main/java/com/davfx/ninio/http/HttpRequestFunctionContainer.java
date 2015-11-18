@@ -3,7 +3,6 @@ package com.davfx.ninio.http;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.davfx.ninio.http.util.HttpRequestFilter;
 import com.google.common.base.Function;
 
 public final class HttpRequestFunctionContainer implements Function<HttpRequest, HttpServerHandler> {

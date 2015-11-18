@@ -14,5 +14,7 @@ public interface HttpHeaderKey {
 
 	String ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin";
 	String ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods";
-
+	
+	String CHARSET = "charset";
+	String QUALITY = "q";
 }

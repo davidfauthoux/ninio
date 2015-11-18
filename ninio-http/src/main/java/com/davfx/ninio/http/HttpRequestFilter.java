@@ -1,6 +1,5 @@
-package com.davfx.ninio.http.util;
+package com.davfx.ninio.http;
 
-import com.davfx.ninio.http.HttpRequest;
 
 public interface HttpRequestFilter {
 	boolean accept(HttpRequest request);

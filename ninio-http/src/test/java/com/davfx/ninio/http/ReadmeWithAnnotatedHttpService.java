@@ -8,7 +8,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.http.util.AnnotatedHttpService;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.HttpPost;
-import com.davfx.ninio.http.util.HttpServiceResult;
+import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
 import com.davfx.ninio.http.util.annotations.Header;
 import com.davfx.ninio.http.util.annotations.Path;
@@ -21,86 +21,105 @@ import com.google.common.reflect.ClassPath;
 
 public final class ReadmeWithAnnotatedHttpService {
 
-	/*
-	@HttpController()
-	public static final class VerySimpleTestController {
-		@HttpRoute()
-		public void echo(@HttpQueryParameter("message") String message, HttpServiceResult result) {
-			result.success(HttpContentType.plainText(), " " + message);
-		}
-	}
-	*/
-
 	@Path("/a")
 	public static final class TestController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/echo")
-		public void echo(@QueryParameter("message") String message, HttpRequest request, HttpServiceResult result) {
-			result.out("a/echo " + message);
+		public Http echo(@QueryParameter("message") String message) {
+			return Http.ok().content("a/echo " + message);
 		}
 	}
 	
 	@Path("/post")
 	public static final class TestPostController implements HttpController {
-		@Route(method = HttpMethod.GET)
-		public void echo(HttpServiceResult result) {
-			result.contentType("text/html").out("<html><body><form method='post'><input name='text' type='text' value='TEXT'><input name='text2' type='text' value='TEXT2'></input><input type='submit' value='Submit'></input></form></body></html>");
+		@Route(method = HttpMethod.GET, path = "/s")
+		public Http echo() {
+			// return Http.ok().contentType("text/html" + HttpHeaderExtension.append(HttpHeaderKey.CHARSET, Charsets.UTF_8.name())).content("<html><body><form method='post' action='/post' enctype='multipart/form-data'><input name='text' type='text' value='TEXT'></input><input name='text2' type='text' value='TEXT2'></input><input name='file' type='file'></input><input type='submit' value='Submit'></input></form></body></html>");
+			return Http.ok().contentType("text/html" + HttpHeaderExtension.append(HttpHeaderKey.CHARSET, Charsets.UTF_8.name()))
+					.content("<html>"
+							+ "<body>"
+							+ "<form method='post' action='/post/r'>"
+							+ "<input name='text' type='text' value='TEXT'></input>"
+							+ "<input name='text2' type='text' value='TEXT2'>"
+							+ "<input type='submit' name='submit' value='Submit'></input>"
+							+ "</form>"
+							+ "<form method='get' action='/post/r'>"
+							+ "<input name='text' type='text' value='TEXT'></input>"
+							+ "<input name='text2' type='text' value='TEXT2'>"
+							+ "<input type='submit' name='submit' value='Submit'></input>"
+							+ "<input type='submit' name='submit2' value='Submit2'></input>"
+							+ "</form>"
+							+ "</body>"
+							+ "</html>");
 		}
-		@Route(method = HttpMethod.POST)
-		public void echo(HttpPost post, HttpServiceResult result) {
-			result.out("post " + post);
+		@Route(method = HttpMethod.POST, path = "/r")
+		public Http echoPostAll(@BodyParameter("text") String text, HttpPost post) {
+			return Http.ok().content("post " + text + " " + post + " " + post.parameters());
+		}
+		@Route(method = HttpMethod.GET, path = "/r?submit")
+		public Http echoGetAll(HttpRequest r) {
+			return Http.ok().content("GET " + r);
+		}
+		@Route(method = HttpMethod.GET, path = "/r?submit2")
+		public Http echoGetFirst(HttpRequest r) {
+			return Http.ok().content("GET2 " + r);
 		}
 	}
 	
 	@Path("/b")
 	public static final class SimpleTestController implements HttpController {
 		@Route(method = HttpMethod.GET)
-		public void echo(@QueryParameter("message") String message, HttpServiceResult result) {
-			result.out("b " + message);
+		public Http echo(@QueryParameter("message") String message) {
+			return Http.ok().content("b " + message);
 		}
 	}
 
 	@Path("/e")
 	public static final class SimpleEchoHelloWorldController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/{message}/{to}")
-		public void echo(@PathParameter("message") String message, @PathParameter("to") String to, HttpServiceResult result) {
-			result.out(message + " " + to);
+		public Http echo(@PathParameter("message") String message, @PathParameter("to") String to) {
+			return Http.ok().content(message + " " + to);
 		}
 	}
 
 	@Path("/ech")
 	public static final class SimpleHelloWorldController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/{message}")
-		public void echo(@PathParameter("message") String message, @QueryParameter("to") String to, HttpServiceResult result) {
-			result.out(message + " " + to);
+		public Http echo(@PathParameter("message") String message, @QueryParameter("to") String to) {
+			return Http.ok().content(message + " " + to);
 		}
 	}
 
 	@Path("/echo")
 	public static final class EchoHelloWorldController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/{message}/{to}")
-		public void echo(@PathParameter("message") String message, @PathParameter("to") String to, @QueryParameter("n") String n, HttpServiceResult result) throws IOException {
-			int nn = Integer.parseInt(n);
-			try (OutputStream out = result.contentType(HttpContentType.plainText(Charsets.UTF_8)).out()) {
-				for (int i = 0; i < nn; i++) {
-					out.write((message + " " + to + "\n").getBytes(Charsets.UTF_8));
+		public Http echo(final @PathParameter("message") String message, final @PathParameter("to") String to, final @QueryParameter("n") String n) throws IOException {
+			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new HttpStream() {
+				@Override
+				public void produce(OutputStreamFactory output) throws Exception {
+					int nn = Integer.parseInt(n);
+					try (OutputStream out = output.open()) {
+						for (int i = 0; i < nn; i++) {
+							out.write((message + " " + to + "\n").getBytes(Charsets.UTF_8));
+						}
+					}
 				}
-			}
+			});
 		}
 	}
 	
 	@Path("/header")
 	public static final class EchoHeaderController implements HttpController {
 		@Route(method = HttpMethod.GET)
-		public void echo(@Header("Host") String host, HttpServiceResult result) throws IOException {
-			result.out(host);
+		public Http echo(@Header("Host") String host) throws IOException {
+			return Http.ok().content(host);
 		}
 	}
 
 	@Path("/headerWithDefaultValue")
 	public static final class EchoHeaderWithDefaultValueController implements HttpController {
 		@Route(method = HttpMethod.GET)
-		public void echo(@Header("Host2") @DefaultValue("default") String host, HttpServiceResult result) throws IOException {
-			result.out(host);
+		public Http echo(@Header("Host2") @DefaultValue("default") String host) throws IOException {
+			return Http.ok().content(host);
 		}
 	}
 
@@ -126,7 +145,6 @@ public final class ReadmeWithAnnotatedHttpService {
 
 			server.start(port);
 
-			// System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/?message=helloworld");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/a/echo?message=helloworld");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/b?message=helloworld");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/e/Hello/World");
