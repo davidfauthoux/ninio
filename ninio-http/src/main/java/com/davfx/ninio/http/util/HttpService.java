@@ -152,7 +152,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 									if (parameters != null) {
 										return parameters;
 									}
-									parameters = new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR) + HttpSpecification.PARAMETERS_START + toString()).parameters;
+									parameters = HttpPath.of(String.valueOf(HttpSpecification.PATH_SEPARATOR) + HttpSpecification.PARAMETERS_START + toString()).parameters;
 									return parameters;
 								}
 							});

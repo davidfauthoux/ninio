@@ -1,6 +1,5 @@
 package com.davfx.ninio.http.util;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
@@ -27,7 +26,6 @@ import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.util.HttpController.HttpWrap;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
-import com.davfx.ninio.http.util.annotations.Directory;
 import com.davfx.ninio.http.util.annotations.Header;
 import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Intercept;
@@ -36,6 +34,7 @@ import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
 import com.google.common.base.Optional;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class AnnotatedHttpService implements AutoCloseable, Closeable {
@@ -70,8 +69,8 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		}
 	}
 
-	public final HttpService service;
-	public final List<HttpServiceHandler> allInterceptHandlers = new LinkedList<>();
+	private final HttpService service;
+	private final List<HttpServiceHandler> allInterceptHandlers = new LinkedList<>();
 
 	public AnnotatedHttpService(Queue queue, Address address) {
 		service = new HttpService(queue, address);
@@ -82,18 +81,19 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		service.close();
 	}
 	
-	private static List<HttpServiceHandler> createInterceptHandlers(Class<? extends HttpController> clazz) {
-		List<HttpServiceHandler> handlers = new LinkedList<>();
-
-		final Object object;
+	private static HttpController newInstance(Class<? extends HttpController> clazz) {
 		try {
-			object = clazz.newInstance();
+			return clazz.newInstance();
 		} catch (Exception e) {
 			LOGGER.warn("Could not create object from pre class {}", clazz, e);
-			return handlers;
+			throw new RuntimeException(e);
 		}
-		
-		for (final Method method : clazz.getMethods()) {
+	}
+	
+	private static List<HttpServiceHandler> createInterceptHandlers(final HttpController object) {
+		List<HttpServiceHandler> handlers = new LinkedList<>();
+
+		for (final Method method : object.getClass().getMethods()) {
 
             Route route = (Route) method.getAnnotation(Route.class);
 			if (route != null) {
@@ -251,16 +251,22 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	}
 
 	public AnnotatedHttpService intercept(Class<? extends HttpController> clazz) {
-		LOGGER.debug("Intercept class: {}", clazz);
-		allInterceptHandlers.addAll(createInterceptHandlers(clazz));
+		return intercept(newInstance(clazz));
+	}
+	
+	public AnnotatedHttpService intercept(HttpController controller) {
+		allInterceptHandlers.addAll(createInterceptHandlers(controller));
 		return this;
 	}
 	
 	public AnnotatedHttpService register(Class<? extends HttpController> clazz) {
-		LOGGER.debug("Service class: {}", clazz);
 		Path controllerPath = (Path) clazz.getAnnotation(Path.class);
 		HttpQueryPath pathPrefix = (controllerPath == null) ? null : HttpQueryPath.of(controllerPath.value());
-		List<PathComponent> pathComponents = new LinkedList<>();
+		return register(pathPrefix, newInstance(clazz));
+	}
+	
+	public AnnotatedHttpService register(HttpQueryPath pathPrefix, final HttpController controller) {
+		final List<PathComponent> pathComponents = new LinkedList<>();
 		int pathVariableIndex = 0;
 		if (pathPrefix != null) {
 			for (String p : pathPrefix.path) {
@@ -269,32 +275,24 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 			}
 		}
 		
-		Header controllerHeader = (Header) clazz.getAnnotation(Header.class);
+		Header controllerHeader = (Header) controller.getClass().getAnnotation(Header.class);
 		final String controllerHeaderKey = (controllerHeader == null) ? null : controllerHeader.key();
 		final String controllerHeaderValue = (controllerHeader == null) ? null : controllerHeader.value();
-
-		final Object object;
-		try {
-			object = clazz.newInstance();
-		} catch (Exception e) {
-			LOGGER.warn("Could not create object from class {}", clazz, e);
-			return this;
-		}
 		
-		for (final Method method : clazz.getMethods()) {
+		for (final Method method : controller.getClass().getMethods()) {
 			final List<HttpServiceHandler> interceptHandlers = new LinkedList<>();
 			interceptHandlers.addAll(allInterceptHandlers);
 			
             Intercept intercept = (Intercept) method.getAnnotation(Intercept.class);
 			if (intercept != null) {
-				interceptHandlers.addAll(createInterceptHandlers(intercept.value()));
+				interceptHandlers.addAll(createInterceptHandlers(newInstance(intercept.value())));
 			}
 			
             Route route = (Route) method.getAnnotation(Route.class);
 			if (route != null) {
 				final HttpMethod routeMethod = route.method();
 				
-				HttpPath pathSuffix = route.path().isEmpty() ? null : new HttpPath(route.path());
+				HttpPath pathSuffix = route.path().isEmpty() ? null : HttpPath.of(route.path());
 				
 				final List<PathComponent> routePathComponents = new LinkedList<>();
 				routePathComponents.addAll(pathComponents);
@@ -370,7 +368,17 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				
 				HttpServiceHandler handler = new HttpServiceHandler() {
 					@Override
-					public HttpController.Http handle(HttpRequest request, HttpPost post) throws Exception {
+					public HttpController.Http handle(HttpRequest sourceRequest, HttpPost post) throws Exception {
+						ImmutableList.Builder<String> pathWithoutBeginning = ImmutableList.builder();
+						int pathIndex = 0;
+						for (String s : sourceRequest.path.path.path) {
+							if (pathIndex > pathComponents.size()) {
+								pathWithoutBeginning.add(s);
+							}
+							pathIndex++;
+						}
+						HttpRequest request = new HttpRequest(sourceRequest.address, sourceRequest.secure, sourceRequest.method, new HttpPath(new HttpQueryPath(pathWithoutBeginning.build()), sourceRequest.path.parameters, sourceRequest.path.hash), sourceRequest.headers);
+						
 						List<HttpWrap> wraps = new LinkedList<>();
 						for (HttpServiceHandler interceptHandler : interceptHandlers) {
 							HttpController.Http interceptHttp = interceptHandler.handle(request, post);
@@ -396,16 +404,15 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 							}
 							
 							MethodParameter p = parameters[i];
-							String defaultValue = defaultValues[i];
+							String v;
 							if (p == null) {
-								args[i] = defaultValue;
+								v = null;
 							} else {
-								String v;
 								switch (p.from) {
 								case QUERY: {
 									Iterator<Optional<String>> it = request.path.parameters.get(p.name).iterator();
 									if (!it.hasNext()) {
-										v = defaultValue;
+										v = null;
 									} else {
 										Optional<String> o = it.next();
 										if (o.isPresent()) {
@@ -419,16 +426,16 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 								case PATH: {
 									Integer index = pathComponentNameToIndex.get(p.name);
 									if (index == null) {
-										v = defaultValue;
+										v = null;
 									} else {
-										v = request.path.path.path.get(index);
+										v = sourceRequest.path.path.path.get(index);
 									}
 									break;
 								}
 								case HEADER: {
 									Iterator<HttpHeaderValue> it = request.headers.get(p.name).iterator();
 									if (!it.hasNext()) {
-										v = defaultValue;
+										v = null;
 									} else {
 										v = it.next().asString();
 									}
@@ -437,7 +444,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 								case BODY: {
 									Iterator<Optional<String>> it = post.parameters().get(p.name).iterator();
 									if (!it.hasNext()) {
-										v = defaultValue;
+										v = null;
 									} else {
 										Optional<String> o = it.next();
 										if (o.isPresent()) {
@@ -449,16 +456,18 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 									break;
 								}
 								default:
-									v = defaultValue;
+									v = null;
 									break;
 								}
-								args[i] = v;
 							}
+
+							String defaultValue = defaultValues[i];
+							args[i] = (v == null) ? defaultValue : v;
 						}
 
 						HttpController.Http http;
 						try {
-							http = (HttpController.Http) method.invoke(object, args);
+							http = (HttpController.Http) method.invoke(controller, args);
 						} catch (Exception e) {
 							throw new IOException(e);
 						}
@@ -495,8 +504,8 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				}, handler);
 			}
 		}
-
-        Directory directory = (Directory) clazz.getAnnotation(Directory.class);
+		/*%%
+        Directory directory = (Directory) controller.getClass().getAnnotation(Directory.class);
         if (directory != null) {
 			HttpServiceHandler handler = new FileHttpServiceHandler(new File(directory.root()), directory.index(), pathPrefix);
 			final List<PathComponent> routePathComponents = pathComponents;
@@ -516,6 +525,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				}
 			}, handler);
 		}
+		*/
 		
 		return this;
 	}

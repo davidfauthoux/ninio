@@ -1,27 +1,24 @@
-package com.davfx.ninio.http.util;
+package com.davfx.ninio.http.util.controllers;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
 
 import com.davfx.ninio.http.HttpHeaderValue;
-import com.davfx.ninio.http.HttpQueryPath;
+import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.util.HttpController.Http;
+import com.davfx.ninio.http.util.HttpController;
+import com.davfx.ninio.http.util.annotations.Route;
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class FileHttpServiceHandler implements HttpServiceHandler {
+public final class Assets implements HttpController{
 	
-	private static final Config CONFIG = ConfigFactory.load(FileHttpServiceHandler.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(Assets.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.file.buffer").intValue();
 	
 	private static final ImmutableMap<String, HttpHeaderValue> DEFAULT_CONTENT_TYPES;
@@ -35,16 +32,15 @@ public final class FileHttpServiceHandler implements HttpServiceHandler {
 	
 	private final File dir;
 	private final String index;
-	private final ImmutableList<String> path;
 	
-	public FileHttpServiceHandler(File dir, String index, HttpQueryPath path) {
+	public Assets(File dir, String index) {
 		this.dir = dir;
 		this.index = index;
-		this.path = path.path;
 	}
 	
-	@Override
-	public Http handle(HttpRequest request, HttpPost post) throws Exception {
+	@Route(method = HttpMethod.GET)
+	public Http serve(HttpRequest request) throws Exception {
+		/*%%
 		List<String> l = new LinkedList<>();
 		Iterator<String> i = path.iterator();
 		for (String s : request.path.path.path) {
@@ -60,8 +56,9 @@ public final class FileHttpServiceHandler implements HttpServiceHandler {
 				}
 			}
 		}
+		*/
 		
-		final File file = new File(dir, l.isEmpty() ? index : Joiner.on(File.separatorChar).join(l));
+		final File file = new File(dir, request.path.path.path.isEmpty() ? index : Joiner.on(File.separatorChar).join(request.path.path.path));
 
 		if (file.isFile()) {
 			String name = file.getName();

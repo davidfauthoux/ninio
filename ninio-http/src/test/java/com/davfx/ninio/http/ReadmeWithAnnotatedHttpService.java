@@ -1,5 +1,6 @@
 package com.davfx.ninio.http;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
@@ -11,12 +12,12 @@ import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.HttpPost;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
-import com.davfx.ninio.http.util.annotations.Directory;
 import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
+import com.davfx.ninio.http.util.controllers.Assets;
 import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 import com.google.common.reflect.ClassPath;
@@ -123,15 +124,11 @@ public final class ReadmeWithAnnotatedHttpService {
 		}
 	}
 
-	@Path("/files")
-	@Directory(root = "src/test/resources")
-	public static final class FileController implements HttpController {
-	}
-
 	public static void main(String[] args) throws Exception {
 		Wait wait = new Wait();
 		int port = 8080;
 		try (AnnotatedHttpService server = new AnnotatedHttpService(new Queue(), new Address(Address.ANY, port))) {
+			server.register(HttpQueryPath.of("/files"), new Assets(new File("src/test/resources"), "index.html"));
 			ClassPath classPath = ClassPath.from(ReadmeWithAnnotatedHttpService.class.getClassLoader());
 			
 			for (ClassPath.ClassInfo classInfo : classPath.getAllClasses()) {

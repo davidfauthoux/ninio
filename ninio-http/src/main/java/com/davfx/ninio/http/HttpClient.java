@@ -347,7 +347,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 						
 						redirected = true;
 						
-						HttpRequest newRequest = new HttpRequest(newAddress, secure, request.method, new HttpPath(newPath));
+						HttpRequest newRequest = new HttpRequest(newAddress, secure, request.method, HttpPath.of(newPath));
 						client.send(newRequest, new RedirectHandler(levelOfRedirect + 1, client, newRequest, wrappee));
 						return;
 					}

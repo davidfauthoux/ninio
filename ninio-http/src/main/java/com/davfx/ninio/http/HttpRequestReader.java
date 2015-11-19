@@ -143,7 +143,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 						enableGzip = accept.contains(HttpHeaderValue.GZIP.asString());
 					}
 					
-					handler.handle(new HttpRequest(address, secure, requestMethod, new HttpPath(requestPath), ImmutableMultimap.copyOf(headers)));
+					handler.handle(new HttpRequest(address, secure, requestMethod, HttpPath.of(requestPath), ImmutableMultimap.copyOf(headers)));
 
 					if (requestMethod == HttpMethod.POST) {
 						contentLength = -1;

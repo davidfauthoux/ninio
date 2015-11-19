@@ -1,6 +1,7 @@
 package com.davfx.ninio.http;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -18,13 +19,13 @@ import com.davfx.ninio.http.util.AnnotatedHttpService;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
-import com.davfx.ninio.http.util.annotations.Directory;
 import com.davfx.ninio.http.util.annotations.Header;
 import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
+import com.davfx.ninio.http.util.controllers.Assets;
 import com.google.common.base.Charsets;
 
 public class HttpServiceTest {
@@ -531,16 +532,12 @@ public class HttpServiceTest {
 		testGetWithHostFilter();
 	}
 	
-	@Path("/files")
-	@Directory(root = "src/test/resources")
-	public static final class FileController implements HttpController {
-	}
-
 	@Test
 	public void testFiles() throws Exception {
 		int port = 8080;
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, port))) {
+				server.register(HttpQueryPath.of("/files"), new Assets(new File("src/test/resources"), "index.html"));
 				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
@@ -548,7 +545,6 @@ public class HttpServiceTest {
 					server.register(c);
 				}
 				*/
-				server.register(FileController.class);
 
 				queue.finish().waitFor();
 				
@@ -574,6 +570,7 @@ public class HttpServiceTest {
 	public void testFilesWithPortRouting() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.register(HttpQueryPath.of("/files"), new Assets(new File("src/test/resources"), "index.html"));
 				/*
 				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
 			    	@SuppressWarnings("unchecked")
@@ -581,7 +578,6 @@ public class HttpServiceTest {
 					server.register(c);
 				}
 				*/
-				server.register(FileController.class);
 
 				queue.finish().waitFor();
 				

@@ -235,7 +235,7 @@ public class HttpServerTest {
 				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
-				new Http().client().send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, new HttpPath("/test?a=b")), new HttpClientHandler() {
+				new Http().client().send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, HttpPath.of("/test?a=b")), new HttpClientHandler() {
 					private HttpResponse response;
 					private final InMemoryBuffers b = new InMemoryBuffers();
 
@@ -334,7 +334,7 @@ public class HttpServerTest {
 				final Lock<String, IOException> lock = new Lock<>();
 				final String post = "post";
 				try (HttpClient client = new Http().client()) {
-					client.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, new HttpPath("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), new HttpClientHandler() {
+					client.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), new HttpClientHandler() {
 						private HttpResponse response;
 						private final InMemoryBuffers b = new InMemoryBuffers();
 

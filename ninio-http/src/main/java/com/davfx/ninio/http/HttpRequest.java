@@ -50,6 +50,6 @@ public final class HttpRequest {
 		if (i < 0) {
 			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, method, HttpPath.ROOT, headers);
 		}
-		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, method, new HttpPath(url.substring(i)), headers);
+		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, method, HttpPath.of(url.substring(i)), headers);
 	}
 }
