@@ -1,7 +1,8 @@
-package com.davfx.ninio.http.util;
+package com.davfx.ninio.http.util.controllers;
 
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
+import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.annotations.Route;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;

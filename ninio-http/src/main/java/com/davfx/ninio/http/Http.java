@@ -63,21 +63,20 @@ public final class Http {
 				handler.failed(e);
 			}
 			@Override
-			public void close() {
-				client.close();
-				handler.close();
+			public void received(HttpResponse response) {
+				handler.handle(response);
+			}
+			@Override
+			public void ready(CloseableByteBufferHandler write) {
 			}
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
 				handler.handle(buffer);
 			}
 			@Override
-			public void received(HttpResponse response) {
-				handler.handle(response);
-			}
-			
-			@Override
-			public void ready(CloseableByteBufferHandler write) {
+			public void close() {
+				client.close();
+				handler.close();
 			}
 		});
 	}
@@ -90,23 +89,87 @@ public final class Http {
 				handler.failed(e);
 			}
 			@Override
-			public void close() {
-				client.close();
-				handler.close();
+			public void received(HttpResponse response) {
+				handler.handle(response);
+			}
+			@Override
+			public void ready(CloseableByteBufferHandler write) {
+				write.handle(null, post);
+				write.close();
 			}
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
 				handler.handle(buffer);
 			}
 			@Override
-			public void received(HttpResponse response) {
-				handler.handle(response);
+			public void close() {
+				client.close();
+				handler.close();
 			}
+		});
+	}
+	
+	public static interface InMemoryHandler extends Failable {
+		void handle(HttpResponse response, InMemoryBuffers content);
+	}
+	
+	public void get(String url, final InMemoryHandler handler) {
+		final HttpClient client = client();
+		client.send(HttpRequest.of(url), new HttpClientHandler() {
+			private final InMemoryBuffers content = new InMemoryBuffers();
+			private HttpResponse response;
 			
+			@Override
+			public void failed(IOException e) {
+				client.close();
+				handler.failed(e);
+			}
+			@Override
+			public void received(HttpResponse response) {
+				this.response = response;
+			}
+			@Override
+			public void ready(CloseableByteBufferHandler write) {
+			}
+			@Override
+			public void handle(Address address, ByteBuffer buffer) {
+				content.add(buffer);
+			}
+			@Override
+			public void close() {
+				client.close();
+				handler.handle(response, content);
+			}
+		});
+	}
+	public void post(String url, final ByteBuffer post, final InMemoryHandler handler) {
+		final HttpClient client = client();
+		client.send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, HttpHeaderValue>of()), new HttpClientHandler() {
+			private final InMemoryBuffers content = new InMemoryBuffers();
+			private HttpResponse response;
+
+			@Override
+			public void failed(IOException e) {
+				client.close();
+				handler.failed(e);
+			}
+			@Override
+			public void received(HttpResponse response) {
+				this.response = response;
+			}
 			@Override
 			public void ready(CloseableByteBufferHandler write) {
 				write.handle(null, post);
 				write.close();
+			}
+			@Override
+			public void handle(Address address, ByteBuffer buffer) {
+				content.add(buffer);
+			}
+			@Override
+			public void close() {
+				client.close();
+				handler.handle(response, content);
 			}
 		});
 	}

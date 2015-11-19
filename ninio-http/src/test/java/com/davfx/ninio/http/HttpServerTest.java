@@ -8,9 +8,6 @@ import java.io.Writer;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.util.Deque;
-import java.util.Iterator;
-import java.util.LinkedList;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
@@ -467,52 +464,6 @@ public class HttpServerTest {
 			}
 
 			queue.finish().waitFor();
-		}
-	}
-
-	private static final class InMemoryBuffers implements Iterable<ByteBuffer> {
-		private final Deque<ByteBuffer> buffers = new LinkedList<>();
-		
-		public InMemoryBuffers() {
-		}
-		
-		@Override
-		public Iterator<ByteBuffer> iterator() {
-			return buffers.iterator();
-		}
-		
-		public void add(ByteBuffer buffer) {
-			if (!buffer.hasRemaining()) {
-				return;
-			}
-			buffers.addLast(buffer);
-		}
-		
-		public int getSize() {
-			int l = 0;
-			for (ByteBuffer b : buffers) {
-				l += b.remaining();
-			}
-			return l;
-		}
-		
-		public byte[] toByteArray() {
-			byte[] b = new byte[getSize()];
-			int off = 0;
-			for (ByteBuffer bb : buffers) {
-				int pos = bb.position();
-				int r = bb.remaining();
-				bb.get(b, off, bb.remaining());
-				off += r;
-				bb.position(pos);
-			}
-			return b;
-		}
-		
-		@Override
-		public String toString() {
-			byte[] b = toByteArray();
-			return new String(b, 0, b.length, Charsets.UTF_8);
 		}
 	}
 }

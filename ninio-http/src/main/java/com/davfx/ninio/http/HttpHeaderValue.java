@@ -63,6 +63,16 @@ public final class HttpHeaderValue {
 			return 0;
 		}
 	}
+	public long asLong() {
+		if (values.isEmpty()) {
+			return 0L;
+		}
+		try {
+			return Long.parseLong(values.get(0));
+		} catch (NumberFormatException nfe) {
+			return 0L;
+		}
+	}
 
 	public static HttpHeaderValue simple(String value) {
 		return new HttpHeaderValue(ImmutableList.of(value), ImmutableMultimap.<String, Optional<String>>of());

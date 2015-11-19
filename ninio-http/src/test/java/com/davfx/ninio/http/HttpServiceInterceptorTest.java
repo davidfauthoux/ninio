@@ -2,6 +2,7 @@ package com.davfx.ninio.http;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 
@@ -11,13 +12,13 @@ import org.junit.Test;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.util.AnnotatedHttpService;
-import com.davfx.ninio.http.util.CrossDomain;
 import com.davfx.ninio.http.util.HttpController;
-import com.davfx.ninio.http.util.Jsonp;
 import com.davfx.ninio.http.util.annotations.Intercept;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
+import com.davfx.ninio.http.util.controllers.CrossDomain;
+import com.davfx.ninio.http.util.controllers.Jsonp;
 import com.google.common.base.Charsets;
 import com.google.gson.JsonPrimitive;
 
@@ -169,6 +170,48 @@ public class HttpServiceInterceptorTest {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
 				server.intercept(Jsonp.class);
 				server.register(TestGetWithQueryParameterWrappedGloballyController.class);
+
+				queue.finish().waitFor();
+
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=helloworld&jsonp=f").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(c.getHeaderField(HttpHeaderKey.CONTENT_TYPE)).isEqualTo("application/javascript");
+				Assertions.assertThat(b.toString()).isEqualTo("f(\"helloworld\");\n");
+			}
+			queue.finish().waitFor();
+		}
+	}
+	
+
+	@Path("/get")
+	public static final class TestGetWithQueryParameterWrappedGloballyStreamController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(final @QueryParameter("message") String message) {
+			return Http.ok().contentType(HttpContentType.json()).stream(new HttpStream() {
+				@Override
+				public void produce(OutputStream output) throws Exception {
+					output.write(new JsonPrimitive(message).toString().getBytes(Charsets.UTF_8));
+				}
+			});
+		}
+	}
+	
+	@Test
+	public void testGetWithQueryParameterWrappedGloballyStream() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.intercept(Jsonp.class);
+				server.register(TestGetWithQueryParameterWrappedGloballyStreamController.class);
 
 				queue.finish().waitFor();
 

@@ -6,6 +6,8 @@ import java.nio.charset.Charset;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -145,7 +147,7 @@ public final class FtpClient {
 		
 		private FtpClientHandler.Callback.DownloadCallback downloadCallback = null;
 		private FtpClientHandler.Callback.ListCallback listCallback = null;
-		private final List<String> list = new LinkedList<>();
+		private final Set<String> list = new TreeSet<>();
 
 		@Override
 		public void list(String path, ListCallback callback) {

@@ -1,7 +1,11 @@
 package com.davfx.ninio.http.util;
 
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
+import com.davfx.ninio.core.Closeable;
+import com.davfx.ninio.core.Failable;
+import com.davfx.ninio.http.HttpContentType;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMessage;
@@ -13,6 +17,21 @@ public interface HttpController {
 	interface HttpStream {
 		void produce(OutputStream output) throws Exception;
 	}
+	
+	interface HttpAsyncOutput extends Failable, Closeable {
+		HttpAsyncOutput ok();
+		HttpAsyncOutput internalServerError();
+		HttpAsyncOutput notFound();
+		HttpAsyncOutput header(String key, HttpHeaderValue value);
+		HttpAsyncOutput contentType(HttpHeaderValue contentType);
+		HttpAsyncOutput contentLength(long contentLength);
+		HttpAsyncOutput produce(ByteBuffer buffer);
+		HttpAsyncOutput produce(String buffer);
+	}
+	interface HttpAsync {
+		void produce(HttpAsyncOutput output);
+	}
+
 	interface HttpWrap {
 		void handle(Http http) throws Exception;
 	}
@@ -21,21 +40,23 @@ public interface HttpController {
 		final int status;
 		final String reason;
 		final Multimap<String, HttpHeaderValue> headers = LinkedHashMultimap.create();
-		//%% HttpHeaderValue contentType = HttpContentType.plainText();
-		//%% long contentLength = -1L;
 		String content = null;
 		HttpStream stream = null;
+		HttpAsync async = null;
 		final HttpWrap wrap;
 		
-		private Http(int status, String reason) {
-			this.status = status;
-			this.reason = reason;
-			wrap = null;
-		}
-		private Http(int status, String reason, HttpWrap wrap) {
+		private Http(int status, String reason, HttpWrap wrap, HttpAsync async) {
 			this.status = status;
 			this.reason = reason;
 			this.wrap = wrap;
+			this.async = async;
+			headers.put(HttpHeaderKey.CONTENT_TYPE, HttpContentType.plainText());
+		}
+		private Http(int status, String reason) {
+			this(status, reason, null, null);
+		}
+		private Http(int status, String reason, HttpWrap wrap) {
+			this(status, reason, wrap, null);
 		}
 		
 		public Http header(String key, HttpHeaderValue value) {
@@ -63,10 +84,18 @@ public interface HttpController {
 			header(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(contentLength)));
 			return this;
 		}
+		public long contentLength() {
+			HttpHeaderValue v = header(HttpHeaderKey.CONTENT_LENGTH);
+			if (v == null) {
+				return -1L;
+			}
+			return v.asLong();
+		}
 		
 		public Http content(String content) {
 			this.content = content;
 			stream = null;
+			async = null;
 			return this;
 		}
 		public String content() {
@@ -74,8 +103,21 @@ public interface HttpController {
 		}
 		public Http stream(HttpStream stream) {
 			content = null;
+			async = null;
 			this.stream = stream;
 			return this;
+		}
+		public HttpStream stream() {
+			return stream;
+		}
+		public Http async(HttpAsync async) {
+			content = null;
+			stream = null;
+			this.async = async;
+			return this;
+		}
+		public HttpAsync async() {
+			return async;
 		}
 		
 		public static Http ok() {
@@ -91,7 +133,6 @@ public interface HttpController {
 		public static Http wrap(HttpWrap wrap) {
 			return new Http(HttpStatus.OK, HttpMessage.OK, wrap);
 		}
-
 
 	}
 }

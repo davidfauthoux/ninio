@@ -33,10 +33,13 @@ import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpStatus;
+import com.davfx.ninio.http.util.HttpController.HttpAsyncOutput;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.base.Optional;
+import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.Multimap;
 import com.google.common.net.HttpHeaders;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -204,85 +207,190 @@ public final class HttpService implements AutoCloseable, Closeable {
 					write.handle(null, ByteBuffer.wrap(error.getMessage().getBytes(Charsets.UTF_8)));
 					write.close();
 				} else {
-					ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
-					for (Map.Entry<String, Collection<HttpHeaderValue>> h : http.headers.asMap().entrySet()) {
-						String key = h.getKey();
-						if ((key.equals(HttpHeaders.CONTENT_TYPE)) || (key.equals(HttpHeaders.CONTENT_LENGTH))) {
-							HttpHeaderValue last = null;
-							for (HttpHeaderValue v : h.getValue()) {
-								last = v;
-							}
-							if (last != null) {
-								headers.put(key, last);
-							}
-						} else {
-							for (HttpHeaderValue v : h.getValue()) {
-								headers.put(key, v);
-							}
-						}
-					}
-					write.write(new HttpResponse(http.status, http.reason, headers.build()));
-					
-					if (http.stream == null) {
-						if (http.content != null) {
-							write.handle(null, ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)));
-						}
-						write.close();
-					} else {
-						final HttpController.HttpStream stream = http.stream;
+					if (http.async != null) {
+						
 						final Write w = write;
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								try {
-									try (OutputStream out = new BufferedOutputStream(new OutputStream() {
-										@Override
-										public void write(byte[] b, int off, int len) {
-											byte[] copy = new byte[len];
-											System.arraycopy(b, off, copy, 0, len);
-											final ByteBuffer bb = ByteBuffer.wrap(copy);
-											queue.post(new Runnable() {
-												@Override
-												public void run() {
-													w.handle(null, bb);
-												}
-											});
-										}
-										@Override
-										public void write(byte[] b) {
-											write(b, 0, b.length);
-										}
-										@Override
-										public void write(int b) {
-											byte[] bb = new byte[] { (byte) (b & 0xFF) };
-											write(bb);
-										}
-										@Override
-										public void flush() {
-										}
-										@Override
-										public void close() {
-											queue.post(new Runnable() {
-												@Override
-												public void run() {
-													w.close();
-												}
-											});
-										}
-									}, STREAM_BUFFERING_SIZE)) {
-										stream.produce(out);
-									}
-								} catch (Exception e) {
-									LOGGER.error("Internal server error", e);
+						http.async.produce(new HttpAsyncOutput() {
+							
+							private int status = HttpStatus.OK;
+							private String reason = HttpMessage.OK;
+							private Multimap<String, HttpHeaderValue> headers = HashMultimap.create();
+							private boolean sent = false;
+
+							private void send() {
+								if (sent) {
+									return;
 								}
+								if (!headers.containsKey(HttpHeaderKey.CONTENT_TYPE)) {
+									headers.put(HttpHeaderKey.CONTENT_TYPE, HttpContentType.plainText());
+								}
+								w.write(new HttpResponse(status, reason, ImmutableMultimap.copyOf(headers)));
+								sent = true;
+							}
+							
+							@Override
+							public void close() {
 								queue.post(new Runnable() {
 									@Override
 									public void run() {
+										send();
 										w.close();
 									}
 								});
 							}
+							
+							@Override
+							public void failed(final IOException e) {
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										w.failed(e);
+									}
+								});
+							}
+							
+							@Override
+							public HttpAsyncOutput ok() {
+								status = HttpStatus.OK;
+								reason = HttpMessage.OK;
+								return this;
+							}
+							@Override
+							public HttpAsyncOutput notFound() {
+								status = HttpStatus.NOT_FOUND;
+								reason = HttpMessage.NOT_FOUND;
+								return this;
+							}
+							@Override
+							public HttpAsyncOutput internalServerError() {
+								status = HttpStatus.INTERNAL_SERVER_ERROR;
+								reason = HttpMessage.INTERNAL_SERVER_ERROR;
+								return this;
+							}
+
+							@Override
+							public HttpAsyncOutput header(String key, HttpHeaderValue value) {
+								headers.put(key, value);
+								return this;
+							}
+							@Override
+							public HttpAsyncOutput contentType(HttpHeaderValue contentType) {
+								return header(HttpHeaderKey.CONTENT_TYPE, contentType);
+							}
+							@Override
+							public HttpAsyncOutput contentLength(long contentLength) {
+								return header(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(contentLength)));
+							}
+
+							@Override
+							public HttpAsyncOutput produce(final ByteBuffer buffer) {
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										send();
+										w.handle(null, buffer);
+									}
+								});
+								return this;
+							}
+
+							@Override
+							public HttpAsyncOutput produce(String buffer) {
+								return produce(ByteBuffer.wrap(buffer.getBytes(Charsets.UTF_8)));
+							}
 						});
+						
+					} else {
+						
+						ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
+						for (Map.Entry<String, Collection<HttpHeaderValue>> h : http.headers.asMap().entrySet()) {
+							String key = h.getKey();
+							if ((key.equals(HttpHeaders.CONTENT_TYPE)) || (key.equals(HttpHeaders.CONTENT_LENGTH))) {
+								HttpHeaderValue last = null;
+								for (HttpHeaderValue v : h.getValue()) {
+									last = v;
+								}
+								if (last != null) {
+									headers.put(key, last);
+								}
+							} else {
+								for (HttpHeaderValue v : h.getValue()) {
+									headers.put(key, v);
+								}
+							}
+						}
+						write.write(new HttpResponse(http.status, http.reason, headers.build()));
+						
+						if (http.stream == null) {
+							if (http.content != null) {
+								write.handle(null, ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)));
+							}
+							write.close();
+						} else {
+							final HttpController.HttpStream stream = http.stream;
+							final Write w = write;
+							executor.execute(new Runnable() {
+								@Override
+								public void run() {
+									try {
+										try (OutputStream out = new BufferedOutputStream(new OutputStream() {
+											@Override
+											public void write(byte[] b, int off, int len) {
+												byte[] copy = new byte[len];
+												System.arraycopy(b, off, copy, 0, len);
+												final ByteBuffer bb = ByteBuffer.wrap(copy);
+												queue.post(new Runnable() {
+													@Override
+													public void run() {
+														w.handle(null, bb);
+													}
+												});
+											}
+											@Override
+											public void write(byte[] b) {
+												write(b, 0, b.length);
+											}
+											@Override
+											public void write(int b) {
+												byte[] bb = new byte[] { (byte) (b & 0xFF) };
+												write(bb);
+											}
+											@Override
+											public void flush() {
+											}
+											@Override
+											public void close() {
+												queue.post(new Runnable() {
+													@Override
+													public void run() {
+														w.close();
+													}
+												});
+											}
+										}, STREAM_BUFFERING_SIZE)) {
+											stream.produce(out);
+										}
+									} catch (Exception e) {
+										LOGGER.error("Internal server error", e);
+										final IOException ioe = new IOException(e);
+										queue.post(new Runnable() {
+											@Override
+											public void run() {
+												w.failed(ioe);
+											}
+										});
+									}
+									
+									queue.post(new Runnable() {
+										@Override
+										public void run() {
+											w.close();
+										}
+									});
+								}
+							});
+						}
+						
 					}
 				}
 				

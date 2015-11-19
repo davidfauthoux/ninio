@@ -156,7 +156,8 @@ public final class ReadmeWithAnnotatedHttpService {
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/header");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/headerWithDefaultValue");
 			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/post/s");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files/testws.html");
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files");
+			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files/ws.html");
 			wait.waitFor();
 		}
 	}

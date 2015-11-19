@@ -61,7 +61,7 @@ public final class FileHttpServiceHandler implements HttpServiceHandler {
 			}
 		}
 		
-		final File file = new File(dir, l.isEmpty() ? index : (File.separatorChar + Joiner.on(File.separatorChar).join(l)));
+		final File file = new File(dir, l.isEmpty() ? index : Joiner.on(File.separatorChar).join(l));
 
 		if (file.isFile()) {
 			String name = file.getName();
