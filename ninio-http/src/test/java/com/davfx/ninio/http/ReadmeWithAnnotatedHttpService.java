@@ -36,7 +36,7 @@ public final class ReadmeWithAnnotatedHttpService {
 		@Route(method = HttpMethod.GET, path = "/s")
 		public Http echo() {
 			// return Http.ok().contentType("text/html" + HttpHeaderExtension.append(HttpHeaderKey.CHARSET, Charsets.UTF_8.name())).content("<html><body><form method='post' action='/post' enctype='multipart/form-data'><input name='text' type='text' value='TEXT'></input><input name='text2' type='text' value='TEXT2'></input><input name='file' type='file'></input><input type='submit' value='Submit'></input></form></body></html>");
-			return Http.ok().contentType("text/html" + HttpHeaderExtension.append(HttpHeaderKey.CHARSET, Charsets.UTF_8.name()))
+			return Http.ok().contentType(HttpHeaderValue.of("text/html", HttpHeaderKey.CHARSET, Charsets.UTF_8.name()))
 					.content("<html>"
 							+ "<body>"
 							+ "<form method='post' action='/post/r'>"

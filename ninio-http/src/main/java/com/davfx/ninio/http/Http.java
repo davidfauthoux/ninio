@@ -83,7 +83,7 @@ public final class Http {
 	}
 	public void post(String url, final ByteBuffer post, final Handler handler) {
 		final HttpClient client = client();
-		client.send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()), new HttpClientHandler() {
+		client.send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, HttpHeaderValue>of()), new HttpClientHandler() {
 			@Override
 			public void failed(IOException e) {
 				client.close();

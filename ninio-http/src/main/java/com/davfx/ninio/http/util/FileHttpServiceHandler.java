@@ -9,6 +9,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpQueryPath;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.util.HttpController.Http;
@@ -23,11 +24,11 @@ public final class FileHttpServiceHandler implements HttpServiceHandler {
 	private static final Config CONFIG = ConfigFactory.load(FileHttpServiceHandler.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.file.buffer").intValue();
 	
-	private static final ImmutableMap<String, String> DEFAULT_CONTENT_TYPES;
+	private static final ImmutableMap<String, HttpHeaderValue> DEFAULT_CONTENT_TYPES;
 	static {
-		ImmutableMap.Builder<String, String> b = ImmutableMap.builder();
+		ImmutableMap.Builder<String, HttpHeaderValue> b = ImmutableMap.builder();
 		for (Config c : CONFIG.getConfigList("ninio.http.file.contentTypes")) {
-			b.put(c.getString("extension").toLowerCase(), c.getString("contentType"));
+			b.put(c.getString("extension").toLowerCase(), HttpHeaderValue.of(c.getString("contentType")));
 		}
 		DEFAULT_CONTENT_TYPES = b.build();
 	}
@@ -64,8 +65,8 @@ public final class FileHttpServiceHandler implements HttpServiceHandler {
 
 		if (file.isFile()) {
 			String name = file.getName();
-			String contentType = null;
-			for (Map.Entry<String, String> e : DEFAULT_CONTENT_TYPES.entrySet()) {
+			HttpHeaderValue contentType = null;
+			for (Map.Entry<String, HttpHeaderValue> e : DEFAULT_CONTENT_TYPES.entrySet()) {
 				if (name.toLowerCase().endsWith(e.getKey())) {
 					contentType = e.getValue();
 					break;

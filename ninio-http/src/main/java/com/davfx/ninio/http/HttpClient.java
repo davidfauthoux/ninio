@@ -230,18 +230,22 @@ public final class HttpClient implements AutoCloseable, Closeable {
 		});
 	}
 	
-	private static void appendHeader(StringBuilder buffer, String key, String value) {
-		buffer.append(key).append(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR).append(HttpSpecification.HEADER_BEFORE_VALUE).append(value).append(HttpSpecification.CR).append(HttpSpecification.LF);
+	private static void appendHeader(StringBuilder buffer, String key, HttpHeaderValue value) {
+		buffer.append(key).append(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR).append(HttpSpecification.HEADER_BEFORE_VALUE).append(value.toString()).append(HttpSpecification.CR).append(HttpSpecification.LF);
 	}
+	
+	private static final HttpHeaderValue DEFAULT_USER_AGENT = HttpHeaderValue.simple(HttpClient.class.getName()); // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
+	private static final HttpHeaderValue DEFAULT_ACCEPT = HttpHeaderValue.simple("*/*");
+
 	private static ByteBuffer createRequest(HttpRequest request) {
 		StringBuilder header = new StringBuilder();
 		header.append(request.method.toString()).append(HttpSpecification.START_LINE_SEPARATOR).append(request.path).append(HttpSpecification.START_LINE_SEPARATOR).append(HttpSpecification.HTTP11).append(HttpSpecification.CR).append(HttpSpecification.LF);
 		
-		for (Map.Entry<String, String> h : request.headers.entries()) {
+		for (Map.Entry<String, HttpHeaderValue> h : request.headers.entries()) {
 			appendHeader(header, h.getKey(), h.getValue());
 		}
 		if (!request.headers.containsKey(HttpHeaderKey.HOST)) {
-			appendHeader(header, HttpHeaderKey.HOST, request.address.getHost()); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
+			appendHeader(header, HttpHeaderKey.HOST, HttpHeaderValue.simple(request.address.getHost())); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
 		}
 		if (!request.headers.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
 			appendHeader(header, HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
@@ -250,10 +254,10 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			appendHeader(header, HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
 		}
 		if (!request.headers.containsKey(HttpHeaderKey.USER_AGENT)) {
-			appendHeader(header, HttpHeaderKey.USER_AGENT, HttpHeaderValue.DEFAULT_USER_AGENT);
+			appendHeader(header, HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
 		}
 		if (!request.headers.containsKey(HttpHeaderKey.ACCEPT)) {
-			appendHeader(header, HttpHeaderKey.ACCEPT, HttpHeaderValue.DEFAULT_ACCEPT);
+			appendHeader(header, HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
 		}
 		
 		header.append(HttpSpecification.CR).append(HttpSpecification.LF);
@@ -295,8 +299,8 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			try {
 				if (levelOfRedirect < MAX_REDIRECT_LEVELS) {
 					String location = null;
-					for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
-						location = locationValue;
+					for (HttpHeaderValue locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
+						location = locationValue.asString();
 						break;
 					}
 					if (location != null) {

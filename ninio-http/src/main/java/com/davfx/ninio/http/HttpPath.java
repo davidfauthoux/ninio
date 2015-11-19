@@ -7,6 +7,8 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class HttpPath {
+	public static final HttpPath ROOT = new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR));
+
 	public final String line;
 	public final HttpQueryPath path;
 	public final ImmutableMultimap<String, Optional<String>> parameters;

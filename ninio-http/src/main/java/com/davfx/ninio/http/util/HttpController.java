@@ -3,6 +3,7 @@ package com.davfx.ninio.http.util;
 import java.io.OutputStream;
 
 import com.davfx.ninio.http.HttpContentType;
+import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMessage;
 import com.davfx.ninio.http.HttpStatus;
 
@@ -17,7 +18,7 @@ public interface HttpController {
 	final class Http {
 		final int status;
 		final String reason;
-		String contentType = HttpContentType.plainText();
+		HttpHeaderValue contentType = HttpContentType.plainText();
 		long contentLength = -1L;
 		String content = null;
 		HttpStream stream = null;
@@ -34,9 +35,12 @@ public interface HttpController {
 			this.wrap = wrap;
 		}
 		
-		public Http contentType(String contentType) {
+		public Http contentType(HttpHeaderValue contentType) {
 			this.contentType = contentType;
 			return this;
+		}
+		public HttpHeaderValue contentType() {
+			return contentType;
 		}
 		public Http contentLength(long contentLength) {
 			this.contentLength = contentLength;

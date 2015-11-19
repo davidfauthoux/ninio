@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
+import java.util.Collection;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -18,8 +19,8 @@ import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.DispatchHttpServerHandler;
 import com.davfx.ninio.http.HttpContentType;
-import com.davfx.ninio.http.HttpHeaderExtension;
 import com.davfx.ninio.http.HttpHeaderKey;
+import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMessage;
 import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpRequest;
@@ -122,10 +123,10 @@ public final class HttpService implements AutoCloseable, Closeable {
 										return string;
 									}
 									Charset charset = Charsets.UTF_8;
-									for (String h : request.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
-										String c = HttpHeaderExtension.extract(h, HttpHeaderKey.CHARSET);
-										if (c != null) {
-											charset = Charset.forName(c);
+									for (HttpHeaderValue h : request.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
+										Collection<Optional<String>> c = h.extensions.get(HttpHeaderKey.CHARSET);
+										if (!c.isEmpty()) {
+											charset = Charset.forName(c.iterator().next().get());
 											break;
 										}
 									}
@@ -202,12 +203,12 @@ public final class HttpService implements AutoCloseable, Closeable {
 					write.handle(null, ByteBuffer.wrap(error.getMessage().getBytes(Charsets.UTF_8)));
 					write.close();
 				} else {
-					ImmutableMultimap.Builder<String, String> headers = ImmutableMultimap.builder();
+					ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
 					if (http.contentType != null) {
 						headers.put(HttpHeaders.CONTENT_TYPE, http.contentType);
 					}
 					if (http.contentLength >= 0L) {
-						headers.put(HttpHeaders.CONTENT_LENGTH, String.valueOf(http.contentLength));
+						headers.put(HttpHeaders.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(http.contentLength)));
 					}
 					write.write(new HttpResponse(http.status, http.reason, headers.build()));
 					

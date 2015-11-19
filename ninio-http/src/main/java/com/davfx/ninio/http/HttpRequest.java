@@ -9,9 +9,9 @@ public final class HttpRequest {
 	public final boolean secure;
 	public final HttpMethod method;
 	public final HttpPath path;
-	public final ImmutableMultimap<String, String> headers;
+	public final ImmutableMultimap<String, HttpHeaderValue> headers;
 	
-	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path, ImmutableMultimap<String, String> headers) {
+	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path, ImmutableMultimap<String, HttpHeaderValue> headers) {
 		this.address = address;
 		this.secure = secure;
 		this.method = method;
@@ -19,7 +19,7 @@ public final class HttpRequest {
 		this.headers = headers;
 	}
 	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path) {
-		this(address, secure, method, path, ImmutableMultimap.<String, String>of());
+		this(address, secure, method, path, ImmutableMultimap.<String, HttpHeaderValue>of());
 	}
 	
 	@Override
@@ -28,9 +28,9 @@ public final class HttpRequest {
 	}
 	
 	public static HttpRequest of(String url) {
-		return of(url, HttpMethod.GET, ImmutableMultimap.<String, String>of());
+		return of(url, HttpMethod.GET, ImmutableMultimap.<String, HttpHeaderValue>of());
 	}
-	public static HttpRequest of(String url, HttpMethod method, ImmutableMultimap<String, String> headers) {
+	public static HttpRequest of(String url, HttpMethod method, ImmutableMultimap<String, HttpHeaderValue> headers) {
 		String protocol;
 		boolean secure;
 		int defaultPort;
@@ -48,7 +48,7 @@ public final class HttpRequest {
 
 		int i = url.indexOf(HttpSpecification.PATH_SEPARATOR, protocol.length());
 		if (i < 0) {
-			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, method, new HttpPath(String.valueOf(HttpSpecification.PATH_SEPARATOR)), headers);
+			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, method, HttpPath.ROOT, headers);
 		}
 		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, method, new HttpPath(url.substring(i)), headers);
 	}

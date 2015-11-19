@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpQueryPath;
@@ -70,6 +71,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	}
 
 	public final HttpService service;
+	public final List<HttpServiceHandler> allInterceptHandlers = new LinkedList<>();
 
 	public AnnotatedHttpService(Queue queue, Address address) {
 		service = new HttpService(queue, address);
@@ -203,11 +205,11 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 									break;
 								}
 								case HEADER: {
-									Iterator<String> it = request.headers.get(p.name).iterator();
+									Iterator<HttpHeaderValue> it = request.headers.get(p.name).iterator();
 									if (!it.hasNext()) {
 										v = defaultValue;
 									} else {
-										v = it.next();
+										v = it.next().asString();
 									}
 									break;
 								}
@@ -248,6 +250,12 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		return handlers;
 	}
 
+	public AnnotatedHttpService intercept(Class<? extends HttpController> clazz) {
+		LOGGER.debug("Intercept class: {}", clazz);
+		allInterceptHandlers.addAll(createInterceptHandlers(clazz));
+		return this;
+	}
+	
 	public AnnotatedHttpService register(Class<? extends HttpController> clazz) {
 		LOGGER.debug("Service class: {}", clazz);
 		Path controllerPath = (Path) clazz.getAnnotation(Path.class);
@@ -275,6 +283,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		
 		for (final Method method : clazz.getMethods()) {
 			final List<HttpServiceHandler> interceptHandlers = new LinkedList<>();
+			interceptHandlers.addAll(allInterceptHandlers);
 			
             Intercept intercept = (Intercept) method.getAnnotation(Intercept.class);
 			if (intercept != null) {
@@ -417,11 +426,11 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 									break;
 								}
 								case HEADER: {
-									Iterator<String> it = request.headers.get(p.name).iterator();
+									Iterator<HttpHeaderValue> it = request.headers.get(p.name).iterator();
 									if (!it.hasNext()) {
 										v = defaultValue;
 									} else {
-										v = it.next();
+										v = it.next().asString();
 									}
 									break;
 								}
@@ -514,8 +523,8 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	private static boolean filterHeader(HttpRequest request, String controllerHeaderKey, String controllerHeaderValue) {
 		if ((controllerHeaderKey != null) && (controllerHeaderValue != null)) {
 			boolean found = false;
-			for (String v : request.headers.get(controllerHeaderKey)) {
-				if (v.equals(controllerHeaderValue)) {
+			for (HttpHeaderValue v : request.headers.get(controllerHeaderKey)) {
+				if (v.contains(controllerHeaderValue)) {
 					found = true;
 					break;
 				}
