@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -204,11 +205,21 @@ public final class HttpService implements AutoCloseable, Closeable {
 					write.close();
 				} else {
 					ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
-					if (http.contentType != null) {
-						headers.put(HttpHeaders.CONTENT_TYPE, http.contentType);
-					}
-					if (http.contentLength >= 0L) {
-						headers.put(HttpHeaders.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(http.contentLength)));
+					for (Map.Entry<String, Collection<HttpHeaderValue>> h : http.headers.asMap().entrySet()) {
+						String key = h.getKey();
+						if ((key.equals(HttpHeaders.CONTENT_TYPE)) || (key.equals(HttpHeaders.CONTENT_LENGTH))) {
+							HttpHeaderValue last = null;
+							for (HttpHeaderValue v : h.getValue()) {
+								last = v;
+							}
+							if (last != null) {
+								headers.put(key, last);
+							}
+						} else {
+							for (HttpHeaderValue v : h.getValue()) {
+								headers.put(key, v);
+							}
+						}
 					}
 					write.write(new HttpResponse(http.status, http.reason, headers.build()));
 					

@@ -11,6 +11,7 @@ import org.junit.Test;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.util.AnnotatedHttpService;
+import com.davfx.ninio.http.util.CrossDomain;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.Jsonp;
 import com.davfx.ninio.http.util.annotations.Intercept;
@@ -185,6 +186,43 @@ public class HttpServiceInterceptorTest {
 				c.disconnect();
 				Assertions.assertThat(c.getHeaderField(HttpHeaderKey.CONTENT_TYPE)).isEqualTo("application/javascript");
 				Assertions.assertThat(b.toString()).isEqualTo("f(\"helloworld\");\n");
+			}
+			queue.finish().waitFor();
+		}
+	}
+	
+	@Path("/get")
+	public static final class TestGetCrossDomainController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") String message) {
+			return Http.ok().content("GET hello:" + message);
+		}
+	}
+	
+	@Test
+	public void testGetCrossDomain() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.intercept(CrossDomain.class);
+				server.register(TestGetCrossDomainController.class);
+
+				queue.finish().waitFor();
+
+				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=world").openConnection();
+				StringBuilder b = new StringBuilder();
+				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+					while (true) {
+						String line = r.readLine();
+						if (line == null) {
+							break;
+						}
+						b.append(line).append('\n');
+					}
+				}
+				c.disconnect();
+				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
+				Assertions.assertThat(c.getHeaderField("Access-Control-Allow-Origin")).isEqualTo("*");
+				Assertions.assertThat(c.getHeaderField("Access-Control-Allow-Methods")).isEqualTo("GET,PUT,POST,DELETE,HEAD");
 			}
 			queue.finish().waitFor();
 		}

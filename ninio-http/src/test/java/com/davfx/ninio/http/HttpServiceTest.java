@@ -505,6 +505,8 @@ public class HttpServiceTest {
 				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world 127.0.0.1:8080\n");
 	
 				try (PortRouter router = new PortRouter(new Queue(), new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					queue.finish().waitFor();
+					Thread.sleep(100);
 					c = (HttpURLConnection) new URL("http://127.0.0.1:8081/getfilterbyheader2/hello?message=world").openConnection();
 					b = new StringBuilder();
 					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {

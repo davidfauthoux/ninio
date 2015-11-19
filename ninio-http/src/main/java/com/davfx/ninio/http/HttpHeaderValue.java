@@ -16,9 +16,6 @@ public final class HttpHeaderValue {
 	public static final HttpHeaderValue KEEP_ALIVE = HttpHeaderValue.simple("keep-alive");
 	public static final HttpHeaderValue CHUNKED = HttpHeaderValue.simple("chunked");
 
-	//TODO String ACCESS_CONTROL_ALLOWED_METHODS = "GET, PUT, POST, DELETE, HEAD";
-	//TODO String WILDCARD = "*";
-
 	public final ImmutableList<String> values;
 	public final ImmutableMultimap<String, Optional<String>> extensions;
 

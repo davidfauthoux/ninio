@@ -10,8 +10,7 @@ public final class Jsonp implements HttpController {
 	public Jsonp() {
 	}
 	
-	@Route(method = HttpMethod.GET)
-	public Http checkMessage(final @QueryParameter("jsonp") String jsonp) {
+	private static HttpController.Http wrap(final String jsonp) {
 		if (jsonp == null) {
 			return null;
 		}
@@ -23,6 +22,27 @@ public final class Jsonp implements HttpController {
 				}
 			}
 		});
+	}
+
+	@Route(method = HttpMethod.GET)
+	public Http addJsonpToGet(@QueryParameter("jsonp") String jsonp) {
+		return wrap(jsonp);
+	}
+	@Route(method = HttpMethod.PUT)
+	public Http addJsonpToPut(@QueryParameter("jsonp") String jsonp) {
+		return wrap(jsonp);
+	}
+	@Route(method = HttpMethod.POST)
+	public Http addJsonpToPost(@QueryParameter("jsonp") String jsonp) {
+		return wrap(jsonp);
+	}
+	@Route(method = HttpMethod.DELETE)
+	public Http addJsonpToDelete(@QueryParameter("jsonp") String jsonp) {
+		return wrap(jsonp);
+	}
+	@Route(method = HttpMethod.HEAD)
+	public Http addJsonpToHead(@QueryParameter("jsonp") String jsonp) {
+		return wrap(jsonp);
 	}
 
 }
