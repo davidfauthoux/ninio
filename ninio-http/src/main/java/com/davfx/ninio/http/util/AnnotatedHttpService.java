@@ -71,9 +71,59 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 
 	private final HttpService service;
 	private final List<HttpServiceHandler> allInterceptHandlers = new LinkedList<>();
+	private final Map<Class<?>, ParameterConverter<?>> stringConverters = new HashMap<>();
 
 	public AnnotatedHttpService(Queue queue, Address address) {
 		service = new HttpService(queue, address);
+		
+		stringConverters.put(Boolean.class, new ParameterConverter<Boolean>() {
+			@Override
+			public Boolean of(String s) throws Exception {
+				return Boolean.parseBoolean(s);
+			}
+		});
+		stringConverters.put(Byte.class, new ParameterConverter<Byte>() {
+			@Override
+			public Byte of(String s) throws Exception {
+				return Byte.parseByte(s);
+			}
+		});
+		stringConverters.put(Short.class, new ParameterConverter<Short>() {
+			@Override
+			public Short of(String s) throws Exception {
+				return Short.parseShort(s);
+			}
+		});
+		stringConverters.put(Integer.class, new ParameterConverter<Integer>() {
+			@Override
+			public Integer of(String s) throws Exception {
+				return Integer.parseInt(s);
+			}
+		});
+		stringConverters.put(Long.class, new ParameterConverter<Long>() {
+			@Override
+			public Long of(String s) throws Exception {
+				return Long.parseLong(s);
+			}
+		});
+		stringConverters.put(Character.class, new ParameterConverter<Character>() {
+			@Override
+			public Character of(String s) throws Exception {
+				return s.charAt(0);
+			}
+		});
+		stringConverters.put(Float.class, new ParameterConverter<Float>() {
+			@Override
+			public Float of(String s) throws Exception {
+				return Float.parseFloat(s);
+			}
+		});
+		stringConverters.put(Double.class, new ParameterConverter<Double>() {
+			@Override
+			public Double of(String s) throws Exception {
+				return Double.parseDouble(s);
+			}
+		});
 	}
 	
 	@Override
@@ -81,7 +131,63 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		service.close();
 	}
 	
-	private static HttpController newInstance(Class<? extends HttpController> clazz) {
+	public <T> AnnotatedHttpService parameters(Class<T> clazz, ParameterConverter<T> converter) {
+		stringConverters.put(clazz, converter);
+		return this;
+	}
+	
+	public <T> AnnotatedHttpService parameters(final Class<T> clazz) {
+		final Method m;
+		try {
+			m = clazz.getDeclaredMethod("of", String.class);
+		} catch (Throwable e) {
+			throw new RuntimeException(e);
+		}
+		try {
+			m.setAccessible(true);
+		} catch (Throwable e) {
+		}
+		stringConverters.put(clazz, new ParameterConverter<T>() {
+			@Override
+			public T of(String s) throws Exception {
+				Object r = m.invoke(null, s);
+				@SuppressWarnings("unchecked")
+				T t = (T) r;
+				return t;
+			}
+		});
+		return this;
+	}
+	
+	private ParameterConverter<?> getConverter(Class<?> clazz) {
+		if (clazz == boolean.class) {
+			clazz = Boolean.class;
+		}
+		if (clazz == byte.class) {
+			clazz = Byte.class;
+		}
+		if (clazz == short.class) {
+			clazz = Short.class;
+		}
+		if (clazz == int.class) {
+			clazz = Integer.class;
+		}
+		if (clazz == long.class) {
+			clazz = Long.class;
+		}
+		if (clazz == char.class) {
+			clazz = Character.class;
+		}
+		if (clazz == float.class) {
+			clazz = Float.class;
+		}
+		if (clazz == double.class) {
+			clazz = Double.class;
+		}
+		return stringConverters.get(clazz);
+	}
+	
+	private static <T> T newInstance(Class<? extends T> clazz) {
 		try {
 			return clazz.newInstance();
 		} catch (Exception e) {
@@ -90,7 +196,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private static List<HttpServiceHandler> createInterceptHandlers(final HttpController object) {
+	private List<HttpServiceHandler> createInterceptHandlers(final HttpController object) {
 		List<HttpServiceHandler> handlers = new LinkedList<>();
 
 		for (final Method method : object.getClass().getMethods()) {
@@ -103,9 +209,12 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				Class<?>[] parameterTypes = method.getParameterTypes();
 				final MethodParameter[] parameters = new MethodParameter[parameterAnnotations.length];
 				final String[] defaultValues = new String[parameterAnnotations.length];
+				final ParameterConverter<?>[] methodStringConverters = new ParameterConverter<?>[parameterAnnotations.length];
 				int requestParameterIndexToSet = -1;
 				int postParameterIndexToSet = -1;
 				for (int i = 0; i < parameterAnnotations.length; i++) {
+					methodStringConverters[i] = getConverter(parameterTypes[i]);
+
 					if (parameterTypes[i] == HttpRequest.class) {
 						requestParameterIndexToSet = i;
 						parameters[i] = null;
@@ -184,16 +293,15 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 							}
 							
 							MethodParameter p = parameters[i];
-							String defaultValue = defaultValues[i];
+							String v;
 							if (p == null) {
-								args[i] = defaultValue;
+								v = null;
 							} else {
-								String v;
 								switch (p.from) {
 								case QUERY: {
 									Iterator<Optional<String>> it = request.path.parameters.get(p.name).iterator();
 									if (!it.hasNext()) {
-										v = defaultValue;
+										v = null;
 									} else {
 										Optional<String> o = it.next();
 										if (o.isPresent()) {
@@ -207,7 +315,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 								case HEADER: {
 									Iterator<HttpHeaderValue> it = request.headers.get(p.name).iterator();
 									if (!it.hasNext()) {
-										v = defaultValue;
+										v = null;
 									} else {
 										v = it.next().asString();
 									}
@@ -216,7 +324,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 								case BODY: {
 									Iterator<Optional<String>> it = post.parameters().get(p.name).iterator();
 									if (!it.hasNext()) {
-										v = defaultValue;
+										v = null;
 									} else {
 										Optional<String> o = it.next();
 										if (o.isPresent()) {
@@ -228,11 +336,24 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 									break;
 								}
 								default:
-									v = defaultValue;
+									v = null;
 									break;
 								}
-								args[i] = v;
 							}
+							
+							String defaultValue = defaultValues[i];
+							if (v == null) {
+								v = defaultValue;
+							}
+							
+							Object o;
+							if (methodStringConverters[i] != null) {
+								o = methodStringConverters[i].of(v);
+							} else {
+								o = v;
+							}
+							
+							args[i] = o;
 						}
 
 						try {
@@ -310,9 +431,12 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				Class<?>[] parameterTypes = method.getParameterTypes();
 				final MethodParameter[] parameters = new MethodParameter[parameterAnnotations.length];
 				final String[] defaultValues = new String[parameterAnnotations.length];
+				final ParameterConverter<?>[] methodStringConverters = new ParameterConverter<?>[parameterAnnotations.length];
 				int requestParameterIndexToSet = -1;
 				int postParameterIndexToSet = -1;
 				for (int i = 0; i < parameterAnnotations.length; i++) {
+					methodStringConverters[i] = getConverter(parameterTypes[i]);
+
 					if (parameterTypes[i] == HttpRequest.class) {
 						requestParameterIndexToSet = i;
 						parameters[i] = null;
@@ -462,7 +586,18 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 							}
 
 							String defaultValue = defaultValues[i];
-							args[i] = (v == null) ? defaultValue : v;
+							if (v == null) {
+								v = defaultValue;
+							}
+							
+							Object o;
+							if (methodStringConverters[i] != null) {
+								o = methodStringConverters[i].of(v);
+							} else {
+								o = v;
+							}
+							
+							args[i] = o;
 						}
 
 						HttpController.Http http;
