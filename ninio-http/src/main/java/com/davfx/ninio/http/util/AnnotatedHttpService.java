@@ -21,6 +21,7 @@ import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpQueryPath;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpRequestFilter;
+import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.util.annotations.BodyParameter;
 import com.davfx.ninio.http.util.annotations.DefaultValue;
 import com.davfx.ninio.http.util.annotations.Directory;
@@ -28,6 +29,7 @@ import com.davfx.ninio.http.util.annotations.Header;
 import com.davfx.ninio.http.util.annotations.HeaderParameter;
 import com.davfx.ninio.http.util.annotations.Path;
 import com.davfx.ninio.http.util.annotations.PathParameter;
+import com.davfx.ninio.http.util.annotations.Pre;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
 import com.google.common.base.Optional;
@@ -75,7 +77,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	public void close() {
 		service.close();
 	}
-	
+
 	public AnnotatedHttpService register(Class<? extends HttpController> clazz) {
 		LOGGER.debug("Service class: {}", clazz);
 		Path controllerPath = (Path) clazz.getAnnotation(Path.class);
@@ -93,7 +95,169 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		final String controllerHeaderKey = (controllerHeader == null) ? null : controllerHeader.key();
 		final String controllerHeaderValue = (controllerHeader == null) ? null : controllerHeader.value();
 
+		final Object object;
+		try {
+			object = clazz.newInstance();
+		} catch (Exception e) {
+			LOGGER.warn("Could not create object from class {}", clazz, e);
+			return this;
+		}
+		
 		for (final Method method : clazz.getMethods()) {
+			final List<HttpServiceHandler> preHandlers = new LinkedList<>();
+			
+            Pre pre = (Pre) method.getAnnotation(Pre.class);
+			if (pre != null) {
+				
+				Class<? extends HttpController> preClazz = pre.value();
+
+				final Object preObject;
+				try {
+					preObject = preClazz.newInstance();
+				} catch (Exception e) {
+					LOGGER.warn("Could not create object from pre class {}", preClazz, e);
+					continue;
+				}
+				
+				for (final Method preMethod : preClazz.getMethods()) {
+	
+		            Route route = (Route) preMethod.getAnnotation(Route.class);
+					if (route != null) {
+						final HttpMethod routeMethod = route.method();
+						
+						Annotation[][] parameterAnnotations = preMethod.getParameterAnnotations();
+						Class<?>[] parameterTypes = preMethod.getParameterTypes();
+						final MethodParameter[] parameters = new MethodParameter[parameterAnnotations.length];
+						final String[] defaultValues = new String[parameterAnnotations.length];
+						int requestParameterIndexToSet = -1;
+						int postParameterIndexToSet = -1;
+						for (int i = 0; i < parameterAnnotations.length; i++) {
+							if (parameterTypes[i] == HttpRequest.class) {
+								requestParameterIndexToSet = i;
+								parameters[i] = null;
+								continue;
+							}
+							
+							if (parameterTypes[i] == HttpPost.class) {
+								postParameterIndexToSet = i;
+								parameters[i] = null;
+								continue;
+							}
+		
+							Annotation[] an = parameterAnnotations[i];
+							MethodParameter p = null;
+							String defaultValue = null;
+							for (Annotation a : an) {
+								if (a.annotationType() == DefaultValue.class) {
+									defaultValue = ((DefaultValue) a).value();
+								}
+								MethodParameter q = null;
+								if (a.annotationType() == QueryParameter.class) {
+									q = new MethodParameter(((QueryParameter) a).value(), MethodParameter.From.QUERY);
+								}
+								if (a.annotationType() == HeaderParameter.class) {
+									q = new MethodParameter(((HeaderParameter) a).value(), MethodParameter.From.HEADER);
+								}
+								if (a.annotationType() == BodyParameter.class) {
+									q = new MethodParameter(((BodyParameter) a).value(), MethodParameter.From.BODY);
+								}
+								if (q != null) {
+									if (p != null) {
+										LOGGER.warn("Multiple annotations clash: {} / {}", p, q);
+									}
+									p = q;
+								}
+							}
+							parameters[i] = p;
+							defaultValues[i] = defaultValue;
+						}
+						
+						final int requestParameterIndex = requestParameterIndexToSet;
+						final int postParameterIndex = postParameterIndexToSet;
+		
+						HttpServiceHandler preHandler = new HttpServiceHandler() {
+							@Override
+							public HttpController.Http handle(HttpRequest request, HttpPost post) throws Exception {
+								if (request.method != routeMethod) {
+									return null;
+								}
+	
+								Object[] args = new Object[parameters.length];
+								for (int i = 0; i < parameters.length; i++) {
+									if (i == requestParameterIndex) {
+										args[i] = request;
+										continue;
+									}
+									if (i == postParameterIndex) {
+										args[i] = post;
+										continue;
+									}
+									
+									MethodParameter p = parameters[i];
+									String defaultValue = defaultValues[i];
+									if (p == null) {
+										args[i] = defaultValue;
+									} else {
+										String v;
+										switch (p.from) {
+										case QUERY: {
+											Iterator<Optional<String>> it = request.path.parameters.get(p.name).iterator();
+											if (!it.hasNext()) {
+												v = defaultValue;
+											} else {
+												Optional<String> o = it.next();
+												if (o.isPresent()) {
+													v = o.get();
+												} else {
+													v = null;
+												}
+											}
+											break;
+										}
+										case HEADER: {
+											Iterator<String> it = request.headers.get(p.name).iterator();
+											if (!it.hasNext()) {
+												v = defaultValue;
+											} else {
+												v = it.next();
+											}
+											break;
+										}
+										case BODY: {
+											Iterator<Optional<String>> it = post.parameters().get(p.name).iterator();
+											if (!it.hasNext()) {
+												v = defaultValue;
+											} else {
+												Optional<String> o = it.next();
+												if (o.isPresent()) {
+													v = o.get();
+												} else {
+													v = null;
+												}
+											}
+											break;
+										}
+										default:
+											v = defaultValue;
+											break;
+										}
+										args[i] = v;
+									}
+								}
+		
+								try {
+									return (HttpController.Http) preMethod.invoke(preObject, args);
+								} catch (Exception e) {
+									throw new IOException(e);
+								}
+							}
+						};
+						
+						preHandlers.add(preHandler);
+					}
+				}
+			}
+			
             Route route = (Route) method.getAnnotation(Route.class);
 			if (route != null) {
 				final HttpMethod routeMethod = route.method();
@@ -111,14 +275,6 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				}
 				
 				final ImmutableMultimap<String, Optional<String>> pathParameters = (pathSuffix == null) ? null : pathSuffix.parameters;
-				
-				final Object object;
-				try {
-					object = clazz.newInstance();
-				} catch (Exception e) {
-					LOGGER.warn("Could not create object from class {}", clazz, e);
-					continue;
-				}
 				
 				Annotation[][] parameterAnnotations = method.getParameterAnnotations();
 				Class<?>[] parameterTypes = method.getParameterTypes();
@@ -183,6 +339,15 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				HttpServiceHandler handler = new HttpServiceHandler() {
 					@Override
 					public HttpController.Http handle(HttpRequest request, HttpPost post) throws Exception {
+						for (HttpServiceHandler preHandler : preHandlers) {
+							HttpController.Http preHttp = preHandler.handle(request, post);
+							if (preHttp != null) {
+								if (preHttp.status != HttpStatus.OK) {
+									return preHttp;
+								}
+							}
+						}
+						
 						Object[] args = new Object[parameters.length];
 						for (int i = 0; i < parameters.length; i++) {
 							if (i == requestParameterIndex) {
