@@ -10,6 +10,10 @@ public interface HttpController {
 	interface HttpStream {
 		void produce(OutputStream output) throws Exception;
 	}
+	interface HttpWrap {
+		void handle(Http http) throws Exception;
+	}
+	
 	final class Http {
 		final int status;
 		final String reason;
@@ -17,12 +21,19 @@ public interface HttpController {
 		long contentLength = -1L;
 		String content = null;
 		HttpStream stream = null;
+		final HttpWrap wrap;
 		
-		Http(int status, String reason) {
+		private Http(int status, String reason) {
 			this.status = status;
 			this.reason = reason;
+			wrap = null;
 		}
-
+		private Http(int status, String reason, HttpWrap wrap) {
+			this.status = status;
+			this.reason = reason;
+			this.wrap = wrap;
+		}
+		
 		public Http contentType(String contentType) {
 			this.contentType = contentType;
 			return this;
@@ -36,6 +47,9 @@ public interface HttpController {
 			this.content = content;
 			stream = null;
 			return this;
+		}
+		public String content() {
+			return content;
 		}
 		public Http stream(HttpStream stream) {
 			content = null;
@@ -52,5 +66,11 @@ public interface HttpController {
 		public static Http notFound() {
 			return new Http(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND);
 		}
+		
+		public static Http wrap(HttpWrap wrap) {
+			return new Http(HttpStatus.OK, HttpMessage.OK, wrap);
+		}
+
+
 	}
 }

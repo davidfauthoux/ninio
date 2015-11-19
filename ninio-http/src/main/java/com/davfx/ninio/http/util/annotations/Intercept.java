@@ -9,6 +9,6 @@ import com.davfx.ninio.http.util.HttpController;
 
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Pre {
+public @interface Intercept {
 	Class<? extends HttpController> value();
 }
