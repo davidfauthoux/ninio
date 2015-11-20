@@ -71,7 +71,7 @@ public final class ReadmeWithWebsocket {
 								LOGGER.warn("Failed <--", e);
 							}
 						}))
-						.add(new SubPathHttpRequestFilter(HttpQueryPath.of()), new FileHttpServerHandler(new File("src/test/resources")))
+						.add(new SubPathHttpRequestFilter(HttpQueryPath.of()), new FileHttpServerHandler(new File("src/test/resources"), HttpQueryPath.of()))
 					);
 				}
 		})) {

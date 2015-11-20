@@ -496,7 +496,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 						ImmutableList.Builder<String> pathWithoutBeginning = ImmutableList.builder();
 						int pathIndex = 0;
 						for (String s : sourceRequest.path.path.path) {
-							if (pathIndex > pathComponents.size()) {
+							if (pathIndex >= pathComponents.size()) {
 								pathWithoutBeginning.add(s);
 							}
 							pathIndex++;

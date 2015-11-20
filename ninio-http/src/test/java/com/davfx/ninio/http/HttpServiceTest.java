@@ -602,4 +602,139 @@ public class HttpServiceTest {
 			queue.finish().waitFor();
 		}
 	}
+	@Test
+	public void testInsideFilesWithPortRouting() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.register(HttpQueryPath.of("/files"), new Assets(new File("src/test/resources"), "index.html"));
+				/*
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+				*/
+
+				queue.finish().waitFor();
+				
+				try (PortRouter router = new PortRouter(queue, new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					queue.finish().waitFor();
+					Thread.sleep(100);
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8081/files/in-dir/in-file.html").openConnection();
+					StringBuilder b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					c.disconnect();
+					Assertions.assertThat(b.toString()).isEqualTo("<!doctype html><html><head><meta charset=\"utf-8\" /></head><body><div>Hello inside</div></body>\n");
+				}
+			}
+			queue.finish().waitFor();
+		}
+	}
+	@Test
+	public void testRootIndexFilesWithPortRouting() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.register(HttpQueryPath.of(), new Assets(new File("src/test/resources"), "index.html"));
+				/*
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+				*/
+
+				queue.finish().waitFor();
+				
+				try (PortRouter router = new PortRouter(queue, new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					queue.finish().waitFor();
+					Thread.sleep(100);
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8081").openConnection();
+					StringBuilder b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					c.disconnect();
+					Assertions.assertThat(b.toString()).isEqualTo("<!doctype html><html><head><meta charset=\"utf-8\" /></head><body><div>Hello</div></body>\n");
+				}
+			}
+			queue.finish().waitFor();
+		}
+	}
+	@Test
+	public void testRootInsideFilesWithPortRouting() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.register(HttpQueryPath.of(), new Assets(new File("src/test/resources"), "index.html"));
+				/*
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+				*/
+
+				queue.finish().waitFor();
+				
+				try (PortRouter router = new PortRouter(queue, new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					queue.finish().waitFor();
+					Thread.sleep(100);
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8081/in-dir/in-file.html").openConnection();
+					StringBuilder b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					c.disconnect();
+					Assertions.assertThat(b.toString()).isEqualTo("<!doctype html><html><head><meta charset=\"utf-8\" /></head><body><div>Hello inside</div></body>\n");
+				}
+			}
+			queue.finish().waitFor();
+		}
+	}
+	
+	@Test
+	public void testInsideIndexFilesWithPortRouting() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
+				server.register(HttpQueryPath.of("/files"), new Assets(new File("src/test/resources"), "index.html"));
+				/*
+				for (Class<?> cls : HttpServiceTest.class.getDeclaredClasses()) {
+			    	@SuppressWarnings("unchecked")
+					Class<? extends HttpController> c = (Class<? extends HttpController>) cls;
+					server.register(c);
+				}
+				*/
+
+				queue.finish().waitFor();
+				
+				try (PortRouter router = new PortRouter(queue, new Address(Address.ANY, 8081), new Address(Address.LOCALHOST, 8080), null)) {
+					queue.finish().waitFor();
+					Thread.sleep(100);
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8081/files/in-dir").openConnection();
+					Assertions.assertThat(c.getResponseCode()).isEqualTo(404);
+					c.disconnect();
+				}
+			}
+			queue.finish().waitFor();
+		}
+	}
 }

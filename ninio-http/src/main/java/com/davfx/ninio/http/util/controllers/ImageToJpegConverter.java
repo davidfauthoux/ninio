@@ -37,30 +37,9 @@ public final class ImageToJpegConverter implements HttpController {
 	}
 
 	@Route(method = HttpMethod.GET)
-	public Http convert(final @QueryParameter("url") String url, @QueryParameter("quality") String qualityAsString, @QueryParameter("width") @DefaultValue("0") String widthAsString, @QueryParameter("height") @DefaultValue("0") String heightAsString) {
+	public Http convert(final @QueryParameter("url") String url, final @QueryParameter("quality") float quality, final @QueryParameter("width") @DefaultValue("0") int width, final @QueryParameter("height") @DefaultValue("0") int height) {
 		LOGGER.debug("Converting: {}", url);
 
-		final float quality;
-		if (qualityAsString == null) {
-			quality = 1f;
-		} else {
-			quality = Float.parseFloat(qualityAsString);
-		}
-
-		final int width;
-		if (widthAsString == null) {
-			width = -1;
-		} else {
-			width = Integer.parseInt(widthAsString);
-		}
-
-		final int height;
-		if (heightAsString == null) {
-			height = -1;
-		} else {
-			height = Integer.parseInt(heightAsString);
-		}
-		
 		return Http.ok().async(new HttpAsync() {
 			@Override
 			public void produce(final HttpAsyncOutput output) {

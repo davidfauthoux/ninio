@@ -6,7 +6,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import com.davfx.ninio.core.Address;
@@ -29,12 +32,14 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	}
 	
 	private final File dir;
+	private final HttpQueryPath rootPath;
 	private HttpRequest request;
 	private final Map<String, HttpHeaderValue> contentTypes = new LinkedHashMap<>();
 	private String index = DEFAULT_INDEX;
 	
-	public FileHttpServerHandler(File dir) {
+	public FileHttpServerHandler(File dir, HttpQueryPath rootPath) {
 		this.dir = dir;
+		this.rootPath = rootPath;
 		contentTypes.putAll(DEFAULT_CONTENT_TYPES);
 	}
 	
@@ -63,7 +68,25 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	@Override
 	public void ready(Write write) {
 		try {
-			File file = new File(dir, request.path.path.path.isEmpty() ? index : (File.separatorChar + Joiner.on(File.separatorChar).join(request.path.path.path)));
+			List<String> ll = new LinkedList<>();
+			Iterator<String> i = rootPath.path.iterator();
+			for (String s : request.path.path.path) {
+				if (!i.hasNext()) {
+					i = null;
+				}
+				if (i == null) {
+					ll.add(s);
+				} else {
+					String n = i.next();
+					if (!s.equals(n)) {
+						write.write(new HttpResponse(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND));
+						write.close();
+						return;
+					}
+				}
+			}
+
+			File file = new File(dir, ll.isEmpty() ? index : (File.separatorChar + Joiner.on(File.separatorChar).join(ll)));
 
 			if (file.isFile()) {
 				String name = file.getName();

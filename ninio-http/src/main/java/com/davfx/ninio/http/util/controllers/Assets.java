@@ -40,24 +40,6 @@ public final class Assets implements HttpController{
 	
 	@Route(method = HttpMethod.GET)
 	public Http serve(HttpRequest request) throws Exception {
-		/*%%
-		List<String> l = new LinkedList<>();
-		Iterator<String> i = path.iterator();
-		for (String s : request.path.path.path) {
-			if (!i.hasNext()) {
-				i = null;
-			}
-			if (i == null) {
-				l.add(s);
-			} else {
-				String n = i.next();
-				if (!s.equals(n)) {
-					return Http.notFound();
-				}
-			}
-		}
-		*/
-		
 		final File file = new File(dir, request.path.path.path.isEmpty() ? index : Joiner.on(File.separatorChar).join(request.path.path.path));
 
 		if (file.isFile()) {
