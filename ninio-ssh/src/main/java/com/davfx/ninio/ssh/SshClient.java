@@ -95,6 +95,7 @@ public final class SshClient implements TelnetReady {
 					private byte[] sessionId;
 					private boolean passwordWritten = false;
 					private String encryptionKeyExchangeAlgorithm;
+					private boolean channelOpen = false;
 					
 					{
 						clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
@@ -413,57 +414,86 @@ public final class SshClient implements TelnetReady {
 										b.writeInt(maxPacketSize);
 										write.handle(null, b.finish());
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_OPEN_CONFIRMATION) { // Without this command, the shell would have no prompt
-										int channelId = 0;
-										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
-										b.writeInt(channelId);
-										b.writeString("pty-req");
-										b.writeByte(1); // With reply
-										b.writeString("vt100");
-										b.writeInt(80);
-										b.writeInt(24);
-										b.writeInt(640);
-										b.writeInt(480);
-										b.writeString(""); // Terminal mode
-										write.handle(null, b.finish());
-									} else if (command == SshUtils.SSH_MSG_CHANNEL_SUCCESS) {
-										int channelId = 0;
-										SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
-										b.writeInt(channelId);
 										if (exec == null) {
-											b.writeString("shell");
+											int channelId = 0;
+											SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
+											b.writeInt(channelId);
+											b.writeString("pty-req");
+											b.writeByte(1); // With reply
+											b.writeString("vt100");
+											b.writeInt(80);
+											b.writeInt(24);
+											b.writeInt(640);
+											b.writeInt(480);
+											byte[] terminalModes = {};
+											b.writeBlob(terminalModes);
+											write.handle(null, b.finish());
 										} else {
-											b.writeString("exec");
-										}
-										b.writeByte(0); // No reply
-										if (exec != null) {
-											b.writeString(exec);
-										}
-										write.handle(null, b.finish());
-
-										clientHandler.connected(new FailableCloseableByteBufferHandler() {
-											@Override
-											public void close() {
-												write.close();
-											}
-											@Override
-											public void failed(IOException e) {
-												close();
-											}
-											@Override
-											public void handle(Address address, ByteBuffer buffer) {
+											if (!channelOpen) {
+												channelOpen = true;
 												int channelId = 0;
-												SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_DATA);
+												SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
 												b.writeInt(channelId);
-												b.writeBlob(buffer);
+												b.writeString("exec");
+												b.writeByte(1); // With reply
+												b.writeString(exec);
 												write.handle(null, b.finish());
+											} else {
+												clientHandler.connected(new FailableCloseableByteBufferHandler() {
+													@Override
+													public void close() {
+														write.close();
+													}
+													@Override
+													public void failed(IOException e) {
+														close();
+													}
+													@Override
+													public void handle(Address address, ByteBuffer buffer) {
+														int channelId = 0;
+														SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_DATA);
+														b.writeInt(channelId);
+														b.writeBlob(buffer);
+														write.handle(null, b.finish());
+													}
+												});
 											}
-										});
+										}
+									} else if (command == SshUtils.SSH_MSG_CHANNEL_SUCCESS) {
+										if (!channelOpen) {
+											channelOpen = true;
+											int channelId = 0;
+											SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_REQUEST);
+											b.writeInt(channelId);
+											b.writeString("shell");
+											b.writeByte(1); // With reply
+											write.handle(null, b.finish());
+										} else {
+											clientHandler.connected(new FailableCloseableByteBufferHandler() {
+												@Override
+												public void close() {
+													write.close();
+												}
+												@Override
+												public void failed(IOException e) {
+													close();
+												}
+												@Override
+												public void handle(Address address, ByteBuffer buffer) {
+													int channelId = 0;
+													SshPacketBuilder b = new SshPacketBuilder().writeByte(SshUtils.SSH_MSG_CHANNEL_DATA);
+													b.writeInt(channelId);
+													b.writeBlob(buffer);
+													write.handle(null, b.finish());
+												}
+											});
+										}
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_WINDOW_ADJUST) {
 										// Ignored
 									} else if (command == SshUtils.SSH_MSG_CHANNEL_DATA) {
 										packet.readInt(); // Channel ID
 										lengthToRead = packet.readInt();
-										LOGGER.trace("Data length: {}", lengthToRead);
+										LOGGER.trace("Data length: {} / {}", lengthToRead, buffer.remaining());
 										if (lengthToRead <= buffer.remaining()) {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
@@ -478,7 +508,7 @@ public final class SshClient implements TelnetReady {
 										long code = packet.readInt(); // Code
 										LOGGER.trace("Extended data code: {}", code);
 										lengthToRead = packet.readInt();
-										LOGGER.trace("Data length: {}", lengthToRead);
+										LOGGER.trace("Extended data length: {}", lengthToRead);
 										if (lengthToRead <= buffer.remaining()) {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));

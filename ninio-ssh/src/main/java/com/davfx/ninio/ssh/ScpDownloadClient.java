@@ -1,20 +1,21 @@
 package com.davfx.ninio.ssh;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.ByteBuffer;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.Failable;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.ReadyConnection;
-import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 
 public final class ScpDownloadClient {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(ScpDownloadClient.class);
+	
 	private final SshClient client;
 	
 	public ScpDownloadClient(SshClient client) {
@@ -68,12 +69,14 @@ public final class ScpDownloadClient {
 						handler.close();
 					}
 				} else {
+					String header = new String(buffer.array(), buffer.position(), buffer.remaining());
+					LOGGER.trace("Header: {}", header);
 					try {
-						size = Long.parseLong(Splitter.on(' ').splitToList(new String(buffer.array(), buffer.position(), buffer.remaining())).get(1));
+						size = Long.parseLong(Splitter.on(' ').splitToList(header).get(1));
 					} catch (Exception e) {
 						write.close();
 						closed = true;
-						handler.failed(new IOException("SCP header corrupted", e));
+						handler.failed(new IOException("SCP header corrupted: " + header, e));
 					}
 					write.handle(null, ByteBuffer.wrap(new byte[] { 0 }));
 				}
@@ -87,6 +90,7 @@ public final class ScpDownloadClient {
 		});
 	}
 	
+	/*%% Not working with big files
 	public void put(final String filePath, final long fileSize, final ReadyConnection in) {
 		client.exec("scp -t " + filePath.replace(" ", "\\ ")).connect(new ReadyConnection() {
 			private CloseableByteBufferHandler write;
@@ -107,11 +111,13 @@ public final class ScpDownloadClient {
 			
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
+				LOGGER.debug("Upload response: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
 				if (write == null) {
 					return;
 				}
 				countAck++;
 				if (countAck == 3) {
+					LOGGER.debug("Upload done: {}", filePath);
 					write.close();
 					write = null;
 					in.close();
@@ -138,6 +144,7 @@ public final class ScpDownloadClient {
 					
 					@Override
 					public void close() {
+						LOGGER.debug("Upload closed");
 						write.handle(null, ByteBuffer.wrap(new byte[] { 0 }));
 					}
 					
@@ -149,39 +156,5 @@ public final class ScpDownloadClient {
 			}
 		});
 	}
-	
-	private static final int BUFFER_SIZE = 10 * 1024;
-	
-	public void put(String filePath, final File source, final Failable end) {
-		put(filePath, source.length(), new ReadyConnection() {
-			@Override
-			public void failed(IOException e) {
-				end.failed(e);
-			}
-			@Override
-			public void close() {
-				end.failed(null);
-			}
-			@Override
-			public void handle(Address address, ByteBuffer buffer) {
-			}
-			@Override
-			public void connected(FailableCloseableByteBufferHandler write) {
-				try (InputStream in = new FileInputStream(source)) {
-					byte[] b = new byte[BUFFER_SIZE];
-					while (true) {
-						int l = in.read(b);
-						if (l < 0) {
-							break;
-						}
-						write.handle(null, ByteBuffer.wrap(b, 0, l));
-					}
-					write.close();
-				} catch (IOException e) {
-					write.failed(e);
-					end.failed(e);
-				}
-			}
-		});
-	}
+	*/
 }

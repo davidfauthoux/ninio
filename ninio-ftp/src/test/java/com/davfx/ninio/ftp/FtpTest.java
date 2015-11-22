@@ -149,5 +149,6 @@ public class FtpTest {
 			f.delete();
 		}
 		server.stop();
+		Thread.sleep(100);
 	}
 }

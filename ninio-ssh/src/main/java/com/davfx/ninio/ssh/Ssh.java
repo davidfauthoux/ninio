@@ -21,6 +21,7 @@ public final class Ssh {
 	private static final Config CONFIG = ConfigFactory.load(Ssh.class.getClassLoader());
 	
 	private static final String DEFAULT_LOGIN = CONFIG.getString("ninio.ssh.defaultLogin");
+	//%% private static final int UPLOAD_BUFFER_SIZE = CONFIG.getBytes("ninio.ssh.upload.buffer").intValue();
 	
 	public static final int DEFAULT_PORT = 22;
 
@@ -78,10 +79,47 @@ public final class Ssh {
 		return new SshClient(queue, readyFactory, address, login, password, key);
 	}
 	
-	public void download(String filePath, final FailableCloseableByteBufferHandler handler) {
+	public void download(String filePath, FailableCloseableByteBufferHandler handler) {
 		new ScpDownloadClient(client()).get(filePath, handler);
 	}
-	
+	/*%%
+	public void upload(String filePath, long fileSize, ReadyConnection handler) {
+		new ScpDownloadClient(client()).put(filePath, fileSize, handler);
+	}
+	public void upload(String filePath, final File source, final Failable end) {
+		upload(filePath, source.length(), new ReadyConnection() {
+			@Override
+			public void failed(IOException e) {
+				end.failed(e);
+			}
+			@Override
+			public void close() {
+				end.failed(null);
+			}
+			@Override
+			public void handle(Address address, ByteBuffer buffer) {
+			}
+			@Override
+			public void connected(FailableCloseableByteBufferHandler write) {
+				try (InputStream in = new FileInputStream(source)) {
+					byte[] b = new byte[UPLOAD_BUFFER_SIZE];
+					while (true) {
+						int l = in.read(b);
+						if (l < 0) {
+							break;
+						}
+						write.handle(null, ByteBuffer.wrap(b, 0, l));
+					}
+					write.close();
+				} catch (IOException e) {
+					write.failed(e);
+					end.failed(e);
+				}
+			}
+		});
+	}
+	*/
+
 	public static TelnetSharingReadyFactory sharing(final String login, final String password) {
 		return new TelnetSharingReadyFactory() {
 			@Override
