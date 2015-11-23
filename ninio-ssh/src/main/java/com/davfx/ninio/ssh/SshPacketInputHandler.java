@@ -7,6 +7,7 @@ import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.google.common.primitives.Ints;
 
 final class SshPacketInputHandler implements CloseableByteBufferHandler {
+	
 	private ByteBuffer buffer = null;
 	private ByteBuffer paddingBuffer = null;
 	private ByteBuffer lengthBuffer = ByteBuffer.allocate(Ints.BYTES);
@@ -37,21 +38,20 @@ final class SshPacketInputHandler implements CloseableByteBufferHandler {
 			}
 			
 			if (state == 1) {
-				int padding = b.get() & 0xFF;
-				buffer = ByteBuffer.allocate(length - 1 - padding);
-				paddingBuffer = ByteBuffer.allocate(padding);
-				length = -1;
-				state = 2;
+				if (b.hasRemaining()) {
+					int padding = b.get() & 0xFF;
+					buffer = ByteBuffer.allocate(length - 1 - padding);
+					paddingBuffer = ByteBuffer.allocate(padding);
+					length = -1;
+					state = 2;
+				}
 			}
 			
 			if (state == 2) {
 				ByteBufferUtils.transfer(b, buffer);
 				if (buffer.position() == buffer.capacity()) {
 					buffer.flip();
-					ByteBuffer bb = buffer;
-					buffer = null;
 					state = 3;
-					wrappee.handle(address, bb);
 				}
 			}
 			if (state == 3) {
@@ -59,6 +59,10 @@ final class SshPacketInputHandler implements CloseableByteBufferHandler {
 				if (paddingBuffer.position() == paddingBuffer.capacity()) {
 					paddingBuffer = null;
 					state = 0;
+
+					ByteBuffer bb = buffer;
+					buffer = null;
+					wrappee.handle(address, bb);
 				}
 			}
 		}

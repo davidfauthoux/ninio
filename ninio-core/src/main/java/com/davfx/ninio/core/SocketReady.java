@@ -71,6 +71,13 @@ public final class SocketReady implements Ready {
 												connection.close();
 											} else {
 												readBuffer.flip();
+												/*%%%
+												while (readBuffer.hasRemaining()) {
+													byte[] bbb = new byte[] { readBuffer.get() };
+													ByteBuffer b = ByteBuffer.wrap(bbb);
+													connection.handle(address, b);
+												}
+												*/
 												connection.handle(address, readBuffer);
 											}
 										} catch (IOException e) {
