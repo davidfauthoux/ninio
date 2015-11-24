@@ -2,7 +2,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<groupId>com.davfx.ninio</groupId>
-	<artifactId>ninio-parent</artifactId>
+	<artifactId>ninio</artifactId>
 	<version>2.0</version>
 	<packaging>pom</packaging>
 
