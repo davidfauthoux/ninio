@@ -15,37 +15,31 @@
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-core</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx</groupId>
 			<artifactId>davfx-script</artifactId>
-			<version>${ninio.version}</version>
+			<version>2.0</version>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-ping</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-snmp</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-telnet</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-ssh</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-http</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 	</dependencies>
 </project>

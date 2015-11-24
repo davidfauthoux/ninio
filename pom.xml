@@ -30,7 +30,6 @@
 	</scm>
 
 	<properties>
-		<ninio.version>2.0</ninio.version>
 		<jdk.version>1.8</jdk.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
@@ -190,5 +189,52 @@
 	</dependencies>
 
 	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-core</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-snmp</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-telnet</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-ssh</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-ftp</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-ping</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-proxy</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-http</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-script</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+		</dependencies>
 	</dependencyManagement>
 </project>

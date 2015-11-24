@@ -15,7 +15,6 @@
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-core</artifactId>
-			<version>${ninio.version}</version>
 		</dependency>
 	</dependencies>
 </project>
