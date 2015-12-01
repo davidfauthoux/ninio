@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
 
-final class HexTcpdumpReader implements TcpdumpReader {
+public final class HexTcpdumpReader implements TcpdumpReader {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HexTcpdumpReader.class);
 	
 	private static final int MAX_SIZE = 100 * 1024;

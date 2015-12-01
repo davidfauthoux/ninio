@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 
-interface TcpdumpReader {
+public interface TcpdumpReader {
 	Iterable<String> tcpdumpOptions();
 	
 	interface Handler {

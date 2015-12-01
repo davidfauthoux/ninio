@@ -127,7 +127,10 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		
 		private DatagramSocket socket = null;
 		
-		public Receiver(final Rule rule, final String interfaceId) { //, final boolean promiscuous) {
+		public Receiver(Rule rule, String interfaceId) {
+			this(rule, interfaceId, null);
+		}
+		public Receiver(final Rule rule, final String interfaceId, final ByteBufferHandler allHandler) { //, final boolean promiscuous) {
 			/*%%
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
@@ -229,6 +232,10 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 															LOGGER.error("Could not forward tcpdump packet", ee);
 														}
 													}*/
+													
+													if (allHandler != null) {
+														allHandler.handle(sourceAddress, buffer);
+													}
 													
 													ReadyConnection connection = connections.get("s/" + sourceAddress.getHost() + "/"); //%% new Address(destinationIp, destinationPort));
 													if (connection == null) {
