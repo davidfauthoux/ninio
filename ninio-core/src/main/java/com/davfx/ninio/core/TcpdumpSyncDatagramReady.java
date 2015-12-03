@@ -51,6 +51,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			throw new ConfigException.BadValue("ninio.tcpdump.mode", "Invalid: " + mode + ", only 'raw' and 'hex' allowed");
 		}
 	}
+	private static final String TCPDUMP_COMMAND = CONFIG.getString("ninio.tcpdump.path");
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.tcpdump.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.tcpdump.datagram.write.size").intValue();
 
@@ -157,12 +158,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						File dir = new File(".");
 			
 						List<String> toExec = new LinkedList<String>();
-						File tcpdump = new File(dir, "tcpdump");
-						if (tcpdump.exists()) {
-							toExec.add(tcpdump.getAbsolutePath());
-						} else {
-							toExec.add("tcpdump");
-						}
+						toExec.add(TCPDUMP_COMMAND);
 						//%% toExec.add("-w");
 						//%% toExec.add("-"); // Try with /dev/stdout
 						toExec.add("-i");
