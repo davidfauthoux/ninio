@@ -31,7 +31,9 @@ public final class DispatchHttpServerHandler implements HttpServerHandler {
 				}
 				@Override
 				public void ready(Write write) {
-					write.failed(new IOException("No handler provided"));
+					write.write(new HttpResponse(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND));
+					write.close();
+					// write.failed(new IOException("No handler provided"));
 				}
 				@Override
 				public void handle(HttpRequest request) {

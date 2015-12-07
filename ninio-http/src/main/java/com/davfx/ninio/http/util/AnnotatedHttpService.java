@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -36,6 +37,7 @@ import com.davfx.ninio.http.util.annotations.Route;
 import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
+import com.google.common.reflect.TypeToken;
 
 public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 	
@@ -69,61 +71,79 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		}
 	}
 
+	private static final class ConverterElement<T> {
+		public final TypeToken<T> type;
+		public final ParameterConverter<T> converter;
+		public ConverterElement(Class<T> type, ParameterConverter<T> converter) {
+			this(TypeToken.of(type), converter);
+		}
+		public ConverterElement(TypeToken<T> type, ParameterConverter<T> converter) {
+			this.type = type;
+			this.converter = converter;
+		}
+	}
+	
 	private final HttpService service;
 	private final List<HttpServiceHandler> allInterceptHandlers = new LinkedList<>();
-	private final Map<Class<?>, ParameterConverter<?>> stringConverters = new HashMap<>();
+	private final List<ConverterElement<?>> stringConverters = new LinkedList<>();
 
 	public AnnotatedHttpService(Queue queue, Address address) {
 		service = new HttpService(queue, address);
 		
-		stringConverters.put(Boolean.class, new ParameterConverter<Boolean>() {
+		stringConverters.add(new ConverterElement<Boolean>(Boolean.class, new ParameterConverter<Boolean>() {
 			@Override
 			public Boolean of(String s) throws Exception {
 				return Boolean.parseBoolean(s);
 			}
-		});
-		stringConverters.put(Byte.class, new ParameterConverter<Byte>() {
+		}));
+		stringConverters.add(new ConverterElement<Byte>(Byte.class, new ParameterConverter<Byte>() {
 			@Override
 			public Byte of(String s) throws Exception {
 				return Byte.parseByte(s);
 			}
-		});
-		stringConverters.put(Short.class, new ParameterConverter<Short>() {
+		}));
+		stringConverters.add(new ConverterElement<Short>(Short.class, new ParameterConverter<Short>() {
 			@Override
 			public Short of(String s) throws Exception {
 				return Short.parseShort(s);
 			}
-		});
-		stringConverters.put(Integer.class, new ParameterConverter<Integer>() {
+		}));
+		stringConverters.add(new ConverterElement<Integer>(Integer.class, new ParameterConverter<Integer>() {
 			@Override
 			public Integer of(String s) throws Exception {
 				return Integer.parseInt(s);
 			}
-		});
-		stringConverters.put(Long.class, new ParameterConverter<Long>() {
+		}));
+		stringConverters.add(new ConverterElement<Long>(Long.class, new ParameterConverter<Long>() {
 			@Override
 			public Long of(String s) throws Exception {
 				return Long.parseLong(s);
 			}
-		});
-		stringConverters.put(Character.class, new ParameterConverter<Character>() {
+		}));
+		stringConverters.add(new ConverterElement<Character>(Character.class, new ParameterConverter<Character>() {
 			@Override
 			public Character of(String s) throws Exception {
 				return s.charAt(0);
 			}
-		});
-		stringConverters.put(Float.class, new ParameterConverter<Float>() {
+		}));
+		stringConverters.add(new ConverterElement<Float>(Float.class, new ParameterConverter<Float>() {
 			@Override
 			public Float of(String s) throws Exception {
 				return Float.parseFloat(s);
 			}
-		});
-		stringConverters.put(Double.class, new ParameterConverter<Double>() {
+		}));
+		stringConverters.add(new ConverterElement<Double>(Double.class, new ParameterConverter<Double>() {
 			@Override
 			public Double of(String s) throws Exception {
 				return Double.parseDouble(s);
 			}
-		});
+		}));
+		stringConverters.add(new ConverterElement<String>(String.class, new ParameterConverter<String>() {
+			@Override
+			public String of(String s) throws Exception {
+				return s;
+			}
+		}));
 	}
 	
 	@Override
@@ -131,8 +151,13 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		service.close();
 	}
 	
+	public <T> AnnotatedHttpService parameters(TypeToken<T> clazz, ParameterConverter<T> converter) {
+		stringConverters.add(new ConverterElement<>(clazz, converter));
+		return this;
+	}
+	
 	public <T> AnnotatedHttpService parameters(Class<T> clazz, ParameterConverter<T> converter) {
-		stringConverters.put(clazz, converter);
+		stringConverters.add(new ConverterElement<>(clazz, converter));
 		return this;
 	}
 	
@@ -147,7 +172,7 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 			m.setAccessible(true);
 		} catch (Throwable e) {
 		}
-		stringConverters.put(clazz, new ParameterConverter<T>() {
+		stringConverters.add(new ConverterElement<>(clazz, new ParameterConverter<T>() {
 			@Override
 			public T of(String s) throws Exception {
 				Object r = m.invoke(null, s);
@@ -155,11 +180,11 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				T t = (T) r;
 				return t;
 			}
-		});
+		}));
 		return this;
 	}
 	
-	private ParameterConverter<?> getConverter(Class<?> clazz) {
+	private ParameterConverter<?> getConverter(Type clazz) {
 		if (clazz == boolean.class) {
 			clazz = Boolean.class;
 		}
@@ -184,7 +209,17 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 		if (clazz == double.class) {
 			clazz = Double.class;
 		}
-		return stringConverters.get(clazz);
+		TypeToken<?> t = TypeToken.of(clazz);
+		for (ConverterElement<?> c : stringConverters) {
+			LOGGER.trace("Comparing {} == {}", t, c.type);
+			if (c.type.equals(t)) {
+				return c.converter;
+			}
+			if (c.type.isAssignableFrom(t)) {
+				return c.converter;
+			}
+		}
+		throw new IllegalArgumentException("No converter found for: " + clazz);
 	}
 	
 	private static <T> T newInstance(Class<? extends T> clazz) {
@@ -206,26 +241,28 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				final HttpMethod routeMethod = route.method();
 				
 				Annotation[][] parameterAnnotations = method.getParameterAnnotations();
-				Class<?>[] parameterTypes = method.getParameterTypes();
+				Type[] parameterTypes = method.getGenericParameterTypes();
 				final MethodParameter[] parameters = new MethodParameter[parameterAnnotations.length];
 				final String[] defaultValues = new String[parameterAnnotations.length];
 				final ParameterConverter<?>[] methodStringConverters = new ParameterConverter<?>[parameterAnnotations.length];
 				int requestParameterIndexToSet = -1;
 				int postParameterIndexToSet = -1;
 				for (int i = 0; i < parameterAnnotations.length; i++) {
-					methodStringConverters[i] = getConverter(parameterTypes[i]);
-
 					if (parameterTypes[i] == HttpRequest.class) {
+						methodStringConverters[i] = null;
 						requestParameterIndexToSet = i;
 						parameters[i] = null;
 						continue;
 					}
 					
 					if (parameterTypes[i] == HttpPost.class) {
+						methodStringConverters[i] = null;
 						postParameterIndexToSet = i;
 						parameters[i] = null;
 						continue;
 					}
+
+					methodStringConverters[i] = getConverter(parameterTypes[i]);
 
 					Annotation[] an = parameterAnnotations[i];
 					MethodParameter p = null;
@@ -428,26 +465,28 @@ public final class AnnotatedHttpService implements AutoCloseable, Closeable {
 				final ImmutableMultimap<String, Optional<String>> pathParameters = (pathSuffix == null) ? null : pathSuffix.parameters;
 				
 				Annotation[][] parameterAnnotations = method.getParameterAnnotations();
-				Class<?>[] parameterTypes = method.getParameterTypes();
+				Type[] parameterTypes = method.getGenericParameterTypes();
 				final MethodParameter[] parameters = new MethodParameter[parameterAnnotations.length];
 				final String[] defaultValues = new String[parameterAnnotations.length];
 				final ParameterConverter<?>[] methodStringConverters = new ParameterConverter<?>[parameterAnnotations.length];
 				int requestParameterIndexToSet = -1;
 				int postParameterIndexToSet = -1;
 				for (int i = 0; i < parameterAnnotations.length; i++) {
-					methodStringConverters[i] = getConverter(parameterTypes[i]);
-
 					if (parameterTypes[i] == HttpRequest.class) {
+						methodStringConverters[i] = null;
 						requestParameterIndexToSet = i;
 						parameters[i] = null;
 						continue;
 					}
 					
 					if (parameterTypes[i] == HttpPost.class) {
+						methodStringConverters[i] = null;
 						postParameterIndexToSet = i;
 						parameters[i] = null;
 						continue;
 					}
+
+					methodStringConverters[i] = getConverter(parameterTypes[i]);
 
 					Annotation[] an = parameterAnnotations[i];
 					MethodParameter p = null;
