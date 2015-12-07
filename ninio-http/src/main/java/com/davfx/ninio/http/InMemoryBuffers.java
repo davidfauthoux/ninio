@@ -14,6 +14,10 @@ public final class InMemoryBuffers implements Iterable<ByteBuffer> {
 	public InMemoryBuffers() {
 	}
 	
+	public void clear() {
+		buffers.clear();
+	}
+	
 	@Override
 	public Iterator<ByteBuffer> iterator() {
 		return buffers.iterator();

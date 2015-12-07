@@ -70,45 +70,47 @@ public class WebsocketTest {
 				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
-				new WebsocketReady(new Http().client()).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
-					private FailableCloseableByteBufferHandler write;
-					
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						if (s.equals("echo test")) {
-							LOGGER.debug("Received {} -->: {}", address, s);
-							write.handle(null, ByteBuffer.wrap("test2".getBytes(Charsets.UTF_8)));
-						} else if (s.equals("echo test2")) {
-							LOGGER.debug("Received {} -->: {}", address, s);
-							write.handle(null, ByteBuffer.wrap("test3".getBytes(Charsets.UTF_8)));
-						} else {
-							LOGGER.debug("Received? {} -->: {}", address, s);
-							lock.set(s);
+				try (Http http = new Http()) {
+					new WebsocketReady(http.client()).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
+						private FailableCloseableByteBufferHandler write;
+						
+						@Override
+						public void handle(Address address, ByteBuffer buffer) {
+							String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+							if (s.equals("echo test")) {
+								LOGGER.debug("Received {} -->: {}", address, s);
+								write.handle(null, ByteBuffer.wrap("test2".getBytes(Charsets.UTF_8)));
+							} else if (s.equals("echo test2")) {
+								LOGGER.debug("Received {} -->: {}", address, s);
+								write.handle(null, ByteBuffer.wrap("test3".getBytes(Charsets.UTF_8)));
+							} else {
+								LOGGER.debug("Received? {} -->: {}", address, s);
+								lock.set(s);
+							}
 						}
-					}
+						
+						@Override
+						public void connected(final FailableCloseableByteBufferHandler write) {
+							this.write = write;
+							LOGGER.debug("Connected -->");
+							write.handle(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
+						}
+						
+						@Override
+						public void close() {
+							LOGGER.debug("Closed -->");
+							lock.fail(new IOException("Closed"));
+						}
+						
+						@Override
+						public void failed(IOException e) {
+							LOGGER.warn("Failed -->", e);
+							lock.fail(e);
+						}
+					});
 					
-					@Override
-					public void connected(final FailableCloseableByteBufferHandler write) {
-						this.write = write;
-						LOGGER.debug("Connected -->");
-						write.handle(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed -->");
-						lock.fail(new IOException("Closed"));
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed -->", e);
-						lock.fail(e);
-					}
-				});
-				
-				Assertions.assertThat(lock.waitFor()).isEqualTo("echo test3");
+					Assertions.assertThat(lock.waitFor()).isEqualTo("echo test3");
+				}
 			}
 			queue.finish().waitFor();
 		}
@@ -161,50 +163,52 @@ public class WebsocketTest {
 				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
-				new WebsocketReady(new Http().client()).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
-					private FailableCloseableByteBufferHandler write;
-					
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						if (s.equals("echo test")) {
-							LOGGER.debug("Received {} -->: {}", address, s);
-							write.handle(null, ByteBuffer.wrap("test2".getBytes(Charsets.UTF_8)));
-						} else if (s.equals("echo test2")) {
-							LOGGER.debug("Received {} -->: {}", address, s);
-							write.handle(null, ByteBuffer.wrap("test3".getBytes(Charsets.UTF_8)));
-						} else {
-							LOGGER.debug("Received? {} -->: {}", address, s);
-							lock.set(s);
-						}
-					}
-					
-					@Override
-					public void connected(final FailableCloseableByteBufferHandler write) {
-						this.write = write;
-						LOGGER.debug("Connected -->");
-						QueueScheduled.run(queue, 0.1d, new Runnable() {
-							@Override
-							public void run() {
-								write.handle(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
+				try (Http http = new Http()) {
+					new WebsocketReady(http.client()).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
+						private FailableCloseableByteBufferHandler write;
+						
+						@Override
+						public void handle(Address address, ByteBuffer buffer) {
+							String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+							if (s.equals("echo test")) {
+								LOGGER.debug("Received {} -->: {}", address, s);
+								write.handle(null, ByteBuffer.wrap("test2".getBytes(Charsets.UTF_8)));
+							} else if (s.equals("echo test2")) {
+								LOGGER.debug("Received {} -->: {}", address, s);
+								write.handle(null, ByteBuffer.wrap("test3".getBytes(Charsets.UTF_8)));
+							} else {
+								LOGGER.debug("Received? {} -->: {}", address, s);
+								lock.set(s);
 							}
-						});
-					}
+						}
+						
+						@Override
+						public void connected(final FailableCloseableByteBufferHandler write) {
+							this.write = write;
+							LOGGER.debug("Connected -->");
+							QueueScheduled.run(queue, 0.1d, new Runnable() {
+								@Override
+								public void run() {
+									write.handle(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
+								}
+							});
+						}
+						
+						@Override
+						public void close() {
+							LOGGER.debug("Closed -->");
+							lock.fail(new IOException("Closed"));
+						}
+						
+						@Override
+						public void failed(IOException e) {
+							LOGGER.warn("Failed -->", e);
+							lock.fail(e);
+						}
+					});
 					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed -->");
-						lock.fail(new IOException("Closed"));
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed -->", e);
-						lock.fail(e);
-					}
-				});
-				
-				Assertions.assertThat(lock.waitFor()).isEqualTo("echo test3");
+					Assertions.assertThat(lock.waitFor()).isEqualTo("echo test3");
+				}
 			}
 			queue.finish().waitFor();
 		}

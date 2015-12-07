@@ -1,5 +1,8 @@
 package com.davfx.ninio.script;
 
+import com.davfx.ninio.core.DatagramReadyFactory;
+import com.davfx.ninio.core.Queue;
+
 ///!\ NOT WORKING WITH Java7 ON UP-TO-DATE open-ssl SERVERS
 
 public final class ReadmeWithSsh {
@@ -7,7 +10,7 @@ public final class ReadmeWithSsh {
 		String login = "<your-login>";
 		String password = "<your-password>";
 		
-		try (ExtendedScriptRunner runner = new ExtendedScriptRunner()) {
+		try (ExtendedScriptRunner runner = new ExtendedScriptRunner(new Queue(), new DatagramReadyFactory())) {
 			runner.runner.engine().eval("ssh("
 					+ "{"
 						+ "'host': '127.0.0.1',"

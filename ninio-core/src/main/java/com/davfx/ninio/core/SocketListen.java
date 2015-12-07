@@ -106,7 +106,7 @@ public final class SocketListen implements Listen {
 										try {
 											int r = outboundChannel.read(readBuffer);
 											if (r < 0) {
-												LOGGER.debug("Closing client socket");
+												LOGGER.debug("Client socket closed by peer");
 												removed(outboundChannel);
 												read.close();
 											} else {

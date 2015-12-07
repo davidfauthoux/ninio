@@ -91,22 +91,13 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final Random RANDOM = new Random(System.currentTimeMillis());
 
 	private static final class RequestIdProvider {
-		private static final int LOOP_REQUEST_ID = 1 << 16; // 2^16
-		private static final AtomicInteger PREFIX = new AtomicInteger(RANDOM.nextInt());
+		private static final AtomicInteger NEXT = new AtomicInteger(RANDOM.nextInt());
 		
-		private final int prefix = PREFIX.getAndIncrement();
-		private int nextRequestId = 0;
-
 		public RequestIdProvider() {
 		}
 		
 		public int get() {
-			int id = ((prefix & 0xFFFF) << 16) | (nextRequestId & 0xFFFF);
-			nextRequestId++;
-			if (nextRequestId == LOOP_REQUEST_ID) {
-				nextRequestId = 0;
-			}
-			return id;
+			return NEXT.getAndIncrement();
 		}
 	}
 	

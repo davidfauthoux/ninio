@@ -2,87 +2,25 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Ready;
-import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.QueueScheduled;
-import com.davfx.util.ConfigUtils;
-import com.davfx.util.DateUtils;
-import com.google.common.base.Charsets;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class HttpClient implements AutoCloseable, Closeable {
-	
-	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.Recycler.class);
+public final class HttpClient {
 	
 	private static final Config CONFIG = ConfigFactory.load(HttpClient.class.getClassLoader());
 
 	private static final int MAX_REDIRECT_LEVELS = CONFIG.getInt("ninio.http.redirect.max");
-	private static final double RECYCLERS_TIME_TO_LIVE = ConfigUtils.getDuration(CONFIG, "ninio.http.recyclers.ttl");
-	private static final double RECYCLERS_CHECK_TIME = ConfigUtils.getDuration(CONFIG, "ninio.http.recyclers.check");
-
-	private static final class Recycler {
-		public HttpResponseReader reader;
-		public HttpClientHandler handler;
-		public CloseableByteBufferHandler write;
-		public double closeDate = 0d;
-		public boolean closed = false;
-	}
 
 	private final Queue queue;
+	private final HttpRecycle recycle;
 
-	private final ReadyFactory readyFactory;
-	private final ReadyFactory secureReadyFactory;
-
-	private final Map<Address, Deque<Recycler>> recyclers = new HashMap<Address, Deque<Recycler>>();
-	private final Closeable closeable;
-
-	public HttpClient(Queue queue, ReadyFactory readyFactory, ReadyFactory secureReadyFactory) {
+	public HttpClient(Queue queue, HttpRecycle recycle) {
 		this.queue = queue;
-		this.readyFactory = readyFactory;
-		this.secureReadyFactory = secureReadyFactory;
-		
-		closeable = QueueScheduled.schedule(queue, RECYCLERS_CHECK_TIME, new Runnable() {
-			@Override
-			public void run() {
-				double now = DateUtils.now();
-				Iterator<Deque<Recycler>> recyclersIterator = recyclers.values().iterator();
-				while (recyclersIterator.hasNext()) {
-					Deque<Recycler> l = recyclersIterator.next();
-					Iterator<Recycler> i = l.iterator();
-					while (i.hasNext()) {
-						Recycler r = i.next();
-						if ((r.closeDate > 0d) && (r.closeDate <= now)) {
-							r.write.close();
-							i.remove();
-						}
-					}
-					if (l.isEmpty()) {
-						recyclersIterator.remove();
-					}
-				}
-			}
-		});
-	}
-	
-	@Override
-	public void close() {
-		closeable.close();
+		this.recycle = recycle;
 	}
 	
 	public void send(final HttpRequest request, final HttpClientHandler clientHandler) {
@@ -90,179 +28,9 @@ public final class HttpClient implements AutoCloseable, Closeable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				final HttpResponseReader reader = new HttpResponseReader(handler);
-				if (request.method != HttpMethod.GET) {
-					Ready ready;
-					if (request.secure) {
-						ready = secureReadyFactory.create(queue);
-					} else {
-						ready = readyFactory.create(queue);
-					}
-					ready.connect(request.address, new ReadyConnection() {
-						@Override
-						public void handle(Address address, ByteBuffer buffer) {
-							reader.handle(buffer, null);
-						}
-						
-						@Override
-						public void failed(IOException e) {
-							reader.failed(e);
-						}
-						
-						@Override
-						public void connected(final FailableCloseableByteBufferHandler write) {
-							write.handle(null, createRequest(request));
-							handler.ready(write);
-						}
-						
-						@Override
-						public void close() {
-							reader.close();
-						}
-					});
-					return;
-				}
-				
-				Deque<Recycler> oldRecyclers = recyclers.get(request.address);
-
-				if (oldRecyclers != null) {
-					while (!oldRecyclers.isEmpty()) {
-						LOGGER.trace("Recycling connection to {}", request.address);
-						Recycler oldRecycler = oldRecyclers.removeFirst();
-						if (oldRecyclers.isEmpty()) {
-							recyclers.remove(request.address);
-						}
-						if (!oldRecycler.closed) {
-							oldRecycler.reader = reader;
-							oldRecycler.handler = handler;
-							oldRecycler.closeDate = 0d;
-							oldRecycler.write.handle(null, createRequest(request));
-							oldRecycler.handler.ready(oldRecycler.write);
-							return;
-						}
-					}
-				}
-
-				final Recycler newRecycler = new Recycler();
-				newRecycler.reader = reader;
-				newRecycler.handler = handler;
-				newRecycler.closeDate = 0d;
-				Ready ready;
-				if (request.secure) {
-					ready = secureReadyFactory.create(queue);
-				} else {
-					ready = readyFactory.create(queue);
-				}
-				ready.connect(request.address, new ReadyConnection() {
-					private HttpResponseReader.RecyclingHandler recyclingHandler;
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						if (newRecycler.reader == null) {
-							return;
-						}
-						
-						newRecycler.reader.handle(buffer, recyclingHandler);
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						newRecycler.closed = true;
-						if (newRecycler.reader == null) {
-							return;
-						}
-						newRecycler.reader.failed(e);
-					}
-					
-					@Override
-					public void connected(final FailableCloseableByteBufferHandler write) {
-						if (newRecycler.handler == null) {
-							return;
-						}
-						
-						recyclingHandler = new HttpResponseReader.RecyclingHandler() {
-							@Override
-							public void recycle() {
-								newRecycler.reader = null;
-								newRecycler.handler = null;
-								newRecycler.closeDate = DateUtils.now() + RECYCLERS_TIME_TO_LIVE;
-								Deque<Recycler> oldRecyclers = recyclers.get(request.address);
-								if (oldRecyclers == null) {
-									oldRecyclers = new LinkedList<Recycler>();
-									recyclers.put(request.address, oldRecyclers);
-								}
-								oldRecyclers.add(newRecycler);
-							}
-							@Override
-							public void close() {
-								write.close();
-							}
-						};
-
-						newRecycler.write = new CloseableByteBufferHandler() {
-							@Override
-							public void handle(Address address, ByteBuffer buffer) {
-								write.handle(address, buffer);
-							}
-							@Override
-							public void close() {
-								write.close();
-								newRecycler.closed = true;
-								if (newRecycler.reader == null) {
-									return;
-								}
-								newRecycler.reader.close();
-							}
-						};
-						write.handle(null, createRequest(request));
-						newRecycler.handler.ready(newRecycler.write);
-					}
-					
-					@Override
-					public void close() {
-						newRecycler.closed = true;
-						if (newRecycler.reader == null) {
-							return;
-						}
-						newRecycler.reader.close();
-					}
-				});
+				recycle.connect(request, handler);
 			}
 		});
-	}
-	
-	private static void appendHeader(StringBuilder buffer, String key, HttpHeaderValue value) {
-		buffer.append(key).append(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR).append(HttpSpecification.HEADER_BEFORE_VALUE).append(value.toString()).append(HttpSpecification.CR).append(HttpSpecification.LF);
-	}
-	
-	private static final HttpHeaderValue DEFAULT_USER_AGENT = HttpHeaderValue.simple(HttpClient.class.getName()); // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
-	private static final HttpHeaderValue DEFAULT_ACCEPT = HttpHeaderValue.simple("*/*");
-
-	private static ByteBuffer createRequest(HttpRequest request) {
-		StringBuilder header = new StringBuilder();
-		header.append(request.method.toString()).append(HttpSpecification.START_LINE_SEPARATOR).append(request.path).append(HttpSpecification.START_LINE_SEPARATOR).append(HttpSpecification.HTTP11).append(HttpSpecification.CR).append(HttpSpecification.LF);
-		
-		for (Map.Entry<String, HttpHeaderValue> h : request.headers.entries()) {
-			appendHeader(header, h.getKey(), h.getValue());
-		}
-		if (!request.headers.containsKey(HttpHeaderKey.HOST)) {
-			appendHeader(header, HttpHeaderKey.HOST, HttpHeaderValue.simple(request.address.getHost())); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
-		}
-		if (!request.headers.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
-			appendHeader(header, HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
-		}
-		if (!request.headers.containsKey(HttpHeaderKey.CONNECTION)) {
-			appendHeader(header, HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
-		}
-		if (!request.headers.containsKey(HttpHeaderKey.USER_AGENT)) {
-			appendHeader(header, HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
-		}
-		if (!request.headers.containsKey(HttpHeaderKey.ACCEPT)) {
-			appendHeader(header, HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
-		}
-		
-		header.append(HttpSpecification.CR).append(HttpSpecification.LF);
-		LOGGER.trace("Header: {}", header);
-		return ByteBuffer.wrap(header.toString().getBytes(Charsets.US_ASCII));
 	}
 	
 	private static class RedirectHandler implements HttpClientHandler {

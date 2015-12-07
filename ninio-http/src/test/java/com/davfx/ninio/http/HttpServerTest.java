@@ -15,7 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
@@ -235,40 +234,24 @@ public class HttpServerTest {
 				queue.finish().waitFor();
 				
 				final Lock<String, IOException> lock = new Lock<>();
-				new Http().client().send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, HttpPath.of("/test?a=b")), new HttpClientHandler() {
-					private HttpResponse response;
-					private final InMemoryBuffers b = new InMemoryBuffers();
-
-					@Override
-					public void failed(IOException e) {
-						lock.fail(e);
-					}
-					
-					@Override
-					public void ready(CloseableByteBufferHandler write) {
-						LOGGER.debug("Ready to write post");
-					}
-					
-					@Override
-					public void received(HttpResponse response) {
-						LOGGER.debug("Response received: {}", response);
-						this.response = response;
-					}
-	
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						b.add(buffer);
-					}
-					
-					@Override
-					public void close() {
-						String s = b.toString();
-						LOGGER.debug("Received: {}", s);
-						lock.set(response.status + ":" + response.reason + ":" + s);
-					}
-				});
+				try (Http http = new Http()) {
+					http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.GET, HttpPath.of("/test?a=b")), null, new Http.InMemoryHandler() {
+						
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+						
+						@Override
+						public void handle(HttpResponse response, InMemoryBuffers content) {
+							String s = content.toString();
+							LOGGER.debug("Received: {}", s);
+							lock.set(response.status + ":" + response.reason + ":" + s);
+						}
+					});
 				
-				Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
+					Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
+				}
 			}
 
 			queue.finish().waitFor();
@@ -317,6 +300,7 @@ public class HttpServerTest {
 						@Override
 						public void ready(Write write) {
 							String post = b.toString();
+							b.clear();
 							LOGGER.debug("Post received: {}", post);
 							LOGGER.debug("Ready to write");
 							write.write(new HttpResponse());
@@ -331,44 +315,47 @@ public class HttpServerTest {
 				
 				queue.finish().waitFor();
 				
-				final Lock<String, IOException> lock = new Lock<>();
 				final String post = "post";
-				try (HttpClient client = new Http().client()) {
-					client.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), new HttpClientHandler() {
-						private HttpResponse response;
-						private final InMemoryBuffers b = new InMemoryBuffers();
-
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						
-						@Override
-						public void ready(CloseableByteBufferHandler write) {
-							LOGGER.debug("Ready to write post");
-							write.handle(null, ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)));
-						}
-						
-						@Override
-						public void received(HttpResponse response) {
-							LOGGER.debug("Response received: {}", response);
-							this.response = response;
-						}
-		
-						@Override
-						public void handle(Address address, ByteBuffer buffer) {
-							b.add(buffer);
-						}
-						
-						@Override
-						public void close() {
-							String s = b.toString();
-							LOGGER.debug("Received: {}", s);
-							lock.set(response.status + ":" + response.reason + ":" + s);
-						}
-					});
-				
-					Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b:" + post);
+				try (Http http = new Http()) {
+					{
+						final Lock<String, IOException> lock = new Lock<>();
+						http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Http.InMemoryHandler() {
+							
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
+							}
+							
+							@Override
+							public void handle(HttpResponse response, InMemoryBuffers content) {
+								String s = content.toString();
+								LOGGER.debug("Received: {}", s);
+								lock.set(response.status + ":" + response.reason + ":" + s);
+							}
+						});
+					
+						Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b:" + post);
+					}
+					// Testing recycle
+					{
+						final Lock<String, IOException> lock = new Lock<>();
+						http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Http.InMemoryHandler() {
+							
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
+							}
+							
+							@Override
+							public void handle(HttpResponse response, InMemoryBuffers content) {
+								String s = content.toString();
+								LOGGER.debug("Received: {}", s);
+								lock.set(response.status + ":" + response.reason + ":" + s);
+							}
+						});
+					
+						Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b:" + post);
+					}
 				}
 			}
 
@@ -418,6 +405,7 @@ public class HttpServerTest {
 						@Override
 						public void ready(Write write) {
 							LOGGER.debug("Post received: {}", b.toString());
+							b.clear();
 							LOGGER.debug("Ready to write response");
 							write.write(new HttpResponse());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path).getBytes(Charsets.UTF_8)));
@@ -431,36 +419,73 @@ public class HttpServerTest {
 				
 				queue.finish().waitFor();
 				
-				final Lock<String, IOException> lock = new Lock<>();
-				new Http().get("http://127.0.0.1:8080/test?a=b", new Http.Handler() {
-					private HttpResponse response;
-					private final InMemoryBuffers b = new InMemoryBuffers();
-					
-					@Override
-					public void failed(IOException e) {
-						lock.fail(e);
-					}
-					
-					@Override
-					public void handle(HttpResponse response) {
-						LOGGER.debug("Response received: {}", response);
-						this.response = response;
-					}
+				try (Http http = new Http()) {
+					{
+						final Lock<String, IOException> lock = new Lock<>();
+						http.get("http://127.0.0.1:8080/test?a=b", new Http.Handler() {
+							private HttpResponse response;
+							private final InMemoryBuffers b = new InMemoryBuffers();
+							
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
+							}
+							
+							@Override
+							public void handle(HttpResponse response) {
+								LOGGER.debug("Response received: {}", response);
+								this.response = response;
+							}
+			
+							@Override
+							public void handle(ByteBuffer buffer) {
+								b.add(buffer);
+							}
+							
+							@Override
+							public void close() {
+								String s = b.toString();
+								LOGGER.debug("Received: {}", s);
+								lock.set(response.status + ":" + response.reason + ":" + s);
+							}
+						});
 	
-					@Override
-					public void handle(ByteBuffer buffer) {
-						b.add(buffer);
+						Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
 					}
-					
-					@Override
-					public void close() {
-						String s = b.toString();
-						LOGGER.debug("Received: {}", s);
-						lock.set(response.status + ":" + response.reason + ":" + s);
+					// Testing recycle
+					{
+						final Lock<String, IOException> lock = new Lock<>();
+						http.get("http://127.0.0.1:8080/test?a=b", new Http.Handler() {
+							private HttpResponse response;
+							private final InMemoryBuffers b = new InMemoryBuffers();
+							
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
+							}
+							
+							@Override
+							public void handle(HttpResponse response) {
+								LOGGER.debug("Response received: {}", response);
+								this.response = response;
+							}
+			
+							@Override
+							public void handle(ByteBuffer buffer) {
+								b.add(buffer);
+							}
+							
+							@Override
+							public void close() {
+								String s = b.toString();
+								LOGGER.debug("Received: {}", s);
+								lock.set(response.status + ":" + response.reason + ":" + s);
+							}
+						});
+	
+						Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
 					}
-				});
-				
-				Assertions.assertThat(lock.waitFor()).isEqualTo("200:OK:hello:/test?a=b");
+				}
 			}
 
 			queue.finish().waitFor();

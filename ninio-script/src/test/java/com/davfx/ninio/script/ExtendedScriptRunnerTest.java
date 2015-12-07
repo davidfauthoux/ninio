@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReady;
+import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
@@ -35,19 +36,21 @@ public class ExtendedScriptRunnerTest {
 	
 	@Test
 	public void testPing() throws Exception {
-		try (ExtendedScriptRunner runner = new ExtendedScriptRunner()) {
-			{
-				final Lock<JsonElement, Exception> lock = new Lock<>();
-				ScriptRunner.Engine engine = runner.runner.engine();
-				engine.register("out", new SyncScriptFunction() {
-					@Override
-					public JsonElement call(JsonElement request) {
-						lock.set(request);
-						return null;
-					}
-				});
-				engine.eval("ping({host:'127.0.0.1'}, function(r) { console.debug(r); out(r); });", null);
-				Assertions.assertThat(lock.waitFor().getAsDouble()).isGreaterThan(0d);
+		try (Queue queue = new Queue()) {
+			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
+				{
+					final Lock<JsonElement, Exception> lock = new Lock<>();
+					ScriptRunner.Engine engine = runner.runner.engine();
+					engine.register("out", new SyncScriptFunction() {
+						@Override
+						public JsonElement call(JsonElement request) {
+							lock.set(request);
+							return null;
+						}
+					});
+					engine.eval("ping({host:'127.0.0.1'}, function(r) { console.debug(r); out(r); });", null);
+					Assertions.assertThat(lock.waitFor().getAsDouble()).isGreaterThan(0d);
+				}
 			}
 		}
 	}
@@ -65,7 +68,7 @@ public class ExtendedScriptRunnerTest {
 		try (Queue queue = new Queue()) {
 			try (SnmpServer snmpServer = new SnmpServer(queue, new DatagramReady(queue.getSelector(), queue.allocator()).bind(), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
 				queue.finish().waitFor();
-				try (ExtendedScriptRunner runner = new ExtendedScriptRunner()) {
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
 					{
 						final Lock<JsonElement, Exception> lock = new Lock<>();
 						ScriptRunner.Engine engine = runner.runner.engine();
@@ -148,7 +151,7 @@ public class ExtendedScriptRunnerTest {
 				
 			})) {
 				queue.finish().waitFor();
-				try (ExtendedScriptRunner runner = new ExtendedScriptRunner()) {
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
 					final Lock<JsonElement, Exception> lock = new Lock<>();
 					ScriptRunner.Engine engine = runner.runner.engine();
 					engine.register("out", new SyncScriptFunction() {
@@ -180,7 +183,7 @@ public class ExtendedScriptRunnerTest {
 				}
 			})) {
 				queue.finish().waitFor();
-				try (ExtendedScriptRunner runner = new ExtendedScriptRunner()) {
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
 					final Lock<JsonElement, Exception> lock = new Lock<>();
 					ScriptRunner.Engine engine = runner.runner.engine();
 					engine.register("out", new SyncScriptFunction() {

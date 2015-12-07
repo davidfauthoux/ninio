@@ -17,7 +17,8 @@ import javax.imageio.ImageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.http.Http.InMemoryHandler;
+import com.davfx.ninio.core.Closeable;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpResponse;
@@ -29,11 +30,20 @@ import com.davfx.ninio.http.util.annotations.QueryParameter;
 import com.davfx.ninio.http.util.annotations.Route;
 
 @Path("/image.convert")
-public final class ImageToJpegConverter implements HttpController {
+public final class ImageToJpegConverter implements HttpController, AutoCloseable, Closeable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ImageToJpegConverter.class);
 	
+	private final Queue queue = new Queue();
+	private final com.davfx.ninio.http.Http http = new com.davfx.ninio.http.Http().withQueue(queue);
+	
 	public ImageToJpegConverter() {
+	}
+	
+	@Override
+	public void close() {
+		http.close();
+		queue.close();
 	}
 
 	@Route(method = HttpMethod.GET)
@@ -43,7 +53,7 @@ public final class ImageToJpegConverter implements HttpController {
 		return Http.ok().async(new HttpAsync() {
 			@Override
 			public void produce(final HttpAsyncOutput output) {
-				new com.davfx.ninio.http.Http().get(url, new InMemoryHandler() {
+				http.get(url, new com.davfx.ninio.http.Http.InMemoryHandler() {
 					@Override
 					public void failed(IOException e) {
 						output.failed(e);

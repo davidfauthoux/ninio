@@ -24,24 +24,26 @@ public final class Queue implements AutoCloseable {
 	
 	private static final double WAIT_ON_SELECTOR_ERROR = 0.5d;
 	
-	private final long threadId;
-	private final Selector selector;
+	private long threadId = -1L;
+	private Selector selector = null;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
+
+	public Queue() {
+	}
 	
-	public static Selector selector() {
+	private void createSelector() {
+		if (threadId >= 0L) {
+			return;
+		}
+
+		Selector s;
 		try {
-			return SelectorProvider.provider().openSelector();
+			s = SelectorProvider.provider().openSelector();
 		} catch (IOException ioe) {
 			LOGGER.error("Could not create selector", ioe);
 			throw new RuntimeException(ioe);
 		}
-	}
-	
-	public Queue() {
-		this(selector());
-	}
-	private Queue(final Selector selector) {
-		this.selector = selector;
+		selector = s;
 
 		Thread t = new ClassThreadFactory(Queue.class).newThread(new Runnable() {
 			@Override
@@ -94,6 +96,7 @@ public final class Queue implements AutoCloseable {
 	}
 	
 	public Selector getSelector() {
+		createSelector();
 		return selector;
 	}
 
@@ -114,7 +117,9 @@ public final class Queue implements AutoCloseable {
 			r.run();
 			return;
 		}
-		
+
+		createSelector();
+
 		toRun.add(r);
 		if (!selector.isOpen()) {
 			LOGGER.warn("Selector closed");
@@ -134,10 +139,15 @@ public final class Queue implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		try {
-			selector.close();
-		} catch (IOException e) {
+		if (isInside()) {
+			throw new IllegalStateException("Should not be in queue thread");
 		}
-		selector.wakeup();
+		if (selector != null) {
+			try {
+				selector.close();
+			} catch (IOException e) {
+			}
+			selector.wakeup();
+		}
 	}
 }

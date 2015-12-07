@@ -45,6 +45,7 @@ public class SnmpServerTest {
 		
 		try (Queue queue = new Queue()) {
 			try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
+				queue.finish().waitFor();
 				final Lock<List<Result>, IOException> lock = new Lock<>();
 				try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(new Address(Address.LOCALHOST, 8080)).client()) {
 					client.connect(new SnmpClientHandler() {

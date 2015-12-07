@@ -7,16 +7,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.http.Http;
-import com.davfx.ninio.http.HttpClient;
-import com.davfx.ninio.http.HttpClientHandler;
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpStatus;
+import com.davfx.ninio.http.InMemoryBuffers;
 import com.davfx.ninio.ping.Ping;
 import com.davfx.ninio.ping.PingClientHandler;
 import com.davfx.ninio.snmp.Oid;
@@ -41,18 +40,16 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExtendedScriptRunner.class);
 	
-	private final Queue queue;
 	public final ScriptRunner runner;
-	private final HttpClient http;
+	private final Http http;
 	private final TelnetSharing telnet;
 	private final TelnetSharing ssh;
 
-	public ExtendedScriptRunner() {
-		queue = new Queue();
-
+	public ExtendedScriptRunner(final Queue queue, final ReadyFactory udpReadyFactory) {
 		runner = new QueueScriptRunner(queue, new ExecutorScriptRunner());
 
-		http = new Http().withQueue(queue).client();
+		http = new Http();
+		http.withQueue(queue);
 		
 		telnet = new TelnetSharing();
 		telnet.withQueue(queue);
@@ -104,7 +101,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 					return;
 				}
 
-				Snmp snmp = new Snmp().withQueue(queue).to(address);
+				Snmp snmp = new Snmp().override(udpReadyFactory).withQueue(queue).to(address);
 				
 				String community = JsonUtils.getString(r, "community", null);
 				if (community != null) {
@@ -165,12 +162,12 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 				ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
 
 				JsonElement postObject = r.get("post");
-				final String post;
+				final ByteBuffer post;
 				if (postObject == null) {
 					post = null;
 				} else {
 					JsonObject o = postObject.getAsJsonObject();
-					post = JsonUtils.getString(o, "data");
+					post = ByteBuffer.wrap(JsonUtils.getString(o, "data").getBytes(Charsets.UTF_8));
 					String contentType = JsonUtils.getString(o, "contentType", null);
 					if (contentType != null) {
 						headers.put(HttpHeaders.CONTENT_TYPE, HttpHeaderValue.of(contentType));
@@ -178,36 +175,18 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 				}
 				
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
-				http.send(HttpRequest.of(url, (post == null) ? HttpMethod.GET : HttpMethod.POST, headers.build()), new HttpClientHandler() {
-					private ByteBufferContainer content = new ByteBufferContainer();
-					
+				http.send(HttpRequest.of(url, (post == null) ? HttpMethod.GET : HttpMethod.POST, headers.build()), post, new Http.InMemoryHandler() {
 					@Override
 					public void failed(IOException e) {
 						m.failed(e);
 					}
 					
 					@Override
-					public void received(HttpResponse response) {
+					public void handle(HttpResponse response, InMemoryBuffers content) {
 						if (response.status != HttpStatus.OK) {
 							m.failed(new IOException("Status: " + response.status + ", Reason: " + response.reason));
+							return;
 						}
-					}
-					
-					@Override
-					public void ready(CloseableByteBufferHandler write) {
-						if (post != null) {
-							write.handle(null, ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)));
-							write.close();
-						}
-					}
-					
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						content.add(buffer);
-					}
-					
-					@Override
-					public void close() {
 						m.done(new JsonPrimitive(content.toString()));
 					}
 				});
@@ -308,8 +287,6 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 		http.close();
 		telnet.close();
 		ssh.close();
-
-		queue.close();
 	}
 	
 }

@@ -246,6 +246,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 					requestLineRead = false; // another connection possible
 					headersRead = false;
 					ready = false;
+					headers.clear();
 					LOGGER.trace("Keep alive");
 					return; // keep alive
 				}
