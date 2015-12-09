@@ -42,6 +42,9 @@ public final class HttpQueryPath {
 		return new HttpQueryPath(ImmutableList.<String>of());
 	}
 	public static HttpQueryPath of(String p) {
+		return of(HttpQueryPath.of(), p);
+	}
+	public static HttpQueryPath of(HttpQueryPath root, String p) {
 		if (p.isEmpty()) {
 			throw new IllegalArgumentException("Invalid empty path");
 		}
@@ -49,7 +52,7 @@ public final class HttpQueryPath {
 			throw new IllegalArgumentException("Path must start with '" + HttpSpecification.PATH_SEPARATOR + "': " + p);
 		}
 		String s = p.substring(1);
-		Deque<String> l = new LinkedList<>();
+		Deque<String> l = new LinkedList<>(root.path);
 		for (String k : Splitter.on(HttpSpecification.PATH_SEPARATOR).splitToList(s)) {
 			if (k.isEmpty()) {
 				continue;

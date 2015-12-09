@@ -69,9 +69,19 @@ public final class Http implements AutoCloseable, Closeable {
 		void handle(ByteBuffer buffer);
 	}
 	
+	private static HttpRequest addContentLength(HttpRequest r, ByteBuffer post) {
+		if (post == null) {
+			return r;
+		}
+		ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
+		headers.putAll(r.headers);
+		headers.put(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.remaining())));
+		return new HttpRequest(r.address, r.secure, r.method, r.path, headers.build());
+	}
+	
 	public void send(HttpRequest r, final ByteBuffer post, final Handler handler) {
 		final HttpClient client = client();
-		client.send(r, new HttpClientHandler() {
+		client.send(addContentLength(r, post), new HttpClientHandler() {
 			@Override
 			public void failed(IOException e) {
 				handler.failed(e);
@@ -110,7 +120,7 @@ public final class Http implements AutoCloseable, Closeable {
 	
 	public void send(HttpRequest r, final ByteBuffer post, final InMemoryHandler handler) {
 		final HttpClient client = client();
-		client.send(r, new HttpClientHandler() {
+		client.send(addContentLength(r, post), new HttpClientHandler() {
 			private final InMemoryBuffers content = new InMemoryBuffers();
 			private HttpResponse response;
 

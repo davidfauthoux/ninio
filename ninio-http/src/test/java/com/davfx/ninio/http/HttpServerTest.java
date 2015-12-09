@@ -18,7 +18,6 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableMultimap;
 
 public class HttpServerTest {
 	
@@ -319,7 +318,7 @@ public class HttpServerTest {
 				try (Http http = new Http()) {
 					{
 						final Lock<String, IOException> lock = new Lock<>();
-						http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Http.InMemoryHandler() {
+						http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b")), ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Http.InMemoryHandler() {
 							
 							@Override
 							public void failed(IOException e) {
@@ -339,7 +338,7 @@ public class HttpServerTest {
 					// Testing recycle
 					{
 						final Lock<String, IOException> lock = new Lock<>();
-						http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b"), ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.length())))), ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Http.InMemoryHandler() {
+						http.send(new HttpRequest(new Address(Address.LOCALHOST, 8080), false, HttpMethod.POST, HttpPath.of("/test?a=b")), ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Http.InMemoryHandler() {
 							
 							@Override
 							public void failed(IOException e) {
