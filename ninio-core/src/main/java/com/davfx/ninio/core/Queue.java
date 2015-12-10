@@ -24,18 +24,11 @@ public final class Queue implements AutoCloseable {
 	
 	private static final double WAIT_ON_SELECTOR_ERROR = 0.5d;
 	
-	private long threadId = -1L;
-	private Selector selector = null;
+	private final long threadId;
+	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 
 	public Queue() {
-	}
-	
-	private void createSelector() {
-		if (threadId >= 0L) {
-			return;
-		}
-
 		Selector s;
 		try {
 			s = SelectorProvider.provider().openSelector();
@@ -96,7 +89,6 @@ public final class Queue implements AutoCloseable {
 	}
 	
 	public Selector getSelector() {
-		createSelector();
 		return selector;
 	}
 
@@ -117,8 +109,6 @@ public final class Queue implements AutoCloseable {
 			r.run();
 			return;
 		}
-
-		createSelector();
 
 		toRun.add(r);
 		if (!selector.isOpen()) {
@@ -142,12 +132,10 @@ public final class Queue implements AutoCloseable {
 		if (isInside()) {
 			throw new IllegalStateException("Should not be in queue thread");
 		}
-		if (selector != null) {
-			try {
-				selector.close();
-			} catch (IOException e) {
-			}
-			selector.wakeup();
+		try {
+			selector.close();
+		} catch (IOException e) {
 		}
+		selector.wakeup();
 	}
 }

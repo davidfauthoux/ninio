@@ -7,6 +7,8 @@ import java.util.TreeMap;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Count;
@@ -19,6 +21,8 @@ import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 import com.davfx.util.Lock;
 
 public class SnmpServerTest {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpServerTest.class);
 
 	private static final class InnerCount implements Count {
 		public long count = 0L;
@@ -44,50 +48,54 @@ public class SnmpServerTest {
 		InnerCount openCount = new InnerCount();
 		
 		try (Queue queue = new Queue()) {
-			try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
-				queue.finish().waitFor();
-				final Lock<List<Result>, IOException> lock = new Lock<>();
-				try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(new Address(Address.LOCALHOST, 8080)).client()) {
-					client.connect(new SnmpClientHandler() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void close() {
-							lock.fail(new IOException("Closed"));
-						}
-						@Override
-						public void launched(final Callback callback) {
-							callback.get(new Oid("1.1.1"), new GetCallback() {
-								private final List<Result> r = new LinkedList<>();
-								@Override
-								public void failed(IOException e) {
-									callback.close();
-									lock.fail(e);
-								}
-								@Override
-								public void close() {
-									callback.close();
-									lock.set(r);
-								}
-								@Override
-								public void result(Result result) {
-									r.add(result);
-								}
-							});
-						}
-					});
-					Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
+			{
+				try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
+					queue.finish().waitFor();
+					final Lock<List<Result>, IOException> lock = new Lock<>();
+					try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(new Address(Address.LOCALHOST, 8080)).client()) {
+						client.connect(new SnmpClientHandler() {
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
+							}
+							@Override
+							public void close() {
+								lock.fail(new IOException("Closed"));
+							}
+							@Override
+							public void launched(final Callback callback) {
+								callback.get(new Oid("1.1.1"), new GetCallback() {
+									private final List<Result> r = new LinkedList<>();
+									@Override
+									public void failed(IOException e) {
+										callback.close();
+										lock.fail(e);
+									}
+									@Override
+									public void close() {
+										callback.close();
+										lock.set(r);
+									}
+									@Override
+									public void result(Result result) {
+										r.add(result);
+									}
+								});
+							}
+						});
+						Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
+					}
+	
+					Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
+					Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
+					Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
+					Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2]");
+					Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
+					LOGGER.debug("-----ok");
 				}
-
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
 			}
 			queue.finish().waitFor();
+			LOGGER.debug("-----ok2");
 		}
 		
 		Assertions.assertThat(serverOpenCount.count).isEqualTo(0L);

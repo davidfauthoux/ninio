@@ -43,6 +43,8 @@ public final class DatagramReady implements Ready {
 		return this;
 	}
 	
+	//%%% Thread ttt;
+
 	@Override
 	public void connect(Address address, final ReadyConnection connection) {
 		try {
@@ -67,6 +69,7 @@ public final class DatagramReady implements Ready {
 							try {
 								InetSocketAddress from = (InetSocketAddress) channel.receive(readBuffer);
 								if (from == null) {
+									channel.socket().close();
 									try {
 										channel.close();
 									} catch (IOException ee) {
@@ -77,6 +80,7 @@ public final class DatagramReady implements Ready {
 									connection.handle(new Address(from.getHostString(), from.getPort()), readBuffer);
 								}
 							} catch (IOException e) {
+								channel.socket().close();
 								try {
 									channel.close();
 								} catch (IOException ee) {
@@ -84,58 +88,71 @@ public final class DatagramReady implements Ready {
 								connection.close();
 							}
 						} else if (key.isWritable()) {
+							/*%%%
+							if ((ttt != null) && (ttt != Thread.currentThread())) {
+								throw new RuntimeException("ERR " + ttt + " " + Thread.currentThread());
+							}
+							if (ttt ==null) {
+							ttt= Thread.currentThread();
+							}
+							*/
 							while (!toWriteQueue.isEmpty()) {
 								AddressedByteBuffer b = toWriteQueue.getFirst();
+								/*%%
 								if (b == null) {
+									channel.socket().close();
 									try {
 										channel.close();
 									} catch (IOException ee) {
 									}
 									return;
 								} else {
-									if (b.address == null) {
+								*/
+								if (b.address == null) {
+									try {
+										channel.write(b.buffer);
+									} catch (IOException e) {
+										channel.socket().close();
 										try {
-											channel.write(b.buffer);
+											channel.close();
+										} catch (IOException ee) {
+										}
+										connection.close();
+										return;
+									}
+								} else {
+									InetSocketAddress a;
+									try {
+										a = AddressUtils.toConnectableInetSocketAddress(b.address);
+									} catch (IOException e) {
+										LOGGER.warn("Invalid address: {}", b.address);
+										b.buffer.position(b.buffer.position() + b.buffer.remaining());
+										a = null;
+									}
+									
+									if (a != null) {
+										long before = b.buffer.remaining();
+										try {
+											channel.send(b.buffer, a);
+											toWriteLength[0] -= before - b.buffer.remaining();
 										} catch (IOException e) {
+											channel.socket().close();
 											try {
 												channel.close();
 											} catch (IOException ee) {
 											}
 											connection.close();
-											break;
-										}
-									} else {
-										InetSocketAddress a;
-										try {
-											a = AddressUtils.toConnectableInetSocketAddress(b.address);
-										} catch (IOException e) {
-											LOGGER.warn("Invalid address: {}", b.address);
-											b.buffer.position(b.buffer.position() + b.buffer.remaining());
-											a = null;
-										}
-										
-										if (a != null) {
-											long before = b.buffer.remaining();
-											try {
-												channel.send(b.buffer, a);
-												toWriteLength[0] -= before - b.buffer.remaining();
-											} catch (IOException e) {
-												try {
-													channel.close();
-												} catch (IOException ee) {
-												}
-												connection.close();
-												break;
-											}
+											return;
 										}
 									}
-									
-									if (b.buffer.hasRemaining()) {
-										return;
-									}
-									
-									toWriteQueue.removeFirst();
 								}
+								
+								if (b.buffer.hasRemaining()) {
+									return;
+								}
+								
+								toWriteQueue.removeFirst();
+								//%% }
 							}
 							if (!selector.isOpen()) {
 								return;
@@ -175,6 +192,14 @@ public final class DatagramReady implements Ready {
 				connection.connected(new FailableCloseableByteBufferHandler() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
+						/*%%%
+						if ((ttt != null) && (ttt != Thread.currentThread())) {
+							throw new RuntimeException("ERR " + ttt + " " + Thread.currentThread());
+						}
+						if (ttt ==null) {
+						ttt= Thread.currentThread();
+						}
+						*/
 						if (!selector.isOpen()) {
 							return;
 						}
@@ -199,6 +224,20 @@ public final class DatagramReady implements Ready {
 					}
 					@Override
 					public void close() {
+						/*%%%
+						if ((ttt != null) && (ttt != Thread.currentThread())) {
+							throw new RuntimeException("ERR " + ttt + " " + Thread.currentThread());
+						}
+						if (ttt ==null) {
+						ttt= Thread.currentThread();
+						}
+						*/
+						channel.socket().close();
+						try {
+							channel.close();
+						} catch (IOException ee) {
+						}
+						/*%%
 						if (!selector.isOpen()) {
 							return;
 						}
@@ -210,6 +249,7 @@ public final class DatagramReady implements Ready {
 						}
 						toWriteQueue.addLast(null);
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+						*/
 					}
 					@Override
 					public void failed(IOException e) {
@@ -217,6 +257,7 @@ public final class DatagramReady implements Ready {
 					}
 				});
 			} catch (IOException e) {
+				channel.socket().close();
 				try {
 					channel.close();
 				} catch (IOException ee) {

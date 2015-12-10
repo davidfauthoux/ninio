@@ -65,6 +65,10 @@ public final class SocketReady implements Ready {
 										try {
 											if (channel.read(readBuffer) < 0) {
 												try {
+													channel.socket().close();
+												} catch (IOException ee) {
+												}
+												try {
 													channel.close();
 												} catch (IOException ee) {
 												}
@@ -82,6 +86,10 @@ public final class SocketReady implements Ready {
 											}
 										} catch (IOException e) {
 											try {
+												channel.socket().close();
+											} catch (IOException ee) {
+											}
+											try {
 												channel.close();
 											} catch (IOException ee) {
 											}
@@ -90,6 +98,7 @@ public final class SocketReady implements Ready {
 									} else if (key.isWritable()) {
 										while (!toWriteQueue.isEmpty()) {
 											ByteBuffer b = toWriteQueue.getFirst();
+											/*%%
 											if (b == null) {
 												try {
 													channel.close();
@@ -97,25 +106,30 @@ public final class SocketReady implements Ready {
 												}
 												return;
 											} else {
-												long before = b.remaining();
+											*/
+											long before = b.remaining();
+											try {
+												channel.write(b);
+												toWriteLength -= before - b.remaining();
+											} catch (IOException e) {
 												try {
-													channel.write(b);
-													toWriteLength -= before - b.remaining();
-												} catch (IOException e) {
-													try {
-														channel.close();
-													} catch (IOException ee) {
-													}
-													connection.close();
-													return;
+													channel.socket().close();
+												} catch (IOException ee) {
 												}
-												
-												if (b.hasRemaining()) {
-													return;
+												try {
+													channel.close();
+												} catch (IOException ee) {
 												}
-												
-												toWriteQueue.removeFirst();
+												connection.close();
+												return;
 											}
+											
+											if (b.hasRemaining()) {
+												return;
+											}
+											
+											toWriteQueue.removeFirst();
+											//%% }
 										}
 										if (!selector.isOpen()) {
 											return;
@@ -145,22 +159,43 @@ public final class SocketReady implements Ready {
 									if (!selectionKey.isValid()) {
 										return;
 									}
+									/*%%
 									if (toWriteLength < 0L) {
 										return;
 									}
+									*/
 									toWriteQueue.addLast(buffer);
 									toWriteLength += buffer.remaining();
 									while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
 										LOGGER.warn("Buffer overflow, closing connection to {}", address);
+										try {
+											channel.socket().close();
+										} catch (IOException ee) {
+										}
+										try {
+											channel.close();
+										} catch (IOException ee) {
+										}
+										/*%%
 										toWriteLength = -1L;
 										toWriteQueue.clear();
 										toWriteQueue.addLast(null);
+										*/
 										return;
 									}
 									selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 								}
 								@Override
 								public void close() {
+									try {
+										channel.socket().close();
+									} catch (IOException ee) {
+									}
+									try {
+										channel.close();
+									} catch (IOException ee) {
+									}
+									/*%%
 									if (!selector.isOpen()) {
 										return;
 									}
@@ -175,6 +210,7 @@ public final class SocketReady implements Ready {
 									}
 									toWriteQueue.addLast(null);
 									selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+									*/
 								}
 								@Override
 								public void failed(IOException e) {
@@ -183,6 +219,10 @@ public final class SocketReady implements Ready {
 							});
 		
 						} catch (IOException e) {
+							try {
+								channel.socket().close();
+							} catch (IOException ee) {
+							}
 							try {
 								channel.close();
 							} catch (IOException ee) {
@@ -203,6 +243,10 @@ public final class SocketReady implements Ready {
 					throw e;
 				}
 			} catch (IOException e) {
+				try {
+					channel.socket().close();
+				} catch (IOException ee) {
+				}
 				try {
 					channel.close();
 				} catch (IOException ee) {
