@@ -46,31 +46,84 @@ public final class HttpHeaderValue {
 		}
 		return false;
 	}
+
+	/* Not thread-safe
+	private String asString;
+	private boolean asStringSet = false;
+	public String asString() {
+		if (!asStringSet) {
+			if (values.isEmpty()) {
+				asString = "";
+			} else {
+				asString = values.get(0);
+			}
+			asStringSet = true;
+		}
+		return asString;
+	}
+	private int asInt;
+	private boolean asIntSet = false;
+	public int asInt() {
+		if (!asIntSet) {
+			if (values.isEmpty()) {
+				asInt = 0;
+			} else {
+				try {
+					asInt = Integer.parseInt(values.get(0));
+				} catch (NumberFormatException nfe) {
+					asInt = 0;
+				}
+			}
+			asIntSet = true;
+		}
+		return asInt;
+	}
+	private long asLong;
+	private boolean asLongSet = false;
+	public long asLong() {
+		if (!asLongSet) {
+			if (values.isEmpty()) {
+				asLong = 0L;
+			} else {
+				try {
+					asLong = Long.parseLong(values.get(0));
+				} catch (NumberFormatException nfe) {
+					asLong = 0L;
+				}
+			}
+			asLongSet = true;
+		}
+		return asLong;
+	}
+	*/
 	
 	public String asString() {
 		if (values.isEmpty()) {
 			return "";
+		} else {
+			return values.iterator().next();
 		}
-		return values.get(0);
 	}
 	public int asInt() {
 		if (values.isEmpty()) {
 			return 0;
-		}
-		try {
-			return Integer.parseInt(values.get(0));
-		} catch (NumberFormatException nfe) {
-			return 0;
+		} else {
+			try {
+				return Integer.parseInt(values.iterator().next());
+			} catch (NumberFormatException nfe) {
+				return 0;
+			}
 		}
 	}
 	public long asLong() {
 		if (values.isEmpty()) {
 			return 0L;
-		}
-		try {
-			return Long.parseLong(values.get(0));
-		} catch (NumberFormatException nfe) {
-			return 0L;
+		} else {
+			try {
+				return Long.parseLong(values.iterator().next());
+			} catch (NumberFormatException nfe) {
+				return 0L;
+			}
 		}
 	}
 

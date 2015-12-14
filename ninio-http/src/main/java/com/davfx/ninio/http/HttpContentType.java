@@ -18,6 +18,12 @@ public final class HttpContentType {
 	public static HttpHeaderValue plainText() {
 		return plainText(Charsets.UTF_8);
 	}
+	public static HttpHeaderValue html(Charset c) {
+		return new HttpHeaderValue(ImmutableList.of("text/html"), ImmutableMultimap.of(HttpHeaderKey.CHARSET, Optional.of(c.name())));
+	}
+	public static HttpHeaderValue html() {
+		return html(Charsets.UTF_8);
+	}
 	public static HttpHeaderValue json(Charset c) {
 		return new HttpHeaderValue(ImmutableList.of("application/json"), ImmutableMultimap.of(HttpHeaderKey.CHARSET, Optional.of(c.name())));
 	}

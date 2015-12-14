@@ -232,15 +232,21 @@ public final class SocketReady implements Ready {
 					}
 				});
 				
+				InetSocketAddress a;
 				try {
-					InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
+					a = AddressUtils.toConnectableInetSocketAddress(address);
 					if (a == null) {
 						throw new IOException("Invalid address");
 					}
-					channel.connect(a);
 				} catch (IOException e) {
 					inboundKey.cancel();
 					throw e;
+				}
+				try {
+					channel.connect(a);
+				} catch (IOException e) {
+					inboundKey.cancel();
+					throw new IOException("Could not connect to: " + a, e);
 				}
 			} catch (IOException e) {
 				try {

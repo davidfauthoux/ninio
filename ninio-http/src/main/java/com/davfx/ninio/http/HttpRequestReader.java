@@ -14,10 +14,22 @@ import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 final class HttpRequestReader implements CloseableByteBufferHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpRequestReader.class);
 
+	private static final Config CONFIG = ConfigFactory.load(HttpRequestReader.class.getClassLoader());
+
+	private static final boolean GZIP_DEFAULT = CONFIG.getBoolean("ninio.http.gzip.default");
+	
+	// Optim (not static because ByteBuffer.duplicate could be thread-unsafe)
+	private final ByteBuffer GZIP_BYTE_BUFFER = LineReader.toBuffer(HttpHeaderKey.CONTENT_ENCODING + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + HttpHeaderValue.GZIP.toString());
+	private final ByteBuffer CHUNKED_BYTE_BUFFER = LineReader.toBuffer(HttpHeaderKey.TRANSFER_ENCODING + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + HttpHeaderValue.CHUNKED.toString());
+	private final ByteBuffer EMPTY_LINE_BYTE_BUFFER = LineReader.toBuffer("");
+	private final ByteBuffer ZERO_BYTE_BUFFER = LineReader.toBuffer(Integer.toHexString(0));
+	
 	private final LineReader lineReader = new LineReader();
 	private boolean headersRead = false;
 	private boolean requestLineRead = false;
@@ -86,6 +98,16 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			throw new IOException("Invalid request: " + requestLine);
 		}
 		requestPath = requestLine.substring(i + 1, j);
+		
+		/*
+		// Tolerance
+		if (requestPath.isEmpty()) {
+			requestPath = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+		} else if (requestPath.charAt(0) != HttpSpecification.PATH_SEPARATOR) {
+			requestPath = HttpSpecification.PATH_SEPARATOR + requestPath;
+		}
+		*/
+		
 		String requestVersion = requestLine.substring(j + 1);
 		if (requestVersion.equals(HttpSpecification.HTTP10)) {
 			http11 = false;
@@ -236,8 +258,8 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			
 			if (http11) {
 				if (chunked) {
-					write.handle(address, LineReader.toBuffer(Integer.toHexString(0)));
-					write.handle(address, LineReader.toBuffer(""));
+					write.handle(address, ZERO_BYTE_BUFFER.duplicate());
+					write.handle(address, EMPTY_LINE_BYTE_BUFFER.duplicate());
 				}
 				
 				if (chunked || ((writeContentLength >= 0) && (countWrite == writeContentLength))) {
@@ -276,16 +298,19 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			
 			if (http11) {
 				if (enableGzip) {
+					boolean gzip = GZIP_DEFAULT;
 					for (HttpHeaderValue contentEncodingValue : response.headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
-						if (contentEncodingValue.contains(HttpHeaderValue.GZIP.asString())) {
-							gzipWriter = new GzipWriter(new ByteBufferHandler() {
-								@Override
-								public void handle(Address address, ByteBuffer buffer) {
-									doWrite(buffer);
-								}
-							});
-							break;
+						if (!contentEncodingValue.contains(HttpHeaderValue.GZIP.asString())) {
+							gzip = false;
 						}
+					}
+					if (gzip) {
+						gzipWriter = new GzipWriter(new ByteBufferHandler() {
+							@Override
+							public void handle(Address address, ByteBuffer buffer) {
+								doWrite(buffer);
+							}
+						});
 					}
 				}
 				
@@ -328,17 +353,18 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 						continue;
 					}
 				}
-				if (!http11) {
-					if (k.equals(HttpHeaderKey.CONTENT_ENCODING)) {
-						continue;
-					}
+				if (k.equals(HttpHeaderKey.CONTENT_ENCODING)) {
+					continue;
 				}
 				write.handle(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v.toString()));
 			}
-			if (chunked) {
-				write.handle(null, LineReader.toBuffer(HttpHeaderKey.TRANSFER_ENCODING + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + HttpHeaderValue.CHUNKED.toString()));
+			if (gzipWriter != null) {
+				write.handle(null, GZIP_BYTE_BUFFER.duplicate());
 			}
-			write.handle(null, LineReader.toBuffer(""));
+			if (chunked) {
+				write.handle(null, CHUNKED_BYTE_BUFFER.duplicate());
+			}
+			write.handle(null, EMPTY_LINE_BYTE_BUFFER.duplicate());
 		}
 		
 		@Override
@@ -364,7 +390,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			countWrite += buffer.remaining();
 			write.handle(null, buffer);
 			if (chunked) {
-				write.handle(null, LineReader.toBuffer(""));
+				write.handle(null, EMPTY_LINE_BYTE_BUFFER.duplicate());
 			}
 		}
 	}

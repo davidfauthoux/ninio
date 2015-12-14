@@ -159,6 +159,11 @@ final class HttpRecycle implements AutoCloseable, Closeable {
 				recyclingHandler = new HttpResponseReader.RecyclingHandler() {
 					@Override
 					public void recycle() {
+						if (RECYCLERS_TIME_TO_LIVE == 0d) {
+							close();
+							return;
+						}
+						
 						newRecycler.reader = null;
 						newRecycler.handler = null;
 						newRecycler.closeDate = DateUtils.now() + RECYCLERS_TIME_TO_LIVE;

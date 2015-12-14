@@ -11,7 +11,7 @@ import com.typesafe.config.ConfigFactory;
 
 final class GzipWriter {
 	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
-	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer.size").intValue();
+	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
 
 	private static final int OS_TYPE_UNKNOWN = 0xFF;
 
