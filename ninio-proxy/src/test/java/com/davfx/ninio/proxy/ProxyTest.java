@@ -37,7 +37,7 @@ public class ProxyTest {
 		int proxyServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
 				proxyServer.start();
 				queue.finish().waitFor();
 	
@@ -92,11 +92,11 @@ public class ProxyTest {
 					
 					final Lock<String, IOException> lock = new Lock<>();
 					
-					ReadyFactory socketReadyFactory = new SocketReadyFactory();
+					ReadyFactory socketReadyFactory = new SocketReadyFactory(queue);
 					
-					socketReadyFactory = proxyClient.socket();
+					socketReadyFactory = proxyClient.socket(queue);
 					
-					Ready socketReady = socketReadyFactory.create(queue);
+					Ready socketReady = socketReadyFactory.create();
 					final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 					socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 						@Override
@@ -135,7 +135,7 @@ public class ProxyTest {
 		int proxyServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
 				proxyServer.start();
 				queue.finish().waitFor();
 	
@@ -187,11 +187,11 @@ public class ProxyTest {
 					
 					final Lock<String, IOException> lock = new Lock<>();
 					
-					ReadyFactory socketReadyFactory = new DatagramReadyFactory();
+					ReadyFactory socketReadyFactory = new DatagramReadyFactory(queue);
 					
-					socketReadyFactory = proxyClient.datagram();
+					socketReadyFactory = proxyClient.datagram(queue);
 					
-					Ready socketReady = socketReadyFactory.create(queue);
+					Ready socketReady = socketReadyFactory.create();
 					final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 					socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 						@Override
@@ -232,7 +232,7 @@ public class ProxyTest {
 		int proxyServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(proxyServerPort, 1)) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
 				proxyServer.start();
 				queue.finish().waitFor();
 	
@@ -253,7 +253,7 @@ public class ProxyTest {
 					
 					final Lock<Double, IOException> lock = new Lock<>();
 					
-					new Ping().override(proxyClient.ping()).ping("127.0.0.1", new PingCallback() {
+					new Ping().override(proxyClient.ping(queue)).ping("127.0.0.1", new PingCallback() {
 						@Override
 						public void failed(IOException e) {
 							e.printStackTrace();
@@ -278,11 +278,11 @@ public class ProxyTest {
 		int proxy1ServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
+			try (ProxyServer proxy0Server = new ProxyServer(queue, proxy0ServerPort, 1)) {
 				proxy0Server.start();
 				queue.finish().waitFor();
 				
-				try (ProxyServer proxy1Server = new ProxyServer(proxy1ServerPort, 1)) {
+				try (ProxyServer proxy1Server = new ProxyServer(queue, proxy1ServerPort, 1)) {
 					proxy1Server.start();
 					queue.finish().waitFor();
 					
@@ -339,11 +339,11 @@ public class ProxyTest {
 						
 						final Lock<String, IOException> lock = new Lock<>();
 						
-						ReadyFactory socketReadyFactory = new SocketReadyFactory();
+						ReadyFactory socketReadyFactory = new SocketReadyFactory(queue);
 						
-						socketReadyFactory = proxyClient.hop();
+						socketReadyFactory = proxyClient.hop(queue);
 						
-						Ready socketReady = socketReadyFactory.create(queue);
+						Ready socketReady = socketReadyFactory.create();
 						final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 						socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 							@Override
@@ -384,12 +384,12 @@ public class ProxyTest {
 		int proxy1ServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxy0Server = new ProxyServer(proxy0ServerPort, 1)) {
+			try (ProxyServer proxy0Server = new ProxyServer(queue, proxy0ServerPort, 1)) {
 				proxy0Server.start();
 				queue.finish().waitFor();
 	
-				try (ProxyServer proxy1Server = new ProxyServer(proxy1ServerPort, 1)) {
-					proxy1Server.override(ProxyCommons.Types.SOCKET, new ForwardServerSideConfigurator(new Address(Address.LOCALHOST, proxy0ServerPort), new ProxyListener() {
+				try (ProxyServer proxy1Server = new ProxyServer(queue, proxy1ServerPort, 1)) {
+					proxy1Server.override(null, ProxyCommons.Types.SOCKET, new ForwardServerSideConfigurator(queue, new Address(Address.LOCALHOST, proxy0ServerPort), new ProxyListener() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Forward failed", e);
@@ -457,11 +457,11 @@ public class ProxyTest {
 						
 						final Lock<String, IOException> lock = new Lock<>();
 						
-						ReadyFactory socketReadyFactory = new SocketReadyFactory();
+						ReadyFactory socketReadyFactory = new SocketReadyFactory(queue);
 						
-						socketReadyFactory = proxyClient.socket();
+						socketReadyFactory = proxyClient.socket(queue);
 						
-						Ready socketReady = socketReadyFactory.create(queue);
+						Ready socketReady = socketReadyFactory.create();
 						final FailableCloseableByteBufferHandler[] w = new FailableCloseableByteBufferHandler[] { null };
 						socketReady.connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
 							@Override

@@ -66,7 +66,7 @@ public final class PingClient implements Closeable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(queue);
+				Ready ready = readyFactory.create();
 				
 				Address address = new Address(Address.ANY, 0);
 				

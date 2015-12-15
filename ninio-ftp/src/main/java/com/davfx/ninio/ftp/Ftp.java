@@ -13,7 +13,7 @@ public final class Ftp {
 
 	private Queue queue = DEFAULT_QUEUE;
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
-	private ReadyFactory readyFactory = new SocketReadyFactory();
+	private ReadyFactory readyFactory = null;
 
 	private String login = null;
 	private String password = null;
@@ -46,6 +46,6 @@ public final class Ftp {
 	}
 	
 	public FtpClient client() {
-		return new FtpClient(queue, readyFactory, address, login, password);
+		return new FtpClient(queue, (readyFactory == null) ? new SocketReadyFactory(queue) : readyFactory, address, login, password);
 	}
 }

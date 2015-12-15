@@ -2,6 +2,7 @@ package com.davfx.ninio.proxy;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
+import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
@@ -29,29 +30,29 @@ public final class ProxyClient implements AutoCloseable, Closeable {
 		proxyReadyGenerator.close();
 	}
 	
-	public ReadyFactory socket() {
-		return new ProxyReadyFactory(proxyReadyGenerator, ProxyCommons.Types.SOCKET);
+	public ReadyFactory socket(Queue queue) {
+		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.SOCKET);
 	}
-	public ReadyFactory datagram() {
-		return new ProxyReadyFactory(proxyReadyGenerator, ProxyCommons.Types.DATAGRAM);
+	public ReadyFactory datagram(Queue queue) {
+		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.DATAGRAM);
 	}
-	public ReadyFactory ping() {
-		return new ProxyReadyFactory(proxyReadyGenerator, ProxyCommons.Types.PING);
+	public ReadyFactory ping(Queue queue) {
+		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.PING);
 	}
-	public ReadyFactory hop() {
-		return new ProxyReadyFactory(proxyReadyGenerator, ProxyCommons.Types.HOP);
+	public ReadyFactory hop(Queue queue) {
+		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.HOP);
 	}
-	public ReadyFactory of(String type) {
-		return new ProxyReadyFactory(proxyReadyGenerator, type);
+	public ReadyFactory of(Queue queue, String type) {
+		return new ProxyReadyFactory(queue, proxyReadyGenerator, type);
 	}
 
-	public ProxyClient override(String type, ClientSideConfigurator configurator) {
-		proxyReadyGenerator.override(type, configurator);
+	public ProxyClient override(Address address, String type, ClientSideConfigurator configurator) {
+		proxyReadyGenerator.override(address, type, configurator);
 		return this;
 	}
 	
 	public ProxyClient hopTo(Address address, String type) {
-		override(ProxyCommons.Types.HOP, new HopClientSideConfigurator(address, type));
+		override(null, ProxyCommons.Types.HOP, new HopClientSideConfigurator(address, type));
 		return this;
 	}
 }

@@ -42,8 +42,6 @@ final class HttpRecycle implements AutoCloseable, Closeable {
 		public boolean closed = false;
 	}
 
-	private final Queue queue;
-
 	private final ReadyFactory readyFactory;
 	private final ReadyFactory secureReadyFactory;
 
@@ -51,7 +49,6 @@ final class HttpRecycle implements AutoCloseable, Closeable {
 	private final Closeable closeable;
 
 	public HttpRecycle(Queue queue, ReadyFactory readyFactory, ReadyFactory secureReadyFactory) {
-		this.queue = queue;
 		this.readyFactory = readyFactory;
 		this.secureReadyFactory = secureReadyFactory;
 		
@@ -126,9 +123,9 @@ final class HttpRecycle implements AutoCloseable, Closeable {
 		newRecycler.closeDate = 0d;
 		Ready ready;
 		if (request.secure) {
-			ready = secureReadyFactory.create(queue);
+			ready = secureReadyFactory.create();
 		} else {
-			ready = readyFactory.create(queue);
+			ready = readyFactory.create();
 		}
 		ready.connect(request.address, new ReadyConnection() {
 			private HttpResponseReader.RecyclingHandler recyclingHandler;

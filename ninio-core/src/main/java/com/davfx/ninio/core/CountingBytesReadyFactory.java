@@ -10,7 +10,7 @@ public final class CountingBytesReadyFactory implements ReadyFactory {
 		this.wrappee = wrappee;
 	}
 	@Override
-	public Ready create(Queue queue) {
-		return new CountingBytesReady(readCount, writeCount, wrappee.create(queue));
+	public Ready create() {
+		return new CountingBytesReady(readCount, writeCount, wrappee.create());
 	}
 }

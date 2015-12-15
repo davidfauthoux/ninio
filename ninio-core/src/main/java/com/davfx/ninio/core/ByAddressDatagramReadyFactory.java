@@ -242,7 +242,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 	}
 	
 	@Override
-	public Ready create(Queue ignoredQueue) {
+	public Ready create() {
 		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(final Address address, ReadyConnection connection) {

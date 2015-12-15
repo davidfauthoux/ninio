@@ -8,31 +8,33 @@ public final class ReadmeWithTelnet {
 		String login = "<your-login>";
 		String password = "<your-password>";
 		
-		try (ExtendedScriptRunner runner = new ExtendedScriptRunner(new Queue(), new DatagramReadyFactory())) {
-			runner.runner.engine().eval("telnet("
-					+ "{"
-						+ "'host': '127.0.0.1',"
-						+ "'init': ["
-									+ "{"
-										+ "'prompt': 'login: '"
-									+ "},"
-									+ "{"
-										+ "'command': '" + login + "',"
-										+ "'prompt': 'Password:'"
-									+ "},"
-									+ "{"
-										+ "'command': '" + password + "',"
-										+ "'prompt': '" + login + "$ '"
-									+ "}"
-								+ "],"
-						+ "'command': 'ls',"
-						+ "'prompt': '" + login + "$ '"
-					+ "}, function(r) {"
-							+ "console.log(r);"
-						+ "}"
-				+ ");", null);
-			
-			Thread.sleep(10000);
+		try (Queue queue = new Queue()) {
+			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
+				runner.runner.engine().eval("telnet("
+						+ "{"
+							+ "'host': '127.0.0.1',"
+							+ "'init': ["
+										+ "{"
+											+ "'prompt': 'login: '"
+										+ "},"
+										+ "{"
+											+ "'command': '" + login + "',"
+											+ "'prompt': 'Password:'"
+										+ "},"
+										+ "{"
+											+ "'command': '" + password + "',"
+											+ "'prompt': '" + login + "$ '"
+										+ "}"
+									+ "],"
+							+ "'command': 'ls',"
+							+ "'prompt': '" + login + "$ '"
+						+ "}, function(r) {"
+								+ "console.log(r);"
+							+ "}"
+					+ ");", null);
+				
+				Thread.sleep(10000);
+			}
 		}
 	}
 }

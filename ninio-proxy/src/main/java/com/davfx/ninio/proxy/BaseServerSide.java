@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
@@ -17,6 +18,7 @@ import com.davfx.ninio.core.TcpdumpSyncDatagramReady;
 import com.davfx.ninio.core.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.ninio.ping.InternalPingServerReadyFactory;
 import com.davfx.ninio.ping.PureJavaSyncPing;
+import com.davfx.ninio.snmp.InternalSnmpCacheServerReadyFactory;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
@@ -49,12 +51,12 @@ public final class BaseServerSide implements ServerSide {
 		}
 	}
 
-	private final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
+	private final Map<AddressConnecterTypeKey, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 	private final Closeable toClose;
 	
 	public BaseServerSide(Queue queue) {
 		
-		configurators.put(ProxyCommons.Types.SOCKET, new SimpleServerSideConfigurator(new SocketReadyFactory()));
+		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.SOCKET), new SimpleServerSideConfigurator(new SocketReadyFactory(queue)));
 
 		ReadyFactory datagramReadyFactory;
 		switch (MODE) {
@@ -71,7 +73,7 @@ public final class BaseServerSide implements ServerSide {
 			} catch (IOException ioe) {
 				LOGGER.error("Tcpdump receiver could not be prepared", ioe);
 			}
-			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(receiver);
+			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(queue, receiver);
 			toClose = receiver;
 			break;
 		case ASYNC:
@@ -83,11 +85,11 @@ public final class BaseServerSide implements ServerSide {
 			throw new IllegalStateException("Mode not implemented: " + MODE);
 		}
 
-		configurators.put(ProxyCommons.Types.DATAGRAM, new SimpleServerSideConfigurator(datagramReadyFactory));
+		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.DATAGRAM), new SimpleServerSideConfigurator(datagramReadyFactory));
 
-		configurators.put(ProxyCommons.Types.PING, new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(new PureJavaSyncPing())));
+		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.PING), new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(queue, new PureJavaSyncPing())));
 
-		configurators.put(ProxyCommons.Types.HOP, new HopServerSideConfigurator(new ProxyListener() {
+		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.HOP), new HopServerSideConfigurator(queue, new ProxyListener() {
 			@Override
 			public void failed(IOException e) {
 				LOGGER.warn("Hop failed", e);
@@ -101,22 +103,30 @@ public final class BaseServerSide implements ServerSide {
 				LOGGER.debug("Hop connected");
 			}
 		}));
+
+		configurators.put(new AddressConnecterTypeKey(new Address(ProxyCommons.Ports.SNMP), ProxyCommons.Types.DATAGRAM), new SimpleServerSideConfigurator(new InternalSnmpCacheServerReadyFactory(datagramReadyFactory)));
 	}
 
 	@Override
-	public void override(String connecterType, ServerSideConfigurator configurator) {
-		configurators.put(connecterType, configurator);
+	public void override(Address address, String connecterType, ServerSideConfigurator configurator) {
+		configurators.put(new AddressConnecterTypeKey(address, connecterType), configurator);
 	}
 	
 	@Override
-	public ReadyFactory read(DataInputStream in) throws IOException {
+	public ReadyFactory read(Address address, DataInputStream in) throws IOException {
 		String connecterType = in.readUTF();
-		ServerSideConfigurator configurator = configurators.get(connecterType);
+		ServerSideConfigurator configurator = configurators.get(new AddressConnecterTypeKey(address, connecterType));
+		if (configurator == null) {
+			configurator = configurators.get(new AddressConnecterTypeKey(new Address(null, address.getPort()), connecterType));
+		}
+		if (configurator == null) {
+			configurator = configurators.get(new AddressConnecterTypeKey(null, connecterType));
+		}
 		if (configurator == null) {
 			LOGGER.error("Unknown type: {}", connecterType);
 			throw new IOException("Unknown type: " + connecterType);
 		}
-		return configurator.configure(connecterType, in);
+		return configurator.configure(address, connecterType, in);
 	}
 	
 	@Override

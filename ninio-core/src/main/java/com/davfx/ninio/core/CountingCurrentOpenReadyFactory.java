@@ -8,7 +8,7 @@ public final class CountingCurrentOpenReadyFactory implements ReadyFactory {
 		this.wrappee = wrappee;
 	}
 	@Override
-	public Ready create(Queue queue) {
-		return new CountingCurrentOpenReady(openCount, wrappee.create(queue));
+	public Ready create() {
+		return new CountingCurrentOpenReady(openCount, wrappee.create());
 	}
 }

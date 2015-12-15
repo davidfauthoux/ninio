@@ -27,7 +27,7 @@ public final class TelnetClient implements TelnetReady {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(queue);
+				Ready ready = readyFactory.create();
 				ready.connect(address, new ReadyConnection() {
 					private FailableCloseableByteBufferHandler write;
 					private TelnetResponseReader reader;

@@ -29,7 +29,7 @@ public final class Ssh {
 
 	private Queue queue = DEFAULT_QUEUE;
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
-	private ReadyFactory readyFactory = new SocketReadyFactory();
+	private ReadyFactory readyFactory = null;
 	private String login = DEFAULT_LOGIN;
 	private String password = null;
 	private SshPublicKey key = null;
@@ -76,7 +76,7 @@ public final class Ssh {
 	}
 
 	public SshClient client() {
-		return new SshClient(queue, readyFactory, address, login, password, key);
+		return new SshClient(queue, (readyFactory == null) ? new SocketReadyFactory(queue) : readyFactory, address, login, password, key);
 	}
 	
 	public void download(String filePath, FailableCloseableByteBufferHandler handler) {
@@ -128,7 +128,7 @@ public final class Ssh {
 			}
 			@Override
 			public TelnetReady create(Queue queue, Address address) {
-				return new SshClient(queue, new SocketReadyFactory(), address, login, password, null);
+				return new SshClient(queue, new SocketReadyFactory(queue), address, login, password, null);
 			}
 		};
 	}
@@ -140,7 +140,7 @@ public final class Ssh {
 			}
 			@Override
 			public TelnetReady create(Queue queue, Address address) {
-				return new SshClient(queue, new SocketReadyFactory(), address, login, null, rsaKey(privateKey, publicKey));
+				return new SshClient(queue, new SocketReadyFactory(queue), address, login, null, rsaKey(privateKey, publicKey));
 			}
 		};
 	}
@@ -152,7 +152,7 @@ public final class Ssh {
 			}
 			@Override
 			public TelnetReady create(Queue queue, Address address) {
-				return new SshClient(queue, new SocketReadyFactory(), address, login, null, rsaKey(trust.getPrivateKey(alias, password), trust.getPublicKey(alias)));
+				return new SshClient(queue, new SocketReadyFactory(queue), address, login, null, rsaKey(trust.getPrivateKey(alias, password), trust.getPublicKey(alias)));
 			}
 		};
 	}

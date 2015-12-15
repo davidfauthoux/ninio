@@ -37,7 +37,7 @@ public class ExtendedScriptRunnerTest {
 	@Test
 	public void testPing() throws Exception {
 		try (Queue queue = new Queue()) {
-			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
+			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
 				{
 					final Lock<JsonElement, Exception> lock = new Lock<>();
 					ScriptRunner.Engine engine = runner.runner.engine();
@@ -68,7 +68,7 @@ public class ExtendedScriptRunnerTest {
 		try (Queue queue = new Queue()) {
 			try (SnmpServer snmpServer = new SnmpServer(queue, new DatagramReady(queue.getSelector(), queue.allocator()).bind(), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
 				queue.finish().waitFor();
-				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
 					{
 						final Lock<JsonElement, Exception> lock = new Lock<>();
 						ScriptRunner.Engine engine = runner.runner.engine();
@@ -151,7 +151,7 @@ public class ExtendedScriptRunnerTest {
 				
 			})) {
 				queue.finish().waitFor();
-				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
 					final Lock<JsonElement, Exception> lock = new Lock<>();
 					ScriptRunner.Engine engine = runner.runner.engine();
 					engine.register("out", new SyncScriptFunction() {
@@ -183,7 +183,7 @@ public class ExtendedScriptRunnerTest {
 				}
 			})) {
 				queue.finish().waitFor();
-				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory())) {
+				try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
 					final Lock<JsonElement, Exception> lock = new Lock<>();
 					ScriptRunner.Engine engine = runner.runner.engine();
 					engine.register("out", new SyncScriptFunction() {

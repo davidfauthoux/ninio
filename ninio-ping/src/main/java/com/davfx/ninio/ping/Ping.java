@@ -26,7 +26,7 @@ public final class Ping {
 	private static final Queue DEFAULT_QUEUE = new Queue();
 
 	private Queue queue = DEFAULT_QUEUE;
-	private ReadyFactory readyFactory = new InternalPingServerReadyFactory(DEFAULT_SYNC_PING);
+	private ReadyFactory readyFactory = null;
 
 	public Ping() {
 	}
@@ -42,7 +42,7 @@ public final class Ping {
 	}
 	
 	public PingClient client() {
-		return new PingClient(queue, readyFactory);
+		return new PingClient(queue, (readyFactory == null) ? new InternalPingServerReadyFactory(queue, DEFAULT_SYNC_PING) : readyFactory);
 	}
 	
 	public void ping(final String host, final PingClientHandler.Callback.PingCallback pingCallback) {

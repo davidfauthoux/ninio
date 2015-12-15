@@ -67,4 +67,6 @@ public final class BerConstants {
 	 * 
 	 * public static final int GET = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x0); public static final int GETNEXT = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x1); public static final int RESPONSE = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x2); public static final int GETBULK = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x5);
 	 */
+	
+	public static final int NO_SUCH_NAME_ERROR = 2;
 }

@@ -23,7 +23,6 @@ import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.QueueReady;
 import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.core.ReadyFactory;
@@ -40,15 +39,13 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 
 	public static final double READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.proxy.timeout.read");
 	
-	private final Queue queue;
 	private final ServerSide proxyServerSide;
 	private final ExecutorService listenExecutor;
 	private final ExecutorService clientExecutor;
 	private final Set<String> hostsToFilter = new HashSet<>();
 	private final ServerSocket serverSocket;
 	
-	public ProxyServer(int port, int maxNumberOfSimultaneousClients) throws IOException {
-		queue = new Queue();
+	public ProxyServer(Queue queue, int port, int maxNumberOfSimultaneousClients) throws IOException {
 		proxyServerSide = new BaseServerSide(queue);
 		LOGGER.debug("Proxy server on port {}", port);
 		listenExecutor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, "listen"));
@@ -66,8 +63,8 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 		}
 	}
 	
-	public ProxyServer override(String type, ServerSideConfigurator configurator) {
-		proxyServerSide.override(type, configurator);
+	public ProxyServer override(Address address, String type, ServerSideConfigurator configurator) {
+		proxyServerSide.override(address, type, configurator);
 		return this;
 	}
 	
@@ -110,8 +107,9 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 											int command = -len;
 											if (command == ProxyCommons.Commands.ESTABLISH_CONNECTION) {
 												final Address address = new Address(in.readUTF(), in.readInt());
-												ReadyFactory factory = proxyServerSide.read(in);
-												Ready r = new QueueReady(queue, factory.create(queue));
+												ReadyFactory factory = proxyServerSide.read(address, in);
+												//%% Ready r = new QueueReady(queue, factory.create());
+												Ready r = factory.create();
 												r.connect(address, new ReadyConnection() {
 													@Override
 													public void failed(IOException e) {

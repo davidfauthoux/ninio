@@ -13,7 +13,7 @@ public final class Telnet {
 
 	private Queue queue = DEFAULT_QUEUE;
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
-	private ReadyFactory readyFactory = new SocketReadyFactory();
+	private ReadyFactory readyFactory = null;
 
 	public Telnet() {
 	}
@@ -34,7 +34,7 @@ public final class Telnet {
 	}
 	
 	public TelnetClient client() {
-		return new TelnetClient(queue, readyFactory, address);
+		return new TelnetClient(queue, (readyFactory == null) ? new SocketReadyFactory(queue) : readyFactory, address);
 	}
 	
 	public static TelnetSharingReadyFactory sharing() {
@@ -45,7 +45,7 @@ public final class Telnet {
 			}
 			@Override
 			public TelnetReady create(Queue queue, Address address) {
-				return new TelnetClient(queue, new SocketReadyFactory(), address);
+				return new TelnetClient(queue, new SocketReadyFactory(queue), address);
 			}
 		};
 	}

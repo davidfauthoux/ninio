@@ -21,7 +21,7 @@ public final class Snmp {
 	private Queue queue = DEFAULT_QUEUE;
 	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ninio.snmp.defaultTimeoutFromBeginning");
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
-	private ReadyFactory readyFactory = new DatagramReadyFactory();
+	private ReadyFactory readyFactory = null;
 	private String community = CONFIG.getString("ninio.snmp.defaultCommunity");
 	private AuthRemoteEngine authEngine = null;
 
@@ -59,9 +59,9 @@ public final class Snmp {
 
 	public SnmpClient client() {
 		if (authEngine != null) {
-			return new SnmpClient(queue, readyFactory, address, authEngine, timeoutFromBeginning);
+			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, authEngine, timeoutFromBeginning);
 		} else {
-			return new SnmpClient(queue, readyFactory, address, community, timeoutFromBeginning);
+			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, timeoutFromBeginning);
 		}
 	}
 	

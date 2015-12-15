@@ -62,7 +62,7 @@ public final class SshClient implements TelnetReady {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(queue);
+				Ready ready = readyFactory.create();
 				ready.connect(address, new ReadyConnection() {
 					@Override
 					public void failed(IOException e) {

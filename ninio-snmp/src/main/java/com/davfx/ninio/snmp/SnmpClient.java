@@ -105,7 +105,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(queue);
+				Ready ready = readyFactory.create();
 				
 				final InstanceMapper instanceMapper = new InstanceMapper(address, requestIdProvider);
 				instanceMappers.add(instanceMapper);

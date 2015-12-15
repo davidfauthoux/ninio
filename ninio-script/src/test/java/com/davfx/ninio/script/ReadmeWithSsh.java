@@ -10,25 +10,27 @@ public final class ReadmeWithSsh {
 		String login = "<your-login>";
 		String password = "<your-password>";
 		
-		try (ExtendedScriptRunner runner = new ExtendedScriptRunner(new Queue(), new DatagramReadyFactory())) {
-			runner.runner.engine().eval("ssh("
-					+ "{"
-						+ "'host': '127.0.0.1',"
-						+ "'login': '" + login + "',"
-						+ "'password': '" + password + "',"
-						+ "'init': ["
-									+ "{"
-										+ "'prompt': '" + login + "$ '"
-									+ "}"
-								+ "],"
-						+ "'command': 'ls',"
-						+ "'prompt': '" + login + "$ '"
-					+ "}, function(r) {"
-							+ "console.log(r);"
-					+ "}"
-				+ ");", null);
-			
-			Thread.sleep(10000);
+		try (Queue queue = new Queue()) {
+			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
+				runner.runner.engine().eval("ssh("
+						+ "{"
+							+ "'host': '127.0.0.1',"
+							+ "'login': '" + login + "',"
+							+ "'password': '" + password + "',"
+							+ "'init': ["
+										+ "{"
+											+ "'prompt': '" + login + "$ '"
+										+ "}"
+									+ "],"
+							+ "'command': 'ls',"
+							+ "'prompt': '" + login + "$ '"
+						+ "}, function(r) {"
+								+ "console.log(r);"
+						+ "}"
+					+ ");", null);
+				
+				Thread.sleep(10000);
+			}
 		}
 	}
 }

@@ -5,16 +5,18 @@ import com.davfx.ninio.core.Queue;
 
 public final class ReadmeWithPing {
 	public static void main(String[] args) throws Exception {
-		try (ExtendedScriptRunner runner = new ExtendedScriptRunner(new Queue(), new DatagramReadyFactory())) {
-			runner.runner.engine().eval("ping("
-					+ "{"
-						+ "'host': '127.0.0.1',"
-					+ "}, function(r) {"
-							+ "console.debug(JSON.stringify(r));"
-						+ "}"
-				+ ");", null);
-			
-			Thread.sleep(10000);
+		try (Queue queue = new Queue()) {
+			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
+				runner.runner.engine().eval("ping("
+						+ "{"
+							+ "'host': '127.0.0.1',"
+						+ "}, function(r) {"
+								+ "console.debug(JSON.stringify(r));"
+							+ "}"
+					+ ");", null);
+				
+				Thread.sleep(10000);
+			}
 		}
 	}
 }

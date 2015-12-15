@@ -31,7 +31,6 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 	}
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpServer.class);
-	private static final int NO_SUCH_NAME_ERROR = 2;
 	
 	private final Queue queue;
 	private CloseableByteBufferHandler write = null;
@@ -99,14 +98,16 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 							// if (!oid.isPrefix(handleOid)) {
 							// return false;
 							// }
-							next.add(new Pair<>(handleOid, ber(value)));
+							if (handleOid.equals(oid)) {
+								next.add(new Pair<>(handleOid, ber(value)));
+							}
 							return false;
 						}
 					});
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GET {}: None", oid);
-						write(address, build(requestId, community, NO_SUCH_NAME_ERROR, 0, null));
+						write(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 
@@ -132,7 +133,7 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETNEXT {}: No next", oid);
-						write(address, build(requestId, community, NO_SUCH_NAME_ERROR, 0, null));
+						write(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 
@@ -161,7 +162,7 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETBULK {}: No next", oid);
-						write(address, build(requestId, community, NO_SUCH_NAME_ERROR, 0, null));
+						write(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 

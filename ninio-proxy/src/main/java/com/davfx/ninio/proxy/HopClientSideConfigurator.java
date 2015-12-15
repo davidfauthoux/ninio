@@ -15,7 +15,7 @@ public final class HopClientSideConfigurator implements ClientSideConfigurator {
 	}
 
 	@Override
-	public void configure(String connecterType, DataOutputStream out) throws IOException {
+	public void configure(Address address, String connecterType, DataOutputStream out) throws IOException {
 		out.writeUTF(toAddress.getHost());
 		out.writeInt(toAddress.getPort());
 		out.writeUTF(underlyingType);

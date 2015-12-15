@@ -19,8 +19,9 @@ public final class Http implements AutoCloseable, Closeable {
 	private static final Queue DEFAULT_QUEUE = new Queue();
 
 	private Queue queue = DEFAULT_QUEUE;
-	private ReadyFactory readyFactory = new SocketReadyFactory();
-	private ReadyFactory secureReadyFactory = new SslReadyFactory(new Trust());
+	private ReadyFactory readyFactory = null;
+	private ReadyFactory secureReadyFactory = null;
+	private Trust trust = new Trust();
 	private HttpRecycle recycle;
 
 	public Http() {
@@ -32,31 +33,32 @@ public final class Http implements AutoCloseable, Closeable {
 		recycle.close();
 	}
 
+	private void createRecycle() {
+		recycle.close();
+		recycle = new HttpRecycle(queue, (readyFactory == null) ? new SocketReadyFactory(queue) : readyFactory, (secureReadyFactory == null) ? new SslReadyFactory(queue, trust) : secureReadyFactory);
+	}
+	
 	public Http withQueue(Queue queue) {
 		this.queue = queue;
-		recycle.close();
-		recycle = new HttpRecycle(queue, readyFactory, secureReadyFactory);
+		createRecycle();
 		return this;
 	}
 	
 	public Http override(ReadyFactory readyFactory) {
 		this.readyFactory = readyFactory;
-		recycle.close();
-		recycle = new HttpRecycle(queue, readyFactory, secureReadyFactory);
+		createRecycle();
 		return this;
 	}
 
 	public Http overrideSecure(ReadyFactory secureReadyFactory) {
 		this.secureReadyFactory = secureReadyFactory;
-		recycle.close();
-		recycle = new HttpRecycle(queue, readyFactory, secureReadyFactory);
+		createRecycle();
 		return this;
 	}
 
 	public Http withTrust(Trust trust) {
-		secureReadyFactory = new SslReadyFactory(trust);
-		recycle.close();
-		recycle = new HttpRecycle(queue, readyFactory, secureReadyFactory);
+		this.trust = trust;
+		createRecycle();
 		return this;
 	}
 	

@@ -43,7 +43,7 @@ public final class FtpClient {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				Ready ready = readyFactory.create(queue);
+				Ready ready = readyFactory.create();
 				ready.connect(address, new ReadyConnection() {
 					private FtpResponseReader reader = null;
 					@Override

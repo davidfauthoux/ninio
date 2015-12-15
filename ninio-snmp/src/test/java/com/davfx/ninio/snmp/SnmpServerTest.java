@@ -46,7 +46,7 @@ public class SnmpServerTest {
 			try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
 				queue.finish().waitFor();
 				final Lock<List<Result>, IOException> lock = new Lock<>();
-				try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(new Address(Address.LOCALHOST, 8080)).client()) {
+				try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory(queue))).to(new Address(Address.LOCALHOST, 8080)).client()) {
 					client.connect(new SnmpClientHandler() {
 						@Override
 						public void failed(IOException e) {
@@ -80,11 +80,11 @@ public class SnmpServerTest {
 					Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
 				}
 
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2]");
-				Assertions.assertThat(test(openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
+				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
+				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
+				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
+				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2]");
+				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
 			}
 			queue.finish().waitFor();
 		}
@@ -93,9 +93,9 @@ public class SnmpServerTest {
 		Assertions.assertThat(openCount.count).isEqualTo(0L);
 	}
 	
-	private static List<Result> test(Count openCount, Address address, Oid oid) throws IOException {
+	private static List<Result> test(Queue queue, Count openCount, Address address, Oid oid) throws IOException {
 		final Lock<List<Result>, IOException> lock = new Lock<>();
-		new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(address).get(oid, new SnmpClientHandler.Callback.GetCallback() {
+		new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory(queue))).to(address).get(oid, new SnmpClientHandler.Callback.GetCallback() {
 			private final List<Result> r = new LinkedList<>();
 			@Override
 			public void failed(IOException e) {

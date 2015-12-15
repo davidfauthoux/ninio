@@ -29,12 +29,14 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.ping.timeout");
 	private static final int MAX_SIMULTANEOUS_CLIENTS = CONFIG.getInt("ninio.ping.maxSimultaneousClients");
 	
+	private final Queue queue;
 	private final SyncPing syncPing;
 	private final ExecutorService clientExecutor = Executors.newFixedThreadPool(MAX_SIMULTANEOUS_CLIENTS, new ClassThreadFactory(InternalPingServerReadyFactory.class));
 	private final Map<String, List<PingCallback>> pinging = new HashMap<>();
 
-	public InternalPingServerReadyFactory(SyncPing syncPing) {
+	public InternalPingServerReadyFactory(Queue queue, SyncPing syncPing) {
 		this.syncPing = syncPing;
+		this.queue = queue;
 	}
 	
 	@Override
@@ -46,7 +48,7 @@ public final class InternalPingServerReadyFactory implements ReadyFactory, AutoC
 	}
 	
 	@Override
-	public Ready create(final Queue queue) {
+	public Ready create() {
 		return new Ready() {
 			@Override
 			public void connect(Address ignoredInternalServerAddress, final ReadyConnection connection) {
