@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 public final class CountingCurrentOpenReady implements Ready {
+	
 	private final Ready wrappee;
 	private final Count openCount;
 	

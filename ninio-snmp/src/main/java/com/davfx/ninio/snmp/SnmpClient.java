@@ -439,7 +439,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						if (r.getValue() == null) {
 							continue;
 						}
-						if (!initialRequestOid.isPrefix(r.getOid())) {
+						if (!initialRequestOid.isPrefixOf(r.getOid())) {
 							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
 							lastOid = null;
 							break;

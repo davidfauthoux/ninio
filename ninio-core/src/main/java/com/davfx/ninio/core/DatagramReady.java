@@ -85,6 +85,7 @@ public final class DatagramReady implements Ready {
 									channel.close();
 								} catch (IOException ee) {
 								}
+								// connection.failed(e);
 								connection.close();
 							}
 						} else if (key.isWritable()) {
@@ -117,6 +118,7 @@ public final class DatagramReady implements Ready {
 											channel.close();
 										} catch (IOException ee) {
 										}
+										// connection.failed(e);
 										connection.close();
 										return;
 									}
@@ -141,6 +143,7 @@ public final class DatagramReady implements Ready {
 												channel.close();
 											} catch (IOException ee) {
 											}
+											// connection.failed(e);
 											connection.close();
 											return;
 										}

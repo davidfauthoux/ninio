@@ -15,7 +15,6 @@ import com.davfx.ninio.core.CountingCurrentOpenReadyFactory;
 import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 import com.davfx.util.Lock;
 
 public class SnmpServerTest {
@@ -59,7 +58,7 @@ public class SnmpServerTest {
 						}
 						@Override
 						public void launched(final Callback callback) {
-							callback.get(new Oid("1.1.1"), new GetCallback() {
+							callback.get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
 								private final List<Result> r = new LinkedList<>();
 								@Override
 								public void failed(IOException e) {
@@ -96,7 +95,7 @@ public class SnmpServerTest {
 	
 	private static List<Result> test(Count openCount, Address address, Oid oid) throws IOException {
 		final Lock<List<Result>, IOException> lock = new Lock<>();
-		new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(address).get(oid, new GetCallback() {
+		new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory())).to(address).get(oid, new SnmpClientHandler.Callback.GetCallback() {
 			private final List<Result> r = new LinkedList<>();
 			@Override
 			public void failed(IOException e) {

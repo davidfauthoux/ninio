@@ -73,7 +73,7 @@ public final class Oid implements Comparable<Oid> {
 		return b.toString();
 	}
 
-	public boolean isPrefix(Oid oid) {
+	public boolean isPrefixOf(Oid oid) {
 		if (oid.raw.length < raw.length) {
 			return false;
 		}

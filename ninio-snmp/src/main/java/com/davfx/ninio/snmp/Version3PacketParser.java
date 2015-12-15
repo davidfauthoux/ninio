@@ -116,7 +116,7 @@ final class Version3PacketParser {
 							pdu.beginReadSequence();
 							{
 								Oid oid = pdu.readOid();
-								if (AUTH_ERROR_OID.isPrefix(oid)) {
+								if (AUTH_ERROR_OID.isPrefixOf(oid)) {
 									LOGGER.error("Authentication failed ({}), requestId = {}", oid, requestId);
 									// There is no wait to report it to the user because requestId is 0
 									errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;

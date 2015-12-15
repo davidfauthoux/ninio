@@ -7,11 +7,11 @@ public class OidTest {
 
 	@Test
 	public void test() throws Exception {
-		Assertions.assertThat(new Oid("1.1.1").isPrefix(new Oid("1.1.1.2"))).isTrue();
-		Assertions.assertThat(new Oid("1.1.1").isPrefix(new Oid("1.1.1"))).isTrue();
-		Assertions.assertThat(new Oid("1.1.1").isPrefix(new Oid("1.1.2.2"))).isFalse();
-		Assertions.assertThat(new Oid("1.1.1").isPrefix(new Oid("1.1.2"))).isFalse();
-		Assertions.assertThat(new Oid("1.1.1").isPrefix(new Oid("1.1"))).isFalse();
+		Assertions.assertThat(new Oid("1.1.1").isPrefixOf(new Oid("1.1.1.2"))).isTrue();
+		Assertions.assertThat(new Oid("1.1.1").isPrefixOf(new Oid("1.1.1"))).isTrue();
+		Assertions.assertThat(new Oid("1.1.1").isPrefixOf(new Oid("1.1.2.2"))).isFalse();
+		Assertions.assertThat(new Oid("1.1.1").isPrefixOf(new Oid("1.1.2"))).isFalse();
+		Assertions.assertThat(new Oid("1.1.1").isPrefixOf(new Oid("1.1"))).isFalse();
 
 		Assertions.assertThat(new Oid("1.1.1")).isEqualTo(new Oid("1.1.1"));
 		Assertions.assertThat(new Oid("1.1.1")).isNotEqualTo(new Oid("1.1.2"));

@@ -93,6 +93,7 @@ public final class SocketReady implements Ready {
 												channel.close();
 											} catch (IOException ee) {
 											}
+											// connection.failed(e);
 											connection.close();
 										}
 									} else if (key.isWritable()) {
@@ -120,6 +121,7 @@ public final class SocketReady implements Ready {
 													channel.close();
 												} catch (IOException ee) {
 												}
+												// connection.failed(e);
 												connection.close();
 												return;
 											}
