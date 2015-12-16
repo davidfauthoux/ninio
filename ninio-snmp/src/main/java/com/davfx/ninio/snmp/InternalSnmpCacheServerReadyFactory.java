@@ -61,6 +61,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 		closeable = QueueScheduled.schedule(queue, CHECK_TIME, new Runnable() {
 			@Override
 			public void run() {
+				LOGGER.trace("Checking {}", CHECK_TIME);
 				double now = DateUtils.now();
 				
 				Iterator<Map.Entry<Key, CacheElement>> i = cache.entrySet().iterator();
@@ -70,7 +71,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 					CacheElement cacheElement = e.getValue();
 					
 					if ((cacheElement.requesting == null) && cacheElement.expired(now)) {
-						LOGGER.debug("Expired: {}/{}", key.request, key.oid);
+						LOGGER.trace("Expired: {}/{}", key.request, key.oid);
 						i.remove();
 						continue;
 					}
@@ -80,7 +81,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 							cacheElement.errorStatus = BerConstants.ERROR_STATUS_TIMEOUT;
 							cacheElement.errorIndex = 0;
 							cacheElement.results = null;
-							LOGGER.debug("Timeout: {}/{}", key.request, key.oid);
+							LOGGER.trace("Timeout: {}/{}", key.request, key.oid);
 							for (Requesting r : cacheElement.requesting) {
 								ByteBuffer builtBuffer = build(r.requestId, NO_COMMUNITY, cacheElement.errorStatus, cacheElement.errorIndex, cacheElement.results);
 								r.connection.handle(null, builtBuffer);
@@ -93,7 +94,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 						while (j.hasNext()) {
 							Requesting r = j.next();
 							if (r.expired(now)) {
-								LOGGER.debug("Timeout: {}", r.requestId);
+								LOGGER.trace("Timeout: {}", r.requestId);
 								ByteBuffer builtBuffer = build(r.requestId, NO_COMMUNITY, BerConstants.ERROR_STATUS_TIMEOUT, 0, null);
 								r.connection.handle(null, builtBuffer);
 								j.remove();
@@ -183,14 +184,14 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 	
 	@Override
 	public Ready create() {
-		LOGGER.debug("Ready created");
+		LOGGER.trace("Ready created");
 		final Ready wrappeeReady = wrappee.create();
 		return new Ready() {
 			@Override
 			public void connect(final Address address, final ReadyConnection connection) {
 				// final ReadyConnection connection = new MayBeClosedReadyConnection(sourceConnection);
 
-				LOGGER.debug("Connecting to: {}", address);
+				LOGGER.trace("Connecting to: {}", address);
 				
 				wrappeeReady.connect(address, new ReadyConnection() {
 					@Override
@@ -246,7 +247,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 									return;
 								}
 
-								LOGGER.debug("Request {} with community: {} and oid: {}", requestId, community, oid);
+								LOGGER.trace("Request {} with community: {} and oid: {}", requestId, community, oid);
 								
 								if (!filter.cache(address, oid)) {
 									write.handle(address, sourceBuffer);
@@ -259,7 +260,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 								CacheElement cacheElement = cache.get(key);
 								if (cacheElement != null) {
 									if ((cacheElement.requesting == null) && cacheElement.expired(now)) {
-										LOGGER.debug("Expired: {}/{}", request, oid);
+										LOGGER.trace("Expired: {}/{}", request, oid);
 										cacheElement = null;
 									}
 								}
@@ -270,20 +271,20 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 									fromRequestId.put(requestId, key);
 									cacheElement.requesting.add(new Requesting(requestId, connection));
 									
-									LOGGER.debug("Request {} actually sent: {}/{}", requestId, request, oid);
+									LOGGER.trace("Request {} actually sent: {}/{}", requestId, request, oid);
 									write.handle(address, sourceBuffer);
 									return;
 								}
 								if (cacheElement.requesting == null) {
-									LOGGER.debug("Request {} from cache: {}/{}", requestId, request, oid);
+									LOGGER.trace("Request {} from cache: {}/{}", requestId, request, oid);
 									ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, cacheElement.errorStatus, cacheElement.errorIndex, cacheElement.results);
 									connection.handle(address, builtBuffer);
 								} else {
 									if (cacheElement.shouldReapeat(now)) {
-										LOGGER.debug("Request {} repeated: {}/{}", requestId, request, oid);
+										LOGGER.trace("Request {} repeated: {}/{}", requestId, request, oid);
 										write.handle(address, sourceBuffer);
 									} else {
-										LOGGER.debug("Request {} not sent: {}/{}", requestId, request, oid);
+										LOGGER.trace("Request {} not sent: {}/{}", requestId, request, oid);
 									}
 									if (fromRequestId.put(requestId, key) == null) {
 										cacheElement.requesting.add(new Requesting(requestId, connection));
@@ -311,7 +312,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 							return;
 						}
 						
-						LOGGER.debug("Response for {}: {}", requestId, results);
+						LOGGER.trace("Response for {}: {}", requestId, results);
 						
 						Key key = fromRequestId.remove(requestId);
 						if (key == null) {
@@ -326,7 +327,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 						cacheElement.errorStatus = errorStatus;
 						cacheElement.errorIndex = errorIndex;
 						cacheElement.results = results;
-						LOGGER.debug("Response for {} in cache", requestId);
+						LOGGER.trace("Response for {} in cache", requestId);
 						for (Requesting r : cacheElement.requesting) {
 							ByteBuffer builtBuffer = build(r.requestId, NO_COMMUNITY, cacheElement.errorStatus, cacheElement.errorIndex, cacheElement.results);
 							connection.handle(address, builtBuffer);
@@ -336,7 +337,6 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 					
 					@Override
 					public void close() {
-						LOGGER.debug("Connection closed");
 						connection.close();
 					}
 				});

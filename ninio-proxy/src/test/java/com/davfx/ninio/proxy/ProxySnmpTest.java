@@ -22,15 +22,9 @@ import com.davfx.util.Lock;
 
 public class ProxySnmpTest {
 
-	private static final double EXPIRATION = 2d;
-	
-	static {
-		System.setProperty("ninio.snmp.cache.check", "1 second");
-		System.setProperty("ninio.snmp.cache.timeout", "2 seconds");
-		System.setProperty("ninio.snmp.cache.repeat", "5 seconds");
-		System.setProperty("ninio.snmp.cache.expiration", EXPIRATION + " seconds");
-	}
-	
+	private static final double CHECK = 1d; // Should match application.conf
+	private static final double EXPIRATION = 2d; // Should match application.conf
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxySnmpTest.class);
 	
 	@Test
@@ -150,7 +144,7 @@ public class ProxySnmpTest {
 								Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1.1:A1, 1.1.1.2:A2, 1.1.1.3:A3]");
 							}
 							
-							Thread.sleep((long) (EXPIRATION * 1000d * 1.1d));
+							Thread.sleep((long) ((EXPIRATION + (CHECK * 2)) * 1000d * 1.1d));
 							
 							{
 								diff[0] = "D";
