@@ -100,8 +100,9 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 							// }
 							if (handleOid.equals(oid)) {
 								next.add(new Pair<>(handleOid, ber(value)));
+								return false;
 							}
-							return false;
+							return true;
 						}
 					});
 
@@ -124,10 +125,13 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 						public boolean handle(Oid handleOid, String value) {
 							if (handleOid.equals(oid)) {
 								// Skipped
+								return true;
 							} else {
-								next.add(new Pair<>(handleOid, ber(value)));
+								if (next.isEmpty()) {
+									next.add(new Pair<>(handleOid, ber(value)));
+								}
+								return false;
 							}
-							return false;
 						}
 					});
 
