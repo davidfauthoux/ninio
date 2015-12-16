@@ -389,7 +389,7 @@ public class ProxyTest {
 				queue.finish().waitFor();
 	
 				try (ProxyServer proxy1Server = new ProxyServer(queue, proxy1ServerPort, 1)) {
-					proxy1Server.override(null, ProxyCommons.Types.SOCKET, new ForwardServerSideConfigurator(queue, new Address(Address.LOCALHOST, proxy0ServerPort), new ProxyListener() {
+					proxy1Server.override(ProxyCommons.Types.SOCKET, new ForwardServerSideConfigurator(queue, new Address(Address.LOCALHOST, proxy0ServerPort), new ProxyListener() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Forward failed", e);

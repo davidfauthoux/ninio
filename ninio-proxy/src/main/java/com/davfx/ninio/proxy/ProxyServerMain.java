@@ -17,7 +17,7 @@ public final class ProxyServerMain {
 		try (Queue queue = new Queue()) {
 			try (ProxyServer server = new ProxyServer(queue, CONFIG.getInt("proxy.port"), CONFIG.getInt("proxy.maxSimultaneousClients"))) {
 				for (Config c : CONFIG.getConfigList("proxy.forward")) {
-					server.override(null, c.getString("type"), new ForwardServerSideConfigurator(queue, new Address(c.getString("host"), c.getInt("port")), null));
+					server.override(c.getString("type"), new ForwardServerSideConfigurator(queue, new Address(c.getString("host"), c.getInt("port")), null));
 				}
 				for (String host : CONFIG.getStringList("proxy.filter")) {
 					server.filter(host);

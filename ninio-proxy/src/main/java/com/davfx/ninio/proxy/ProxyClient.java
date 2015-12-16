@@ -46,13 +46,13 @@ public final class ProxyClient implements AutoCloseable, Closeable {
 		return new ProxyReadyFactory(queue, proxyReadyGenerator, type);
 	}
 
-	public ProxyClient override(Address address, String type, ClientSideConfigurator configurator) {
-		proxyReadyGenerator.override(address, type, configurator);
+	public ProxyClient override(String type, ClientSideConfigurator configurator) {
+		proxyReadyGenerator.override(type, configurator);
 		return this;
 	}
 	
 	public ProxyClient hopTo(Address address, String type) {
-		override(null, ProxyCommons.Types.HOP, new HopClientSideConfigurator(address, type));
+		override(ProxyCommons.Types.HOP, new HopClientSideConfigurator(address, type));
 		return this;
 	}
 }

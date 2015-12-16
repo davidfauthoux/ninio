@@ -70,8 +70,8 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 		return proxyServerSide.socketReadyFactory();
 	}
 
-	public ProxyServer override(Address address, String type, ServerSideConfigurator configurator) {
-		proxyServerSide.override(address, type, configurator);
+	public ProxyServer override(String type, ServerSideConfigurator configurator) {
+		proxyServerSide.override(type, configurator);
 		return this;
 	}
 	
@@ -114,7 +114,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 											int command = -len;
 											if (command == ProxyCommons.Commands.ESTABLISH_CONNECTION) {
 												final Address address = new Address(in.readUTF(), in.readInt());
-												ReadyFactory factory = proxyServerSide.read(address, in);
+												ReadyFactory factory = proxyServerSide.read(in);
 												//%% Ready r = new QueueReady(queue, factory.create());
 												Ready r = factory.create();
 												r.connect(address, new ReadyConnection() {

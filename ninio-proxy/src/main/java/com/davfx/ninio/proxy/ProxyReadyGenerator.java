@@ -63,8 +63,8 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 		}
 	}
 
-	public ProxyReadyGenerator override(Address address, String type, ClientSideConfigurator configurator) {
-		proxyClientSide.override(address, type, configurator);
+	public ProxyReadyGenerator override(String type, ClientSideConfigurator configurator) {
+		proxyClientSide.override(type, configurator);
 		return this;
 	}
 	
@@ -282,7 +282,7 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 					out.writeInt(-ProxyCommons.Commands.ESTABLISH_CONNECTION);
 					out.writeUTF(address.getHost());
 					out.writeInt(address.getPort());
-					proxyClientSide.write(address, connecterType, out);
+					proxyClientSide.write(connecterType, out);
 					out.flush();
 				} catch (IOException ioe) {
 					LOGGER.error("Could not establish connection", ioe);

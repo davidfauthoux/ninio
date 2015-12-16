@@ -63,7 +63,7 @@ public class ProxySnmpTest {
 							return true;
 						}
 					}, queue, proxyServer.datagramReadyFactory())) {
-						proxyServer.override(null, "_snmp", new SimpleServerSideConfigurator(i));
+						proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 						proxyServer.start();
 						queue.finish().waitFor();
 			
@@ -81,7 +81,7 @@ public class ProxySnmpTest {
 								LOGGER.debug("Proxy connected");
 							}
 						})) {
-							proxyClient.override(null, "_snmp", new EmptyClientSideConfiguration());
+							proxyClient.override("_snmp", new EmptyClientSideConfiguration());
 	
 							{
 								diff[0] = "A";
@@ -194,7 +194,7 @@ public class ProxySnmpTest {
 						return true;
 					}
 				}, queue, proxyServer.datagramReadyFactory())) {
-					proxyServer.override(null, "_snmp", new SimpleServerSideConfigurator(i));
+					proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 					proxyServer.start();
 					queue.finish().waitFor();
 		
@@ -212,7 +212,7 @@ public class ProxySnmpTest {
 							LOGGER.debug("Proxy connected");
 						}
 					})) {
-						proxyClient.override(null, "_snmp", new EmptyClientSideConfiguration());
+						proxyClient.override("_snmp", new EmptyClientSideConfiguration());
 	
 						{
 							final Lock<List<Result>, IOException> lock = new Lock<>();

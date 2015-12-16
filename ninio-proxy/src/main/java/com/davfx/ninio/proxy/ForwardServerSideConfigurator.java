@@ -17,7 +17,7 @@ public final class ForwardServerSideConfigurator implements ServerSideConfigurat
 	}
 
 	@Override
-	public ReadyFactory configure(Address address, String connecterType, DataInputStream in) throws IOException {
+	public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
 		return client.of(queue, connecterType);
 	}
 }

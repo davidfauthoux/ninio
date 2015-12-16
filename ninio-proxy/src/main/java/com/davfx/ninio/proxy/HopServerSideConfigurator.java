@@ -21,7 +21,7 @@ public final class HopServerSideConfigurator implements ServerSideConfigurator {
 	}
 
 	@Override
-	public ReadyFactory configure(Address address, String connecterType, DataInputStream in) throws IOException {
+	public ReadyFactory configure(String connecterType, DataInputStream in) throws IOException {
 		Address proxyAddress = new Address(in.readUTF(), in.readInt());
 		ProxyClient c = clients.get(proxyAddress);
 		if (c == null) {

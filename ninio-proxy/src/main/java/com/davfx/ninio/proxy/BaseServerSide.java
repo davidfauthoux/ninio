@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
@@ -50,7 +49,7 @@ public final class BaseServerSide implements ServerSide {
 		}
 	}
 
-	private final Map<AddressConnecterTypeKey, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
+	private final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 	private final Closeable toClose;
 
 	private final ReadyFactory datagramReadyFactory;
@@ -60,7 +59,7 @@ public final class BaseServerSide implements ServerSide {
 		
 		socketReadyFactory = new SocketReadyFactory(queue);
 		
-		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.SOCKET), new SimpleServerSideConfigurator(socketReadyFactory));
+		configurators.put(ProxyCommons.Types.SOCKET, new SimpleServerSideConfigurator(socketReadyFactory));
 
 		switch (MODE) {
 		case SYNC_TCPDUMP:
@@ -88,11 +87,11 @@ public final class BaseServerSide implements ServerSide {
 			throw new IllegalStateException("Mode not implemented: " + MODE);
 		}
 
-		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.DATAGRAM), new SimpleServerSideConfigurator(datagramReadyFactory));
+		configurators.put(ProxyCommons.Types.DATAGRAM, new SimpleServerSideConfigurator(datagramReadyFactory));
 
-		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.PING), new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(queue, new PureJavaSyncPing())));
+		configurators.put(ProxyCommons.Types.PING, new SimpleServerSideConfigurator(new InternalPingServerReadyFactory(queue, new PureJavaSyncPing())));
 
-		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.HOP), new HopServerSideConfigurator(queue, new ProxyListener() {
+		configurators.put(ProxyCommons.Types.HOP, new HopServerSideConfigurator(queue, new ProxyListener() {
 			@Override
 			public void failed(IOException e) {
 				LOGGER.warn("Hop failed", e);
@@ -116,25 +115,19 @@ public final class BaseServerSide implements ServerSide {
 	}
 	
 	@Override
-	public void override(Address address, String connecterType, ServerSideConfigurator configurator) {
-		configurators.put(new AddressConnecterTypeKey(address, connecterType), configurator);
+	public void override(String connecterType, ServerSideConfigurator configurator) {
+		configurators.put(connecterType, configurator);
 	}
 	
 	@Override
-	public ReadyFactory read(Address address, DataInputStream in) throws IOException {
+	public ReadyFactory read(DataInputStream in) throws IOException {
 		String connecterType = in.readUTF();
-		ServerSideConfigurator configurator = configurators.get(new AddressConnecterTypeKey(address, connecterType));
-		if (configurator == null) {
-			configurator = configurators.get(new AddressConnecterTypeKey(new Address(null, address.getPort()), connecterType));
-		}
-		if (configurator == null) {
-			configurator = configurators.get(new AddressConnecterTypeKey(null, connecterType));
-		}
+		ServerSideConfigurator configurator = configurators.get(connecterType);
 		if (configurator == null) {
 			LOGGER.error("Unknown type: {}", connecterType);
 			throw new IOException("Unknown type: " + connecterType);
 		}
-		return configurator.configure(address, connecterType, in);
+		return configurator.configure(connecterType, in);
 	}
 	
 	@Override
