@@ -25,7 +25,7 @@ public final class Http implements AutoCloseable, Closeable {
 	private HttpRecycle recycle;
 
 	public Http() {
-		recycle = new HttpRecycle(queue, readyFactory, secureReadyFactory);
+		recycle = new HttpRecycle(queue, (readyFactory == null) ? new SocketReadyFactory(queue) : readyFactory, (secureReadyFactory == null) ? new SslReadyFactory(queue, trust) : secureReadyFactory);
 	}
 	
 	@Override
