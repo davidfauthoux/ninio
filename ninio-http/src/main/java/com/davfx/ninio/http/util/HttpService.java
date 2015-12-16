@@ -125,9 +125,12 @@ public final class HttpService implements AutoCloseable, Closeable {
 									if (string != null) {
 										return string;
 									}
-									Charset charset = Charsets.UTF_8;
+									Charset charset = null;
 									for (String h : request.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
 										charset = HttpContentType.getContentType(h);
+									}
+									if (charset == null) {
+										charset = Charsets.UTF_8;
 									}
 									int l = post.waitFor();
 									byte[] b = new byte[l];

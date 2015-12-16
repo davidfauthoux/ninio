@@ -132,7 +132,7 @@ public class HttpServiceInterceptorTest {
 						}
 					}
 					c.disconnect();
-					Assertions.assertThat(c.getHeaderField(HttpHeaderKey.CONTENT_TYPE)).isEqualTo("application/json;charset=UTF-8");
+					Assertions.assertThat(c.getHeaderField(HttpHeaderKey.CONTENT_TYPE)).isEqualTo("application/json; charset=UTF-8");
 					Assertions.assertThat(b.toString()).isEqualTo("\"helloworld\"\n");
 				}
 				{
@@ -265,7 +265,7 @@ public class HttpServiceInterceptorTest {
 				c.disconnect();
 				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
 				Assertions.assertThat(c.getHeaderField("Access-Control-Allow-Origin")).isEqualTo("*");
-				Assertions.assertThat(c.getHeaderField("Access-Control-Allow-Methods")).isEqualTo("GET,PUT,POST,DELETE,HEAD");
+				Assertions.assertThat(c.getHeaderField("Access-Control-Allow-Methods")).isEqualTo("GET, PUT, POST, DELETE, HEAD");
 			}
 			queue.finish().waitFor();
 		}

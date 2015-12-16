@@ -71,7 +71,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 		if (sanitizedKey != null) {
 			key = sanitizedKey;
 		}
-		String value = headerLine.substring(i + 1);
+		String value = headerLine.substring(i + 1).trim();
 		headers.put(key, value);
 	}
 	private void setRequestLine(String requestLine) throws IOException {
