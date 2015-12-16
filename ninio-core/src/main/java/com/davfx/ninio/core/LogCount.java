@@ -3,6 +3,8 @@ package com.davfx.ninio.core;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.util.DateUtils;
+
 public final class LogCount implements Count {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(LogCount.class);
@@ -24,10 +26,10 @@ public final class LogCount implements Count {
 		count++;
 		bytes += b;
 		if (timestamp == 0d) {
-			timestamp = System.currentTimeMillis() / 1000d;
+			timestamp = DateUtils.now();
 		} else {
 			if (bytes > stepToLog) {
-				double now = System.currentTimeMillis() / 1000d;
+				double now = DateUtils.now();
 				double delta = now - timestamp;
 				double rate = Double.NaN;
 				if (delta > 0d) {

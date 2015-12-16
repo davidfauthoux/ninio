@@ -4,6 +4,7 @@ public final class BerConstants {
 
 	public static final int ERROR_STATUS_RETRY = -1;
 	public static final int ERROR_STATUS_AUTHENTICATION_FAILED = -2;
+	public static final int ERROR_STATUS_TIMEOUT = -3; // Used in cache server
 
 	public static final int VERSION_2C = 1;
 	public static final int VERSION_3 = 3;

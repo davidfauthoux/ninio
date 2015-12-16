@@ -21,13 +21,4 @@ interface ProxyCommons {
 		private Types() {
 		}
 	}
-	
-	final class Ports {
-		private static final Config CONFIG = ConfigFactory.load(Ports.class.getClassLoader());
-		
-		public static final int SNMP = CONFIG.getInt("ninio.proxy.snmp");
-		
-		private Ports() {
-		}
-	}
 }

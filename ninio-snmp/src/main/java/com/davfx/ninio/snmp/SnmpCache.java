@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
+import com.davfx.util.DateUtils;
 
 public final class SnmpCache {
 	
@@ -74,10 +75,6 @@ public final class SnmpCache {
 		this.filter = filter;
 	}
 	
-	private static double now() {
-		return System.currentTimeMillis() / 1000d;
-	}
-
 	// May be called often to save memory
 	public void clear() {
 		Iterator<CacheElement> i = cache.values().iterator();
@@ -109,7 +106,7 @@ public final class SnmpCache {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				double now = now();
+				double now = DateUtils.now();
 				
 				CacheElement f = cache.get(address);
 				if (f == null) {
@@ -162,7 +159,7 @@ public final class SnmpCache {
 			@Override
 			public void failed(IOException ioe) {
 				f.ioe = ioe;
-				f.timestamp = now();
+				f.timestamp = DateUtils.now();
 				for (SnmpClientHandler.Callback.GetCallback c : e.callbacks) {
 					c.failed(ioe);
 				}
@@ -177,7 +174,7 @@ public final class SnmpCache {
 			}
 			@Override
 			public void result(Result result) {
-				double now = now();
+				double now = DateUtils.now();
 
 				Result internResult = internResult(result);
 

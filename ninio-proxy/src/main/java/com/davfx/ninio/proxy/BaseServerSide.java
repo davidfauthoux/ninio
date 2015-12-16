@@ -18,7 +18,6 @@ import com.davfx.ninio.core.TcpdumpSyncDatagramReady;
 import com.davfx.ninio.core.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.ninio.ping.InternalPingServerReadyFactory;
 import com.davfx.ninio.ping.PureJavaSyncPing;
-import com.davfx.ninio.snmp.InternalSnmpCacheServerReadyFactory;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
@@ -53,12 +52,16 @@ public final class BaseServerSide implements ServerSide {
 
 	private final Map<AddressConnecterTypeKey, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 	private final Closeable toClose;
-	
+
+	private final ReadyFactory datagramReadyFactory;
+	private final ReadyFactory socketReadyFactory;
+
 	public BaseServerSide(Queue queue) {
 		
-		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.SOCKET), new SimpleServerSideConfigurator(new SocketReadyFactory(queue)));
+		socketReadyFactory = new SocketReadyFactory(queue);
+		
+		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.SOCKET), new SimpleServerSideConfigurator(socketReadyFactory));
 
-		ReadyFactory datagramReadyFactory;
 		switch (MODE) {
 		case SYNC_TCPDUMP:
 			TcpdumpSyncDatagramReady.Rule rule;
@@ -103,10 +106,15 @@ public final class BaseServerSide implements ServerSide {
 				LOGGER.debug("Hop connected");
 			}
 		}));
-
-		configurators.put(new AddressConnecterTypeKey(new Address(ProxyCommons.Ports.SNMP), ProxyCommons.Types.DATAGRAM), new SimpleServerSideConfigurator(new InternalSnmpCacheServerReadyFactory(datagramReadyFactory)));
 	}
 
+	public ReadyFactory datagramReadyFactory() {
+		return datagramReadyFactory;
+	}
+	public ReadyFactory socketReadyFactory() {
+		return socketReadyFactory;
+	}
+	
 	@Override
 	public void override(Address address, String connecterType, ServerSideConfigurator configurator) {
 		configurators.put(new AddressConnecterTypeKey(address, connecterType), configurator);

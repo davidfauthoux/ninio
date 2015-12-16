@@ -20,7 +20,6 @@ final class BaseClientSide implements ClientSide {
 		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.DATAGRAM), new EmptyClientSideConfiguration());
 		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.PING), new EmptyClientSideConfiguration());
 		configurators.put(new AddressConnecterTypeKey(null, ProxyCommons.Types.HOP), new EmptyClientSideConfiguration());
-		configurators.put(new AddressConnecterTypeKey(new Address(ProxyCommons.Ports.SNMP), ProxyCommons.Types.DATAGRAM), new EmptyClientSideConfiguration());
 	}
 	
 	@Override

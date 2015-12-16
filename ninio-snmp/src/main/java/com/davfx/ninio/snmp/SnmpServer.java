@@ -176,32 +176,6 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 				write.handle(address, b);
 			}
 			
-			private ByteBuffer build(int requestId, String community, int errorStatus, int errorIndex, Iterable<Pair<Oid, BerPacket>> oidValues) {
-				SequenceBerPacket oidSequence = new SequenceBerPacket(BerConstants.SEQUENCE);
-				if (oidValues != null) {
-					for (Pair<Oid, BerPacket> ov : oidValues) {
-						oidSequence.add(new SequenceBerPacket(BerConstants.SEQUENCE)
-							.add(new OidBerPacket(ov.first))
-							.add(ov.second));
-					}
-				}
-
-				SequenceBerPacket root = new SequenceBerPacket(BerConstants.SEQUENCE)
-				.add(new IntegerBerPacket(BerConstants.VERSION_2C))
-				.add(new BytesBerPacket(BerPacketUtils.bytes(community)))
-				.add(new SequenceBerPacket(BerConstants.RESPONSE)
-					.add(new IntegerBerPacket(requestId))
-					.add(new IntegerBerPacket(errorStatus))
-					.add(new IntegerBerPacket(errorIndex))
-					.add(oidSequence));
-
-				ByteBuffer buffer = ByteBuffer.allocate(BerPacketUtils.typeAndLengthBufferLength(root.lengthBuffer()) + root.length());
-				root.write(buffer);
-				buffer.flip();
-
-				return buffer;
-			}
-			
 			@Override
 			public void failed(IOException e) {
 				LOGGER.error("Failed", e);
@@ -221,6 +195,32 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 			public void close() {
 			}
 		});
+	}
+	
+	private static ByteBuffer build(int requestId, String community, int errorStatus, int errorIndex, Iterable<Pair<Oid, BerPacket>> oidValues) {
+		SequenceBerPacket oidSequence = new SequenceBerPacket(BerConstants.SEQUENCE);
+		if (oidValues != null) {
+			for (Pair<Oid, BerPacket> ov : oidValues) {
+				oidSequence.add(new SequenceBerPacket(BerConstants.SEQUENCE)
+					.add(new OidBerPacket(ov.first))
+					.add(ov.second));
+			}
+		}
+
+		SequenceBerPacket root = new SequenceBerPacket(BerConstants.SEQUENCE)
+		.add(new IntegerBerPacket(BerConstants.VERSION_2C))
+		.add(new BytesBerPacket(BerPacketUtils.bytes(community)))
+		.add(new SequenceBerPacket(BerConstants.RESPONSE)
+			.add(new IntegerBerPacket(requestId))
+			.add(new IntegerBerPacket(errorStatus))
+			.add(new IntegerBerPacket(errorIndex))
+			.add(oidSequence));
+
+		ByteBuffer buffer = ByteBuffer.allocate(BerPacketUtils.typeAndLengthBufferLength(root.lengthBuffer()) + root.length());
+		root.write(buffer);
+		buffer.flip();
+
+		return buffer;
 	}
 	
 	@Override

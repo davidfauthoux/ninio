@@ -7,6 +7,7 @@ import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
+@Deprecated
 public final class CacheFailSnmpClientHandler implements SnmpClientHandler {
 	
 	private static final Config CONFIG = ConfigFactory.load();

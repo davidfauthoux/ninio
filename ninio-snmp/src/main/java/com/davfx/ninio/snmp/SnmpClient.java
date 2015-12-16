@@ -377,6 +377,14 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 			
+			if (errorStatus == BerConstants.ERROR_STATUS_TIMEOUT) {
+				requestOid = null;
+				SnmpClientHandler.Callback.GetCallback c = callback;
+				callback = null;
+				c.failed(new IOException("Timeout"));
+				return;
+			}
+			
 			if (shouldRepeatWhat == BerConstants.GET) {
 				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
 					LOGGER.trace("Retrying GET after receiving auth engine completion message");

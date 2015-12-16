@@ -39,7 +39,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 
 	public static final double READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.proxy.timeout.read");
 	
-	private final ServerSide proxyServerSide;
+	private final BaseServerSide proxyServerSide;
 	private final ExecutorService listenExecutor;
 	private final ExecutorService clientExecutor;
 	private final Set<String> hostsToFilter = new HashSet<>();
@@ -63,6 +63,13 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 		}
 	}
 	
+	public ReadyFactory datagramReadyFactory() {
+		return proxyServerSide.datagramReadyFactory();
+	}
+	public ReadyFactory socketReadyFactory() {
+		return proxyServerSide.socketReadyFactory();
+	}
+
 	public ProxyServer override(Address address, String type, ServerSideConfigurator configurator) {
 		proxyServerSide.override(address, type, configurator);
 		return this;

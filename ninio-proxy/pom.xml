@@ -20,9 +20,11 @@
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-ping</artifactId>
 		</dependency>
+		
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-snmp</artifactId>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 </project>
