@@ -22,8 +22,8 @@ public interface HttpController {
 		HttpAsyncOutput ok();
 		HttpAsyncOutput internalServerError();
 		HttpAsyncOutput notFound();
-		HttpAsyncOutput header(String key, HttpHeaderValue value);
-		HttpAsyncOutput contentType(HttpHeaderValue contentType);
+		HttpAsyncOutput header(String key, String value);
+		HttpAsyncOutput contentType(String contentType);
 		HttpAsyncOutput contentLength(long contentLength);
 		HttpAsyncOutput produce(ByteBuffer buffer);
 		HttpAsyncOutput produce(String buffer);
@@ -39,7 +39,7 @@ public interface HttpController {
 	final class Http {
 		final int status;
 		final String reason;
-		final Multimap<String, HttpHeaderValue> headers = LinkedHashMultimap.create();
+		final Multimap<String, String> headers = LinkedHashMultimap.create();
 		String content = null;
 		HttpStream stream = null;
 		HttpAsync async = null;
@@ -50,6 +50,7 @@ public interface HttpController {
 			this.reason = reason;
 			this.wrap = wrap;
 			this.async = async;
+			headers.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
 			headers.put(HttpHeaderKey.CONTENT_TYPE, HttpContentType.plainText());
 		}
 		private Http(int status, String reason) {
@@ -59,37 +60,41 @@ public interface HttpController {
 			this(status, reason, wrap, null);
 		}
 		
-		public Http header(String key, HttpHeaderValue value) {
+		public Http header(String key, String value) {
 			headers.put(key, value);
 			return this;
 		}
 		// Last one
-		public HttpHeaderValue header(String key) {
-			HttpHeaderValue value = null;
-			for (HttpHeaderValue v : headers.get(key)) {
+		public String header(String key) {
+			String value = null;
+			for (String v : headers.get(key)) {
 				value = v;
 			}
 			return value;
 		}
 		
-		public Http contentType(HttpHeaderValue contentType) {
+		public Http contentType(String contentType) {
 			header(HttpHeaderKey.CONTENT_TYPE, contentType);
 			return this;
 		}
-		public HttpHeaderValue contentType() {
+		public String contentType() {
 			return header(HttpHeaderKey.CONTENT_TYPE);
 		}
 		
 		public Http contentLength(long contentLength) {
-			header(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(contentLength)));
+			header(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(contentLength));
 			return this;
 		}
 		public long contentLength() {
-			HttpHeaderValue v = header(HttpHeaderKey.CONTENT_LENGTH);
+			String v = header(HttpHeaderKey.CONTENT_LENGTH);
 			if (v == null) {
 				return -1L;
 			}
-			return v.asLong();
+			try {
+				return Long.parseLong(v);
+			} catch (NumberFormatException nfe) {
+				return -1L;
+			}
 		}
 		
 		public Http content(String content) {

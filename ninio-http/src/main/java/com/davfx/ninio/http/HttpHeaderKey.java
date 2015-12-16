@@ -11,6 +11,4 @@ public interface HttpHeaderKey {
 	String LOCATION = "Location";
 	String USER_AGENT = "User-Agent";
 	String ACCEPT = "Accept";
-
-	String CHARSET = "charset";
 }

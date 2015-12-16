@@ -24,17 +24,17 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 	private static final String DEFAULT_INDEX = CONFIG.getString("ninio.http.file.index");
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.file.buffer").intValue();
 	
-	private static final Map<String, HttpHeaderValue> DEFAULT_CONTENT_TYPES = new HashMap<>();
+	private static final Map<String, String> DEFAULT_CONTENT_TYPES = new HashMap<>();
 	static {
 		for (Config c : CONFIG.getConfigList("ninio.http.file.contentTypes")) {
-			DEFAULT_CONTENT_TYPES.put(c.getString("extension").toLowerCase(), HttpHeaderValue.of(c.getString("contentType")));
+			DEFAULT_CONTENT_TYPES.put(c.getString("extension").toLowerCase(), c.getString("contentType"));
 		}
 	}
 	
 	private final File dir;
 	private final HttpQueryPath rootPath;
 	private HttpRequest request;
-	private final Map<String, HttpHeaderValue> contentTypes = new LinkedHashMap<>();
+	private final Map<String, String> contentTypes = new LinkedHashMap<>();
 	private String index = DEFAULT_INDEX;
 	
 	public FileHttpServerHandler(File dir, HttpQueryPath rootPath) {
@@ -43,7 +43,7 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 		contentTypes.putAll(DEFAULT_CONTENT_TYPES);
 	}
 	
-	public FileHttpServerHandler withContentType(String extension, HttpHeaderValue contentType) {
+	public FileHttpServerHandler withContentType(String extension, String contentType) {
 		contentTypes.put(extension.toLowerCase(), contentType);
 		return this;
 	}
@@ -90,16 +90,16 @@ public final class FileHttpServerHandler implements HttpServerHandler {
 
 			if (file.isFile()) {
 				String name = file.getName();
-				HttpHeaderValue contentType = null;
-				for (Map.Entry<String, HttpHeaderValue> e : contentTypes.entrySet()) {
+				String contentType = null;
+				for (Map.Entry<String, String> e : contentTypes.entrySet()) {
 					if (name.toLowerCase().endsWith(e.getKey())) {
 						contentType = e.getValue();
 						break;
 					}
 				}
 				
-				ImmutableMultimap.Builder<String, HttpHeaderValue> parameters = ImmutableMultimap.builder();
-				parameters.put(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(file.length())));
+				ImmutableMultimap.Builder<String, String> parameters = ImmutableMultimap.builder();
+				parameters.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(file.length()));
 				if (contentType != null) {
 					parameters.put(HttpHeaderKey.CONTENT_TYPE, contentType);
 				}

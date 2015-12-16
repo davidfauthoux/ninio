@@ -75,9 +75,9 @@ public final class Http implements AutoCloseable, Closeable {
 		if (post == null) {
 			return r;
 		}
-		ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
+		ImmutableMultimap.Builder<String, String> headers = ImmutableMultimap.builder();
 		headers.putAll(r.headers);
-		headers.put(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(post.remaining())));
+		headers.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(post.remaining()));
 		return new HttpRequest(r.address, r.secure, r.method, r.path, headers.build());
 	}
 	
@@ -113,7 +113,7 @@ public final class Http implements AutoCloseable, Closeable {
 		send(HttpRequest.of(url), null, handler);
 	}
 	public void post(String url, ByteBuffer post, Handler handler) {
-		send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, HttpHeaderValue>of()), post, handler);
+		send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()), post, handler);
 	}
 	
 	public static interface InMemoryHandler extends Failable {
@@ -155,6 +155,6 @@ public final class Http implements AutoCloseable, Closeable {
 		send(HttpRequest.of(url), null, handler);
 	}
 	public void post(String url, ByteBuffer post, InMemoryHandler handler) {
-		send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, HttpHeaderValue>of()), post, handler);
+		send(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()), post, handler);
 	}
 }

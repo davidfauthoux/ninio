@@ -11,18 +11,15 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferHandler;
 import com.davfx.ninio.core.CloseableByteBufferHandler;
+import com.google.common.base.Splitter;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 final class HttpRequestReader implements CloseableByteBufferHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpRequestReader.class);
 
-	private static final Config CONFIG = ConfigFactory.load(HttpRequestReader.class.getClassLoader());
-
-	private static final boolean GZIP_DEFAULT = CONFIG.getBoolean("ninio.http.gzip.default");
+	// Can't work with all clients // private static final boolean GZIP_DEFAULT = CONFIG.getBoolean("ninio.http.gzip.default");
 	
 	// Optim (not static because ByteBuffer.duplicate could be thread-unsafe)
 	private final ByteBuffer GZIP_BYTE_BUFFER = LineReader.toBuffer(HttpHeaderKey.CONTENT_ENCODING + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + HttpHeaderValue.GZIP.toString());
@@ -39,7 +36,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 	private String requestPath;
 	private boolean http11;
 	private boolean enableGzip = false;
-	private final Multimap<String, HttpHeaderValue> headers = HashMultimap.create();
+	private final Multimap<String, String> headers = HashMultimap.create();
 	private boolean failClose = false;
 	private boolean closed = false;
 	private boolean ready = false;
@@ -74,7 +71,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 		if (sanitizedKey != null) {
 			key = sanitizedKey;
 		}
-		HttpHeaderValue value = HttpHeaderValue.of(headerLine.substring(i + 1));
+		String value = headerLine.substring(i + 1);
 		headers.put(key, value);
 	}
 	private void setRequestLine(String requestLine) throws IOException {
@@ -161,23 +158,28 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 					LOGGER.trace("Header line empty");
 					headersRead = true;
 
-					for (HttpHeaderValue accept : headers.get(HttpHeaderKey.ACCEPT_ENCODING)) {
-						enableGzip = accept.contains(HttpHeaderValue.GZIP.asString());
+					for (String accept : headers.get(HttpHeaderKey.ACCEPT_ENCODING)) {
+						for (String a : Splitter.on(',').splitToList(accept)) {
+							if (a.trim().equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+								enableGzip = accept.contains(HttpHeaderValue.GZIP);
+								break;
+							}
+						}
+						if (enableGzip) {
+							break;
+						}
 					}
 					
 					handler.handle(new HttpRequest(address, secure, requestMethod, HttpPath.of(requestPath), ImmutableMultimap.copyOf(headers)));
 
 					if (requestMethod == HttpMethod.POST) {
 						contentLength = -1;
-						for (HttpHeaderValue contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
-							contentLength = contentLengthValue.asInt();
-							/*%%
+						for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
 							try {
 								contentLength = Long.parseLong(contentLengthValue);
-							} catch (NumberFormatException e) {
+							} catch (NumberFormatException nfe) {
 								throw new IOException("Invalid Content-Length: " + contentLengthValue);
 							}
-							*/
 							break;
 						}
 						if (contentLength < 0) {
@@ -298,34 +300,30 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			
 			if (http11) {
 				if (enableGzip) {
-					boolean gzip = GZIP_DEFAULT;
-					for (HttpHeaderValue contentEncodingValue : response.headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
-						if (!contentEncodingValue.contains(HttpHeaderValue.GZIP.asString())) {
-							gzip = false;
+					for (String contentEncodingValue : response.headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
+						if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+							gzipWriter = new GzipWriter(new ByteBufferHandler() {
+								@Override
+								public void handle(Address address, ByteBuffer buffer) {
+									doWrite(buffer);
+								}
+							});
 						}
-					}
-					if (gzip) {
-						gzipWriter = new GzipWriter(new ByteBufferHandler() {
-							@Override
-							public void handle(Address address, ByteBuffer buffer) {
-								doWrite(buffer);
-							}
-						});
 					}
 				}
 				
 				if (gzipWriter == null) {
 					boolean keepAlive = true;
-					for (HttpHeaderValue connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
-						if (!connectionValue.contains(HttpHeaderValue.KEEP_ALIVE.asString())) {
+					for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
+						if (!connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
 							keepAlive = false;
 						}
 						break;
 					}
 
 					chunked = keepAlive;
-					for (HttpHeaderValue transferEncodingValue : response.headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-						chunked = transferEncodingValue.contains(HttpHeaderValue.CHUNKED.asString());
+					for (String transferEncodingValue : response.headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+						chunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
 						break;
 					}
 					LOGGER.trace("No gzip, chunked = {}", chunked);
@@ -336,15 +334,20 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				}
 			}
 			
-			for (HttpHeaderValue contentLengthValue : response.headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
-				writeContentLength = contentLengthValue.asInt();
+			for (String contentLengthValue : response.headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
+				try {
+					writeContentLength = Long.parseLong(contentLengthValue);
+				} catch (NumberFormatException nfe) {
+					LOGGER.trace("Invalid content-length: {}", contentLengthValue);
+					writeContentLength = 0;
+				}
 			}
 			// Don't fallback anymore in case of no content length, because of websockets // if (writeContentLength == -1) { chunked = true; }
 			
 			write.handle(null, LineReader.toBuffer((http11 ? HttpSpecification.HTTP11 : HttpSpecification.HTTP10) + HttpSpecification.START_LINE_SEPARATOR + response.status + HttpSpecification.START_LINE_SEPARATOR + response.reason));
-			for (Map.Entry<String, HttpHeaderValue> h : response.headers.entries()) {
+			for (Map.Entry<String, String> h : response.headers.entries()) {
 				String k = h.getKey();
-				HttpHeaderValue v = h.getValue();
+				String v = h.getValue();
 				if (gzipWriter != null) {
 					if (k.equals(HttpHeaderKey.CONTENT_LENGTH)) {
 						continue;
@@ -356,7 +359,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				if (k.equals(HttpHeaderKey.CONTENT_ENCODING)) {
 					continue;
 				}
-				write.handle(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v.toString()));
+				write.handle(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
 			}
 			if (gzipWriter != null) {
 				write.handle(null, GZIP_BYTE_BUFFER.duplicate());

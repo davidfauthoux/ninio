@@ -34,7 +34,7 @@ final class HttpResponseReader {
 //	private String responseVersion;
 	private int responseCode;
 	private String responseReason;
-	private final Multimap<String, HttpHeaderValue> headers = HashMultimap.create();
+	private final Multimap<String, String> headers = HashMultimap.create();
 	private boolean failClose = false;
 	private boolean closed = false;
 	private boolean ended = false;
@@ -53,7 +53,7 @@ final class HttpResponseReader {
 		}
 		String key = headerLine.substring(0, i);
 		String value = headerLine.substring(i + 1).trim();
-		headers.put(key, HttpHeaderValue.of(value));
+		headers.put(key, value);
 	}
 	private void setResponseLine(String responseLine) throws IOException {
 		int i = responseLine.indexOf(HttpSpecification.START_LINE_SEPARATOR);
@@ -131,37 +131,34 @@ final class HttpResponseReader {
 					LOGGER.trace("Header line empty");
 					headersRead = true;
 					
-					for (HttpHeaderValue contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
-						contentLength = contentLengthValue.asInt();
-						/*%%
+					for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
 						try {
-							contentLength = Long.parseLong(contentLengthValue.value);
+							contentLength = Long.parseLong(contentLengthValue);
 							break;
 						} catch (NumberFormatException e) {
 							throw new IOException("Invalid Content-Length: " + contentLengthValue);
 						}
-						*/
 					}
 					
-					for (HttpHeaderValue contentEncodingValue : headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
-						if (contentEncodingValue.contains(HttpHeaderValue.GZIP.asString())) {
+					for (String contentEncodingValue : headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
+						if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
 							gzipReader = new GzipReader(handler);
 						}
 						break;
 					}
 					
-					for (HttpHeaderValue transferEncodingValue : headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-						chunked = transferEncodingValue.contains(HttpHeaderValue.CHUNKED.asString());
+					for (String transferEncodingValue : headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+						chunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
 						break;
 					}
 
 					if (http11) {
 						keepAlive = true; // (contentLength >= 0); // Websocket ready!
 					}
-					for (HttpHeaderValue connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
-						if (connectionValue.contains(HttpHeaderValue.CLOSE.asString())) {
+					for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
+						if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
 							keepAlive = false;
-						} else if (connectionValue.contains(HttpHeaderValue.KEEP_ALIVE.asString())) {
+						} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
 							keepAlive = true;
 						}
 						break;
@@ -212,10 +209,12 @@ final class HttpResponseReader {
 							return;
 						}
 						failClose = true;
+						/*%%
 						int i = line.indexOf(HttpSpecification.EXTENSION_SEPARATOR);
 						if (i > 0) { // extensions ignored
 							line = line.substring(0, i);
 						}
+						*/
 						try {
 							chunkLength = Integer.parseInt(line, 16);
 						} catch (NumberFormatException e) {

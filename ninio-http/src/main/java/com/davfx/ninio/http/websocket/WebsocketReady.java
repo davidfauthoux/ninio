@@ -14,7 +14,6 @@ import com.davfx.ninio.core.Ready;
 import com.davfx.ninio.core.ReadyConnection;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpClientHandler;
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpRequest;
@@ -35,11 +34,11 @@ public final class WebsocketReady implements Ready {
 	
 	@Override
 	public void connect(Address address, final ReadyConnection connection) {
-		HttpRequest request = new HttpRequest(address, false, HttpMethod.GET, HttpPath.ROOT, ImmutableMultimap.<String, HttpHeaderValue>builder()
-			.put("Sec-WebSocket-Key", HttpHeaderValue.simple(BaseEncoding.base64().encode(String.valueOf(random.nextLong()).getBytes(Charsets.UTF_8))))
-			.put("Sec-WebSocket-Version", HttpHeaderValue.simple("13"))
-			.put("Connection", HttpHeaderValue.simple("Upgrade"))
-			.put("Upgrade", HttpHeaderValue.simple("websocket"))
+		HttpRequest request = new HttpRequest(address, false, HttpMethod.GET, HttpPath.ROOT, ImmutableMultimap.<String, String>builder()
+			.put("Sec-WebSocket-Key", BaseEncoding.base64().encode(String.valueOf(random.nextLong()).getBytes(Charsets.UTF_8)))
+			.put("Sec-WebSocket-Version", "13")
+			.put("Connection", "Upgrade")
+			.put("Upgrade", "websocket")
 			.build()
 		);
 

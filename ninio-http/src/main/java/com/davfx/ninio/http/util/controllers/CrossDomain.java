@@ -1,19 +1,15 @@
 package com.davfx.ninio.http.util.controllers;
 
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.annotations.Route;
-import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMultimap;
 
 public final class CrossDomain implements HttpController {
 	public static final String ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin";
-	public static final HttpHeaderValue WILDCARD = HttpHeaderValue.simple("*");
+	public static final String WILDCARD = "*";
 	
 	public static final String ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods";
-	public static final HttpHeaderValue ACCESS_CONTROL_ALLOWED_METHODS = new HttpHeaderValue(ImmutableList.of("GET", "PUT", "POST", "DELETE", "HEAD"), ImmutableMultimap.<String, Optional<String>>of());
+	public static final String ACCESS_CONTROL_ALLOWED_METHODS = "GET, PUT, POST, DELETE, HEAD";
 	
 	public CrossDomain() {
 	}

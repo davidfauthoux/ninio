@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
@@ -78,12 +77,12 @@ public final class Jsonp implements HttpController {
 									return this;
 								}
 								@Override
-								public HttpAsyncOutput header(String key, HttpHeaderValue value) {
+								public HttpAsyncOutput header(String key, String value) {
 									output.header(key, value);
 									return this;
 								}
 								@Override
-								public HttpAsyncOutput contentType(HttpHeaderValue contentType) {
+								public HttpAsyncOutput contentType(String contentType) {
 									output.contentType(contentType);
 									return this;
 								}
@@ -96,7 +95,7 @@ public final class Jsonp implements HttpController {
 						}
 					});
 				} else { // if (http.contentType().contains(HttpContentType.json().asString())) {
-					http.contentType(HttpHeaderValue.simple("application/javascript"));
+					http.contentType("application/javascript");
 					http.contentLength(jsonpHeaderAsBytes.length + http.contentLength() + jsonpFooterAsBytes.length);
 
 					final HttpStream stream = http.stream();

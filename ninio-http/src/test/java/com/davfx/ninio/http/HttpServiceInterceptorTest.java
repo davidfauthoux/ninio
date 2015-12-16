@@ -96,7 +96,7 @@ public class HttpServiceInterceptorTest {
 			return Http.wrap(new HttpWrap() {
 				@Override
 				public void handle(Http http) throws Exception {
-					http.contentType(HttpHeaderValue.simple("application/javascript")).content(jsonp + "(" + http.content() + ");");
+					http.contentType("application/javascript").content(jsonp + "(" + http.content() + ");");
 				}
 			});
 		}

@@ -21,7 +21,6 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.http.DispatchHttpServerHandler;
 import com.davfx.ninio.http.HttpContentType;
 import com.davfx.ninio.http.HttpHeaderKey;
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMessage;
 import com.davfx.ninio.http.HttpPath;
 import com.davfx.ninio.http.HttpRequest;
@@ -127,12 +126,8 @@ public final class HttpService implements AutoCloseable, Closeable {
 										return string;
 									}
 									Charset charset = Charsets.UTF_8;
-									for (HttpHeaderValue h : request.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
-										Collection<Optional<String>> c = h.extensions.get(HttpHeaderKey.CHARSET);
-										if (!c.isEmpty()) {
-											charset = Charset.forName(c.iterator().next().get());
-											break;
-										}
+									for (String h : request.headers.get(HttpHeaderKey.CONTENT_TYPE)) {
+										charset = HttpContentType.getContentType(h);
 									}
 									int l = post.waitFor();
 									byte[] b = new byte[l];
@@ -214,7 +209,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 							
 							private int status = HttpStatus.OK;
 							private String reason = HttpMessage.OK;
-							private Multimap<String, HttpHeaderValue> headers = HashMultimap.create();
+							private Multimap<String, String> headers = HashMultimap.create();
 							private boolean sent = false;
 
 							private void send() {
@@ -269,17 +264,17 @@ public final class HttpService implements AutoCloseable, Closeable {
 							}
 
 							@Override
-							public HttpAsyncOutput header(String key, HttpHeaderValue value) {
+							public HttpAsyncOutput header(String key, String value) {
 								headers.put(key, value);
 								return this;
 							}
 							@Override
-							public HttpAsyncOutput contentType(HttpHeaderValue contentType) {
+							public HttpAsyncOutput contentType(String contentType) {
 								return header(HttpHeaderKey.CONTENT_TYPE, contentType);
 							}
 							@Override
 							public HttpAsyncOutput contentLength(long contentLength) {
-								return header(HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.simple(String.valueOf(contentLength)));
+								return header(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(contentLength));
 							}
 
 							@Override
@@ -302,19 +297,19 @@ public final class HttpService implements AutoCloseable, Closeable {
 						
 					} else {
 						
-						ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
-						for (Map.Entry<String, Collection<HttpHeaderValue>> h : http.headers.asMap().entrySet()) {
+						ImmutableMultimap.Builder<String, String> headers = ImmutableMultimap.builder();
+						for (Map.Entry<String, Collection<String>> h : http.headers.asMap().entrySet()) {
 							String key = h.getKey();
-							if ((key.equals(HttpHeaders.CONTENT_TYPE)) || (key.equals(HttpHeaders.CONTENT_LENGTH))) {
-								HttpHeaderValue last = null;
-								for (HttpHeaderValue v : h.getValue()) {
+							if ((key.equals(HttpHeaders.CONTENT_TYPE)) || (key.equals(HttpHeaders.CONTENT_LENGTH)) || (key.equals(HttpHeaders.CONTENT_ENCODING))) {
+								String last = null;
+								for (String v : h.getValue()) {
 									last = v;
 								}
 								if (last != null) {
 									headers.put(key, last);
 								}
 							} else {
-								for (HttpHeaderValue v : h.getValue()) {
+								for (String v : h.getValue()) {
 									headers.put(key, v);
 								}
 							}

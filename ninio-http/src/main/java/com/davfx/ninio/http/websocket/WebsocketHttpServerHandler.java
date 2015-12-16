@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpServerHandler;
@@ -36,8 +35,8 @@ public final class WebsocketHttpServerHandler implements HttpServerHandler {
 		this.write = write;
 
 		String wsKey = null;
-		for (HttpHeaderValue v : request.headers.get("Sec-WebSocket-Key")) {
-			wsKey = v.asString();
+		for (String v : request.headers.get("Sec-WebSocket-Key")) {
+			wsKey = v;
 			break;
 		}
 		if (wsKey == null) {
@@ -46,8 +45,8 @@ public final class WebsocketHttpServerHandler implements HttpServerHandler {
 		}
 		
 		String wsVersion = null;
-		for (HttpHeaderValue v : request.headers.get("Sec-WebSocket-Version")) {
-			wsVersion = v.asString();
+		for (String v : request.headers.get("Sec-WebSocket-Version")) {
+			wsVersion = v;
 			break;
 		}
 
@@ -56,10 +55,10 @@ public final class WebsocketHttpServerHandler implements HttpServerHandler {
 			return;
 		}
 
-		HttpResponse response = new HttpResponse(101, "Switching Protocols", ImmutableMultimap.<String, HttpHeaderValue>builder()
-			.put("Connection", HttpHeaderValue.simple("Upgrade"))
-			.put("Upgrade", HttpHeaderValue.simple("websocket"))
-			.put("Sec-WebSocket-Accept", HttpHeaderValue.simple(BaseEncoding.base64().encode(Hashing.sha1().hashBytes((wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(Charsets.UTF_8)).asBytes())))
+		HttpResponse response = new HttpResponse(101, "Switching Protocols", ImmutableMultimap.<String, String>builder()
+			.put("Connection", "Upgrade")
+			.put("Upgrade", "websocket")
+			.put("Sec-WebSocket-Accept", BaseEncoding.base64().encode(Hashing.sha1().hashBytes((wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(Charsets.UTF_8)).asBytes()))
 			.build()
 		);
 

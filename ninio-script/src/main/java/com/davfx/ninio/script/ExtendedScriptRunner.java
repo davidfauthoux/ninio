@@ -10,7 +10,6 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.http.Http;
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
@@ -159,7 +158,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 				JsonObject r = request.getAsJsonObject();
 				String url = JsonUtils.getString(r, "url");
 				
-				ImmutableMultimap.Builder<String, HttpHeaderValue> headers = ImmutableMultimap.builder();
+				ImmutableMultimap.Builder<String, String> headers = ImmutableMultimap.builder();
 
 				JsonElement postObject = r.get("post");
 				final ByteBuffer post;
@@ -170,7 +169,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 					post = ByteBuffer.wrap(JsonUtils.getString(o, "data").getBytes(Charsets.UTF_8));
 					String contentType = JsonUtils.getString(o, "contentType", null);
 					if (contentType != null) {
-						headers.put(HttpHeaders.CONTENT_TYPE, HttpHeaderValue.of(contentType));
+						headers.put(HttpHeaders.CONTENT_TYPE, contentType);
 					}
 				}
 				

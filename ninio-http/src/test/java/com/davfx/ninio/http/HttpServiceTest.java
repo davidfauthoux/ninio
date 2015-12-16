@@ -57,6 +57,7 @@ public class HttpServiceTest {
 				queue.finish().waitFor();
 				
 				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=world").openConnection();
+				System.out.println(c.getRequestProperties());
 				StringBuilder b = new StringBuilder();
 				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
 					while (true) {
@@ -67,6 +68,7 @@ public class HttpServiceTest {
 						b.append(line).append('\n');
 					}
 				}
+				System.out.println(c.getHeaderFields());
 				c.disconnect();
 				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
 			}
@@ -459,7 +461,7 @@ public class HttpServiceTest {
 	}
 	
 	@Path("/getfilterbyheader")
-	@Header(key = "Host", value = "127.0.0.1:8080")
+	@Header(key = "Host", pattern = "127\\.0\\.0\\.1\\:8080")
 	public static final class TestGetWithHostFilterController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/hello")
 		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {
@@ -467,7 +469,7 @@ public class HttpServiceTest {
 		}
 	}
 	@Path("/getfilterbyheader2")
-	@Header(key = "Host", value = "127.0.0.1:8081")
+	@Header(key = "Host", pattern = "127\\.0\\.0\\.1\\:8081")
 	public static final class TestGetWithHostFilterController2 implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/hello")
 		public Http echo(@QueryParameter("message") String message, @HeaderParameter("Host") String host) {

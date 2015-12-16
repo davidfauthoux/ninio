@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -128,6 +127,7 @@ public class WebsocketTest {
 				}
 				@Override
 				public void closed() {
+					LOGGER.debug("Server closed");
 				}
 				
 				@Override
@@ -137,7 +137,7 @@ public class WebsocketTest {
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
 							String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-							LOGGER.debug("Received {} <--: {}", address, s);
+							LOGGER.debug("Server received {} <--: {}", address, s);
 							write.handle(null, ByteBuffer.wrap(("echo " + s).getBytes(Charsets.UTF_8)));
 						}
 						
@@ -162,7 +162,8 @@ public class WebsocketTest {
 			})) {
 				
 				queue.finish().waitFor();
-				
+				LOGGER.debug("Server ready");
+
 				final Lock<String, IOException> lock = new Lock<>();
 				try (Http http = new Http()) {
 					new WebsocketReady(http.client()).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {

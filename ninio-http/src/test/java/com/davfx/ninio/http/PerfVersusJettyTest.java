@@ -176,7 +176,7 @@ public class PerfVersusJettyTest {
 							ByteBuffer m = ByteBuffer.wrap(("<html><body>" + message + "</body></html>").getBytes(Charsets.UTF_8));
 							write.write(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(
 									HttpHeaderKey.CONTENT_TYPE, HttpContentType.html(),
-									HttpHeaderKey.CONTENT_LENGTH, HttpHeaderValue.of(String.valueOf(m.remaining()))
+									HttpHeaderKey.CONTENT_LENGTH, String.valueOf(m.remaining())
 								)));
 							write.handle(null, m);
 							write.close();

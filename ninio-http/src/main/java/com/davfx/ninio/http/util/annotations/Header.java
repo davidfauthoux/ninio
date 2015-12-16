@@ -9,5 +9,5 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Header {
 	String key();
-	String value();
+	String pattern();
 }

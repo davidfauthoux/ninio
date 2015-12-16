@@ -19,7 +19,6 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.InMemoryBuffers;
@@ -113,7 +112,7 @@ public final class ImageToJpegConverter implements HttpController, AutoCloseable
 							return;
 						}
 
-						output.ok().contentLength(converted.length).contentType(HttpHeaderValue.simple("image/jpg")).produce(ByteBuffer.wrap(converted)).close();
+						output.ok().contentLength(converted.length).contentType("image/jpg").produce(ByteBuffer.wrap(converted)).close();
 					}
 				});
 			}

@@ -13,9 +13,9 @@ public final class HttpRequest {
 	public final boolean secure;
 	public final HttpMethod method;
 	public final HttpPath path;
-	public final ImmutableMultimap<String, HttpHeaderValue> headers;
+	public final ImmutableMultimap<String, String> headers;
 	
-	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path, ImmutableMultimap<String, HttpHeaderValue> headers) {
+	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path, ImmutableMultimap<String, String> headers) {
 		this.address = address;
 		this.secure = secure;
 		this.method = method;
@@ -23,7 +23,7 @@ public final class HttpRequest {
 		this.headers = headers;
 	}
 	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path) {
-		this(address, secure, method, path, ImmutableMultimap.<String, HttpHeaderValue>of());
+		this(address, secure, method, path, ImmutableMultimap.<String, String>of());
 	}
 	
 	@Override
@@ -32,9 +32,9 @@ public final class HttpRequest {
 	}
 	
 	public static HttpRequest of(String url) {
-		return of(url, HttpMethod.GET, ImmutableMultimap.<String, HttpHeaderValue>of());
+		return of(url, HttpMethod.GET, ImmutableMultimap.<String, String>of());
 	}
-	public static HttpRequest of(String url, HttpMethod method, ImmutableMultimap<String, HttpHeaderValue> headers) {
+	public static HttpRequest of(String url, HttpMethod method, ImmutableMultimap<String, String> headers) {
 		String protocol;
 		boolean secure;
 		int defaultPort;
@@ -57,10 +57,10 @@ public final class HttpRequest {
 		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, method, HttpPath.of(url.substring(i)), headers);
 	}
 	
-	private static final HttpHeaderValue DEFAULT_USER_AGENT = HttpHeaderValue.simple("ninio"); // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
-	private static final HttpHeaderValue DEFAULT_ACCEPT = HttpHeaderValue.simple("*/*");
+	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
+	private static final String DEFAULT_ACCEPT = "*/*";
 
-	private static void appendHeader(StringBuilder buffer, String key, HttpHeaderValue value) {
+	private static void appendHeader(StringBuilder buffer, String key, String value) {
 		buffer.append(key).append(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR).append(HttpSpecification.HEADER_BEFORE_VALUE).append(value.toString()).append(HttpSpecification.CR).append(HttpSpecification.LF);
 	}
 	
@@ -68,11 +68,11 @@ public final class HttpRequest {
 		StringBuilder header = new StringBuilder();
 		header.append(method.toString()).append(HttpSpecification.START_LINE_SEPARATOR).append(path).append(HttpSpecification.START_LINE_SEPARATOR).append(HttpSpecification.HTTP11).append(HttpSpecification.CR).append(HttpSpecification.LF);
 		
-		for (Map.Entry<String, HttpHeaderValue> h : headers.entries()) {
+		for (Map.Entry<String, String> h : headers.entries()) {
 			appendHeader(header, h.getKey(), h.getValue());
 		}
 		if (!headers.containsKey(HttpHeaderKey.HOST)) {
-			appendHeader(header, HttpHeaderKey.HOST, HttpHeaderValue.simple(address.getHost())); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
+			appendHeader(header, HttpHeaderKey.HOST, address.getHost()); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
 		}
 		if (!headers.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
 			appendHeader(header, HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);

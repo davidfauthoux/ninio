@@ -11,8 +11,8 @@ public interface HttpSpecification {
 	
 	char HEADER_KEY_VALUE_SEPARATOR = ':';
 	char HEADER_BEFORE_VALUE = ' ';
-	char EXTENSION_SEPARATOR = ';';
-	char MULTIPLE_SEPARATOR = ',';
+	//%% char EXTENSION_SEPARATOR = ';';
+	//%% char MULTIPLE_SEPARATOR = ',';
 
 	char PARAMETERS_START = '?';
 	char PARAMETERS_SEPARATOR = '&';

@@ -67,8 +67,8 @@ public final class HttpClient {
 			try {
 				if (levelOfRedirect < MAX_REDIRECT_LEVELS) {
 					String location = null;
-					for (HttpHeaderValue locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
-						location = locationValue.asString();
+					for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
+						location = locationValue;
 						break;
 					}
 					if (location != null) {
