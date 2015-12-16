@@ -1,4 +1,4 @@
-package com.davfx.ninio.perf;
+package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -14,6 +14,7 @@ import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.handler.AbstractHandler;
 import org.junit.FixMethodOrder;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runners.MethodSorters;
 import org.slf4j.Logger;
@@ -21,21 +22,6 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.http.Http;
-import com.davfx.ninio.http.HttpContentType;
-import com.davfx.ninio.http.HttpHeaderKey;
-import com.davfx.ninio.http.HttpHeaderValue;
-import com.davfx.ninio.http.HttpMessage;
-import com.davfx.ninio.http.HttpMethod;
-import com.davfx.ninio.http.HttpPath;
-import com.davfx.ninio.http.HttpQueryPath;
-import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.HttpServer;
-import com.davfx.ninio.http.HttpServerHandler;
-import com.davfx.ninio.http.HttpServerHandlerFactory;
-import com.davfx.ninio.http.HttpStatus;
-import com.davfx.ninio.http.InMemoryBuffers;
 import com.davfx.ninio.http.util.AnnotatedHttpService;
 import com.davfx.ninio.http.util.HttpController;
 import com.davfx.ninio.http.util.annotations.QueryParameter;
@@ -44,10 +30,11 @@ import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 
+@Ignore
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
-public class HelloWorldJetty {
+public class PerfVersusJettyTest {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(HelloWorldJetty.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(PerfVersusJettyTest.class);
 	
 	static {
 		// System.setProperty("http.keepAlive", "false");
