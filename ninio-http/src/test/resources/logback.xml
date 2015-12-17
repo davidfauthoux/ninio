@@ -11,7 +11,7 @@
 		<appender-ref ref="STDOUT" />
 	</logger>
 
-	<root level="DEBUG">
+	<root level="DEBUG"> <!-- Set to INFO if you run PerfVersusJettyTest -->
 		<appender-ref ref="STDOUT" />
 	</root>
 </configuration>
