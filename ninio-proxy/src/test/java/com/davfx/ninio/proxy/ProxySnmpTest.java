@@ -1,5 +1,6 @@
 package com.davfx.ninio.proxy;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,7 +13,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.snmp.InternalSnmpCacheServerReadyFactory;
+import com.davfx.ninio.snmp.InternalSnmpSqliteCacheServerReadyFactory;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.Snmp;
@@ -27,10 +28,14 @@ public class ProxySnmpTest {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxySnmpTest.class);
 	
+	private static final File DATABASE = new File("src/test/resources/snmpcache.db");
+	
 	@Test
 	public void test() throws Exception {
 		int snmpServerPort = 8080;
 		int proxyServerPort = 8161;
+		
+		DATABASE.delete();
 		
 		try (Queue queue = new Queue()) {
 			final String[] diff = new String[] { null };
@@ -50,13 +55,8 @@ public class ProxySnmpTest {
 			})) {
 				queue.finish().waitFor();
 
-				try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
-					try (InternalSnmpCacheServerReadyFactory i = new InternalSnmpCacheServerReadyFactory(new InternalSnmpCacheServerReadyFactory.Filter() {
-						@Override
-						public boolean cache(Address address, Oid oid) {
-							return true;
-						}
-					}, queue, proxyServer.datagramReadyFactory())) {
+				try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
+					try (InternalSnmpSqliteCacheServerReadyFactory i = new InternalSnmpSqliteCacheServerReadyFactory(DATABASE, queue, proxyServer.datagramReadyFactory())) {
 						proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 						proxyServer.start();
 						queue.finish().waitFor();
@@ -126,12 +126,16 @@ public class ProxySnmpTest {
 				queue.finish().waitFor();
 			}
 		}
+
+		DATABASE.delete();
 	}
 	
 	@Test
 	public void testExpiration() throws Exception {
 		int snmpServerPort = 8080;
 		int proxyServerPort = 8161;
+		
+		DATABASE.delete();
 		
 		try (Queue queue = new Queue()) {
 			final String[] diff = new String[] { null };
@@ -151,13 +155,8 @@ public class ProxySnmpTest {
 			})) {
 				queue.finish().waitFor();
 
-				try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
-					try (InternalSnmpCacheServerReadyFactory i = new InternalSnmpCacheServerReadyFactory(new InternalSnmpCacheServerReadyFactory.Filter() {
-						@Override
-						public boolean cache(Address address, Oid oid) {
-							return true;
-						}
-					}, queue, proxyServer.datagramReadyFactory())) {
+				try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
+					try (InternalSnmpSqliteCacheServerReadyFactory i = new InternalSnmpSqliteCacheServerReadyFactory(DATABASE, queue, proxyServer.datagramReadyFactory())) {
 						proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 						proxyServer.start();
 						queue.finish().waitFor();
@@ -253,6 +252,8 @@ public class ProxySnmpTest {
 				queue.finish().waitFor();
 			}
 		}
+
+		DATABASE.delete();
 	}
 	
 	@Test
@@ -260,14 +261,11 @@ public class ProxySnmpTest {
 		Address timeoutAddress = new Address("128.0.0.1", 161);
 		int proxyServerPort = 8161;
 		
+		DATABASE.delete();
+		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
-				try (InternalSnmpCacheServerReadyFactory i = new InternalSnmpCacheServerReadyFactory(new InternalSnmpCacheServerReadyFactory.Filter() {
-					@Override
-					public boolean cache(Address address, Oid oid) {
-						return true;
-					}
-				}, queue, proxyServer.datagramReadyFactory())) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
+				try (InternalSnmpSqliteCacheServerReadyFactory i = new InternalSnmpSqliteCacheServerReadyFactory(DATABASE, queue, proxyServer.datagramReadyFactory())) {
 					proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 					proxyServer.start();
 					queue.finish().waitFor();
@@ -343,6 +341,8 @@ public class ProxySnmpTest {
 				}
 				queue.finish().waitFor();
 			}
+
+			DATABASE.delete();
 		}
 	}
 	

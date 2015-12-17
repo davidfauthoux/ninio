@@ -44,16 +44,16 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 	private final TelnetSharing telnet;
 	private final TelnetSharing ssh;
 
-	public ExtendedScriptRunner(final Queue queue, final ReadyFactory udpReadyFactory) {
+	public ExtendedScriptRunner(final Queue queue, ReadyFactory tcpReadyFactory, final ReadyFactory udpReadyFactory, final ReadyFactory pingReadyFactory) {
 		runner = new QueueScriptRunner(queue, new ExecutorScriptRunner());
 
 		http = new Http();
-		http.withQueue(queue);
+		http.override(tcpReadyFactory).withQueue(queue);
 		
 		telnet = new TelnetSharing();
-		telnet.withQueue(queue);
+		telnet.override(tcpReadyFactory).withQueue(queue);
 		ssh = new TelnetSharing();
-		ssh.withQueue(queue);
+		ssh.override(tcpReadyFactory).withQueue(queue);
 		
 		//
 		
@@ -64,7 +64,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 				String host = JsonUtils.getString(r, "host");
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);
 
-				new Ping().withQueue(queue).ping(host, new PingClientHandler.Callback.PingCallback() {
+				new Ping().override(pingReadyFactory).withQueue(queue).ping(host, new PingClientHandler.Callback.PingCallback() {
 					@Override
 					public void failed(IOException e) {
 						m.failed(e);

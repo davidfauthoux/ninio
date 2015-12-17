@@ -127,8 +127,8 @@ public final class Ssh {
 				return SshClient.EOL;
 			}
 			@Override
-			public TelnetReady create(Queue queue, Address address) {
-				return new SshClient(queue, new SocketReadyFactory(queue), address, login, password, null);
+			public TelnetReady create(Queue queue, ReadyFactory readyFactory, Address address) {
+				return new SshClient(queue, readyFactory, address, login, password, null);
 			}
 		};
 	}
@@ -139,8 +139,8 @@ public final class Ssh {
 				return SshClient.EOL;
 			}
 			@Override
-			public TelnetReady create(Queue queue, Address address) {
-				return new SshClient(queue, new SocketReadyFactory(queue), address, login, null, rsaKey(privateKey, publicKey));
+			public TelnetReady create(Queue queue, ReadyFactory readyFactory, Address address) {
+				return new SshClient(queue, readyFactory, address, login, null, rsaKey(privateKey, publicKey));
 			}
 		};
 	}
@@ -151,8 +151,8 @@ public final class Ssh {
 				return SshClient.EOL;
 			}
 			@Override
-			public TelnetReady create(Queue queue, Address address) {
-				return new SshClient(queue, new SocketReadyFactory(queue), address, login, null, rsaKey(trust.getPrivateKey(alias, password), trust.getPublicKey(alias)));
+			public TelnetReady create(Queue queue, ReadyFactory readyFactory, Address address) {
+				return new SshClient(queue, readyFactory, address, login, null, rsaKey(trust.getPrivateKey(alias, password), trust.getPublicKey(alias)));
 			}
 		};
 	}

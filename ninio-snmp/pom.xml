@@ -16,5 +16,11 @@
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-core</artifactId>
 		</dependency>
+
+		<dependency>
+			<groupId>org.xerial</groupId>
+			<artifactId>sqlite-jdbc</artifactId>
+			<version>3.8.11.2</version>
+		</dependency>
 	</dependencies>
 </project>

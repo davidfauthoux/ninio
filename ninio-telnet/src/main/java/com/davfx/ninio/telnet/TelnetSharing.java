@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.ReadyFactory;
+import com.davfx.ninio.core.SocketReadyFactory;
 import com.davfx.ninio.util.QueueScheduled;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
@@ -65,6 +67,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 
 	private Queue queue = DEFAULT_QUEUE;
 	private final Map<Address, TelnetSharingHandlerManager> map = new HashMap<>();
+	private ReadyFactory readyFactory = null;
 	
 	public TelnetSharing() {
 	}
@@ -86,11 +89,17 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 		return this;
 	}
 	
+	public TelnetSharing override(ReadyFactory readyFactory) {
+		this.readyFactory = readyFactory;
+		return this;
+	}
+	
 	private static final class TelnetSharingHandlerManager {
 		private static enum State {
 			CONNECTING, CONNECTED, WAITING_RESPONSE, DISCONNECTED
 		}
 		private final Queue queue;
+		private final ReadyFactory readyFactory;
 		private final Address address;
 		private State state = State.DISCONNECTED;
 		private CutOnPromptClient.Handler.Write write;
@@ -100,8 +109,9 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 		private final Closeable closeable;
 		private boolean closed = false;
 		
-		public TelnetSharingHandlerManager(Queue queue, Address address) {
+		public TelnetSharingHandlerManager(Queue queue, ReadyFactory readyFactory, Address address) {
 			this.queue = queue;
+			this.readyFactory = readyFactory;
 			this.address = address;
 			
 			closeable = QueueScheduled.schedule(queue, CONNECTIONS_CHECK_TIME, new Runnable() {
@@ -185,7 +195,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 							throw new IllegalStateException("Init commands required");
 						}
 
-						new CutOnPromptClient(factory.create(queue, address), BUFFERING_LIMIT, new CutOnPromptClient.Handler() {
+						new CutOnPromptClient(factory.create(queue, (readyFactory == null) ? new SocketReadyFactory(queue) : readyFactory, address), BUFFERING_LIMIT, new CutOnPromptClient.Handler() {
 							private int writeIndex = 0;
 							
 							@Override
@@ -282,7 +292,7 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 	public TelnetSharingHandler client(TelnetSharingReadyFactory factory, Address address) {
 		TelnetSharingHandlerManager m = map.get(address);
 		if (m == null) {
-			m = new TelnetSharingHandlerManager(queue, address);
+			m = new TelnetSharingHandlerManager(queue, readyFactory, address);
 			map.put(address, m);
 		}
 		

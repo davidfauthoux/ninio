@@ -5,7 +5,7 @@ import java.io.IOException;
 
 import com.davfx.ninio.core.ReadyFactory;
 
-final class SimpleServerSideConfigurator implements ServerSideConfigurator {
+public final class SimpleServerSideConfigurator implements ServerSideConfigurator {
 	private final ReadyFactory readyFactory;
 	public SimpleServerSideConfigurator(ReadyFactory readyFactory) {
 		this.readyFactory = readyFactory;

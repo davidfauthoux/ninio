@@ -44,8 +44,8 @@ public final class Telnet {
 				return TelnetSpecification.EOL;
 			}
 			@Override
-			public TelnetReady create(Queue queue, Address address) {
-				return new TelnetClient(queue, new SocketReadyFactory(queue), address);
+			public TelnetReady create(Queue queue, ReadyFactory readyFactory, Address address) {
+				return new TelnetClient(queue, readyFactory, address);
 			}
 		};
 	}

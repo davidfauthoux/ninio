@@ -12,7 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.snmp.InternalSnmpCacheServerReadyFactory;
+import com.davfx.ninio.snmp.InternalSnmpMemoryCacheServerReadyFactory;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.Snmp;
@@ -34,8 +34,8 @@ public class ProxySnmpOnLocalhostTest {
 		int proxyServerPort = 8161;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
-				try (InternalSnmpCacheServerReadyFactory i = new InternalSnmpCacheServerReadyFactory(new InternalSnmpCacheServerReadyFactory.Filter() {
+			try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
+				try (InternalSnmpMemoryCacheServerReadyFactory i = new InternalSnmpMemoryCacheServerReadyFactory(new InternalSnmpMemoryCacheServerReadyFactory.Filter() {
 					@Override
 					public boolean cache(Address address, Oid oid) {
 						return true;

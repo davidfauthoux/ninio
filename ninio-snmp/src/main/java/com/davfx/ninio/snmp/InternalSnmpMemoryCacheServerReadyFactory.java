@@ -31,11 +31,11 @@ import com.typesafe.config.ConfigFactory;
 
 // Transforms all values to string
 // Does not tell community on response
-public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, Closeable, AutoCloseable {
+public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFactory, Closeable, AutoCloseable {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(InternalSnmpCacheServerReadyFactory.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(InternalSnmpMemoryCacheServerReadyFactory.class);
 
-	private static final Config CONFIG = ConfigFactory.load(InternalSnmpCacheServerReadyFactory.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(InternalSnmpMemoryCacheServerReadyFactory.class.getClassLoader());
 
 	private static final double CACHE_EXPIRATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.expiration");
 	private static final double REQUEST_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.timeout");
@@ -92,7 +92,7 @@ public final class InternalSnmpCacheServerReadyFactory implements ReadyFactory, 
 
 	private final Closeable closeable;
 	
-	public InternalSnmpCacheServerReadyFactory(Filter filter, Queue queue, ReadyFactory wrappee) {
+	public InternalSnmpMemoryCacheServerReadyFactory(Filter filter, Queue queue, ReadyFactory wrappee) {
 		this.queue = queue;
 		this.wrappee = wrappee;
 		this.filter = filter;

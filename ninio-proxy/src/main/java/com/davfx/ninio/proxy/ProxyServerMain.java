@@ -7,7 +7,8 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 public final class ProxyServerMain {
-	private static final Config CONFIG = ConfigFactory.load();
+	
+	private static final Config CONFIG = ConfigFactory.load(ProxyServerMain.class.getClassLoader());
 
 	private ProxyServerMain() {
 	}
@@ -15,11 +16,11 @@ public final class ProxyServerMain {
 	public static void main(String[] args) throws Exception {
 		Wait wait = new Wait();
 		try (Queue queue = new Queue()) {
-			try (ProxyServer server = new ProxyServer(queue, CONFIG.getInt("proxy.port"), CONFIG.getInt("proxy.maxSimultaneousClients"))) {
-				for (Config c : CONFIG.getConfigList("proxy.forward")) {
+			try (ProxyServer server = new ProxyServer(queue, new Address(CONFIG.getString("ninio.proxy.host"), CONFIG.getInt("ninio.proxy.port")), CONFIG.getInt("ninio.proxy.maxSimultaneousClients"))) {
+				for (Config c : CONFIG.getConfigList("ninio.proxy.forward")) {
 					server.override(c.getString("type"), new ForwardServerSideConfigurator(queue, new Address(c.getString("host"), c.getInt("port")), null));
 				}
-				for (String host : CONFIG.getStringList("proxy.filter")) {
+				for (String host : CONFIG.getStringList("ninio.proxy.filter")) {
 					server.filter(host);
 				}
 				server.start();

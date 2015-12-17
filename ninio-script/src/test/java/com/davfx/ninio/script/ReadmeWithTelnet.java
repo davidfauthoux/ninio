@@ -1,6 +1,5 @@
 package com.davfx.ninio.script;
 
-import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 
 public final class ReadmeWithTelnet {
@@ -9,7 +8,7 @@ public final class ReadmeWithTelnet {
 		String password = "<your-password>";
 		
 		try (Queue queue = new Queue()) {
-			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, new DatagramReadyFactory(queue))) {
+			try (ExtendedScriptRunner runner = new ExtendedScriptRunner(queue, null, null, null)) {
 				runner.runner.engine().eval("telnet("
 						+ "{"
 							+ "'host': '127.0.0.1',"

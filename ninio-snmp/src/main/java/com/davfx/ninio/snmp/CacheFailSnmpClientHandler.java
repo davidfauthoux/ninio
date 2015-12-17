@@ -9,8 +9,9 @@ import com.typesafe.config.ConfigFactory;
 
 @Deprecated
 public final class CacheFailSnmpClientHandler implements SnmpClientHandler {
-	
-	private static final Config CONFIG = ConfigFactory.load();
+
+	private static final Config CONFIG = ConfigFactory.load(CacheFailSnmpClientHandler.class.getClassLoader());
+
 	private static final double EXPIRATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.fail.expiration");
 	
 	private final SnmpClientHandler wrappee;

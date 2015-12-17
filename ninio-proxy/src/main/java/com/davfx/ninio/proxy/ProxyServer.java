@@ -3,6 +3,7 @@ package com.davfx.ninio.proxy;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -38,6 +39,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 	private static final Config CONFIG = ConfigFactory.load(ProxyServer.class.getClassLoader());
 
 	public static final double READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.proxy.timeout.read");
+	public static final int BACKLOG = CONFIG.getInt("ninio.proxy.backlog");
 	
 	private final BaseServerSide proxyServerSide;
 	private final ExecutorService listenExecutor;
@@ -45,12 +47,12 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 	private final Set<String> hostsToFilter = new HashSet<>();
 	private final ServerSocket serverSocket;
 	
-	public ProxyServer(Queue queue, int port, int maxNumberOfSimultaneousClients) throws IOException {
+	public ProxyServer(Queue queue, Address address, int maxNumberOfSimultaneousClients) throws IOException {
 		proxyServerSide = new BaseServerSide(queue);
-		LOGGER.debug("Proxy server on port {}", port);
+		LOGGER.debug("Proxy server on {}", address);
 		listenExecutor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, "listen"));
 		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ClassThreadFactory(ProxyServer.class, "read"));
-		serverSocket = new ServerSocket(port);
+		serverSocket = new ServerSocket(address.getPort(), BACKLOG, InetAddress.getByName(address.getHost()));
 	}
 
 	@Override

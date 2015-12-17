@@ -37,7 +37,7 @@ public class ProxyTest {
 		int proxyServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
 				proxyServer.start();
 				queue.finish().waitFor();
 	
@@ -135,7 +135,7 @@ public class ProxyTest {
 		int proxyServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
 				proxyServer.start();
 				queue.finish().waitFor();
 	
@@ -232,7 +232,7 @@ public class ProxyTest {
 		int proxyServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxyServer = new ProxyServer(queue, proxyServerPort, 1)) {
+			try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
 				proxyServer.start();
 				queue.finish().waitFor();
 	
@@ -278,11 +278,11 @@ public class ProxyTest {
 		int proxy1ServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxy0Server = new ProxyServer(queue, proxy0ServerPort, 1)) {
+			try (ProxyServer proxy0Server = new ProxyServer(queue, new Address(Address.ANY, proxy0ServerPort), 1)) {
 				proxy0Server.start();
 				queue.finish().waitFor();
 				
-				try (ProxyServer proxy1Server = new ProxyServer(queue, proxy1ServerPort, 1)) {
+				try (ProxyServer proxy1Server = new ProxyServer(queue, new Address(Address.ANY, proxy1ServerPort), 1)) {
 					proxy1Server.start();
 					queue.finish().waitFor();
 					
@@ -384,11 +384,11 @@ public class ProxyTest {
 		int proxy1ServerPort = 9999;
 		
 		try (Queue queue = new Queue()) {
-			try (ProxyServer proxy0Server = new ProxyServer(queue, proxy0ServerPort, 1)) {
+			try (ProxyServer proxy0Server = new ProxyServer(queue, new Address(Address.ANY, proxy0ServerPort), 1)) {
 				proxy0Server.start();
 				queue.finish().waitFor();
 	
-				try (ProxyServer proxy1Server = new ProxyServer(queue, proxy1ServerPort, 1)) {
+				try (ProxyServer proxy1Server = new ProxyServer(queue, new Address(Address.ANY, proxy1ServerPort), 1)) {
 					proxy1Server.override(ProxyCommons.Types.SOCKET, new ForwardServerSideConfigurator(queue, new Address(Address.LOCALHOST, proxy0ServerPort), new ProxyListener() {
 						@Override
 						public void failed(IOException e) {
