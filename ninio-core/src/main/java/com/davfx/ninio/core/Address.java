@@ -4,6 +4,8 @@ public final class Address {
 	public static final String LOCALHOST = "127.0.0.1";
 	public static final String ANY = "0.0.0.0";
 	
+	public static final char SEPARATOR = '^';
+	
 	private final String host;
 	private final int port;
 
@@ -25,13 +27,13 @@ public final class Address {
 	@Override
 	public String toString() {
 		if (host == null) {
-			return ":" + port;
+			return SEPARATOR + "" + port;
 		}
-		return host + ":" + port;
+		return host + SEPARATOR + "" + port;
 	}
 	
 	public static Address of(String hostPort) {
-		int i = hostPort.indexOf(':');
+		int i = hostPort.indexOf(SEPARATOR);
 		String h = hostPort.substring(0, i);
 		if (h.isEmpty()) {
 			h = null;
@@ -40,8 +42,9 @@ public final class Address {
 		return new Address(h, p);
 	}
 
+	/*%%%
 	public static Address of(String hostPort, int defaultPort) {
-		int i = hostPort.indexOf(':');
+		int i = hostPort.indexOf(SEPARATOR);
 		if (i < 0) {
 			return new Address(hostPort, defaultPort);
 		}
@@ -52,6 +55,7 @@ public final class Address {
 		int p = Integer.parseInt(hostPort.substring(i + 1));
 		return new Address(h, p);
 	}
+	*/
 
 	@Override
 	public int hashCode() {

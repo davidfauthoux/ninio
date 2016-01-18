@@ -52,9 +52,30 @@ public final class HttpRequest {
 
 		int i = url.indexOf(HttpSpecification.PATH_SEPARATOR, protocol.length());
 		if (i < 0) {
-			return new HttpRequest(Address.of(url.substring(protocol.length()), defaultPort), secure, method, HttpPath.ROOT, headers);
+			String a = url.substring(protocol.length());
+			int k = a.indexOf(':');
+			Address address;
+			if (k < 0) {
+				address = new Address(a, defaultPort);
+			} else {
+				String h = a.substring(0, k);
+				int p = Integer.parseInt(a.substring(k + 1));
+				address = new Address(h, p);
+			}
+			return new HttpRequest(address, secure, method, HttpPath.ROOT, headers);
+		} else {
+			String a = url.substring(protocol.length(), i);
+			int k = a.indexOf(':');
+			Address address;
+			if (k < 0) {
+				address = new Address(a, defaultPort);
+			} else {
+				String h = a.substring(0, k);
+				int p = Integer.parseInt(a.substring(k + 1));
+				address = new Address(h, p);
+			}
+			return new HttpRequest(address, secure, method, HttpPath.of(url.substring(i)), headers);
 		}
-		return new HttpRequest(Address.of(url.substring(protocol.length(), i), defaultPort), secure, method, HttpPath.of(url.substring(i)), headers);
 	}
 	
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
