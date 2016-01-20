@@ -14,7 +14,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -124,6 +123,10 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 		//%% private final File outputFile;
 		//%% private final DataOutputStream output;
 		
+		private static void execute(String name, Runnable runnable) {
+			new ClassThreadFactory(TcpdumpSyncDatagramReady.class, name).newThread(runnable).start();
+		}
+		
 		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
 		
 		private DatagramSocket socket = null;
@@ -149,7 +152,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			}
 			*/
 
-			Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class)).execute(new Runnable() {
+			execute(null, new Runnable() {
 				@Override
 				public void run() {
 					final TcpdumpReader tcpdumpReader = RAW ? new RawTcpdumpReader(interfaceId.equals("any")) : new HexTcpdumpReader();
@@ -192,17 +195,21 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 						
 						if (p != null) {
 							final InputStream error = p.getErrorStream();
-							Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class, "err")).execute(new Runnable() {
+							execute("err", new Runnable() {
 								@Override
 								public void run() {
 									try {
-										BufferedReader r = new BufferedReader(new InputStreamReader(error));
-										while (true) {
-											String line = r.readLine();
-											if (line == null) {
-												break;
+										try {
+											BufferedReader r = new BufferedReader(new InputStreamReader(error));
+											while (true) {
+												String line = r.readLine();
+												if (line == null) {
+													break;
+												}
+												LOGGER.warn("Tcpdump message: {}", line);
 											}
-											LOGGER.warn("Tcpdump message: {}", line);
+										} finally {
+											error.close();
 										}
 									} catch (IOException e) {
 										LOGGER.error("Error in tcpdump process", e);
@@ -211,7 +218,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							});
 							
 							final InputStream input = p.getInputStream();
-							Executors.newSingleThreadExecutor(new ClassThreadFactory(TcpdumpSyncDatagramReady.class, "in")).execute(new Runnable() {
+							execute("in", new Runnable() {
 								@Override
 								public void run() {
 									try {
@@ -266,6 +273,15 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							if (code != 0) {
 								LOGGER.error("Non zero return code from tcpdump: {}", code);
 							}
+							try {
+								error.close();
+							} catch (IOException e) {
+							}
+							try {
+								input.close();
+							} catch (IOException e) {
+							}
+							p.destroy();
 						}
 						
 						try {
