@@ -16,11 +16,12 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 public final class SnmpClientCache implements AutoCloseable {
-	private static final Config CONFIG = ConfigFactory.load();
-	private static final int CACHE_EXPIRE_THRESHOLD = CONFIG.getInt("snmp.cache.expire.threshold");
+	//private static final Config CONFIG = ConfigFactory.load();
+	//private static final int CACHE_EXPIRE_THRESHOLD = CONFIG.getInt("snmp.cache.expire.threshold");
 	
 	private final SnmpClientConfigurator configurator;
 	
+	/*
 	private static final class Hold {
 		public final SnmpClient client;
 		public final List<SnmpClientHandler> handlers = new LinkedList<>();
@@ -29,8 +30,9 @@ public final class SnmpClientCache implements AutoCloseable {
 			this.client = client;
 		}		
 	}
+	*/
 	
-	private final Map<Address, Hold> clients = new HashMap<>();
+	//private final Map<Address, Hold> clients = new HashMap<>();
 
 	public SnmpClientCache(SnmpClientConfigurator configurator) {
 		this.configurator = configurator;
@@ -75,6 +77,7 @@ public final class SnmpClientCache implements AutoCloseable {
 			}
 			@Override
 			public void connect(final SnmpClientHandler clientHandler) {
+				/*
 				if ((CACHE_EXPIRE_THRESHOLD > 0) && (clients.size() >= CACHE_EXPIRE_THRESHOLD)) {
 					Iterator<Hold> i = clients.values().iterator();
 					while (i.hasNext()) {
@@ -88,9 +91,10 @@ public final class SnmpClientCache implements AutoCloseable {
 						}
 					}
 				}
+				*/
 				
-				Hold c = clients.get(address);
-				if (c == null) {
+				//Hold c = clients.get(address);
+				//if (c == null) {
 					SnmpClientConfigurator clientConfigurator = new SnmpClientConfigurator(configurator);
 					if (community != null) {
 						clientConfigurator.withCommunity(community);
@@ -102,47 +106,59 @@ public final class SnmpClientCache implements AutoCloseable {
 						clientConfigurator.withTimeoutFromBeginning(timeoutFromBeginning);
 					}
 
-					c = new Hold(new SnmpClient(clientConfigurator.withAddress(address)));
+					SnmpClient client = new SnmpClient(clientConfigurator.withAddress(address));
+					//c = new Hold();
 					
-					final Hold cc = c;
-					clients.put(address, cc);
-					c.handlers.add(clientHandler);
+					//final Hold cc = c;
+					//clients.put(address, cc);
+					//c.handlers.add(clientHandler);
 					
-					c.client.connect(new CacheFailSnmpClientHandler(new SnmpClientHandler() {
+					//c.
+					client.connect(new CacheFailSnmpClientHandler(new SnmpClientHandler() {
 						@Override
 						public void failed(IOException e) {
+							/*
 							clients.remove(address);
 							for (SnmpClientHandler h : cc.handlers) {
 								h.failed(e);
 							}
 							cc.client.close();
+							*/
+							clientHandler.failed(e);
 						}
 						@Override
 						public void close() {
+							/*
 							clients.remove(address);
 							for (SnmpClientHandler h : cc.handlers) {
 								h.close();
 							}
 							cc.client.close();
+							*/
+							clientHandler.close();
 						}
 						@Override
 						public void launched(final Callback callback) {
-							cc.launchedCallback = callback;
-							for (SnmpClientHandler h : cc.handlers) {
-								h.launched(new Callback() {
+							//cc.launchedCallback = callback;
+							//for (SnmpClientHandler h : cc.handlers) {
+								clientHandler
+								//h.
+								.launched(new Callback() {
 									@Override
 									public void close() {
-										// Connection never actually closed
-										cc.handlers.remove(clientHandler);
+										//// Connection never actually closed
+										//cc.handlers.remove(clientHandler);
+										callback.close();
 									}
 									@Override
 									public void get(Oid oid, GetCallback getCallback) {
 										callback.get(oid, getCallback);
 									}
 								});
-							}
+							//}
 						}
 					}));
+				/*
 				} else {
 					final Hold cc = c;
 					
@@ -161,12 +177,14 @@ public final class SnmpClientCache implements AutoCloseable {
 						});
 					}
 				}
+				*/
 			}
 		};
 	}
 	
 	@Override
 	public void close() {
+		/*
 		for(Hold c : clients.values()) {
 			if (c.launchedCallback != null) {
 				c.launchedCallback.close();
@@ -174,5 +192,6 @@ public final class SnmpClientCache implements AutoCloseable {
 			c.client.close();
 		}
 		clients.clear();
+		*/
 	}
 }
