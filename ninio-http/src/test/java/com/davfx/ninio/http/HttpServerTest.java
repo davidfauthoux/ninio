@@ -24,7 +24,7 @@ public class HttpServerTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpServerTest.class);
 	
 	static {
-		System.setProperty("http.keepAlive", "false");
+		//System.setProperty("http.keepAlive", "false");
 	}
 	
 	@Test
@@ -487,6 +487,100 @@ public class HttpServerTest {
 				}
 			}
 
+			queue.finish().waitFor();
+		}
+	}
+	
+	@Test
+	public void testPostAndGetServerWithJavaClient() throws Exception {
+		try (Queue queue = new Queue()) {
+			try (HttpServer server = new HttpServer(queue, null, new Address(Address.ANY, 8080), new HttpServerHandlerFactory() {
+				@Override
+				public void failed(IOException e) {
+					LOGGER.error("Failed", e);
+				}
+				@Override
+				public void closed() {
+				}
+				
+				@Override
+				public HttpServerHandler create() {
+					return new HttpServerHandler() {
+						private HttpRequest request;
+						private InMemoryBuffers b;
+
+						@Override
+						public void failed(IOException e) {
+							LOGGER.warn("Failed", e);
+						}
+						@Override
+						public void close() {
+							LOGGER.debug("Closed");
+						}
+						
+						@Override
+						public void handle(HttpRequest request) {
+							LOGGER.debug("Request received: {}", request);
+							this.request = request;
+							b = new InMemoryBuffers();
+						}
+	
+						@Override
+						public void handle(Address address, ByteBuffer buffer) {
+							b.add(buffer);
+						}
+						
+						@Override
+						public void ready(Write write) {
+							String post = b.toString();
+							LOGGER.debug("Post received: {}", post);
+							LOGGER.debug("Ready to write");
+							write.write(new HttpResponse());
+							write.handle(null, ByteBuffer.wrap(("hello:" + request.path + ":" + post).getBytes(Charsets.UTF_8)));
+							write.close();
+						}
+						
+					};
+				}
+				
+			})) {
+				
+				queue.finish().waitFor();
+
+				{
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/test?a=b").openConnection();
+					c.setDoOutput(true);
+					try (Writer w = new OutputStreamWriter(c.getOutputStream(), Charsets.UTF_8)) {
+						w.write("POST");
+					}
+					StringBuilder b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					Assertions.assertThat(b.toString()).isEqualTo("hello:/test?a=b:POST\n");
+				}
+				{
+					HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/test?a=b").openConnection();
+					StringBuilder b = new StringBuilder();
+					try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
+						while (true) {
+							String line = r.readLine();
+							if (line == null) {
+								break;
+							}
+							b.append(line).append('\n');
+						}
+					}
+					Assertions.assertThat(b.toString()).isEqualTo("hello:/test?a=b:\n");
+				}
+			}
+			
 			queue.finish().waitFor();
 		}
 	}
