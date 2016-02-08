@@ -1,6 +1,7 @@
 package com.davfx.ninio.script.util;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 import com.davfx.ninio.common.Address;
 import com.davfx.ninio.http.Http;
@@ -67,6 +68,13 @@ public final class HttpAvailable {
 				}
 				if (port != null) {
 					client.withPort(port);
+				}
+				JsonElement headersElement = r.get("headers");
+				if (headersElement != null) {
+					JsonObject headers = headersElement.getAsJsonObject();
+					for (Map.Entry<String, JsonElement> e : headers.entrySet()) {
+						client.addHeader(e.getKey(), e.getValue().getAsString());
+					}
 				}
 				
 				final AsyncScriptFunctionCallbackManager m = new AsyncScriptFunctionCallbackManager(userCallback);

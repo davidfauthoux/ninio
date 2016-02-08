@@ -2,6 +2,8 @@ package com.davfx.ninio.http.util;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +32,8 @@ public final class SimpleHttpClient implements Closeable {
 	private ByteBuffer post = null;
 
 	private Address address; // Overrides configurator
+	
+	private final Map<String, String> headers = new LinkedHashMap<>();
 
 	private SimpleHttpClient(HttpClientConfigurator configurator, boolean configuratorToClose) {
 		this.configurator = configurator;
@@ -72,6 +76,11 @@ public final class SimpleHttpClient implements Closeable {
 	}
 	public SimpleHttpClient withAddress(Address address) {
 		this.address = address;
+		return this;
+	}
+
+	public SimpleHttpClient addHeader(String key, String value) {
+		headers.put(key, value);
 		return this;
 	}
 
@@ -136,6 +145,7 @@ public final class SimpleHttpClient implements Closeable {
 				request.getHeaders().put(Http.CONTENT_TYPE, postContentType);
 			}
 		}
+		request.getHeaders().putAll(headers);
 		client.send(request, new HttpClientHandler() {
 			private HttpResponse response = null;
 			private InMemoryPost body = null;
