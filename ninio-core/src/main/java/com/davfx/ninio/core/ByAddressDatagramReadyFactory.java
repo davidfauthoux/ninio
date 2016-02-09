@@ -25,6 +25,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
+	private static final int MAX_BY_ADDRESS = CONFIG.getInt("ninio.datagram.byaddress.max");
 	
 	private static final class AddressedByteBuffer {
 		Address address;
@@ -32,7 +33,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 	}
 	
 	private final Queue queue;
-	private final Map<Address, ReadyConnection> connections = new HashMap<>();
+	private final Map<Address, ReadyConnection[]> connections = new HashMap<>();
 	private FailableCloseableByteBufferHandler write = null;
 	private IOException error = null;
 	private boolean closed = false;
@@ -70,9 +71,13 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 										if (from != null) {
 											readBuffer.flip();
 											Address fromAddress = new Address(from.getHostString(), from.getPort());
-											ReadyConnection connection = connections.get(fromAddress);
-											if (connection != null) {
-												connection.handle(fromAddress, readBuffer);
+											ReadyConnection[] l = connections.get(fromAddress);
+											if (l != null) {
+												for (ReadyConnection c : l) {
+													if (c != null) {
+														c.handle(fromAddress, readBuffer.duplicate());
+													}
+												}
 											} else {
 												LOGGER.trace("Packet received but no match: {} / {}", fromAddress, connections.keySet());
 											}
@@ -83,8 +88,12 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 										} catch (IOException ee) {
 										}
 										closed = true;
-										for (ReadyConnection connection : connections.values()) {
-											connection.close();
+										for (ReadyConnection[] l : connections.values()) {
+											for (ReadyConnection c : l) {
+												if (c != null) {
+													c.close();
+												}
+											}
 										}
 										connections.clear();
 									}
@@ -265,13 +274,37 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					return;
 				}
 				
-				connections.put(address, connection);
+				ReadyConnection[] l = connections.get(address);
+				if (l == null) {
+					l = new ReadyConnection[MAX_BY_ADDRESS];
+					connections.put(address, l);
+				}
+				int foundIndex = 0;
+				for (int i = 0; i < l.length; i++) {
+					if (l[i] == null) {
+						l[i] = connection;
+						foundIndex = i;
+						break;
+					}
+				}
+				final ReadyConnection[] removable = l;
+				final int foundIndexToRemove = foundIndex;
+				
 				connection.connected(new FailableCloseableByteBufferHandler() {
+					private void remove() {
+						removable[foundIndexToRemove] = null;
+						for (int i = 0; i < removable.length; i++) {
+							if (removable[i] != null) {
+								return;
+							}
+						}
+						connections.remove(address);
+					}
 					@Override
 					public void failed(IOException e) {
 						//%% queue.check();
 						
-						connections.remove(address);
+						remove();
 
 						/* Global connection never closed
 						write.failed(e);
@@ -281,7 +314,7 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					public void close() {
 						//%% queue.check();
 						
-						connections.remove(address);
+						remove();
 
 						/* Global connection never closed
 						write.close();
@@ -307,8 +340,12 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					connection.close();
 				}
 				toConnect.clear();
-				for (ReadyConnection c : connections.values()) {
-					c.close();
+				for (ReadyConnection[] l : connections.values()) {
+					for (ReadyConnection c : l) {
+						if (c != null) {
+							c.close();
+						}
+					}
 				}
 				connections.clear();
 			}
