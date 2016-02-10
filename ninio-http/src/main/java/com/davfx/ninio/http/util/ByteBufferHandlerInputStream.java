@@ -58,7 +58,7 @@ public final class ByteBufferHandlerInputStream extends InputStream {
 					buffers.addLast(buffer);
 					count += buffer.remaining();
 					if (count >= POST_LIMIT) {
-						LOGGER.warn("Post overflow, it should be read faster");
+						LOGGER.warn("Post overflow (> {} bytes), it should be read faster", POST_LIMIT);
 						buffers.clear();
 						overflow = true;
 					}

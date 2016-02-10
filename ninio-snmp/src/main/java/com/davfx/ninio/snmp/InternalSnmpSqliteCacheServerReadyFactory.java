@@ -257,7 +257,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 									return;
 								}
 
-								LOGGER.trace("Request {} with community: {} and oid: {}", requestId, community, oid);
+								LOGGER.trace("{}: Request {} with community: {} and oid: {}", address, requestId, community, oid);
 								
 								double now = DateUtils.now();
 								
@@ -274,14 +274,14 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 								Double requestTimestamp = cache.requestingByRequestKey.get(requestKey);
 								if (requestTimestamp != null) {
 									if ((now - requestTimestamp) <= REPEAT_TIME) {
-										LOGGER.trace("Not repeating: {}", oid);
+										LOGGER.trace("{}: Not repeating: {}", address, oid);
 										return;
 									}
 								}
 								
 								cache.requestingByRequestKey.put(requestKey, now);
 
-								LOGGER.trace("Actually calling for: {}", oid);
+								LOGGER.trace("{}: Actually calling for: {}", address, oid);
 								write.handle(address, sourceBuffer);
 							}
 						});

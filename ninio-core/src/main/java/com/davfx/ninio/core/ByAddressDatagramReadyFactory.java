@@ -279,13 +279,17 @@ public final class ByAddressDatagramReadyFactory implements ReadyFactory, AutoCl
 					l = new ReadyConnection[MAX_BY_ADDRESS];
 					connections.put(address, l);
 				}
-				int foundIndex = 0;
+				int foundIndex = -1;
 				for (int i = 0; i < l.length; i++) {
 					if (l[i] == null) {
 						l[i] = connection;
 						foundIndex = i;
 						break;
 					}
+				}
+				if (foundIndex < 0) {
+					connection.failed(new IOException("None available datagram connection (ninio.datagram.byaddress.max = " + MAX_BY_ADDRESS + ")"));
+					return;
 				}
 				final ReadyConnection[] removable = l;
 				final int foundIndexToRemove = foundIndex;
