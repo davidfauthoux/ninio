@@ -77,14 +77,14 @@ public final class Snmp {
 		final SnmpClient clientToClose;
 		if (cache == null) {
 			client = client();
-			clientToClose = null;
+			clientToClose = client;
 		} else {
 			if (auth != null) {
 				client = cache.get(address, auth, timeoutFromBeginning);
 			} else {
 				client = cache.get(address, community, timeoutFromBeginning);
 			}
-			clientToClose = client;
+			clientToClose = null;
 		}
 		client.connect(new SnmpClientHandler() {
 			@Override
