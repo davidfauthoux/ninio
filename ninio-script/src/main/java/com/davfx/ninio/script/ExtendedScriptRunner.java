@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.http.Http;
@@ -64,7 +65,9 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 		ssh = new TelnetSharing();
 		ssh.override(tcpReadyFactory).withQueue(queue);
 
-		snmpClientCache = (MAX_SNMP_CONNECTION_CACHE_SIZE == 0) ? null : new SnmpClientCache(queue, udpReadyFactory, MAX_SNMP_CONNECTION_CACHE_SIZE);
+		snmpClientCache = (MAX_SNMP_CONNECTION_CACHE_SIZE == 0) ?
+				null :
+				new SnmpClientCache(queue, (udpReadyFactory == null) ? new DatagramReadyFactory(queue) : udpReadyFactory, MAX_SNMP_CONNECTION_CACHE_SIZE);
 		
 		//
 		
@@ -292,6 +295,9 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 
 	@Override
 	public void close() {
+		if (snmpClientCache != null) {
+			snmpClientCache.close();
+		}
 		runner.close();
 
 		http.close();
