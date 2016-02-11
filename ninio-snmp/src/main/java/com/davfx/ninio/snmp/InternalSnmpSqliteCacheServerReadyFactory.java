@@ -153,7 +153,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 							int ii = ee.getKey();
 							Requesting rr = ee.getValue();
 							if (solve(address, cache, ii, rr)) {
-								i.remove();
+								k.remove();
 							}
 						}
 					}
