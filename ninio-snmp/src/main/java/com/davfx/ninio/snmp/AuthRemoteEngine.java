@@ -25,10 +25,7 @@ final class AuthRemoteEngine {
 	private int time = 0;
 	private byte[] id = new byte[0];
 
-	private final String authLogin;
-	private final String authPassword;
-	private final String privLogin;
-	private final String privPassword;
+	private final AuthRemoteSpecification authRemoteSpecification;
 	private final MessageDigest messageDigest;
 	
 	private int packetNumber = 0;
@@ -36,7 +33,6 @@ final class AuthRemoteEngine {
     
     private final SecureRandom random = new SecureRandom();
     
-    private final String privEncryptionAlgorithm;
     private final Cipher cipher;
     private final int privKeyLength;
 
@@ -44,28 +40,23 @@ final class AuthRemoteEngine {
     
     private boolean ready = false;
     
-	public AuthRemoteEngine(String authLogin, String authPassword, String authDigestAlgorithm, String privLogin, String privPassword, String privEncryptionAlgorithm) {
-		this.authLogin = authLogin;
-		this.authPassword = authPassword;
-		this.privLogin = privLogin;
-		this.privPassword = privPassword;
-		
-		this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification) {
+		this.authRemoteSpecification = authRemoteSpecification;
 
 		try {
-			messageDigest = MessageDigest.getInstance(authDigestAlgorithm);
+			messageDigest = MessageDigest.getInstance(authRemoteSpecification.authDigestAlgorithm);
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		}
 		try {
-			cipher = Cipher.getInstance(privEncryptionAlgorithm + "/" + (privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
+			cipher = Cipher.getInstance(authRemoteSpecification.privEncryptionAlgorithm + "/" + (authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		} catch (NoSuchPaddingException e) {
 			throw new RuntimeException(e);
 		}
 		
-		privKeyLength = privEncryptionAlgorithm.equals("AES") ? 16 : 8;
+		privKeyLength = authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 	}
 	
 	public boolean isReady() {
@@ -77,10 +68,10 @@ final class AuthRemoteEngine {
 	}
 
 	public String getAuthLogin() {
-		return authLogin;
+		return authRemoteSpecification.authLogin;
 	}
 	public String getPrivLogin() {
-		return privLogin;
+		return authRemoteSpecification.privLogin;
 	}
 	
 	public int incPacketNumber() {
@@ -129,11 +120,11 @@ final class AuthRemoteEngine {
 	}
 
 	public byte[] getAuthKey() {
-		return getKey(authPassword);
+		return getKey(authRemoteSpecification.authPassword);
 	}
 	
 	private byte[] getPrivKey() {
-		return getKey(privPassword);
+		return getKey(authRemoteSpecification.privPassword);
 	}
 
 	private byte[] getKey(String password) {
@@ -213,7 +204,7 @@ final class AuthRemoteEngine {
 		int salt = random.nextInt();
 		byte[] iv;
 
-		if (privEncryptionAlgorithm.equals("AES")) {
+		if (authRemoteSpecification.privEncryptionAlgorithm.equals("AES")) {
 			iv = new byte[16];
 			ByteBuffer ivb = ByteBuffer.wrap(iv);
 			ivb.putInt(getBootCount());
@@ -235,7 +226,7 @@ final class AuthRemoteEngine {
 			}
 		}
 		try {
-			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encryptionKey, 0, privKeyLength, privEncryptionAlgorithm), new IvParameterSpec(iv));
+			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encryptionKey, 0, privKeyLength, authRemoteSpecification.privEncryptionAlgorithm), new IvParameterSpec(iv));
 			ByteBuffer b = ByteBuffer.allocate(decryptedBuffer.remaining() + ENCRYPTION_MARGIN);
 			cipher.doFinal(decryptedBuffer, b);
 			b.flip();
@@ -250,7 +241,7 @@ final class AuthRemoteEngine {
 
 		byte[] iv;
 
-		if (privEncryptionAlgorithm.equals("AES")) {
+		if (authRemoteSpecification.privEncryptionAlgorithm.equals("AES")) {
 			iv = new byte[16];
 			ByteBuffer ivb = ByteBuffer.wrap(iv);
 			ivb.putInt(getBootCount());
@@ -267,7 +258,7 @@ final class AuthRemoteEngine {
 		}
 
 		try {
-			SecretKeySpec key = new SecretKeySpec(decryptionKey, 0, privKeyLength, privEncryptionAlgorithm);
+			SecretKeySpec key = new SecretKeySpec(decryptionKey, 0, privKeyLength, authRemoteSpecification.privEncryptionAlgorithm);
 			IvParameterSpec ivSpec = new IvParameterSpec(iv);
 			cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
 			ByteBuffer b = ByteBuffer.allocate(encryptedBuffer.remaining() + ENCRYPTION_MARGIN);

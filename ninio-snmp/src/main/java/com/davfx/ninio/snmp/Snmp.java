@@ -13,7 +13,7 @@ import com.typesafe.config.ConfigFactory;
 public final class Snmp {
 	
 	private static final Config CONFIG = ConfigFactory.load(Snmp.class.getClassLoader());
-	
+
 	public static final int DEFAULT_PORT = 161;
 
 	private static final Queue DEFAULT_QUEUE = new Queue();
@@ -23,8 +23,10 @@ public final class Snmp {
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = null;
 	private String community = CONFIG.getString("ninio.snmp.defaultCommunity");
-	private AuthRemoteEngine authEngine = null;
+	private AuthRemoteSpecification auth = null;
 
+	private SnmpClientCache cache = null;
+	
 	public Snmp() {
 	}
 
@@ -52,21 +54,38 @@ public final class Snmp {
 		this.community = community;
 		return this;
 	}
-	public Snmp withLoginPassword(String authLogin, String authPassword, String authDigestAlgorithm, String privLogin, String privPassword, String privEncryptionAlgorithm) {
-		authEngine = new AuthRemoteEngine(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
+	public Snmp withAuth(AuthRemoteSpecification auth) {
+		this.auth = auth;
 		return this;
 	}
 
 	public SnmpClient client() {
-		if (authEngine != null) {
-			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, authEngine, timeoutFromBeginning);
+		if (auth != null) {
+			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, new AuthRemoteEngine(auth), timeoutFromBeginning);
 		} else {
 			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, timeoutFromBeginning);
 		}
 	}
 	
+	public Snmp withCache(SnmpClientCache cache) {
+		this.cache = cache;
+		return this;
+	}
+
 	public void get(final Oid oid, final SnmpClientHandler.Callback.GetCallback getCallback) {
-		final SnmpClient client = client();
+		SnmpClient client;
+		final SnmpClient clientToClose;
+		if (cache == null) {
+			client = client();
+			clientToClose = null;
+		} else {
+			if (auth != null) {
+				client = cache.get(address, auth, timeoutFromBeginning);
+			} else {
+				client = cache.get(address, community, timeoutFromBeginning);
+			}
+			clientToClose = client;
+		}
 		client.connect(new SnmpClientHandler() {
 			@Override
 			public void failed(IOException e) {
@@ -82,13 +101,17 @@ public final class Snmp {
 					@Override
 					public void failed(IOException e) {
 						callback.close();
-						client.close();
+						if (clientToClose != null) {
+							clientToClose.close();
+						}
 						getCallback.failed(e);
 					}
 					@Override
 					public void close() {
 						callback.close();
-						client.close();
+						if (clientToClose != null) {
+							clientToClose.close();
+						}
 						getCallback.close();
 					}
 					@Override

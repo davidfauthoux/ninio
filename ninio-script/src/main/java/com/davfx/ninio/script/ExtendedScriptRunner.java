@@ -17,9 +17,11 @@ import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.InMemoryBuffers;
 import com.davfx.ninio.ping.Ping;
 import com.davfx.ninio.ping.PingClientHandler;
+import com.davfx.ninio.snmp.AuthRemoteSpecification;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.Snmp;
+import com.davfx.ninio.snmp.SnmpClientCache;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 import com.davfx.ninio.ssh.Ssh;
 import com.davfx.ninio.telnet.Telnet;
@@ -34,15 +36,22 @@ import com.google.common.net.HttpHeaders;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class ExtendedScriptRunner implements AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExtendedScriptRunner.class);
 	
+	private static final Config CONFIG = ConfigFactory.load(ExtendedScriptRunner.class.getClassLoader());
+	private static final int MAX_SNMP_CONNECTION_CACHE_SIZE = CONFIG.getInt("ninio.script.snmp.cache.max");
+
 	public final ScriptRunner runner;
 	private final Http http;
 	private final TelnetSharing telnet;
 	private final TelnetSharing ssh;
+	
+	private final SnmpClientCache snmpClientCache;
 
 	public ExtendedScriptRunner(final Queue queue, ReadyFactory tcpReadyFactory, final ReadyFactory udpReadyFactory, final ReadyFactory pingReadyFactory) {
 		runner = new QueueScriptRunner(queue, new ExecutorScriptRunner());
@@ -54,6 +63,8 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 		telnet.override(tcpReadyFactory).withQueue(queue);
 		ssh = new TelnetSharing();
 		ssh.override(tcpReadyFactory).withQueue(queue);
+
+		snmpClientCache = (MAX_SNMP_CONNECTION_CACHE_SIZE == 0) ? null : new SnmpClientCache(queue, udpReadyFactory, MAX_SNMP_CONNECTION_CACHE_SIZE);
 		
 		//
 		
@@ -100,7 +111,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 					return;
 				}
 
-				Snmp snmp = new Snmp().override(udpReadyFactory).withQueue(queue).to(address);
+				Snmp snmp = new Snmp().withCache(snmpClientCache).override(udpReadyFactory).withQueue(queue).to(address);
 				
 				String community = JsonUtils.getString(r, "community", null);
 				if (community != null) {
@@ -112,14 +123,14 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 					JsonObject s = security.getAsJsonObject();
 					JsonObject auth = s.get("authentication").getAsJsonObject();
 					JsonObject priv = s.get("privacy").getAsJsonObject();
-					snmp.withLoginPassword(
+					snmp.withAuth(new AuthRemoteSpecification(
 							JsonUtils.getString(auth, "login", null),
 							JsonUtils.getString(auth, "password", null),
 							JsonUtils.getString(auth, "method", null).toUpperCase(),
 							JsonUtils.getString(priv, "login", null),
 							JsonUtils.getString(priv, "password", null),
 							JsonUtils.getString(priv, "method", null).toUpperCase()
-					);
+						));
 				}
 
 				JsonElement timeout = r.get("timeout");

@@ -43,10 +43,10 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 
 	private static final Config CONFIG = ConfigFactory.load(InternalSnmpSqliteCacheServerReadyFactory.class.getClassLoader());
 
-	private static final double CACHE_EXPIRATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.expiration");
-	private static final double REQUEST_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.timeout");
-	private static final double CHECK_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.check");
-	private static final double REPEAT_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.cache.repeat");
+	private static final double CACHE_EXPIRATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.server.cache.expiration");
+	private static final double REQUEST_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.server.cache.timeout");
+	private static final double CHECK_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.server.cache.check");
+	private static final double REPEAT_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.server.cache.repeat");
 
 	private static final String NO_COMMUNITY = "xxx";
 	

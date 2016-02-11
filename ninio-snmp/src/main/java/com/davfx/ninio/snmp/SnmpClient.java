@@ -2,6 +2,7 @@ package com.davfx.ninio.snmp;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -88,7 +89,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		});
 	}
 	
-	private static final Random RANDOM = new Random(System.currentTimeMillis());
+	private static final Random RANDOM = new SecureRandom();
 
 	private static final class RequestIdProvider {
 		private static final AtomicInteger NEXT = new AtomicInteger(RANDOM.nextInt());
