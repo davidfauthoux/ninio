@@ -60,11 +60,7 @@ public final class Snmp {
 	}
 
 	public SnmpClient client() {
-		if (auth != null) {
-			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, new AuthRemoteEngine(auth), timeoutFromBeginning);
-		} else {
-			return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, timeoutFromBeginning);
-		}
+		return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, auth, timeoutFromBeginning);
 	}
 	
 	public Snmp withCache(SnmpClientCache cache) {
@@ -73,53 +69,55 @@ public final class Snmp {
 	}
 
 	public void get(final Oid oid, final SnmpClientHandler.Callback.GetCallback getCallback) {
-		SnmpClient client;
-		final SnmpClient clientToClose;
 		if (cache == null) {
-			client = client();
-			clientToClose = client;
+			final SnmpClient client = client();
+			client.connect(new SnmpClientHandler() {
+				@Override
+				public void failed(IOException e) {
+					getCallback.failed(e);
+				}
+				@Override
+				public void close() {
+					getCallback.failed(new IOException("Prematurely closed"));
+				}
+				@Override
+				public void launched(final Callback callback) {
+					callback.get(oid, new Callback.GetCallback() {
+						@Override
+						public void failed(IOException e) {
+							callback.close();
+							client.close();
+							getCallback.failed(e);
+						}
+						@Override
+						public void close() {
+							callback.close();
+							client.close();
+							getCallback.close();
+						}
+						@Override
+						public void result(Result result) {
+							getCallback.result(result);
+						}
+					});
+				}
+			});
 		} else {
-			if (auth != null) {
-				client = cache.get(address, auth, timeoutFromBeginning);
-			} else {
-				client = cache.get(address, community, timeoutFromBeginning);
-			}
-			clientToClose = null;
+			SnmpClientHandler.Callback client = cache.get(address, community, auth, timeoutFromBeginning);
+			client.get(oid, new SnmpClientHandler.Callback.GetCallback() {
+				@Override
+				public void failed(IOException e) {
+					getCallback.failed(e);
+				}
+				@Override
+				public void close() {
+					getCallback.close();
+				}
+				@Override
+				public void result(Result result) {
+					getCallback.result(result);
+				}
+			});
 		}
-		client.connect(new SnmpClientHandler() {
-			@Override
-			public void failed(IOException e) {
-				getCallback.failed(e);
-			}
-			@Override
-			public void close() {
-				getCallback.failed(new IOException("Prematurely closed"));
-			}
-			@Override
-			public void launched(final Callback callback) {
-				callback.get(oid, new Callback.GetCallback() {
-					@Override
-					public void failed(IOException e) {
-						callback.close();
-						if (clientToClose != null) {
-							clientToClose.close();
-						}
-						getCallback.failed(e);
-					}
-					@Override
-					public void close() {
-						callback.close();
-						if (clientToClose != null) {
-							clientToClose.close();
-						}
-						getCallback.close();
-					}
-					@Override
-					public void result(Result result) {
-						getCallback.result(result);
-					}
-				});
-			}
-		});
 	}
 }

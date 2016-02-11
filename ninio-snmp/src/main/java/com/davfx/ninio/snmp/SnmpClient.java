@@ -50,12 +50,12 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final Set<InstanceMapper> instanceMappers = new HashSet<>();
 
-	private SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, String community, AuthRemoteEngine authEngine, double timeoutFromBeginning) {
+	public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, String community, AuthRemoteSpecification authRemoteSpecification, double timeoutFromBeginning) {
 		this.queue = queue;
 		this.readyFactory = readyFactory;
 		this.address = address;
 		this.community = community;
-		this.authEngine = authEngine;
+		authEngine = (authRemoteSpecification == null) ? null : new AuthRemoteEngine(authRemoteSpecification);
 		this.timeoutFromBeginning = timeoutFromBeginning;
 		
 		closeable = QueueScheduled.schedule(queue, REPEAT_TIME, new Runnable() {
@@ -71,8 +71,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, String community, double timeoutFromBeginning) {
 		this(queue, readyFactory, address, community, null, timeoutFromBeginning);
 	}
-	public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, AuthRemoteEngine authEngine, double timeoutFromBeginning) {
-		this(queue, readyFactory, address, null, authEngine, timeoutFromBeginning);
+	public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, AuthRemoteSpecification authRemoteSpecification, double timeoutFromBeginning) {
+		this(queue, readyFactory, address, null, authRemoteSpecification, timeoutFromBeginning);
 	}
 	
 	@Override
