@@ -42,7 +42,7 @@ public final class PingClient implements Closeable {
 			@Override
 			public void run() {
 				for (InstanceMapper i : instanceMappers) {
-					i.close();
+					i.closeAll();
 				}
 				instanceMappers.clear();
 			}
@@ -145,9 +145,9 @@ public final class PingClient implements Closeable {
 			instance.instanceId = instanceId;
 		}
 
-		public void close() {
+		public void closeAll() {
 			for (Instance i : instances.values()) {
-				i.close();
+				i.closeAll();
 			}
 			instances.clear();
 		}
@@ -190,16 +190,16 @@ public final class PingClient implements Closeable {
 			this.write = write;
 		}
 		
-		public void close() {
+		public void closeAll() {
 			write.close();
 			
 			if (callback == null) {
 				return;
 			}
 			
-			PingClientHandler.Callback.PingCallback c = callback;
+			//%% PingClientHandler.Callback.PingCallback c = callback;
 			callback = null;
-			c.failed(new IOException("Closed by peer"));
+			//%% c.failed(new IOException("Closed by peer"));
 		}
 		
 		private void handle(double time) {

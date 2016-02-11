@@ -80,12 +80,15 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 		client = clients.remove(key);
 		if (client == null) {
 			client = new SnmpClient(queue, udpReadyFactory, address, community, timeout);
+			LOGGER.debug("Creating SNMP connection: {}", address);
+		} else {
+			LOGGER.debug("Reusing SNMP connection: {}", address);
 		}
 		clients.put(key, client);
 		if (clients.size() > max) {
 			Iterator<Map.Entry<SnmpClientCacheKey, SnmpClient>> it = clients.entrySet().iterator();
 			Map.Entry<SnmpClientCacheKey, SnmpClient> e = it.next();
-			LOGGER.debug("Forcibly closing snmp connection to: {}", e.getKey().address);
+			LOGGER.debug("Forcibly closing SNMP connection to: {}", e.getKey().address);
 			e.getValue().close();
 			it.remove();
 		}
@@ -99,12 +102,15 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 		if (client == null) {
 			AuthRemoteEngine engine = new AuthRemoteEngine(authRemoteSpecification);
 			client = new SnmpClient(queue, udpReadyFactory, address, engine, timeout);
+			LOGGER.debug("Creating SNMP connection: {}", address);
+		} else {
+			LOGGER.debug("Reusing SNMP connection: {}", address);
 		}
 		clients.put(key, client);
 		if (clients.size() > max) {
 			Iterator<Map.Entry<SnmpClientCacheKey, SnmpClient>> it = clients.entrySet().iterator();
 			Map.Entry<SnmpClientCacheKey, SnmpClient> e = it.next();
-			LOGGER.debug("Forcibly closing snmp connection to: {}", e.getKey().address);
+			LOGGER.debug("Forcibly closing SNMP connection to: {}", e.getKey().address);
 			e.getValue().close();
 			it.remove();
 		}
