@@ -259,6 +259,13 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 
 								LOGGER.trace("{}: Request {} with community: {} and oid: {}", address, requestId, community, oid);
 								
+								if (true) {
+									Requesting r = new Requesting(request, bulkLength, oid, connection);
+									cache.requestingByRequestId.put(requestId, r);
+									write.handle(address, sourceBuffer);
+									return;
+								}
+								
 								double now = DateUtils.now();
 								
 								Requesting r = new Requesting(request, bulkLength, oid, connection);
@@ -289,7 +296,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 					
 					@Override
 					public void handle(Address address, ByteBuffer sourceBuffer) {
-						ByteBuffer buffer = sourceBuffer.duplicate();
+						ByteBuffer buffer = sourceBuffer.duplicate(); //TODO pas besoin de duplicate ici
 						int requestId;
 						int errorStatus;
 						int errorIndex;
@@ -324,6 +331,13 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 							LOGGER.trace("Invalid request: {}", requestId, results);
 							return;
 						}
+						
+						if (true) {
+							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, results);
+							r.connection.handle(address, builtBuffer);
+							return;
+						}
+						
 
 						cache.requestingByRequestKey.remove(new RequestKey(r.request, r.oid));
 					

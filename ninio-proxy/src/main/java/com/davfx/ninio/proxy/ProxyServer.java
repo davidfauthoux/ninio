@@ -63,6 +63,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 			serverSocket.close();
 		} catch (IOException ioe) {
 		}
+		proxyServerSide.close();
 	}
 	
 	public ReadyFactory datagramReadyFactory() {
