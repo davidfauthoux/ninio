@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Charsets;
+import com.google.common.io.BaseEncoding;
 
 final class AuthRemoteEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AuthRemoteEngine.class);
@@ -89,6 +90,7 @@ final class AuthRemoteEngine {
 	}
 
 	public void setId(byte[] id) {
+		LOGGER.trace("Auth engine ID: {} -> {}", (this.id == null) ? null : BaseEncoding.base16().encode(this.id), BaseEncoding.base16().encode(id));
 		this.id = id;
 	}
 	public void setEncryptionParameters(byte[] encryptionParameters) {
@@ -100,6 +102,7 @@ final class AuthRemoteEngine {
 	}
 
 	public void setBootCount(int bootCount) {
+		LOGGER.trace("Auth engine boot count: {} -> {}", this.bootCount, bootCount);
 		this.bootCount = bootCount;
 	}
 
@@ -115,6 +118,7 @@ final class AuthRemoteEngine {
 		}
 	}
 	public void resetTime(int time) {
+		LOGGER.trace("Auth engine reset time: {} -> {}", this.time, time);
 		timeResetAt = System.currentTimeMillis();
 		this.time = time;
 	}

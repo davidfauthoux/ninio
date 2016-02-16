@@ -133,6 +133,7 @@ public final class HttpService implements AutoCloseable, Closeable {
 										charset = Charsets.UTF_8;
 									}
 									int l = post.waitFor();
+									LOGGER.trace("Post size: {} bytes", l);
 									byte[] b = new byte[l];
 									try {
 										try (DataInputStream in = new DataInputStream(post)) {

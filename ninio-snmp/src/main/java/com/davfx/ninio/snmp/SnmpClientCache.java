@@ -119,7 +119,7 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 		SnmpClientCacheKey key = new SnmpClientCacheKey(address, community, authRemoteSpecification);
 		c = clients.remove(key);
 		if (c == null) {
-			SnmpClient client = new SnmpClient(queue, udpReadyFactory, address, community, authRemoteSpecification, timeout);
+			SnmpClient client = new SnmpClient(queue, udpReadyFactory, address, community, (authRemoteSpecification == null) ? null : new AuthRemoteEngine(authRemoteSpecification), timeout);
 			LOGGER.debug("Creating SNMP connection: {}", address);
 			c = new SnmpClientElement(client);
 		} else {

@@ -328,7 +328,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 						
 						Requesting r = cache.requestingByRequestId.get(requestId);
 						if (r == null) {
-							LOGGER.trace("Invalid request: {}", requestId, results);
+							LOGGER.trace("Invalid request ID: {}", requestId, results);
 							return;
 						}
 						
@@ -395,7 +395,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 				nextErrorStatus = errStatus;
 				nextErrorIndex = errIndex;
 			} else {
-				LOGGER.error("Invalid request: {}", request);
+				LOGGER.error("Invalid request code: {}", request);
 				return;
 			}
 			results = null;

@@ -52,7 +52,7 @@ final class Version3PacketParser {
 				authEngine.setBootCount(secBer.readInteger());
 				authEngine.resetTime(secBer.readInteger());
 				String login = BerPacketUtils.string(secBer.readBytes());
-				if (!login.equals(authEngine.getAuthLogin())) {
+				if (((securityFlags & BerConstants.VERSION_3_AUTH_FLAG) != 0) && !login.equals(authEngine.getAuthLogin())) {
 					throw new IOException("Bad login: " + login + " should be: " + authEngine.getAuthLogin());
 				}
 				secBer.readBytes();
@@ -77,25 +77,32 @@ final class Version3PacketParser {
 			pdu.readBytes();
 			
 			if (!authEngine.isReady()) {
+				LOGGER.trace("Engine not ready");
 				if (ber.beginReadSequence() != BerConstants.REPORT) {
 					throw new IOException("Not a report packet");
 				}
 				{
 					requestId = pdu.readInteger();
-					pdu.readInteger();
-					pdu.readInteger();
+					LOGGER.trace("REPORT <- requestId = {}", requestId);
+					{
+						int errorStatus = pdu.readInteger();
+						int errorIndex = pdu.readInteger();
+						LOGGER.trace("REPORT error = {}/{}", errorStatus, errorIndex);
+					}
 
 					errorStatus = BerConstants.ERROR_STATUS_RETRY;
 					errorIndex = 0;
+					LOGGER.trace("REPORT error replaced = {}/{}", errorStatus, errorIndex);
 	
 					pdu.beginReadSequence();
 					{
 						while (pdu.hasRemainingInSequence()) {
 							pdu.beginReadSequence();
 							{
-								pdu.readOid();
-								pdu.readValue();
+								Oid oid = pdu.readOid();
+								String value = pdu.readValue();
 								// pdu.readOidValue();
+								LOGGER.trace("<- {} = {}", oid, value);
 							}
 							pdu.endReadSequence();
 						}
@@ -107,22 +114,24 @@ final class Version3PacketParser {
 				int s = pdu.beginReadSequence();
 				if (s == BerConstants.REPORT) {
 					requestId = pdu.readInteger();
+					LOGGER.trace("REPORT <- requestId = {}", requestId);
 					int errorStatus = pdu.readInteger();
 					int errorIndex = pdu.readInteger();
-	
+					LOGGER.trace("REPORT error = {}/{}", errorStatus, errorIndex);
+
 					pdu.beginReadSequence();
 					{
 						while (pdu.hasRemainingInSequence()) {
 							pdu.beginReadSequence();
 							{
 								Oid oid = pdu.readOid();
+								String value = pdu.readValue();
+								LOGGER.trace("<- {} = {}", oid, value);
 								if (AUTH_ERROR_OID.isPrefixOf(oid)) {
 									LOGGER.error("Authentication failed ({}), requestId = {}", oid, requestId);
-									// There is no wait to report it to the user because requestId is 0
 									errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;
 									errorIndex = 0;
 								}
-								String value = pdu.readValue();
 								// OidValue value = pdu.readOidValue();
 								results.add(new Result(oid, value));
 							}
@@ -138,9 +147,11 @@ final class Version3PacketParser {
 						throw new IOException("Not a response packet");
 					}
 					requestId = pdu.readInteger();
+					LOGGER.trace("RESPONSE <- requestId = {}", requestId);
 					errorStatus = pdu.readInteger();
 					errorIndex = pdu.readInteger();
-	
+					LOGGER.trace("RESPONSE error = {}/{}", errorStatus, errorIndex);
+
 					pdu.beginReadSequence();
 					{
 						while (pdu.hasRemainingInSequence()) {
@@ -148,6 +159,7 @@ final class Version3PacketParser {
 							{
 								Oid oid = pdu.readOid();
 								String value = pdu.readValue();
+								LOGGER.trace("<- {} = {}", oid, value);
 								// OidValue value = pdu.readOidValue();
 								results.add(new Result(oid, value));
 							}

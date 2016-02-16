@@ -23,7 +23,8 @@ public final class Snmp {
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = null;
 	private String community = CONFIG.getString("ninio.snmp.defaultCommunity");
-	private AuthRemoteSpecification auth = null;
+	private AuthRemoteSpecification authRemoteSpecification = null;
+	private AuthRemoteEngine authRemoteEngine = null;
 
 	private SnmpClientCache cache = null;
 	
@@ -54,17 +55,21 @@ public final class Snmp {
 		this.community = community;
 		return this;
 	}
-	public Snmp withAuth(AuthRemoteSpecification auth) {
-		this.auth = auth;
+	public Snmp withAuth(AuthRemoteSpecification authRemoteSpecification) {
+		this.authRemoteSpecification = authRemoteSpecification;
+		if (cache == null) {
+			authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+		}
 		return this;
 	}
 
 	public SnmpClient client() {
-		return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, auth, timeoutFromBeginning);
+		return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, authRemoteEngine, timeoutFromBeginning);
 	}
 	
 	public Snmp withCache(SnmpClientCache cache) {
 		this.cache = cache;
+		authRemoteEngine = null;
 		return this;
 	}
 
@@ -103,7 +108,7 @@ public final class Snmp {
 				}
 			});
 		} else {
-			SnmpClientHandler.Callback client = cache.get(address, community, auth, timeoutFromBeginning);
+			SnmpClientHandler.Callback client = cache.get(address, community, authRemoteSpecification, timeoutFromBeginning);
 			client.get(oid, new SnmpClientHandler.Callback.GetCallback() {
 				@Override
 				public void failed(IOException e) {

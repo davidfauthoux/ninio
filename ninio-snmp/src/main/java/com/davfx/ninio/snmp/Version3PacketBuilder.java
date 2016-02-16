@@ -56,9 +56,9 @@ final class Version3PacketBuilder {
 		
 		boolean encrypt = false;
 		int securityFlags = 0x0;
-		if (authEngine.getAuthLogin() != null) {
-			securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
-			if (authEngine.isReady()) {
+		if (authEngine.isReady()) {
+			if (authEngine.getAuthLogin() != null) {
+				securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
 				if (authEngine.getPrivLogin() != null) {
 					securityFlags |= BerConstants.VERSION_3_PRIV_FLAG;
 					encrypt = true;
@@ -66,7 +66,7 @@ final class Version3PacketBuilder {
 			}
 		}
 		securityFlags |= BerConstants.VERSION_3_REPORTABLE_FLAG;
-		
+	
 		SequenceBerPacket root = new SequenceBerPacket(BerConstants.SEQUENCE)
 			.add(new IntegerBerPacket(BerConstants.VERSION_3))
 			.add(new SequenceBerPacket(BerConstants.SEQUENCE)
@@ -87,7 +87,7 @@ final class Version3PacketBuilder {
 				.add(priv)));
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
-			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
+			.add(new BytesBerPacket(ByteBuffer.wrap(authEngine.getId())))
 			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
 			.add(new SequenceBerPacket(type)
 				.add(new IntegerBerPacket(requestId))
