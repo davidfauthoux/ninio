@@ -87,7 +87,7 @@ final class Version3PacketBuilder {
 				.add(priv)));
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
-			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
+			.add(new BytesBerPacket(ByteBuffer.wrap(authEngine.getId())))
 			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
 			.add(new SequenceBerPacket(type)
 				.add(new IntegerBerPacket(requestId))
