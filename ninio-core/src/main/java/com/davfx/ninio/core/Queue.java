@@ -24,21 +24,27 @@ public final class Queue implements AutoCloseable {
 	
 	private static final double WAIT_ON_SELECTOR_ERROR = 0.5d;
 	
+	private final String name;
 	private final long threadId;
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 
 	public Queue() {
+		this(null);
+	}
+	public Queue(final String name) {
+		this.name = name;
+		
 		Selector s;
 		try {
 			s = SelectorProvider.provider().openSelector();
 		} catch (IOException ioe) {
-			LOGGER.error("Could not create selector", ioe);
+			LOGGER.error("Could not create selector (name = {})", name, ioe);
 			throw new RuntimeException(ioe);
 		}
 		selector = s;
 
-		Thread t = new ClassThreadFactory(Queue.class).newThread(new Runnable() {
+		Thread t = new ClassThreadFactory(Queue.class, name).newThread(new Runnable() {
 			@Override
 			public void run() {
 				while (true) {
@@ -54,13 +60,13 @@ public final class Queue implements AutoCloseable {
 								try {
 									((SelectionKeyVisitor) key.attachment()).visit(key);
 								} catch (Throwable e) {
-									LOGGER.error("Error in event handling", e);
+									LOGGER.error("Error in event handling (name = {})", name, e);
 								}
 							}
 							s.clear();
 						}
 					} catch (Throwable e) {
-						LOGGER.error("Error in selector", e);
+						LOGGER.error("Error in selector (name = {})", name, e);
 						try {
 							Thread.sleep((long) (WAIT_ON_SELECTOR_ERROR * 1000d));
 						} catch (InterruptedException ie) {
@@ -72,7 +78,7 @@ public final class Queue implements AutoCloseable {
 						try {
 							r.run();
 						} catch (Throwable e) {
-							LOGGER.error("Error in running task", e);
+							LOGGER.error("Error in running task (name = {})", name, e);
 						}
 					}
 				}
@@ -94,11 +100,11 @@ public final class Queue implements AutoCloseable {
 
 	public void check() {
 		if (!isInside()) {
-			throw new IllegalStateException("Should be in queue thread");
+			throw new IllegalStateException("Should be in queue thread (" + name + ")");
 		}
 	}
 	public Wait finish() {
-		LOGGER.trace("Finishing queue");
+		LOGGER.trace("Finishing queue (name = {})", name);
 		Wait wait = new Wait();
 		post(wait);
 		return wait;
@@ -112,7 +118,7 @@ public final class Queue implements AutoCloseable {
 
 		toRun.add(r);
 		if (!selector.isOpen()) {
-			LOGGER.warn("Selector closed");
+			LOGGER.warn("Selector closed (name = {})", name);
 			return;
 		}
 		selector.wakeup();
@@ -130,7 +136,7 @@ public final class Queue implements AutoCloseable {
 	@Override
 	public void close() {
 		if (isInside()) {
-			throw new IllegalStateException("Should not be in queue thread");
+			throw new IllegalStateException("Should not be in queue thread (name = " + name + ")");
 		}
 		try {
 			selector.close();

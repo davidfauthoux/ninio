@@ -109,7 +109,17 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 	
 	@Override
 	public void close() {
-		for (SnmpClientElement c : clients.values()) {
+		for (Map.Entry<SnmpClientCacheKey, SnmpClientElement> e : clients.entrySet()) {
+			LOGGER.debug("Closing snmp client in cache: {}", e.getKey().address);
+			final SnmpClientElement c = e.getValue();
+			queue.post(new Runnable() {
+				@Override
+				public void run() {
+					if (c.callback != null) {
+						c.callback.close();
+					}
+				}
+			});
 			c.client.close();
 		}
 	}
