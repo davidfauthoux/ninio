@@ -2,6 +2,7 @@ package com.davfx.ninio.core;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedSelectorException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
@@ -55,15 +56,22 @@ public final class Queue implements AutoCloseable {
 						selector.select();
 
 						if (selector.isOpen()) {
-							Set<SelectionKey> s = selector.selectedKeys();
-							for (SelectionKey key : s) {
-								try {
-									((SelectionKeyVisitor) key.attachment()).visit(key);
-								} catch (Throwable e) {
-									LOGGER.error("Error in event handling (name = {})", name, e);
-								}
+							Set<SelectionKey> s;
+							try {
+								s = selector.selectedKeys();
+							} catch (ClosedSelectorException ce) {
+								s = null;
 							}
-							s.clear();
+							if (s != null) {
+								for (SelectionKey key : s) {
+									try {
+										((SelectionKeyVisitor) key.attachment()).visit(key);
+									} catch (Throwable e) {
+										LOGGER.error("Error in event handling (name = {})", name, e);
+									}
+								}
+								s.clear();
+							}
 						}
 					} catch (Throwable e) {
 						LOGGER.error("Error in selector (name = {})", name, e);
