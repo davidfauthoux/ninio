@@ -14,6 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,8 +116,8 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 							OutputStream sout;
 							InputStream sin;
 							try {
-								sout = socket.getOutputStream();
-								sin = socket.getInputStream();
+								sout = new GZIPOutputStream(socket.getOutputStream(), true);
+								sin = new GZIPInputStream(socket.getInputStream());
 							} catch (IOException ee) {
 								try {
 									socket.close();

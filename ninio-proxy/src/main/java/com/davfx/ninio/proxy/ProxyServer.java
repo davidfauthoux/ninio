@@ -3,6 +3,8 @@ package com.davfx.ninio.proxy;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -15,6 +17,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -134,8 +138,22 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 								final boolean[] closed = new boolean[] { false };
 	
 								try {
-									final DataOutputStream out = new DataOutputStream(socket.getOutputStream());
-									DataInputStream in = new DataInputStream(socket.getInputStream());
+									OutputStream sout;
+									InputStream sin;
+									try {
+										sout = new GZIPOutputStream(socket.getOutputStream(), true);
+										sin = new GZIPInputStream(socket.getInputStream());
+									} catch (IOException ee) {
+										try {
+											socket.close();
+										} catch (IOException se) {
+										}
+										throw ee;
+									}
+									
+									final DataOutputStream out = new DataOutputStream(sout);
+									DataInputStream in = new DataInputStream(sin);
+
 									LOGGER.debug("Accepted connection from: {}", socket.getInetAddress());
 	
 									while (true) {
