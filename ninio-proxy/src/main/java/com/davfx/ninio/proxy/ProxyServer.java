@@ -30,6 +30,7 @@ import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.util.ClassThreadFactory;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.Pair;
+import com.davfx.util.Wait;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -47,6 +48,8 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 	private final Set<String> hostsToFilter = new HashSet<>();
 	private final ServerSocket serverSocket;
 	
+	private List<Socket> sockets = new LinkedList<>();
+	
 	public ProxyServer(Queue queue, Address address, int maxNumberOfSimultaneousClients) throws IOException {
 		proxyServerSide = new BaseServerSide(queue);
 		LOGGER.debug("Proxy server on {}", address);
@@ -57,12 +60,31 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 
 	@Override
 	public void close() {
-		listenExecutor.shutdown();
-		clientExecutor.shutdown();
+		LOGGER.debug("Closing proxy server socket");
 		try {
 			serverSocket.close();
 		} catch (IOException ioe) {
 		}
+
+		final Wait lock = new Wait();
+		listenExecutor.execute(new Runnable() {
+			@Override
+			public void run() {
+				for (Socket s : sockets) {
+					try {
+						s.close();
+					} catch (IOException ioe) {
+					}
+				}
+				sockets = null;
+				lock.run();
+			}
+		});
+		lock.waitFor();
+		listenExecutor.shutdown();
+		
+		clientExecutor.shutdown();
+		
 		proxyServerSide.close();
 	}
 	
@@ -91,6 +113,14 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 				try {
 					while (true) {
 						final Socket socket = serverSocket.accept();
+						if (sockets == null) {
+							try {
+								socket.close();
+							} catch (IOException ce) {
+							}
+							throw new IOException("Closed");
+						}
+						sockets.add(socket);
 						try {
 							socket.setKeepAlive(true);
 							socket.setSoTimeout((int) (READ_TIMEOUT * 1000d));

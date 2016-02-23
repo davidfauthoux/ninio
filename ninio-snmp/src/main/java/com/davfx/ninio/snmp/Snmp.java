@@ -59,6 +59,8 @@ public final class Snmp {
 		this.authRemoteSpecification = authRemoteSpecification;
 		if (cache == null) {
 			authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+		} else {
+			authRemoteEngine = null;
 		}
 		return this;
 	}
@@ -69,7 +71,11 @@ public final class Snmp {
 	
 	public Snmp withCache(SnmpClientCache cache) {
 		this.cache = cache;
-		authRemoteEngine = null;
+		if (cache == null) {
+			authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+		} else {
+			authRemoteEngine = null;
+		}
 		return this;
 	}
 
