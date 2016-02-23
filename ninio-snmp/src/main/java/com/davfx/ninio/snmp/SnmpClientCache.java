@@ -65,6 +65,7 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 		public final SnmpClient client;
 		public final List<Task> tasks = new LinkedList<>();
 		public SnmpClientHandler.Callback callback = null;
+		public boolean closed = false; // Multi-thread access
 		public SnmpClientElement(SnmpClient client) {
 			this.client = client;
 			
@@ -75,6 +76,7 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 						t.callback.failed(e);
 					}
 					tasks.clear();
+					closed = true;
 				}
 				
 				@Override
@@ -128,6 +130,10 @@ public final class SnmpClientCache implements Closeable, AutoCloseable {
 		SnmpClientElement c;
 		SnmpClientCacheKey key = new SnmpClientCacheKey(address, community, authRemoteSpecification);
 		c = clients.remove(key);
+		if ((c != null) && c.closed) {
+			c.client.close();
+			c = null;
+		}
 		if (c == null) {
 			SnmpClient client = new SnmpClient(queue, udpReadyFactory, address, community, (authRemoteSpecification == null) ? null : new AuthRemoteEngine(authRemoteSpecification), timeout);
 			LOGGER.trace("Creating SNMP connection: {}", address);
