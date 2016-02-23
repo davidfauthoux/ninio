@@ -161,6 +161,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					public void connected(final FailableCloseableByteBufferHandler write) {
 						final SnmpWriter w = new SnmpWriter(write, community, authEngine);
 						
+						instanceMapper.write = write;
+						
 						clientHandler.launched(new SnmpClientHandler.Callback() {
 							@Override
 							public void close() {
@@ -195,6 +197,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		private final Map<Integer, Instance> instances = new HashMap<>();
 		private RequestIdProvider requestIdProvider;
 		
+		private FailableCloseableByteBufferHandler write = null;
+		
 		public InstanceMapper(Address address, RequestIdProvider requestIdProvider) {
 			// super(InstanceMapper.class);
 			this.address = address;
@@ -218,6 +222,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		public void closeAll() {
 			for (Instance i : instances.values()) {
 				i.closeAll();
+			}
+			if (write != null) {
+				write.close();
 			}
 			instances.clear();
 		}
