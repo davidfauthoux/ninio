@@ -280,31 +280,40 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		public void get(Address to, int instanceId, Oid oid) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);
-				LOGGER.trace("Writing GET: {} #{} ({})", oid, instanceId, community);
-				write.handle(to, builder.getBuffer());
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
+				write.handle(to, b);
 			} else {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, oid);
-				write.handle(to, builder.getBuffer());
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
+				write.handle(to, b);
 			}
 		}
 		public void getNext(Address to, int instanceId, Oid oid) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, oid);
-				LOGGER.trace("Writing GETNEXT: {} #{} ({})", oid, instanceId, community);
-				write.handle(to, builder.getBuffer());
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
+				write.handle(to, b);
 			} else {
 				Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, oid);
-				write.handle(to, builder.getBuffer());
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
+				write.handle(to, b);
 			}
 		}
 		public void getBulk(Address to, int instanceId, Oid oid, int bulkLength) {
 			if (authEngine == null) {
 				Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, bulkLength);
-				LOGGER.trace("Writing GETBULK: {} #{} ({})", oid, instanceId, community);
-				write.handle(to, builder.getBuffer());
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
+				write.handle(to, b);
 			} else {
 				Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, oid, bulkLength);
-				write.handle(to, builder.getBuffer());
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
+				write.handle(to, b);
 			}
 		}
 	}
