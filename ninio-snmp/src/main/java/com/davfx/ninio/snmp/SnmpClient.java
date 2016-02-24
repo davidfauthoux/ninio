@@ -124,6 +124,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				ready.connect(address, new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
+						LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
 						int instanceId;
 						int errorStatus;
 						int errorIndex;
