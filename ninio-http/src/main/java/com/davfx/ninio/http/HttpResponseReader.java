@@ -35,7 +35,7 @@ final class HttpResponseReader {
 	private int responseCode;
 	private String responseReason;
 	private final Multimap<String, String> headers = HashMultimap.create();
-	private boolean failClose = false;
+	//%% private boolean failClose = false;
 	private boolean closed = false;
 	private boolean ended = false;
 	private boolean http11;
@@ -82,6 +82,8 @@ final class HttpResponseReader {
 	}
 	
 	public void close() {
+		failed(new IOException("Connection reset by peer"));
+		/*%%
 		if (failClose) {
 			if (!closed) {
 				closed = true;
@@ -93,6 +95,7 @@ final class HttpResponseReader {
 				handler.close();
 			}
 		}
+		*/
 	}
 	
 	public void failed(IOException e) {
@@ -112,7 +115,7 @@ final class HttpResponseReader {
 				throw new IOException("Too much data");
 			}
 			
-			failClose = true;
+			//%% failClose = true;
 			while (!responseLineRead) {
 				String line = lineReader.handle(buffer);
 				if (line == null) {
@@ -186,7 +189,7 @@ final class HttpResponseReader {
 						}
 						chunkFooterRead = true;
 						chunkHeaderRead = false;
-						failClose = false;
+						//%% failClose = false;
 						if (chunkLength == 0) {
 							if (recyclingHandler != null) {
 								if (keepAlive) {
@@ -195,9 +198,9 @@ final class HttpResponseReader {
 									recyclingHandler.close();
 								}
 							}
+							ended = true;
 							if (!closed) {
 								closed = true;
-								ended = true;
 								handler.close();
 							}
 						}
@@ -208,7 +211,7 @@ final class HttpResponseReader {
 						if (line == null) {
 							return;
 						}
-						failClose = true;
+						//%% failClose = true;
 						/*%%
 						int i = line.indexOf(HttpSpecification.EXTENSION_SEPARATOR);
 						if (i > 0) { // extensions ignored
@@ -248,7 +251,7 @@ final class HttpResponseReader {
 						handleContent(buffer, toRead, toRead);
 					}
 					if (countRead == contentLength) {
-						failClose = false;
+						//%% failClose = false;
 						if (recyclingHandler != null) {
 							if (keepAlive) {
 								recyclingHandler.recycle();
@@ -263,7 +266,7 @@ final class HttpResponseReader {
 						}
 					}
 				} else {
-					failClose = false;
+					//%% failClose = false;
 					handleContent(buffer, -1, -1);
 				}
 
