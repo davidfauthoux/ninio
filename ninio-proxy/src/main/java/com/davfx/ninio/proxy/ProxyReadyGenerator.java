@@ -176,7 +176,7 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 																	out.close();
 																} catch (IOException e) {
 																}
-																LOGGER.trace("Connection lost", ioe);
+																//%% LOGGER.trace("Connection lost", ioe);
 															}
 														}
 														
