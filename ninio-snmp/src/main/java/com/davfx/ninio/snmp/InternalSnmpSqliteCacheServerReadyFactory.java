@@ -105,7 +105,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 				try (PreparedStatement s = sqlConnection.prepareStatement("DROP TABLE IF EXISTS `next`")) {
 					s.executeUpdate();
 				}
-				try (PreparedStatement s = sqlConnection.prepareStatement("CREATE TABLE `data` (`address` TEXT, `oid` TEXT, `timestamp` DOUBLE, `errorStatus` INT, `errorIndex` INT, `value` TEXT, `lastOfBulk` BOOLEAN, PRIMARY KEY (`address`, `oid`))")) {
+				try (PreparedStatement s = sqlConnection.prepareStatement("CREATE TABLE `data` (`address` TEXT, `oid` TEXT, `timestamp` DOUBLE, `errorStatus` INT, `errorIndex` INT, `value` TEXT, `firstOfBulk` BOOLEAN, `lastOfBulk` BOOLEAN, PRIMARY KEY (`address`, `oid`))")) {
 					s.executeUpdate();
 				}
 				try (PreparedStatement s = sqlConnection.prepareStatement("CREATE TABLE `next` (`address` TEXT, `oid` TEXT, `timestamp` DOUBLE, `nextErrorStatus` INT, `nextErrorIndex` INT, PRIMARY KEY (`address`, `oid`))")) {
@@ -140,7 +140,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 						
 						if ((now - requestTimestamp) > REQUEST_TIMEOUT) {
 							LOGGER.trace("Timeout: {}/{}", address, requestKey.oid);
-							set(cache, address, requestKey.oid, requestKey.request, BerConstants.ERROR_STATUS_TIMEOUT, 0, null);
+							setError(cache, address, requestKey.oid, requestKey.request, BerConstants.ERROR_STATUS_TIMEOUT, 0);
 							requestingIterator.remove();
 							shouldSolve = true;
 						}
@@ -259,12 +259,14 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 
 								LOGGER.trace("{}: Request {} with community: {} and oid: {}", address, requestId, community, oid);
 								
-								if (true) {
+								/*%%
+								if (false) {
 									Requesting r = new Requesting(request, bulkLength, oid, connection);
 									cache.requestingByRequestId.put(requestId, r);
 									write.handle(address, sourceBuffer);
 									return;
 								}
+								*/
 								
 								double now = DateUtils.now();
 								
@@ -295,8 +297,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 					}
 					
 					@Override
-					public void handle(Address address, ByteBuffer sourceBuffer) {
-						ByteBuffer buffer = sourceBuffer.duplicate(); //TODO pas besoin de duplicate ici
+					public void handle(Address address, ByteBuffer buffer) {
 						int requestId;
 						int errorStatus;
 						int errorIndex;
@@ -314,14 +315,18 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 						
 						if (errorStatus == 0) {
 							// We scan and remove opaque values
+							List<Result> filteredResults = new LinkedList<>();
 							for (Result r : results) {
-								if (r.getValue() == null) {
-									errorStatus = BerConstants.NO_SUCH_NAME_ERROR;
-									errorIndex = 0;
-									results = null;
-									break;
+								if (r.getValue() != null) {
+									filteredResults.add(r);
 								}
 							}
+							results = filteredResults;
+						}
+						if (!results.iterator().hasNext()) {
+							errorStatus = BerConstants.NO_SUCH_NAME_ERROR;
+							errorIndex = 0;
+							results = null;
 						}
 						
 						LOGGER.trace("Response for {}: {}:{}/{} ({})", requestId, errorStatus, errorIndex, results, address);
@@ -332,16 +337,27 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 							return;
 						}
 						
-						if (true) {
+						/*%%%
+						if (false) {
 							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, results);
 							r.connection.handle(address, builtBuffer);
 							return;
 						}
-						
+						*/
 
 						cache.requestingByRequestKey.remove(new RequestKey(r.request, r.oid));
 					
-						set(cache, address, r.oid, r.request, errorStatus, errorIndex, results);
+						if (errorStatus == 0) {
+							setResults(cache, address, r.oid, r.request, results);
+						} else {
+							if (r.request == BerConstants.GET) {
+								setError(cache, address, r.oid, r.request, errorStatus, errorIndex);
+							} else if ((r.request == BerConstants.GETNEXT) || (r.request == BerConstants.GETBULK)) {
+								setNextError(cache, address, r.oid, r.request, errorStatus, errorIndex);
+							} else {
+								LOGGER.error("Invalid request code: {}", r.request);
+							}
+						}
 						
 						Iterator<Map.Entry<Integer, Requesting>> i = cache.requestingByRequestId.entrySet().iterator();
 						while (i.hasNext()) {
@@ -363,84 +379,74 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 		});
 	}
 	
-	private void set(Cache cache, Address address, Oid oid, int request, int errStatus, int errIndex, Iterable<Result> res) {
+	private void setError(Cache cache, Address address, Oid oid, int request, int errorStatus, int errorIndex) {
 		double now = DateUtils.now();
 		
-		int errorStatus;
-		int errorIndex;
-		int nextErrorStatus;
-		int nextErrorIndex;
-		Iterable<Result> results;
-		
-		if (errStatus == 0) {
-			errorStatus = 0;
-			errorIndex = 0;
-			nextErrorStatus = 0;
-			nextErrorIndex = 0;
-			results = res;
-		} else {
-			if (request == BerConstants.GET) {
-				errorStatus = errStatus;
-				errorIndex = errIndex;
-				nextErrorStatus = 0;
-				nextErrorIndex = 0;
-			} else if (request == BerConstants.GETNEXT) {
-				errorStatus = 0;
-				errorIndex = 0;
-				nextErrorStatus = errStatus;
-				nextErrorIndex = errIndex;
-			} else if (request == BerConstants.GETBULK) {
-				errorStatus = 0;
-				errorIndex = 0;
-				nextErrorStatus = errStatus;
-				nextErrorIndex = errIndex;
-			} else {
-				LOGGER.error("Invalid request code: {}", request);
-				return;
+		LOGGER.trace("Set GET error in cache: oid = {}, errorStatus = {}", oid, errorStatus);
+		try {
+			try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `data` (`address`, `oid`, `timestamp`, `errorStatus`, `errorIndex`, `value`, `firstOfBulk`, `lastOfBulk`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, oid.toString());
+				s.setDouble(k++, now);
+				s.setInt(k++, errorStatus);
+				s.setInt(k++, errorIndex);
+				s.setString(k++, null);
+				s.setBoolean(k++, true);
+				s.setBoolean(k++, true);
+				s.executeUpdate();
 			}
-			results = null;
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
 		}
+	}
+	
+	private void setNextError(Cache cache, Address address, Oid oid, int request, int errorStatus, int errorIndex) {
+		double now = DateUtils.now();
 		
-		if (results == null) {
-			if (nextErrorStatus != 0) {
-				LOGGER.trace("Set next error in cache: {} = {}/{}", oid, errorStatus, nextErrorStatus);
-				try {
-					try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `next` (`address`, `oid`, `timestamp`, `nextErrorStatus`, `nextErrorIndex`) VALUES (?, ?, ?, ?, ?)")) {
+		LOGGER.trace("Set next error in cache: oid = {}, errorStatus = {}", oid, errorStatus);
+		try {
+			try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `next` (`address`, `oid`, `timestamp`, `nextErrorStatus`, `nextErrorIndex`) VALUES (?, ?, ?, ?, ?)")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, oid.toString());
+				s.setDouble(k++, now);
+				s.setInt(k++, errorStatus);
+				s.setInt(k++, errorIndex);
+				s.executeUpdate();
+			}
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
+		}
+	}
+	
+	private void setResults(Cache cache, Address address, Oid oid, int request, Iterable<Result> results) {
+		double now = DateUtils.now();
+		
+		try {
+			Oid last = null;
+			try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `data` (`address`, `oid`, `timestamp`, `errorStatus`, `errorIndex`, `value`, `firstOfBulk`, `lastOfBulk`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+				{
+					Iterator<Result> responseIterator = results.iterator();
+					if (!responseIterator.hasNext() || !responseIterator.next().getOid().equals(oid)) {
+						LOGGER.trace("Not last in cache: oid = {}", oid);
 						int k = 1;
 						s.setString(k++, address.toString());
 						s.setString(k++, oid.toString());
 						s.setDouble(k++, now);
-						s.setInt(k++, nextErrorStatus);
-						s.setInt(k++, nextErrorIndex);
-						s.executeUpdate();
-					}
-				} catch (SQLException se) {
-					LOGGER.error("SQL error", se);
-				}
-			} else {
-				LOGGER.trace("Set error in cache: {} = {}/{}", oid, errorStatus, nextErrorStatus);
-				try {
-					try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `data` (`address`, `oid`, `timestamp`, `errorStatus`, `errorIndex`, `value`, `lastOfBulk`) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
-						int k = 1;
-						s.setString(k++, address.toString());
-						s.setString(k++, oid.toString());
-						s.setDouble(k++, now);
-						s.setInt(k++, errorStatus);
-						s.setInt(k++, errorIndex);
+						s.setInt(k++, 0);
+						s.setInt(k++, 0);
 						s.setString(k++, null);
 						s.setBoolean(k++, true);
-						s.executeUpdate();
+						s.setBoolean(k++, !responseIterator.hasNext());
+						s.addBatch();
 					}
-				} catch (SQLException se) {
-					LOGGER.error("SQL error", se);
 				}
-			}
-		} else {
-			try {
-				try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `data` (`address`, `oid`, `timestamp`, `errorStatus`, `errorIndex`, `value`, `lastOfBulk`) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+				{
 					Iterator<Result> responseIterator = results.iterator();
 					while (responseIterator.hasNext()) {
 						Result result = responseIterator.next();
+						last = result.getOid();
 						LOGGER.trace("Set value in cache: {} = {}", result.getOid(), result.getValue());
 						int k = 1;
 						s.setString(k++, address.toString());
@@ -449,181 +455,256 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 						s.setInt(k++, 0);
 						s.setInt(k++, 0);
 						s.setString(k++, result.getValue());
+						s.setBoolean(k++, false);
 						s.setBoolean(k++, !responseIterator.hasNext());
 						s.addBatch();
 					}
-					s.executeBatch();
 				}
-			} catch (SQLException se) {
-				LOGGER.error("SQL error", se);
+				s.executeBatch();
 			}
+			if (last != null) {
+				try (PreparedStatement s = sqlConnection.prepareStatement("DELETE FROM `next` WHERE `address` = ? AND `oid` >= ? AND `oid` < ?")) {
+					int k = 1;
+					s.setString(k++, address.toString());
+					s.setString(k++, oid.toString());
+					s.setString(k++, last.toString());
+					s.executeUpdate();
+				}
+			}
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
 		}
 	}
-	
-	private boolean solve(Address address, Cache cache, int requestId, Requesting r) {
+
+	private boolean solveGet(Address address, Cache cache, int requestId, Requesting r) {
 		double now = DateUtils.now();
 		double expiredTimestamp = now - CACHE_EXPIRATION;
 		
-		if (r.request == BerConstants.GET) {
-			LOGGER.trace("Want to solve for GET {} ({})", r.oid, requestId);
-			try {
-				try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `errorStatus`, `errorIndex`, `value` FROM `data` WHERE `address`= ? AND `oid` = ? AND `timestamp` >= ?")) {
-					int k = 1;
-					s.setString(k++, address.toString());
-					s.setString(k++, r.oid.toString());
-					s.setDouble(k++, expiredTimestamp);
-					ResultSet rs = s.executeQuery();
-					while (rs.next()) {
-						Oid oid = new Oid(rs.getString("oid"));
-						int errorStatus = rs.getInt("errorStatus");
-						int errorIndex = rs.getInt("errorIndex");
-						String value = rs.getString("value");
-						if (errorStatus != 0) {
-							LOGGER.trace("Error for GET {}: {} ({})", r.oid, errorStatus, requestId);
-							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
-							r.connection.handle(address, builtBuffer);
-						} else {
-							LOGGER.trace("Solved for GET {}: {} ({})", r.oid, oid, requestId);
-							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(oid, value)));
-							r.connection.handle(address, builtBuffer);
-						}
+		LOGGER.trace("Want to solve for GET {} ({})", r.oid, requestId);
+		try {
+			try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `errorStatus`, `errorIndex`, `value` FROM `data` WHERE `address`= ? AND `oid` = ? AND `timestamp` >= ?")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, r.oid.toString());
+				s.setDouble(k++, expiredTimestamp);
+				ResultSet rs = s.executeQuery();
+				while (rs.next()) {
+					Oid oid = new Oid(rs.getString("oid"));
+					int errorStatus = rs.getInt("errorStatus");
+					int errorIndex = rs.getInt("errorIndex");
+					String value = rs.getString("value");
+					if (errorStatus != 0) {
+						LOGGER.trace("Error for GET {}: {} ({})", r.oid, errorStatus, requestId);
+						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
+						r.connection.handle(address, builtBuffer);
+					} else if (value == null) {
+						LOGGER.trace("Error for GET {}: {} ({})", r.oid, errorStatus, requestId);
+						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, BerConstants.NO_SUCH_NAME_ERROR, 0, null);
+						r.connection.handle(address, builtBuffer);
+					} else {
+						LOGGER.trace("Solved for GET {}: {} ({})", r.oid, oid, requestId);
+						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(oid, value)));
+						r.connection.handle(address, builtBuffer);
+					}
+					return true;
+				}
+				return false;
+			}
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
+			return false;
+		}
+	}
+	
+	private boolean solveGetNext(Address address, Cache cache, int requestId, Requesting r) {
+		double now = DateUtils.now();
+		double expiredTimestamp = now - CACHE_EXPIRATION;
+		
+		LOGGER.trace("Want to solve for GETNEXT {} ({})", r.oid, requestId);
+		
+		try {
+			try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `nextErrorStatus`, `nextErrorIndex` FROM `next` WHERE `address`= ? AND `oid` = ? AND `timestamp` >= ?")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, r.oid.toString());
+				s.setDouble(k++, expiredTimestamp);
+				ResultSet rs = s.executeQuery();
+				while (rs.next()) {
+					Oid oid = new Oid(rs.getString("oid"));
+					int nextErrorStatus = rs.getInt("nextErrorStatus");
+					int nextErrorIndex = rs.getInt("nextErrorIndex");
+		
+					if (nextErrorStatus != 0) {
+						LOGGER.trace("Error for GETNEXT {}: {} = {} ({})", r.oid, oid, nextErrorStatus, requestId);
+						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, nextErrorStatus, nextErrorIndex, null);
+						r.connection.handle(address, builtBuffer);
 						return true;
 					}
-					return false;
 				}
-			} catch (SQLException se) {
-				LOGGER.error("SQL error", se);
-				return false;
 			}
-		} else if (r.request == BerConstants.GETNEXT) {
-			LOGGER.trace("Want to solve for GETNEXT {} ({})", r.oid, requestId);
+			try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `value`, `firstOfBulk`, `lastOfBulk` FROM `data` WHERE `address`= ? AND `oid` >= ? AND `timestamp` >= ? ORDER BY `oid`")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, r.oid.toString());
+				s.setDouble(k++, expiredTimestamp);
+				ResultSet rs = s.executeQuery();
+				boolean first = true;
+				while (rs.next()) {
+					Oid oid = new Oid(rs.getString("oid"));
+					String value = rs.getString("value");
+					boolean firstOfBulk = rs.getBoolean("firstOfBulk");
+					boolean lastOfBulk = rs.getBoolean("lastOfBulk");
 
-			try {
-				try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `nextErrorStatus`, `nextErrorIndex` FROM `next` WHERE `address`= ? AND `oid` = ? AND `timestamp` >= ?")) {
-					int k = 1;
-					s.setString(k++, address.toString());
-					s.setString(k++, r.oid.toString());
-					s.setDouble(k++, expiredTimestamp);
-					ResultSet rs = s.executeQuery();
-					while (rs.next()) {
-						Oid oid = new Oid(rs.getString("oid"));
-						int nextErrorStatus = rs.getInt("nextErrorStatus");
-						int nextErrorIndex = rs.getInt("nextErrorIndex");
-
-						if (nextErrorStatus != 0) {
-							LOGGER.trace("Error for GETNEXT {}: {} = {} ({})", r.oid, oid, nextErrorStatus, requestId);
-							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, nextErrorStatus, nextErrorIndex, null);
-							r.connection.handle(address, builtBuffer);
-							return true;
-						}
-					}
-				}
-				try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `errorStatus`, `errorIndex`, `value` FROM `data` WHERE `address`= ? AND `oid` > ? AND `timestamp` >= ? ORDER BY `oid`")) {
-					int k = 1;
-					s.setString(k++, address.toString());
-					s.setString(k++, r.oid.toString());
-					s.setDouble(k++, expiredTimestamp);
-					ResultSet rs = s.executeQuery();
-					while (rs.next()) {
-						Oid oid = new Oid(rs.getString("oid"));
-						int errorStatus = rs.getInt("errorStatus");
-						int errorIndex = rs.getInt("errorIndex");
-						String value = rs.getString("value");
-
-						if (errorStatus != 0) {
-							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
-							r.connection.handle(address, builtBuffer);
-							return true;
-						}
-
-						if (value == null) {
-							break;
-						} else {
-							LOGGER.trace("Solved for GETNEXT {}: {} ({})", r.oid, oid, requestId);
-							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(oid, value)));
-							r.connection.handle(address, builtBuffer);
-							return true;
-						}
-					}
-					return false;
-				}
-			} catch (SQLException se) {
-				LOGGER.error("SQL error", se);
-				return false;
-			}
-		} else if (r.request == BerConstants.GETBULK) {
-			LOGGER.trace("Want to solve for GETBULK {} ({})", r.oid, requestId);
-			
-			List<Result> rr = new LinkedList<>();
-			int globalErrorStatus = 0;
-			int globalErrorIndex = 0;
-			try {
-				try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `nextErrorStatus`, `nextErrorIndex` FROM `next` WHERE `address`= ? AND `oid` = ? AND `timestamp` >= ?")) {
-					int k = 1;
-					s.setString(k++, address.toString());
-					s.setString(k++, r.oid.toString());
-					s.setDouble(k++, expiredTimestamp);
-					ResultSet rs = s.executeQuery();
-					while (rs.next()) {
-						Oid oid = new Oid(rs.getString("oid"));
-						int nextErrorStatus = rs.getInt("nextErrorStatus");
-						int nextErrorIndex = rs.getInt("nextErrorIndex");
-
-						if (nextErrorStatus != 0) {
-							LOGGER.trace("Error for GETBULK {}: {} = {} ({})", r.oid, oid, nextErrorStatus, requestId);
-							ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, nextErrorStatus, nextErrorIndex, null);
-							r.connection.handle(address, builtBuffer);
-							return true;
-						}
-					}
-				}
-				try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `errorStatus`, `errorIndex`, `value`, `lastOfBulk` FROM `data` WHERE `address`= ? AND `oid` > ? AND `timestamp` >= ? ORDER BY `oid`")) {
-					int k = 1;
-					s.setString(k++, address.toString());
-					s.setString(k++, r.oid.toString());
-					s.setDouble(k++, expiredTimestamp);
-					ResultSet rs = s.executeQuery();
-					while (rs.next()) {
-						Oid oid = new Oid(rs.getString("oid"));
-						int errorStatus = rs.getInt("errorStatus");
-						int errorIndex = rs.getInt("errorIndex");
-						String value = rs.getString("value");
-						boolean lastOfBulk = rs.getBoolean("lastOfBulk");
-						
-						if (errorStatus != 0) {
-							globalErrorStatus = errorStatus;
-							globalErrorIndex = errorIndex;
-							break;
-						}
-
-						if (value == null) {
-							break;
-						} else {
-							LOGGER.trace("Solved for GETBULK {}: {} ({})", r.oid, oid, requestId);
-							rr.add(new Result(oid, value));
-							if (lastOfBulk || (rr.size() == r.bulkLength)) {
-								break;
+					try {
+						if (first) {
+							if (oid.equals(r.oid)) {
+								/*%%% if (errorStatus != 0) {
+									LOGGER.trace("Error for GETNEXT {}: {} ({})", r.oid, errorStatus, requestId);
+									ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
+									r.connection.handle(address, builtBuffer);
+									return true;
+								}*/
+								if (lastOfBulk) {
+									return false;
+								}
+								continue;
+							} else if (firstOfBulk) {
+								return false;
 							}
 						}
+						
+						if (firstOfBulk) {
+							return false;
+						}
+						
+						if (value == null) {
+							if (lastOfBulk) {
+								return false;
+							}
+							continue;
+						}
+
+						LOGGER.trace("Solved for GETNEXT {}: {} ({})", r.oid, oid, requestId);
+						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(oid, value)));
+						r.connection.handle(address, builtBuffer);
+						return true;
+						
+					} finally {
+						first = false;
 					}
 				}
-			} catch (SQLException se) {
-				LOGGER.error("SQL error", se);
 				return false;
 			}
-
-			if (!rr.isEmpty()) {
-				ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, rr);
-				r.connection.handle(address, builtBuffer);
-				return true;
-			}
-			if (globalErrorStatus != 0) {
-				ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, globalErrorStatus, globalErrorIndex, null);
-				r.connection.handle(address, builtBuffer);
-				return true;
-			}
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
+			return false;
 		}
-		return false;
+	}
+	
+	private boolean solveGetBulk(Address address, Cache cache, int requestId, Requesting r) {
+		double now = DateUtils.now();
+		double expiredTimestamp = now - CACHE_EXPIRATION;
+		
+		LOGGER.trace("Want to solve for GETBULK {} ({})", r.oid, requestId);
+		
+		List<Result> rr = new LinkedList<>();
+		try {
+			try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `nextErrorStatus`, `nextErrorIndex` FROM `next` WHERE `address`= ? AND `oid` = ? AND `timestamp` >= ?")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, r.oid.toString());
+				s.setDouble(k++, expiredTimestamp);
+				ResultSet rs = s.executeQuery();
+				while (rs.next()) {
+					Oid oid = new Oid(rs.getString("oid"));
+					int nextErrorStatus = rs.getInt("nextErrorStatus");
+					int nextErrorIndex = rs.getInt("nextErrorIndex");
+
+					if (nextErrorStatus != 0) {
+						LOGGER.trace("Error for GETBULK {}: {} = {} ({})", r.oid, oid, nextErrorStatus, requestId);
+						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, nextErrorStatus, nextErrorIndex, null);
+						r.connection.handle(address, builtBuffer);
+						return true;
+					}
+				}
+			}
+			try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `oid`, `value`, `firstOfBulk`, `lastOfBulk` FROM `data` WHERE `address`= ? AND `oid` >= ? AND `timestamp` >= ? ORDER BY `oid`")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, r.oid.toString());
+				s.setDouble(k++, expiredTimestamp);
+				ResultSet rs = s.executeQuery();
+				boolean first = true;
+				while (rs.next()) {
+					Oid oid = new Oid(rs.getString("oid"));
+					String value = rs.getString("value");
+					boolean firstOfBulk = rs.getBoolean("firstOfBulk");
+					boolean lastOfBulk = rs.getBoolean("lastOfBulk");
+
+					try {
+						if (first) {
+							if (oid.equals(r.oid)) {
+								/*%%%% if (errorStatus != 0) {
+									LOGGER.trace("Error for GETBULK {}: {} ({})", r.oid, errorStatus, requestId);
+									ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
+									r.connection.handle(address, builtBuffer);
+									return true;
+								}
+								*/
+								if (lastOfBulk) {
+									return false;
+								}
+								continue;
+							} else if (firstOfBulk) {
+								return false;
+							}
+						}
+						
+						if (firstOfBulk) {
+							break;
+						}
+						
+						if (value == null) {
+							if (lastOfBulk) {
+								break;
+							}
+							continue;
+						}
+
+						LOGGER.trace("Solved for GETBULK {}: {} ({})", r.oid, oid, requestId);
+						rr.add(new Result(oid, value));
+
+						if (lastOfBulk || (rr.size() == r.bulkLength)) {
+							break;
+						}
+
+					} finally {
+						first = false;
+					}
+				}
+			}
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
+			return false;
+		}
+
+		LOGGER.trace("Solved for GETBULK {}: size = {} ({})", r.oid, rr.size(), requestId);
+		ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, rr);
+		r.connection.handle(address, builtBuffer);
+		return true;
+	}
+	
+	private boolean solve(Address address, Cache cache, int requestId, Requesting r) {
+		if (r.request == BerConstants.GET) {
+			return solveGet(address, cache, requestId, r);
+		} else if (r.request == BerConstants.GETNEXT) {
+			return solveGetNext(address, cache, requestId, r);
+		} else if (r.request == BerConstants.GETBULK) {
+			return solveGetBulk(address, cache, requestId, r);
+		} else {
+			LOGGER.error("Invalid request code: {}", r.request);
+			return false;
+		}
 	}
 
 	private static ByteBuffer build(int requestId, String community, int errorStatus, int errorIndex, Iterable<Result> result) {

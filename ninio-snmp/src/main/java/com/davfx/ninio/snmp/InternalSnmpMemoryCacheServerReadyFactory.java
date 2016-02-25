@@ -31,6 +31,7 @@ import com.typesafe.config.ConfigFactory;
 
 // Transforms all values to string
 // Does not tell community on response
+@Deprecated
 public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFactory, Closeable, AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(InternalSnmpMemoryCacheServerReadyFactory.class);
@@ -97,7 +98,7 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 		this.wrappee = wrappee;
 		this.filter = filter;
 		
-		closeable = QueueScheduled.schedule(queue, CHECK_TIME, new Runnable() {
+		closeable = QueueScheduled.schedule(queue, CHECK_TIME * 1000, new Runnable() {
 			@Override
 			public void run() {
 				LOGGER.trace("Checking {}", CHECK_TIME);
@@ -220,19 +221,19 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 		final Ready wrappeeReady = wrappee.create();
 		return new QueueReady(queue, new Ready() {
 			@Override
-			public void connect(final Address address, final ReadyConnection connection) {
+			public void connect(final Address connectAddress, final ReadyConnection connection) {
 				// final ReadyConnection connection = new MayBeClosedReadyConnection(sourceConnection);
 
-				LOGGER.trace("Connecting to: {}", address);
+				LOGGER.trace("Connecting to: {}", connectAddress);
 				
-				Cache c = cacheByAddress.get(address);
+				Cache c = cacheByAddress.get(connectAddress);
 				if (c == null) {
 					c = new Cache();
-					cacheByAddress.put(address, c);
+					cacheByAddress.put(connectAddress, c);
 				}
 				final Cache cache = c;
 				
-				wrappeeReady.connect(address, new ReadyConnection() {
+				wrappeeReady.connect(connectAddress, new ReadyConnection() {
 					@Override
 					public void failed(IOException e) {
 						connection.failed(e);
@@ -308,6 +309,7 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 								
 								Double requestTimestamp = cache.requestingByRequestKey.get(requestKey);
 								if (requestTimestamp != null) {
+									LOGGER.trace("Already called {}: {} {} ({}) repeat time = {}", request, address, oid, requestId, REPEAT_TIME);
 									if ((now - requestTimestamp) <= REPEAT_TIME) {
 										LOGGER.trace("Not repeating: {}", oid);
 										return;
@@ -316,7 +318,15 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 								
 								cache.requestingByRequestKey.put(requestKey, now);
 
-								LOGGER.trace("Actually calling for: {}", oid);
+								if (request == BerConstants.GET) {
+									LOGGER.trace("Actually calling GET: {} {} ({})", address, oid, requestId);
+								} else if (request == BerConstants.GETNEXT) {
+									LOGGER.trace("Actually calling GETNEXT: {} {} ({})", address, oid, requestId);
+								} else if (request == BerConstants.GETBULK) {
+									LOGGER.trace("Actually calling GETBULK: {} {} ({})", address, oid, requestId);
+								} else {
+									LOGGER.trace("Actually calling {}: {} {} ({})", request, address, oid, requestId);
+								}
 								write.handle(address, sourceBuffer);
 							}
 						});
@@ -342,14 +352,18 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 						
 						if (errorStatus == 0) {
 							// We scan and remove opaque values
+							List<Result> filteredResults = new LinkedList<>();
 							for (Result r : results) {
-								if (r.getValue() == null) {
-									errorStatus = BerConstants.NO_SUCH_NAME_ERROR;
-									errorIndex = 0;
-									results = null;
-									break;
+								if (r.getValue() != null) {
+									filteredResults.add(r);
 								}
 							}
+							results = filteredResults;
+						}
+						if (!results.iterator().hasNext()) {
+							errorStatus = BerConstants.NO_SUCH_NAME_ERROR;
+							errorIndex = 0;
+							results = null;
 						}
 						
 						LOGGER.trace("Response for {}: {}:{}/{} ({})", requestId, errorStatus, errorIndex, results, address);
@@ -439,6 +453,7 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 					toReplace.nextErrorStatus = nextErrorStatus;
 					toReplace.nextErrorIndex = nextErrorIndex;
 				}
+				toReplace.lastOfBulk = true;
 			}
 		} else {
 			Iterator<Result> responseIterator = results.iterator();
@@ -462,6 +477,11 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 				}
 
 				if (previous != null) {
+					if (previous.oid.compareTo(oid) == 0) {
+						previous.errorStatus = 0;
+						previous.errorIndex = 0;
+						previous.lastOfBulk = false;
+					}
 					if (!previous.lastOfBulk) {
 						previous.nextErrorStatus = 0;
 						previous.nextErrorIndex = 0;
@@ -510,11 +530,12 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 					if (e.errorStatus != 0) {
 						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, e.errorStatus, e.errorIndex, null);
 						r.connection.handle(address, builtBuffer);
-					} else {
+						return true;
+					} else if (e.value != null) {
 						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(e.oid, e.value)));
 						r.connection.handle(address, builtBuffer);
+						return true;
 					}
-					return true;
 				}
 				int c = e.oid.compareTo(r.oid);
 				if (c == 0) {
@@ -523,6 +544,9 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, e.nextErrorStatus, e.nextErrorIndex, null);
 						r.connection.handle(address, builtBuffer);
 						return true;
+					}
+					if (e.lastOfBulk) {
+						break;
 					}
 					found = true;
 				}
@@ -541,18 +565,24 @@ public final class InternalSnmpMemoryCacheServerReadyFactory implements ReadyFac
 						errorIndex = e.errorIndex;
 						break;
 					}
-					rr.add(new Result(e.oid, e.value));
-					if (e.lastOfBulk || (rr.size() == r.bulkLength)) {
-						break;
+					if (e.value != null) {
+						rr.add(new Result(e.oid, e.value));
+						if (e.lastOfBulk || (rr.size() == r.bulkLength)) {
+							break;
+						}
 					}
 				}
 				int c = e.oid.compareTo(r.oid);
 				if (c == 0) {
+					LOGGER.trace("******* Solved {} = {}", e.oid, e.oid);
 					if (e.nextErrorStatus != 0) {
 						LOGGER.trace("Error for GETBULK {}: {} = {} ({})", r.oid, e.oid, e.nextErrorStatus, requestId);
 						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, e.nextErrorStatus, e.nextErrorIndex, null);
 						r.connection.handle(address, builtBuffer);
 						return true;
+					}
+					if (e.lastOfBulk) {
+						break;
 					}
 					found = true;
 				}

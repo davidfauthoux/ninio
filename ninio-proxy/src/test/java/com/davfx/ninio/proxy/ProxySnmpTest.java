@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.DatagramReady;
+import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.snmp.InternalSnmpSqliteCacheServerReadyFactory;
 import com.davfx.ninio.snmp.Oid;
@@ -56,7 +57,7 @@ public class ProxySnmpTest {
 				queue.finish().waitFor();
 
 				try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
-					try (InternalSnmpSqliteCacheServerReadyFactory i = new InternalSnmpSqliteCacheServerReadyFactory(DATABASE, queue, proxyServer.datagramReadyFactory())) {
+					try (InternalSnmpSqliteCacheServerReadyFactory i = new InternalSnmpSqliteCacheServerReadyFactory(DATABASE, queue, new DatagramReadyFactory(queue))) {
 						proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 						proxyServer.start();
 						queue.finish().waitFor();

@@ -94,6 +94,7 @@ public final class SocketReady implements Ready {
 											} catch (IOException ee) {
 											}
 											// connection.failed(e);
+											LOGGER.trace("Connection failed", e);
 											connection.close();
 										}
 									} else if (key.isWritable()) {
@@ -122,6 +123,7 @@ public final class SocketReady implements Ready {
 												} catch (IOException ee) {
 												}
 												// connection.failed(e);
+												LOGGER.trace("Connection failed", e);
 												connection.close();
 												return;
 											}

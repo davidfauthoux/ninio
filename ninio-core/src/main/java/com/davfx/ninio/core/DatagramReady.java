@@ -86,6 +86,7 @@ public final class DatagramReady implements Ready {
 								} catch (IOException ee) {
 								}
 								// connection.failed(e);
+								LOGGER.trace("Connection failed", e);
 								connection.close();
 							}
 						} else if (key.isWritable()) {
@@ -119,6 +120,7 @@ public final class DatagramReady implements Ready {
 										} catch (IOException ee) {
 										}
 										// connection.failed(e);
+										LOGGER.trace("Connection failed", e);
 										connection.close();
 										return;
 									}
@@ -144,6 +146,7 @@ public final class DatagramReady implements Ready {
 											} catch (IOException ee) {
 											}
 											// connection.failed(e);
+											LOGGER.trace("Connection failed", e);
 											connection.close();
 											return;
 										}

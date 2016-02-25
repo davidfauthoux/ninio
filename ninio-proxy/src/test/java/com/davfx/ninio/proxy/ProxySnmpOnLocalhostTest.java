@@ -1,5 +1,6 @@
 package com.davfx.ninio.proxy;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
@@ -11,8 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.snmp.InternalSnmpMemoryCacheServerReadyFactory;
+import com.davfx.ninio.snmp.InternalSnmpSqliteCacheServerReadyFactory;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.Snmp;
@@ -28,19 +30,18 @@ public class ProxySnmpOnLocalhostTest {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxySnmpOnLocalhostTest.class);
 	
+	private static final File DATABASE = new File("src/test/resources/snmpcache.db");
+
 	@Test
 	public void test() throws Exception {
+		DATABASE.delete();
+		
 		int snmpServerPort = 161;
 		int proxyServerPort = 8161;
 		
 		try (Queue queue = new Queue()) {
 			try (ProxyServer proxyServer = new ProxyServer(queue, new Address(Address.ANY, proxyServerPort), 1)) {
-				try (InternalSnmpMemoryCacheServerReadyFactory i = new InternalSnmpMemoryCacheServerReadyFactory(new InternalSnmpMemoryCacheServerReadyFactory.Filter() {
-					@Override
-					public boolean cache(Address address, Oid oid) {
-						return true;
-					}
-				}, queue, proxyServer.datagramReadyFactory())) {
+				try (InternalSnmpSqliteCacheServerReadyFactory i = new InternalSnmpSqliteCacheServerReadyFactory(DATABASE, queue, new DatagramReadyFactory(queue))) {
 					proxyServer.override("_snmp", new SimpleServerSideConfigurator(i));
 					proxyServer.start();
 					queue.finish().waitFor();
@@ -107,6 +108,8 @@ public class ProxySnmpOnLocalhostTest {
 				queue.finish().waitFor();
 			}
 		}
+
+		DATABASE.delete();
 	}
 	
 }

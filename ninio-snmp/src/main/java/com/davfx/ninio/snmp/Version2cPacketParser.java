@@ -5,6 +5,9 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 final class Version2cPacketParser {
 	/*%%%
 	public static void main(String[] args) throws Exception {
@@ -23,6 +26,8 @@ final class Version2cPacketParser {
 		}
 	}
 	*/
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(Version2cPacketParser.class);
 
 	private final int requestId;
 	private final int errorStatus;
@@ -53,6 +58,9 @@ final class Version2cPacketParser {
 						{
 							Oid oid = ber.readOid();
 							String value = ber.readValue();
+							if (value == null) {
+								LOGGER.trace("Opaque value: {}", oid);
+							}
 							// OidValue value = ber.readOidValue();
 							results.add(new Result(oid, value));
 						}
