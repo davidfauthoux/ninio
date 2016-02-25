@@ -8,8 +8,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.core.Closeable;
+import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
@@ -62,7 +62,7 @@ public final class BaseServerSide implements ServerSide {
 		configurators.put(ProxyCommons.Types.SOCKET, new SimpleServerSideConfigurator(socketReadyFactory));
 
 		switch (MODE) {
-		case SYNC_TCPDUMP:
+		case SYNC_TCPDUMP: {
 			TcpdumpSyncDatagramReady.Rule rule;
 			if (TCPDUMP_PORT < 0) {
 				rule = new TcpdumpSyncDatagramReady.EmptyRule();
@@ -78,11 +78,15 @@ public final class BaseServerSide implements ServerSide {
 			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(queue, receiver);
 			toClose = receiver;
 			break;
-		case ASYNC:
-			ByAddressDatagramReadyFactory byAddressDatagramReadyFactory = new ByAddressDatagramReadyFactory(queue); // Never closed, but could be when proxy server is closed
-			datagramReadyFactory = byAddressDatagramReadyFactory;
-			toClose = byAddressDatagramReadyFactory;
+		}
+		case ASYNC: {
+			datagramReadyFactory = new DatagramReadyFactory(queue);
+			toClose = null;
+			// ByAddressDatagramReadyFactory byAddressDatagramReadyFactory = new ByAddressDatagramReadyFactory(queue); // Never closed, but could be when proxy server is closed
+			// datagramReadyFactory = byAddressDatagramReadyFactory;
+			// toClose = byAddressDatagramReadyFactory;
 			break;
+		}
 		default:
 			throw new IllegalStateException("Mode not implemented: " + MODE);
 		}
@@ -132,6 +136,8 @@ public final class BaseServerSide implements ServerSide {
 	
 	@Override
 	public void close() {
-		toClose.close();
+		if (toClose != null) {
+			toClose.close();
+		}
 	}
 }

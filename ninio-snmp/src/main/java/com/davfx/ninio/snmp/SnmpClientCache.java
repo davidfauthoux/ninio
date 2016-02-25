@@ -17,6 +17,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.snmp.SnmpClientHandler.Callback.GetCallback;
 
+@Deprecated
 public final class SnmpClientCache implements Closeable, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClientCache.class);
 	

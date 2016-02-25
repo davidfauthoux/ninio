@@ -260,7 +260,9 @@ public class HttpServiceConvertersTest {
 	public void testGetWithListConverter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.parameters(new TypeToken<List<A>>() {}, new ParameterConverter<List<A>>() {
+				server.parameters(new TypeToken<List<A>>() {
+					private static final long serialVersionUID = 1L;
+				}, new ParameterConverter<List<A>>() {
 					@Override
 					public List<A> of(String s) throws Exception {
 						List<A> l = new LinkedList<>();
@@ -316,7 +318,9 @@ public class HttpServiceConvertersTest {
 	public void testGetWithTwoListConverter() throws Exception {
 		try (Queue queue = new Queue()) {
 			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.parameters(new TypeToken<List<A>>() {}, new ParameterConverter<List<A>>() {
+				server.parameters(new TypeToken<List<A>>() {
+					private static final long serialVersionUID = 1L;
+				}, new ParameterConverter<List<A>>() {
 					@Override
 					public List<A> of(String s) throws Exception {
 						List<A> l = new LinkedList<>();
@@ -326,7 +330,9 @@ public class HttpServiceConvertersTest {
 						return l;
 					}
 				});
-				server.parameters(new TypeToken<List<B>>() {}, new ParameterConverter<List<B>>() {
+				server.parameters(new TypeToken<List<B>>() {
+					private static final long serialVersionUID = 1L;
+				}, new ParameterConverter<List<B>>() {
 					@Override
 					public List<B> of(String s) throws Exception {
 						List<B> l = new LinkedList<>();

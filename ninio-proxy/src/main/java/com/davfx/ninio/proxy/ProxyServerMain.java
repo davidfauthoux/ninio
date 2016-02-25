@@ -20,8 +20,8 @@ public final class ProxyServerMain {
 				for (Config c : CONFIG.getConfigList("ninio.proxy.forward")) {
 					server.override(c.getString("type"), new ForwardServerSideConfigurator(queue, new Address(c.getString("host"), c.getInt("port")), null));
 				}
-				for (String host : CONFIG.getStringList("ninio.proxy.filter")) {
-					server.filter(host);
+				for (Config c : CONFIG.getConfigList("ninio.proxy.filter")) {
+					server.filter(new Address(c.getString("host"), c.getInt("port")));
 				}
 				server.start();
 				wait.waitFor();

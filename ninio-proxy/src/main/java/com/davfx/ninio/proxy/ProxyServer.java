@@ -48,7 +48,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 	private final BaseServerSide proxyServerSide;
 	private final ExecutorService listenExecutor;
 	private final ExecutorService clientExecutor;
-	private final Set<String> hostsToFilter = new HashSet<>();
+	private final Set<Address> addressesToFilter = new HashSet<>();
 	private final ServerSocket serverSocket;
 	
 	private final List<Socket> sockets = new LinkedList<>();
@@ -110,9 +110,9 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 		return this;
 	}
 	
-	public ProxyServer filter(String host) {
-		LOGGER.debug("Will filter out: {}", host);
-		hostsToFilter.add(host);
+	public ProxyServer filter(Address address) {
+		LOGGER.debug("Will filter out: {}", address);
+		addressesToFilter.add(address);
 		return this;
 	}
 	
@@ -163,7 +163,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 										if (len < 0) {
 											int command = -len;
 											if (command == ProxyCommons.Commands.ESTABLISH_CONNECTION) {
-												final Address address = new Address(in.readUTF(), in.readInt());
+												final Address address = in.readBoolean() ? new Address(in.readUTF(), in.readInt()) : null;
 												ReadyFactory factory = proxyServerSide.read(in);
 												//%% Ready r = new QueueReady(queue, factory.create());
 												Ready r = factory.create();
@@ -257,7 +257,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 												connection = establishedConnections.get(connectionId);
 											}
 											if (connection != null) {
-												if (!hostsToFilter.contains(connection.first.getHost())) {
+												if (!addressesToFilter.contains(connection.first)) {
 													if (connection.second != null) {
 														connection.second.handle(connection.first, ByteBuffer.wrap(b));
 													}

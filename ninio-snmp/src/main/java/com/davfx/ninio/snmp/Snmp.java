@@ -25,8 +25,6 @@ public final class Snmp {
 	private String community = CONFIG.getString("ninio.snmp.defaultCommunity");
 	private AuthRemoteSpecification authRemoteSpecification = null;
 	private AuthRemoteEngine authRemoteEngine = null;
-
-	private SnmpClientCache cache = null;
 	
 	public Snmp() {
 	}
@@ -57,7 +55,7 @@ public final class Snmp {
 	}
 	public Snmp withAuth(AuthRemoteSpecification authRemoteSpecification) {
 		this.authRemoteSpecification = authRemoteSpecification;
-		if ((cache == null) && (authRemoteSpecification != null)) {
+		if (authRemoteSpecification != null) {
 			authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
 		} else {
 			authRemoteEngine = null;
@@ -66,69 +64,41 @@ public final class Snmp {
 	}
 
 	public SnmpClient client() {
-		return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory, address, community, authRemoteEngine, timeoutFromBeginning);
+		return new SnmpClient(queue, (readyFactory == null) ? new DatagramReadyFactory(queue) : readyFactory);
 	}
 	
-	public Snmp withCache(SnmpClientCache cache) {
-		this.cache = cache;
-		if ((cache == null) && (authRemoteSpecification != null)) {
-			authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
-		} else {
-			authRemoteEngine = null;
-		}
-		return this;
-	}
-
 	public void get(final Oid oid, final SnmpClientHandler.Callback.GetCallback getCallback) {
-		if (cache == null) {
-			final SnmpClient client = client();
-			client.connect(new SnmpClientHandler() {
-				@Override
-				public void failed(IOException e) {
-					getCallback.failed(e);
-				}
-				@Override
-				public void close() {
-					getCallback.failed(new IOException("Prematurely closed"));
-				}
-				@Override
-				public void launched(final Callback callback) {
-					callback.get(oid, new Callback.GetCallback() {
-						@Override
-						public void failed(IOException e) {
-							callback.close();
-							client.close();
-							getCallback.failed(e);
-						}
-						@Override
-						public void close() {
-							callback.close();
-							client.close();
-							getCallback.close();
-						}
-						@Override
-						public void result(Result result) {
-							getCallback.result(result);
-						}
-					});
-				}
-			});
-		} else {
-			SnmpClientHandler.Callback client = cache.get(address, community, authRemoteSpecification, timeoutFromBeginning);
-			client.get(oid, new SnmpClientHandler.Callback.GetCallback() {
-				@Override
-				public void failed(IOException e) {
-					getCallback.failed(e);
-				}
-				@Override
-				public void close() {
-					getCallback.close();
-				}
-				@Override
-				public void result(Result result) {
-					getCallback.result(result);
-				}
-			});
-		}
+		final SnmpClient client = client();
+		client.connect(new SnmpClientHandler() {
+			@Override
+			public void failed(IOException e) {
+				getCallback.failed(e);
+			}
+			@Override
+			public void close() {
+				getCallback.failed(new IOException("Prematurely closed"));
+			}
+			@Override
+			public void launched(final Callback callback) {
+				callback.get(address, community, authRemoteEngine, timeoutFromBeginning, oid, new Callback.GetCallback() {
+					@Override
+					public void failed(IOException e) {
+						callback.close();
+						client.close();
+						getCallback.failed(e);
+					}
+					@Override
+					public void close() {
+						callback.close();
+						client.close();
+						getCallback.close();
+					}
+					@Override
+					public void result(Result result) {
+						getCallback.result(result);
+					}
+				});
+			}
+		});
 	}
 }

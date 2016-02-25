@@ -140,15 +140,8 @@ public final class DatagramReady implements Ready {
 											channel.send(b.buffer, a);
 											toWriteLength[0] -= before - b.buffer.remaining();
 										} catch (IOException e) {
-											channel.socket().close();
-											try {
-												channel.close();
-											} catch (IOException ee) {
-											}
-											// connection.failed(e);
-											LOGGER.trace("Connection failed", e);
-											connection.close();
-											return;
+											LOGGER.warn("Write failed to: {}", a, e);
+											b.buffer.position(b.buffer.position() + b.buffer.remaining());
 										}
 									}
 								}
@@ -184,11 +177,13 @@ public final class DatagramReady implements Ready {
 						}
 						channel.socket().bind(a);
 					} else {
-						InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
-						if (a == null) {
-							throw new IOException("Invalid address");
+						if (address != null) {
+							InetSocketAddress a = AddressUtils.toConnectableInetSocketAddress(address);
+							if (a == null) {
+								throw new IOException("Invalid address");
+							}
+							channel.connect(a);
 						}
-						channel.connect(a);
 					}
 				} catch (IOException e) {
 					selectionKey.cancel();

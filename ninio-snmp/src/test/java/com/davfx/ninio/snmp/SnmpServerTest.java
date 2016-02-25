@@ -10,7 +10,6 @@ import org.junit.Ignore;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.core.Count;
 import com.davfx.ninio.core.CountingCurrentOpenReady;
 import com.davfx.ninio.core.CountingCurrentOpenReadyFactory;
@@ -51,39 +50,22 @@ public class SnmpServerTest {
 			try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
 				queue.finish().waitFor();
 				final Lock<List<Result>, IOException> lock = new Lock<>();
-				try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory(queue))).to(new Address(Address.LOCALHOST, 8080)).client()) {
-					client.connect(new SnmpClientHandler() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void close() {
-							lock.fail(new IOException("Closed"));
-						}
-						@Override
-						public void launched(final Callback callback) {
-							callback.get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
-								private final List<Result> r = new LinkedList<>();
-								@Override
-								public void failed(IOException e) {
-									callback.close();
-									lock.fail(e);
-								}
-								@Override
-								public void close() {
-									callback.close();
-									lock.set(r);
-								}
-								@Override
-								public void result(Result result) {
-									r.add(result);
-								}
-							});
-						}
-					});
-					Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
-				}
+				new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory(queue))).to(new Address(Address.LOCALHOST, 8080)).get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
+					private final List<Result> r = new LinkedList<>();
+					@Override
+					public void failed(IOException e) {
+						lock.fail(e);
+					}
+					@Override
+					public void close() {
+						lock.set(r);
+					}
+					@Override
+					public void result(Result result) {
+						r.add(result);
+					}
+				});
+				Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
 
 				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
 				Assertions.assertThat(test(queue, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
@@ -132,43 +114,26 @@ public class SnmpServerTest {
 		InnerCount openCount = new InnerCount();
 		
 		try (Queue queue = new Queue()) {
-			ReadyFactory readyFactory = new ByAddressDatagramReadyFactory(queue);
+			ReadyFactory readyFactory = new DatagramReadyFactory(queue);
 			try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
 				queue.finish().waitFor();
 				final Lock<List<Result>, IOException> lock = new Lock<>();
-				try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, readyFactory)).to(new Address(Address.LOCALHOST, 8080)).client()) {
-					client.connect(new SnmpClientHandler() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void close() {
-							lock.fail(new IOException("Closed"));
-						}
-						@Override
-						public void launched(final Callback callback) {
-							callback.get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
-								private final List<Result> r = new LinkedList<>();
-								@Override
-								public void failed(IOException e) {
-									callback.close();
-									lock.fail(e);
-								}
-								@Override
-								public void close() {
-									callback.close();
-									lock.set(r);
-								}
-								@Override
-								public void result(Result result) {
-									r.add(result);
-								}
-							});
-						}
-					});
-					Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
-				}
+				new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, readyFactory)).to(new Address(Address.LOCALHOST, 8080)).get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
+					private final List<Result> r = new LinkedList<>();
+					@Override
+					public void failed(IOException e) {
+						lock.fail(e);
+					}
+					@Override
+					public void close() {
+						lock.set(r);
+					}
+					@Override
+					public void result(Result result) {
+						r.add(result);
+					}
+				});
+				Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
 
 				List<Lock<List<Result>, IOException>> l = new LinkedList<>();
 				l.add(testSimultaneous(readyFactory, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")));
@@ -232,39 +197,22 @@ public class SnmpServerTest {
 				try (SnmpServer snmpServer = new SnmpServer(queue, new CountingCurrentOpenReady(serverOpenCount, new DatagramReady(queue.getSelector(), queue.allocator()).bind()), new Address(Address.LOCALHOST, 8080), SnmpServerUtils.from(map))) {
 					queue.finish().waitFor();
 					final Lock<List<Result>, IOException> lock = new Lock<>();
-					try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, readyFactory)).to(new Address(Address.LOCALHOST, 8080)).client()) {
-						client.connect(new SnmpClientHandler() {
-							@Override
-							public void failed(IOException e) {
-								lock.fail(e);
-							}
-							@Override
-							public void close() {
-								lock.fail(new IOException("Closed"));
-							}
-							@Override
-							public void launched(final Callback callback) {
-								callback.get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
-									private final List<Result> r = new LinkedList<>();
-									@Override
-									public void failed(IOException e) {
-										callback.close();
-										lock.fail(e);
-									}
-									@Override
-									public void close() {
-										callback.close();
-										lock.set(r);
-									}
-									@Override
-									public void result(Result result) {
-										r.add(result);
-									}
-								});
-							}
-						});
-						Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
-					}
+					new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, readyFactory)).to(new Address(Address.LOCALHOST, 8080)).get(new Oid("1.1.1"), new SnmpClientHandler.Callback.GetCallback() {
+						private final List<Result> r = new LinkedList<>();
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+						@Override
+						public void close() {
+							lock.set(r);
+						}
+						@Override
+						public void result(Result result) {
+							r.add(result);
+						}
+					});
+					Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
 	
 					List<Lock<List<Result>, IOException>> l = new LinkedList<>();
 					l.add(testSimultaneous(readyFactory, openCount, new Address(Address.LOCALHOST, 8080), new Oid("1.1.1")));

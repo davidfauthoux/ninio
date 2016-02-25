@@ -208,40 +208,22 @@ public class SnmpCacheTest {
 	
 	private static List<Result> test(Queue queue, Count openCount, Address address, final Oid oid) throws IOException {
 		final Lock<List<Result>, IOException> lock = new Lock<>();
-		try (SnmpClient client = new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory(queue))).to(new Address(Address.LOCALHOST, 8080)).client()) {
-			client.connect(new SnmpClientHandler() {
-				@Override
-				public void failed(IOException e) {
-					lock.fail(e);
-				}
-				@Override
-				public void close() {
-					lock.fail(new IOException("Closed"));
-				}
-				@Override
-				public void launched(final Callback callback) {
-					LOGGER.trace("Calling {}", oid);
-					callback.get(oid, new SnmpClientHandler.Callback.GetCallback() {
-						private final List<Result> r = new LinkedList<>();
-						@Override
-						public void failed(IOException e) {
-							callback.close();
-							lock.fail(e);
-						}
-						@Override
-						public void close() {
-							callback.close();
-							lock.set(r);
-						}
-						@Override
-						public void result(Result result) {
-							r.add(result);
-						}
-					});
-				}
-			});
-			return lock.waitFor();
-		}
+		new Snmp().override(new CountingCurrentOpenReadyFactory(openCount, new DatagramReadyFactory(queue))).to(new Address(Address.LOCALHOST, 8080)).get(oid, new SnmpClientHandler.Callback.GetCallback() {
+			private final List<Result> r = new LinkedList<>();
+			@Override
+			public void failed(IOException e) {
+				lock.fail(e);
+			}
+			@Override
+			public void close() {
+				lock.set(r);
+			}
+			@Override
+			public void result(Result result) {
+				r.add(result);
+			}
+		});
+		return lock.waitFor();
 	}
 	
 	private static List<Result> testCache(SnmpCache client, Address address, Oid oid) throws IOException {
