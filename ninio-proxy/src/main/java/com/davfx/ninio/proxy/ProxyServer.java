@@ -159,6 +159,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 									while (true) {
 										LOGGER.trace("Server waiting for connection ID");
 										final int connectionId = in.readInt();
+										LOGGER.trace("Server received connection ID: {}", connectionId);
 										int len = in.readInt();
 										if (len < 0) {
 											int command = -len;
@@ -250,18 +251,26 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 												}
 											}
 										} else {
-											byte[] b = new byte[len];
-											in.readFully(b);
 											Pair<Address, CloseableByteBufferHandler> connection;
 											synchronized (establishedConnections) {
 												connection = establishedConnections.get(connectionId);
 											}
+											Address a;
+											if (in.readBoolean()) {
+												a = new Address(in.readUTF(), in.readInt());
+											} else {
+												a = connection.first;
+											}
+											byte[] b = new byte[len];
+											in.readFully(b);
 											if (connection != null) {
-												if (!addressesToFilter.contains(connection.first)) {
+												if (!addressesToFilter.contains(a)) {
 													if (connection.second != null) {
-														connection.second.handle(connection.first, ByteBuffer.wrap(b));
+														connection.second.handle(a, ByteBuffer.wrap(b));
 													}
 												}
+											} else {
+												LOGGER.debug("Invalid connection ID: {}", connectionId);
 											}
 										}
 									}

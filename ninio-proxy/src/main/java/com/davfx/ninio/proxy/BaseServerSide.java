@@ -8,6 +8,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
@@ -31,17 +32,20 @@ public final class BaseServerSide implements ServerSide {
 	}
 	
 	private static final Mode MODE;
+	private static final String TCPDUMP_HOST;
 	private static final int TCPDUMP_PORT;
 	private static final String TCPDUMP_INTERFACE;
 	static {
 		String datagramMode = CONFIG.getString("ninio.proxy.mode.datagram");
 		if (datagramMode.equals("sync.tcpdump")) {
 			MODE = Mode.SYNC_TCPDUMP;
+			TCPDUMP_HOST = CONFIG.getString("ninio.proxy.tcpdump.host");
 			TCPDUMP_PORT = CONFIG.getInt("ninio.proxy.tcpdump.port");
 			// boolean promiscuous = CONFIG.getBoolean("proxy.tcpdump.promiscuous");
 			TCPDUMP_INTERFACE = CONFIG.getString("ninio.proxy.tcpdump.interface");
 		} else if (datagramMode.equals("async")) {
 			MODE = Mode.ASYNC;
+			TCPDUMP_HOST = null;
 			TCPDUMP_PORT = -1;
 			TCPDUMP_INTERFACE = null;
 		} else {
@@ -69,11 +73,12 @@ public final class BaseServerSide implements ServerSide {
 			} else {
 				rule = new TcpdumpSyncDatagramReady.SourcePortRule(TCPDUMP_PORT);
 			}
-			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(rule, TCPDUMP_INTERFACE); // Never closed, but could be when proxy server is closed
+			TcpdumpSyncDatagramReady.Receiver receiver;
 			try {
-				receiver.prepare();
+				receiver = new TcpdumpSyncDatagramReady.Receiver(rule, TCPDUMP_INTERFACE, new Address(TCPDUMP_HOST, 0)); // Never closed, but could be when proxy server is closed
 			} catch (IOException ioe) {
-				LOGGER.error("Tcpdump receiver could not be prepared", ioe);
+				LOGGER.error("Tcpdump receiver error", ioe);
+				receiver = null;
 			}
 			datagramReadyFactory = new TcpdumpSyncDatagramReadyFactory(queue, receiver);
 			toClose = receiver;

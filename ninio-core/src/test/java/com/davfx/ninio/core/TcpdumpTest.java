@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,7 +18,6 @@ public class TcpdumpTest {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpTest.class);
 	
-	@Ignore
 	@Test
 	public void test() throws Exception {
 		System.setProperty("ninio.tcpdump.mode", "hex"); // raw not working on Mac OS X
@@ -29,11 +27,11 @@ public class TcpdumpTest {
 			
 			final int port = 8080;
 	
-			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.DestinationPortRule(port), "lo0");
+			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.DestinationPortRule(port), "lo0", new Address(Address.LOCALHOST, port));
 			{
-				Ready ready = new TcpdumpSyncDatagramReady(receiver).bind();
+				Ready ready = new TcpdumpSyncDatagramReady(receiver);
 		
-				new QueueReady(queue, ready).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() { // Address MUST be specified for the packet to be mapped
+				new QueueReady(queue, ready).connect(null, new ReadyConnection() { // Address MUST be specified for the packet to be mapped
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
 						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
@@ -65,7 +63,7 @@ public class TcpdumpTest {
 			{
 				Ready ready = new DatagramReady(queue.getSelector(), queue.allocator());
 		
-				new QueueReady(queue, ready).connect(new Address(Address.LOCALHOST, port), new ReadyConnection() {
+				new QueueReady(queue, ready).connect(null, new ReadyConnection() {
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
 						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);

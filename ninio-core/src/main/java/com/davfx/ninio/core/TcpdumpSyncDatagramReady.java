@@ -12,8 +12,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -127,14 +126,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			new ClassThreadFactory(TcpdumpSyncDatagramReady.class, name).newThread(runnable).start();
 		}
 		
-		private final Map<String, ReadyConnection> connections = new ConcurrentHashMap<>();
-		
+		private final ConcurrentLinkedQueue<ReadyConnection> connections = new ConcurrentLinkedQueue<>();
 		private DatagramSocket socket = null;
+		private Process process = null;
+		private boolean closed = false;
 		
-		public Receiver(Rule rule, String interfaceId) {
-			this(rule, interfaceId, null);
-		}
-		public Receiver(final Rule rule, final String interfaceId, final ByteBufferHandler allHandler) { //, final boolean promiscuous) {
+		public Receiver(final Rule rule, final String interfaceId, final Address address) throws IOException { //, final boolean promiscuous) {
 			/*%%
 			if (DO_OUTPUT != null) {
 				outputFile = new File(DO_OUTPUT);
@@ -193,6 +190,37 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							p = null;
 						}
 						
+						DatagramSocket s;
+						try {
+							InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
+							if (a == null) {
+								throw new IOException("Invalid address");
+							}
+							s = new DatagramSocket(a);
+							try {
+								s.setReceiveBufferSize(READ_BUFFER_SIZE);
+								s.setSendBufferSize(WRITE_BUFFER_SIZE);
+								LOGGER.debug("Datagram bound socket {} ({}) buffer size, receive {}, send {}", a, s.getLocalPort(), s.getReceiveBufferSize(), s.getSendBufferSize());
+							} catch (IOException se) {
+								s.close();
+								throw se;
+							}
+						} catch (IOException ae) {
+							LOGGER.error("Could not create receiver socket", ae);
+							s = null;
+						}
+						
+						synchronized (TcpdumpSyncDatagramReady.Receiver.this) {
+							if (closed) {
+								s.close();
+								p.destroy();
+								break;
+							}
+							socket = s;
+							process = p;
+							TcpdumpSyncDatagramReady.Receiver.this.notifyAll();
+						}
+						
 						if (p != null) {
 							final InputStream error = p.getErrorStream();
 							execute("err", new Runnable() {
@@ -206,7 +234,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 												if (line == null) {
 													break;
 												}
-												LOGGER.warn("Tcpdump message: {}", line);
+												LOGGER.debug("Tcpdump message: {}", line);
 											}
 										} finally {
 											error.close();
@@ -226,32 +254,9 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 											tcpdumpReader.read(input, new TcpdumpReader.Handler() {
 												@Override
 												public void handle(double timestamp, Address sourceAddress, Address destinationAddress, ByteBuffer buffer) {
-													/*%% if (output != null) {
-														try {
-															output.writeInt(buffer.remaining());
-															output.write(buffer.array(), buffer.position(), buffer.remaining());
-															output.flush();
-														} catch (IOException ee) {
-															LOGGER.error("Could not forward tcpdump packet", ee);
-														}
-													}*/
-													
-													if (allHandler != null) {
-														allHandler.handle(sourceAddress, buffer);
-													}
-													
-													ReadyConnection connection = connections.get("s/" + sourceAddress.getHost() + "/"); //%% new Address(destinationIp, destinationPort));
-													if (connection == null) {
-														connection = connections.get("d/" + destinationAddress.getHost() + "/" + destinationAddress.getPort()); //%% new Address(null, destinationPort));
-													}
-													if (connection == null) {
-														connection = connections.get("s//" + destinationAddress.getPort()); //%% new Address(null, destinationPort));
-													}
-													
-													if (connection != null) {
-														connection.handle(sourceAddress, buffer);
-													} else {
-														LOGGER.trace("No match for packet: {} -> {}, available: {}", sourceAddress, destinationAddress, connections.keySet());
+													LOGGER.debug("---->{}", buffer.remaining());
+													for (ReadyConnection c : connections) {
+														c.handle(sourceAddress, buffer);
 													}
 												}
 											});
@@ -282,6 +287,12 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 							} catch (IOException e) {
 							}
 							p.destroy();
+							synchronized (TcpdumpSyncDatagramReady.Receiver.this) {
+								process = null;
+								if (closed) {
+									break;
+								}
+							}
 						}
 						
 						try {
@@ -292,134 +303,82 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 					}
 				}
 			});
-		}
-		
-		private void add(String key, ReadyConnection connection) {
-			connections.put(key, connection);
-		}
-		
-		private void remove(String key) {
-			connections.remove(key);
-		}
-
-		public Receiver prepare() throws IOException {
-			DatagramSocket s = new DatagramSocket();
-			try {
-				s.setReceiveBufferSize(READ_BUFFER_SIZE);
-				s.setSendBufferSize(WRITE_BUFFER_SIZE);
-				LOGGER.debug("Datagram socket buffer size, receive {}, send {}", s.getReceiveBufferSize(), s.getSendBufferSize());
-			} catch (IOException ioe) {
-				s.close();
-				throw ioe;
+			
+			synchronized (this) {
+				while (process == null) {
+					try {
+						wait();
+					} catch (InterruptedException e) {
+					}
+				}
 			}
-			socket = s;
-			return this;
 		}
 		
 		@Override
 		public void close() {
-			if (socket != null) {
-				socket.close();
-				socket = null;
+			closed = true;
+			synchronized (this) {
+				if (process != null) {
+					process.destroy();
+					process = null;
+				}
+				if (socket != null) {
+					socket.close();
+					socket = null;
+				}
 			}
 		}
 	}
 	
 	private final Receiver receiver;
-	private boolean bind = false;
 	
 	public TcpdumpSyncDatagramReady(Receiver receiver) {
 		this.receiver = receiver;
 	}
 	
-	public TcpdumpSyncDatagramReady bind() {
-		bind = true;
-		return this;
-	}
-	
 	@Override
-	public void connect(final Address address, final ReadyConnection connection) {
-		final DatagramSocket socket;
-		final String key;
-		final boolean haveToCloseSocket;
-		if (bind) {
-			try {
-				InetSocketAddress a = AddressUtils.toBindableInetSocketAddress(address);
-				if (a == null) {
-					throw new IOException("Invalid address");
-				}
-				socket = new DatagramSocket(a);
-				try {
-					socket.setReceiveBufferSize(READ_BUFFER_SIZE);
-					socket.setSendBufferSize(WRITE_BUFFER_SIZE);
-					LOGGER.debug("Datagram bound socket {} buffer size, receive {}, send {}", a, socket.getReceiveBufferSize(), socket.getSendBufferSize());
-				} catch (IOException ioee) {
-					socket.close();
-					throw ioee;
-				}
-				haveToCloseSocket = true;
-			} catch (IOException ioe) {
-				connection.failed(ioe);
-				return;
-			}
-			key = "d/" + address.getHost() + "/" + address.getPort();
-		} else {
-			if (receiver.socket == null) {
-				try {
-					socket = new DatagramSocket();
-					try {
-						socket.setReceiveBufferSize(READ_BUFFER_SIZE);
-						socket.setSendBufferSize(WRITE_BUFFER_SIZE);
-						LOGGER.debug("Datagram socket buffer size, receive {}, send {}", socket.getReceiveBufferSize(), socket.getSendBufferSize());
-					} catch (IOException ioee) {
-						socket.close();
-						throw ioee;
-					}
-					haveToCloseSocket = true;
-				} catch (IOException ioe) {
-					connection.failed(ioe);
-					return;
-				}
-				key = "s//" + socket.getLocalPort();
-			} else {
-				socket = receiver.socket;
-				key = "s/" + address.getHost() + "/";
-				haveToCloseSocket = false;
-			}
+	public void connect(Address address, final ReadyConnection connection) {
+		if (address != null) {
+			connection.failed(new IOException("Invalid address: " + address + ", must be null"));
+			return;
+		}
+		if (receiver == null) {
+			connection.failed(new IOException("Invalid receiver"));
+			return;
 		}
 		
-		receiver.add(key, connection);
+		receiver.connections.add(connection);
 
 		connection.connected(new FailableCloseableByteBufferHandler() {
-			private void closeSocket() {
-				receiver.remove(key);
-				if (haveToCloseSocket) {
-					socket.close();
-				}
+			private void remove() {
+				receiver.connections.remove(connection);
 			}
-			
 			@Override
 			public void failed(IOException e) {
-				closeSocket();
+				remove();
 			}
 			@Override
 			public void close() {
-				closeSocket();
+				remove();
 			}
 			@Override
 			public void handle(Address a, ByteBuffer buffer) {
 				if (a == null) {
-					LOGGER.error("Dropping datagram sent to null address"); //%% , using instead: {}", address);
+					LOGGER.error("Dropping datagram sent to null address");
 					return;
-					//%% a = address;
 				}
 				LOGGER.trace("Sending datagram to: {}", a);
 				try {
 					DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(a.getHost()), a.getPort());
-					socket.send(packet);
+					DatagramSocket s = receiver.socket;
+					if (s == null) {
+						LOGGER.trace("Could not send datagram to: {}, socket not yet open", a);
+					} else {
+						s.send(packet);
+					}
 				} catch (IOException ioe) {
 					LOGGER.trace("Error while sending datagram to: {}", a, ioe);
-					closeSocket();
+					remove();
 					connection.failed(ioe);
 				}
 			}

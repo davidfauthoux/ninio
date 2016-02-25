@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.TreeMap;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -17,8 +16,6 @@ import com.davfx.ninio.core.DatagramReady;
 import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.core.TcpdumpSyncDatagramReady;
-import com.davfx.ninio.core.TcpdumpSyncDatagramReadyFactory;
 import com.davfx.util.Lock;
 
 public class SnmpServerTest {
@@ -175,7 +172,8 @@ public class SnmpServerTest {
 		return lock;
 	}
 
-	@Ignore //TODO
+	/*%%
+	@Ignore //TO DO
 	@Test
 	public void testSimultaneousWithTcpdump() throws Exception {
 		TreeMap<Oid, String> map = new TreeMap<>();
@@ -234,6 +232,6 @@ public class SnmpServerTest {
 		Assertions.assertThat(serverOpenCount.count).isEqualTo(0L);
 		Assertions.assertThat(openCount.count).isEqualTo(0L);
 	}
-	
+	*/
 	
 }
