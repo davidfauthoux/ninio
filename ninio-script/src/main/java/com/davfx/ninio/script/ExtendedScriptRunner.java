@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.http.Http;
@@ -22,7 +21,6 @@ import com.davfx.ninio.snmp.AuthRemoteSpecification;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.Snmp;
-import com.davfx.ninio.snmp.SnmpClientCache;
 import com.davfx.ninio.snmp.SnmpClientHandler;
 import com.davfx.ninio.ssh.Ssh;
 import com.davfx.ninio.telnet.Telnet;
@@ -37,23 +35,16 @@ import com.google.common.net.HttpHeaders;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonPrimitive;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class ExtendedScriptRunner implements AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExtendedScriptRunner.class);
 	
-	private static final Config CONFIG = ConfigFactory.load(ExtendedScriptRunner.class.getClassLoader());
-	private static final int MAX_SNMP_CONNECTION_CACHE_SIZE = CONFIG.getInt("ninio.script.snmp.cache.max");
-
 	public final ScriptRunner runner;
 	private final Http http;
 	private final TelnetSharing telnet;
 	private final TelnetSharing ssh;
 	
-	private final SnmpClientCache snmpClientCache;
-
 	public ExtendedScriptRunner(final Queue queue, ReadyFactory tcpReadyFactory, final ReadyFactory udpReadyFactory, final ReadyFactory pingReadyFactory) {
 		runner = new QueueScriptRunner(queue, new ExecutorScriptRunner());
 
@@ -65,10 +56,6 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 		ssh = new TelnetSharing();
 		ssh.override(tcpReadyFactory).withQueue(queue);
 
-		snmpClientCache = (MAX_SNMP_CONNECTION_CACHE_SIZE == 0) ?
-				null :
-				new SnmpClientCache(queue, (udpReadyFactory == null) ? new DatagramReadyFactory(queue) : udpReadyFactory, MAX_SNMP_CONNECTION_CACHE_SIZE);
-		
 		//
 		
 		runner.register("ping", new AsyncScriptFunction() {
@@ -114,7 +101,7 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 					return;
 				}
 
-				Snmp snmp = new Snmp().withCache(snmpClientCache).override(udpReadyFactory).withQueue(queue).to(address);
+				Snmp snmp = new Snmp().override(udpReadyFactory).withQueue(queue).to(address);
 				
 				String community = JsonUtils.getString(r, "community", null);
 				if (community != null) {
@@ -295,9 +282,6 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 
 	@Override
 	public void close() {
-		if (snmpClientCache != null) {
-			snmpClientCache.close();
-		}
 		runner.close();
 
 		http.close();
