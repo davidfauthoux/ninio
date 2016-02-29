@@ -54,15 +54,17 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 	private final ReadyFactory wrappee;
 	
 	private static final class RequestKey {
+		public final Address address;
 		public final int request;
 		public final Oid oid;
-		public RequestKey(int request, Oid oid) {
+		public RequestKey(Address address, int request, Oid oid) {
+			this.address = address;
 			this.request = request;
 			this.oid = oid;
 		}
 		@Override
 		public int hashCode() {
-			return Objects.hash(oid, request);
+			return Objects.hash(address, oid, request);
 		}
 		@Override
 		public boolean equals(Object obj) {
@@ -76,7 +78,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 				return false;
 			}
 			RequestKey other = (RequestKey) obj;
-			return (request == other.request) && oid.equals(other.oid);
+			return address.equals(other.address) && (request == other.request) && oid.equals(other.oid);
 		}
 	}
 	
@@ -87,7 +89,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 		}
 	}
 	
-	private final Map<Address, Cache> cacheByAddress = new HashMap<>();
+	private final Cache cache = new Cache();
 
 	private final Closeable closeable;
 	private final Connection sqlConnection;
@@ -125,42 +127,30 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 				LOGGER.trace("Checking {}", CHECK_TIME);
 				double now = DateUtils.now();
 				
-				Iterator<Map.Entry<Address, Cache>> i = cacheByAddress.entrySet().iterator();
-				while (i.hasNext()) {
-					Map.Entry<Address, Cache> e = i.next();
-					Address address = e.getKey();
-					Cache cache = e.getValue();
+				boolean shouldSolve = false;
+				Iterator<Map.Entry<RequestKey, Double>> requestingIterator = cache.requestingByRequestKey.entrySet().iterator();
+				while (requestingIterator.hasNext()) {
+					Map.Entry<RequestKey, Double> d = requestingIterator.next();
+					RequestKey requestKey = d.getKey();
+					Double requestTimestamp = d.getValue();
 					
-					boolean shouldSolve = false;
-					Iterator<Map.Entry<RequestKey, Double>> requestingIterator = cache.requestingByRequestKey.entrySet().iterator();
-					while (requestingIterator.hasNext()) {
-						Map.Entry<RequestKey, Double> d = requestingIterator.next();
-						RequestKey requestKey = d.getKey();
-						Double requestTimestamp = d.getValue();
-						
-						if ((now - requestTimestamp) > REQUEST_TIMEOUT) {
-							LOGGER.trace("Timeout: {}/{}", address, requestKey.oid);
-							setError(cache, address, requestKey.oid, requestKey.request, BerConstants.ERROR_STATUS_TIMEOUT, 0);
-							requestingIterator.remove();
-							shouldSolve = true;
-						}
+					if ((now - requestTimestamp) > REQUEST_TIMEOUT) {
+						LOGGER.trace("Timeout: {}/{}", requestKey.address, requestKey.oid);
+						setError(cache, requestKey.address, requestKey.oid, requestKey.request, BerConstants.ERROR_STATUS_TIMEOUT, 0);
+						requestingIterator.remove();
+						shouldSolve = true;
 					}
-					
-					if (shouldSolve) {
-						Iterator<Map.Entry<Integer, Requesting>> k = cache.requestingByRequestId.entrySet().iterator();
-						while (k.hasNext()) {
-							Map.Entry<Integer, Requesting> ee = k.next();
-							int ii = ee.getKey();
-							Requesting rr = ee.getValue();
-							if (solve(address, cache, ii, rr)) {
-								k.remove();
-							}
+				}
+				
+				if (shouldSolve) {
+					Iterator<Map.Entry<Integer, Requesting>> k = cache.requestingByRequestId.entrySet().iterator();
+					while (k.hasNext()) {
+						Map.Entry<Integer, Requesting> ee = k.next();
+						int ii = ee.getKey();
+						Requesting rr = ee.getValue();
+						if (solve(rr.address, cache, ii, rr)) {
+							k.remove();
 						}
-					}
-					
-					if (cache.requestingByRequestKey.isEmpty() && cache.requestingByRequestId.isEmpty()) {
-						LOGGER.trace("Cache removed: {}", address);
-						i.remove();
 					}
 				}
 			}
@@ -173,12 +163,14 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 	}
 	
 	private static final class Requesting {
+		public final Address address;
 		public final int request;
 		public final int bulkLength;
 		public final Oid oid;
 		public final ReadyConnection connection;
 		
-		public Requesting(int request, int bulkLength, Oid oid, ReadyConnection connection) {
+		public Requesting(Address address, int request, int bulkLength, Oid oid, ReadyConnection connection) {
+			this.address = address;
 			this.request = request;
 			this.bulkLength = bulkLength;
 			this.oid = oid;
@@ -192,17 +184,14 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 		final Ready wrappeeReady = wrappee.create();
 		return new QueueReady(queue, new Ready() {
 			@Override
-			public void connect(final Address address, final ReadyConnection connection) {
-				LOGGER.trace("Connecting to: {}", address);
-				
-				Cache c = cacheByAddress.get(address);
-				if (c == null) {
-					c = new Cache();
-					cacheByAddress.put(address, c);
+			public void connect(Address bindAddress, final ReadyConnection connection) {
+				if (bindAddress != null) {
+					LOGGER.error("Invalid bind address (should be null): {}", bindAddress);
+					connection.failed(new IOException("Invalid bind address (should be null): " + bindAddress));
+					return;
 				}
-				final Cache cache = c;
 				
-				wrappeeReady.connect(address, new ReadyConnection() {
+				wrappeeReady.connect(bindAddress, new ReadyConnection() {
 					@Override
 					public void failed(IOException e) {
 						connection.failed(e);
@@ -270,7 +259,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 								
 								double now = DateUtils.now();
 								
-								Requesting r = new Requesting(request, bulkLength, oid, connection);
+								Requesting r = new Requesting(address, request, bulkLength, oid, connection);
 								
 								if (solve(address, cache, requestId, r)) {
 									return;
@@ -278,7 +267,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 
 								cache.requestingByRequestId.put(requestId, r);
 
-								RequestKey requestKey = new RequestKey(request, oid);
+								RequestKey requestKey = new RequestKey(address, request, oid);
 								
 								Double requestTimestamp = cache.requestingByRequestKey.get(requestKey);
 								if (requestTimestamp != null) {
@@ -345,7 +334,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 						}
 						*/
 
-						cache.requestingByRequestKey.remove(new RequestKey(r.request, r.oid));
+						cache.requestingByRequestKey.remove(new RequestKey(r.address, r.request, r.oid));
 					
 						if (errorStatus == 0) {
 							setResults(cache, address, r.oid, r.request, results);
