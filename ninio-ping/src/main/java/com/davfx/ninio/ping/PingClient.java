@@ -3,9 +3,7 @@ package com.davfx.ninio.ping;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +27,12 @@ public final class PingClient implements Closeable {
 	private final ReadyFactory readyFactory;
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final Set<InstanceMapper> instanceMappers = new HashSet<>();
+	private final InstanceMapper instanceMapper;
 
 	public PingClient(Queue queue, ReadyFactory readyFactory) {
 		this.queue = queue;
 		this.readyFactory = readyFactory;
+		instanceMapper = new InstanceMapper(requestIdProvider);
 	}
 
 	@Override
@@ -41,10 +40,7 @@ public final class PingClient implements Closeable {
 		queue.post(new Runnable() {
 			@Override
 			public void run() {
-				for (InstanceMapper i : instanceMappers) {
-					i.closeAll();
-				}
-				instanceMappers.clear();
+				instanceMapper.closeAll();
 			}
 		});
 	}
@@ -68,12 +64,7 @@ public final class PingClient implements Closeable {
 			public void run() {
 				Ready ready = readyFactory.create();
 				
-				Address address = new Address(Address.ANY, 0);
-				
-				final InstanceMapper instanceMapper = new InstanceMapper(address, requestIdProvider);
-				instanceMappers.add(instanceMapper);
-
-				ready.connect(address, new ReadyConnection() {
+				ready.connect(null, new ReadyConnection() {
 
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
@@ -84,9 +75,7 @@ public final class PingClient implements Closeable {
 					
 					@Override
 					public void failed(IOException e) {
-						if (instanceMappers.remove(instanceMapper)) {
-							clientHandler.failed(e);
-						}
+						clientHandler.failed(e);
 					}
 					
 					@Override
@@ -96,10 +85,6 @@ public final class PingClient implements Closeable {
 						clientHandler.launched(new PingClientHandler.Callback() {
 							@Override
 							public void close() {
-								if (instanceMappers.remove(instanceMapper)) {
-									// Nothing to do
-								}
-								
 								write.close();
 							}
 							@Override
@@ -113,9 +98,7 @@ public final class PingClient implements Closeable {
 					
 					@Override
 					public void close() {
-						if (instanceMappers.remove(instanceMapper)) {
-							clientHandler.close();
-						}
+						clientHandler.close();
 					}
 				});
 			}
@@ -123,12 +106,10 @@ public final class PingClient implements Closeable {
 	}
 	
 	private static final class InstanceMapper {
-		private final Address address;
 		private final Map<Long, Instance> instances = new HashMap<>();
 		private RequestIdProvider requestIdProvider;
 		
-		public InstanceMapper(Address address, RequestIdProvider requestIdProvider) {
-			this.address = address;
+		public InstanceMapper(RequestIdProvider requestIdProvider) {
 			this.requestIdProvider = requestIdProvider;
 		}
 		
@@ -136,7 +117,7 @@ public final class PingClient implements Closeable {
 			long instanceId = requestIdProvider.get();
 
 			if (instances.containsKey(instanceId)) {
-				LOGGER.warn("The maximum number of simultaneous request has been reached [{}]", address);
+				LOGGER.warn("The maximum number of simultaneous request has been reached");
 				return;
 			}
 			

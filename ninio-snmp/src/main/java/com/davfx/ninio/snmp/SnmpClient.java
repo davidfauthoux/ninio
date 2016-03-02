@@ -67,6 +67,14 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				for (InstanceMapper i : instanceMappers) {
 					i.repeat(now);
 				}
+				{
+					Iterator<InstanceMapper> it = instanceMappers.iterator();
+					while (it.hasNext()) {
+						if (it.next().terminated) {
+							it.remove();
+						}
+					}
+				}
 			}
 		});
 	}
@@ -157,9 +165,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					
 					@Override
 					public void failed(IOException e) {
-						if (instanceMappers.remove(instanceMapper)) {
-							clientHandler.failed(e);
+						if (instanceMapper.terminated) {
+							return;
 						}
+						instanceMapper.terminated = true;
+						clientHandler.failed(e);
 					}
 					
 					@Override
@@ -172,10 +182,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						clientHandler.launched(new SnmpClientHandler.Callback() {
 							@Override
 							public void close() {
-								if (instanceMappers.remove(instanceMapper)) {
-									// Nothing to do
+								if (instanceMapper.terminated) {
+									return;
 								}
-								
+								instanceMapper.terminated = true;
 								write.close();
 							}
 							@Override
@@ -191,9 +201,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					
 					@Override
 					public void close() {
-						if (instanceMappers.remove(instanceMapper)) {
-							clientHandler.close();
+						if (instanceMapper.terminated) {
+							return;
 						}
+						instanceMapper.terminated = true;
+						clientHandler.close();
 					}
 				});
 			}
@@ -207,6 +219,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		
 		private FailableCloseableByteBufferHandler write = null;
 		
+		public boolean terminated = false;
+		
 		public InstanceMapper(RequestIdProvider requestIdProvider) {
 		// public InstanceMapper(Address address, RequestIdProvider requestIdProvider) {
 			// super(InstanceMapper.class);
@@ -215,6 +229,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		public void map(Instance instance) {
+			if (terminated) {
+				return;
+			}
 			int instanceId = requestIdProvider.get();
 
 			if (instances.containsKey(instanceId)) {
@@ -229,6 +246,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		public void closeAll() {
+			if (terminated) {
+				return;
+			}
 			for (Instance i : instances.values()) {
 				i.closeAll();
 			}
@@ -239,6 +259,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 
 		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
+			if (terminated) {
+				return;
+			}
 			if (instanceId == Integer.MAX_VALUE) {
 				LOGGER.trace("Calling all instances (request ID = {})", Integer.MAX_VALUE);
 				List<Instance> l = new LinkedList<>(instances.values());
@@ -257,6 +280,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		public void repeat(double now) {
+			if (terminated) {
+				return;
+			}
 			for (Instance i : instances.values()) {
 				i.repeat(now);
 			}
