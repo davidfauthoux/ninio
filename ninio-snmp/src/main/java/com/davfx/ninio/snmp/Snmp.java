@@ -24,7 +24,6 @@ public final class Snmp {
 	private ReadyFactory readyFactory = null;
 	private String community = CONFIG.getString("ninio.snmp.defaultCommunity");
 	private AuthRemoteSpecification authRemoteSpecification = null;
-	private AuthRemoteEngine authRemoteEngine = null;
 	
 	public Snmp() {
 	}
@@ -55,11 +54,6 @@ public final class Snmp {
 	}
 	public Snmp withAuth(AuthRemoteSpecification authRemoteSpecification) {
 		this.authRemoteSpecification = authRemoteSpecification;
-		if (authRemoteSpecification != null) {
-			authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
-		} else {
-			authRemoteEngine = null;
-		}
 		return this;
 	}
 
@@ -80,7 +74,7 @@ public final class Snmp {
 			}
 			@Override
 			public void launched(final Callback callback) {
-				callback.get(address, community, authRemoteEngine, timeoutFromBeginning, oid, new Callback.GetCallback() {
+				callback.get(address, community, authRemoteSpecification, timeoutFromBeginning, oid, new Callback.GetCallback() {
 					@Override
 					public void failed(IOException e) {
 						callback.close();

@@ -26,7 +26,7 @@ final class AuthRemoteEngine {
 	private int time = 0;
 	private byte[] id = new byte[0];
 
-	private final AuthRemoteSpecification authRemoteSpecification;
+	public final AuthRemoteSpecification authRemoteSpecification;
 	private final MessageDigest messageDigest;
 	
 	private int packetNumber = 0;

@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,6 +27,8 @@ import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.util.QueueScheduled;
 import com.davfx.util.ConfigUtils;
 import com.davfx.util.DateUtils;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -35,11 +38,12 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
 
 	private static final int BULK_SIZE = CONFIG.getInt("ninio.snmp.bulkSize");
-	private static final double MIN_TIME_TO_REPEAT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.minTimeToRepeat");
+	private static final double MIN_TIME_TO_REPEAT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeat.min");
 	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
-	private static final double REPEAT_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeatTime");
-	private static final double REPEAT_RANDOMIZATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeatRandomization");
-
+	private static final double REPEAT_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeat.time");
+	private static final double REPEAT_RANDOMIZATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeat.randomization");
+	private static final double AUHT_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
+	
 	private final Queue queue;
 	private final ReadyFactory readyFactory;
 	// private final Address address;
@@ -133,6 +137,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				
 				ready.connect(null, new ReadyConnection() {
 				// ready.connect(address, new ReadyConnection() {
+					private final Cache<Address, AuthRemoteEngine> authRemoteEngines = CacheBuilder.newBuilder().expireAfterWrite((long) (AUHT_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
+
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
 						LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
@@ -141,20 +147,20 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						int errorIndex;
 						Iterable<Result> results;
 						try {
-							//TODO authEngine
-							//if (authEngine == null) {
+							AuthRemoteEngine authRemoteEngine = authRemoteEngines.getIfPresent(address);
+							if (authRemoteEngine == null) {
 								Version2cPacketParser parser = new Version2cPacketParser(buffer);
 								instanceId = parser.getRequestId();
 								errorStatus = parser.getErrorStatus();
 								errorIndex = parser.getErrorIndex();
 								results = parser.getResults();
-							/*} else {
-								Version3PacketParser parser = new Version3PacketParser(authEngine, buffer);
+							} else {
+								Version3PacketParser parser = new Version3PacketParser(authRemoteEngine, buffer);
 								instanceId = parser.getRequestId();
 								errorStatus = parser.getErrorStatus();
 								errorIndex = parser.getErrorIndex();
 								results = parser.getResults();
-							}*/
+							}
 						} catch (Exception e) {
 							LOGGER.error("Invalid packet", e);
 							return;
@@ -189,12 +195,27 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 								write.close();
 							}
 							@Override
-							public void get(Address address, String community, AuthRemoteEngine authEngine, double timeoutFromBeginning, Oid oid, GetCallback callback) {
+							public void get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, double timeoutFromBeginning, Oid oid, GetCallback callback) {
 							// public void get(Oid oid, GetCallback callback) {
-								Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning, address, community, authEngine);
+								AuthRemoteEngine authRemoteEngine = null;
+								if (authRemoteSpecification != null) {
+									authRemoteEngine = authRemoteEngines.getIfPresent(address);
+									if (authRemoteEngine != null) {
+										if (!authRemoteEngine.authRemoteSpecification.equals(authRemoteSpecification)) {
+											authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+										}
+									} else {
+										authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+									}
+								}
+								if (authRemoteEngine != null) {
+									authRemoteEngines.put(address, authRemoteEngine);
+								}
+								
+								Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning, address, community, authRemoteEngine);
 								// Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning);
 								instanceMapper.map(i);
-								w.get(address, i.instanceId, community, authEngine, oid);
+								w.get(address, i.instanceId, community, authRemoteEngine, oid);
 							}
 						});
 					}
