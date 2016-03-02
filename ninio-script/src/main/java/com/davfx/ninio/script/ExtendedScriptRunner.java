@@ -51,10 +51,8 @@ public final class ExtendedScriptRunner implements AutoCloseable {
 		http = new Http();
 		http.override(tcpReadyFactory).withQueue(queue);
 		
-		telnet = new TelnetSharing();
-		telnet.override(tcpReadyFactory).withQueue(queue);
-		ssh = new TelnetSharing();
-		ssh.override(tcpReadyFactory).withQueue(queue);
+		telnet = new TelnetSharing(queue, tcpReadyFactory);
+		ssh = new TelnetSharing(queue, tcpReadyFactory);
 
 		//
 		

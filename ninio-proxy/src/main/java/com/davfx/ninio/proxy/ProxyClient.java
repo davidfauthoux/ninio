@@ -33,6 +33,9 @@ public final class ProxyClient implements AutoCloseable, Closeable {
 	public ReadyFactory socket(Queue queue) {
 		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.SOCKET);
 	}
+	public ReadyFactory ssl(Queue queue) {
+		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.SSL);
+	}
 	public ReadyFactory datagram(Queue queue) {
 		return new ProxyReadyFactory(queue, proxyReadyGenerator, ProxyCommons.Types.DATAGRAM);
 	}

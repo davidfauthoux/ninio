@@ -14,6 +14,7 @@ interface ProxyCommons {
 		private static final Config CONFIG = ConfigFactory.load(ProxyCommons.class.getClassLoader());
 		
 		public static final String SOCKET = CONFIG.getString("ninio.proxy.socket");
+		public static final String SSL = CONFIG.getString("ninio.proxy.ssl");
 		public static final String DATAGRAM = CONFIG.getString("ninio.proxy.datagram");
 		public static final String PING = CONFIG.getString("ninio.proxy.ping");
 		public static final String HOP = CONFIG.getString("ninio.proxy.hop");

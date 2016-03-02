@@ -15,6 +15,7 @@ final class BaseClientSide implements ClientSide {
 
 	public BaseClientSide() {
 		configurators.put(ProxyCommons.Types.SOCKET, new EmptyClientSideConfiguration());
+		configurators.put(ProxyCommons.Types.SSL, new EmptyClientSideConfiguration());
 		configurators.put(ProxyCommons.Types.DATAGRAM, new EmptyClientSideConfiguration());
 		configurators.put(ProxyCommons.Types.PING, new EmptyClientSideConfiguration());
 		configurators.put(ProxyCommons.Types.HOP, new EmptyClientSideConfiguration());

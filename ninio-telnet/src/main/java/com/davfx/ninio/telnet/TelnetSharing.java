@@ -63,13 +63,13 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 		}
 	}
 
-	private static final Queue DEFAULT_QUEUE = new Queue();
-
-	private Queue queue = DEFAULT_QUEUE;
+	private final Queue queue;
+	private final ReadyFactory readyFactory;
 	private final Map<Address, TelnetSharingHandlerManager> map = new HashMap<>();
-	private ReadyFactory readyFactory = null;
 	
-	public TelnetSharing() {
+	public TelnetSharing(Queue queue, ReadyFactory readyFactory) {
+		this.queue = queue;
+		this.readyFactory = readyFactory;
 	}
 	
 	@Override
@@ -82,16 +82,6 @@ public final class TelnetSharing implements AutoCloseable, Closeable {
 				}
 			}
 		});
-	}
-	
-	public TelnetSharing withQueue(Queue queue) {
-		this.queue = queue;
-		return this;
-	}
-	
-	public TelnetSharing override(ReadyFactory readyFactory) {
-		this.readyFactory = readyFactory;
-		return this;
 	}
 	
 	private static final class TelnetSharingHandlerManager {

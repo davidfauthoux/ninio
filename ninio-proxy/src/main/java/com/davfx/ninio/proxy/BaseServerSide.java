@@ -14,8 +14,10 @@ import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.ReadyFactory;
 import com.davfx.ninio.core.SocketReadyFactory;
+import com.davfx.ninio.core.SslReadyFactory;
 import com.davfx.ninio.core.TcpdumpSyncDatagramReady;
 import com.davfx.ninio.core.TcpdumpSyncDatagramReadyFactory;
+import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.ping.InternalPingServerReadyFactory;
 import com.davfx.ninio.ping.PureJavaSyncPing;
 import com.typesafe.config.Config;
@@ -56,14 +58,21 @@ public final class BaseServerSide implements ServerSide {
 	private final Map<String, ServerSideConfigurator> configurators = new ConcurrentHashMap<>();
 	private final Closeable toClose;
 
+	private final Trust trust;
+	
 	private final ReadyFactory datagramReadyFactory;
 	private final ReadyFactory socketReadyFactory;
+	private final ReadyFactory sslReadyFactory;
 
 	public BaseServerSide(Queue queue) {
+
+		trust = new Trust();
 		
 		socketReadyFactory = new SocketReadyFactory(queue);
+		sslReadyFactory = new SslReadyFactory(queue, trust);
 		
 		configurators.put(ProxyCommons.Types.SOCKET, new SimpleServerSideConfigurator(socketReadyFactory));
+		configurators.put(ProxyCommons.Types.SSL, new SimpleServerSideConfigurator(sslReadyFactory));
 
 		switch (MODE) {
 		case SYNC_TCPDUMP: {

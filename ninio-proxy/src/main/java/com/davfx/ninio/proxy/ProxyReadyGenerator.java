@@ -130,7 +130,7 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 							in = new DataInputStream(sin);
 
 						} catch (final IOException ioe) {
-							connection.failed(new IOException("Connection to proxy cannot be established", ioe));
+							connection.failed(new IOException("Connection to proxy cannot be established to: " + proxyServerAddress, ioe));
 							executor.execute(new Runnable() {
 								@Override
 								public void run() {

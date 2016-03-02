@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.SocketReadyFactory;
 import com.davfx.util.Lock;
 import com.google.common.base.Function;
 
@@ -40,7 +41,7 @@ public class TelnetTest {
 
 				final Lock<String, IOException> lock = new Lock<>();
 				
-				try (TelnetSharing sharing = new TelnetSharing()) {
+				try (TelnetSharing sharing = new TelnetSharing(queue, new SocketReadyFactory(queue))) {
 					TelnetSharingHandler handler = sharing.client(Telnet.sharing(), new Address(Address.LOCALHOST, port));
 					handler.init(null, ": ", new TelnetSharingHandler.Callback() {
 						@Override
