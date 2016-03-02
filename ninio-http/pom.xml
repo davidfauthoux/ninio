@@ -21,6 +21,7 @@
 			<groupId>org.eclipse.jetty.aggregate</groupId>
 			<artifactId>jetty-all-server</artifactId>
 			<version>8.1.18.v20150929</version>
+			<scope>test</scope>
 		</dependency>
 	</dependencies>
 </project>
