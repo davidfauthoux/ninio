@@ -239,10 +239,16 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 											synchronized (lock) {
 												currentConnection = connections.get(connectionId);
 											}
+											Address a;
+											if (in.readBoolean()) {
+												a = new Address(in.readUTF(), in.readInt());
+											} else {
+												a = (currentConnection == null) ? null : currentConnection.first;
+											}
 											final byte[] b = new byte[len];
 											in.readFully(b);
 											if (currentConnection != null) {
-												currentConnection.second.handle(currentConnection.first, ByteBuffer.wrap(b));
+												currentConnection.second.handle(a, ByteBuffer.wrap(b));
 											}
 										}
 									} catch (IOException ioe) {

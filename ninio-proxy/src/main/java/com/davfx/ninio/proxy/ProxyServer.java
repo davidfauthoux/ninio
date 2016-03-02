@@ -227,6 +227,13 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 														}
 														try {
 															out.writeInt(connectionId);
+															if (address == null) {
+																out.writeBoolean(false);
+															} else {
+																out.writeBoolean(true);
+																out.writeUTF(address.getHost());
+																out.writeInt(address.getPort());
+															}
 															out.writeInt(buffer.remaining());
 															out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
 															out.flush();
@@ -259,7 +266,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 											if (in.readBoolean()) {
 												a = new Address(in.readUTF(), in.readInt());
 											} else {
-												a = connection.first;
+												a = (connection == null) ? null : connection.first;
 											}
 											byte[] b = new byte[len];
 											in.readFully(b);

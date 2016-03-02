@@ -85,13 +85,23 @@ public final class PingClient implements Closeable {
 						clientHandler.launched(new PingClientHandler.Callback() {
 							@Override
 							public void close() {
-								write.close();
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										write.close();
+									}
+								});
 							}
 							@Override
-							public void ping(String host, PingCallback callback) {
-								Instance i = new Instance(callback, w);
-								instanceMapper.map(i);
-								w.ping(i.instanceId, host);
+							public void ping(final String host, final PingCallback callback) {
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										Instance i = new Instance(callback, w);
+										instanceMapper.map(i);
+										w.ping(i.instanceId, host);
+									}
+								});
 							}
 						});
 					}

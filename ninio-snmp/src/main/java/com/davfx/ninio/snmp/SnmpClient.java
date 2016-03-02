@@ -188,34 +188,44 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						clientHandler.launched(new SnmpClientHandler.Callback() {
 							@Override
 							public void close() {
-								if (instanceMapper.terminated) {
-									return;
-								}
-								instanceMapper.terminated = true;
-								write.close();
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										if (instanceMapper.terminated) {
+											return;
+										}
+										instanceMapper.terminated = true;
+										write.close();
+									}
+								});
 							}
 							@Override
-							public void get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, double timeoutFromBeginning, Oid oid, GetCallback callback) {
+							public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final double timeoutFromBeginning, final Oid oid, final GetCallback callback) {
 							// public void get(Oid oid, GetCallback callback) {
-								AuthRemoteEngine authRemoteEngine = null;
-								if (authRemoteSpecification != null) {
-									authRemoteEngine = authRemoteEngines.getIfPresent(address);
-									if (authRemoteEngine != null) {
-										if (!authRemoteEngine.authRemoteSpecification.equals(authRemoteSpecification)) {
-											authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+								queue.post(new Runnable() {
+									@Override
+									public void run() {
+										AuthRemoteEngine authRemoteEngine = null;
+										if (authRemoteSpecification != null) {
+											authRemoteEngine = authRemoteEngines.getIfPresent(address);
+											if (authRemoteEngine != null) {
+												if (!authRemoteEngine.authRemoteSpecification.equals(authRemoteSpecification)) {
+													authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+												}
+											} else {
+												authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+											}
 										}
-									} else {
-										authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+										if (authRemoteEngine != null) {
+											authRemoteEngines.put(address, authRemoteEngine);
+										}
+										
+										Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning, address, community, authRemoteEngine);
+										// Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning);
+										instanceMapper.map(i);
+										w.get(address, i.instanceId, community, authRemoteEngine, oid);
 									}
-								}
-								if (authRemoteEngine != null) {
-									authRemoteEngines.put(address, authRemoteEngine);
-								}
-								
-								Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning, address, community, authRemoteEngine);
-								// Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning);
-								instanceMapper.map(i);
-								w.get(address, i.instanceId, community, authRemoteEngine, oid);
+								});
 							}
 						});
 					}
