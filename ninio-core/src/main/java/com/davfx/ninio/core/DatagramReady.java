@@ -45,6 +45,10 @@ public final class DatagramReady implements Ready {
 	
 	//%%% Thread ttt;
 
+	private static final class CurrentWriteLength {
+		public long length = 0L;
+	}
+	
 	@Override
 	public void connect(Address address, final ReadyConnection connection) {
 		try {
@@ -56,7 +60,7 @@ public final class DatagramReady implements Ready {
 				final SelectionKey selectionKey = channel.register(selector, 0);
 				
 				final LinkedList<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
-				final long[] toWriteLength = new long[] { 0L };
+				final CurrentWriteLength toWriteLength = new CurrentWriteLength();
 	
 				selectionKey.attach(new SelectionKeyVisitor() {
 					@Override
@@ -138,7 +142,7 @@ public final class DatagramReady implements Ready {
 										long before = b.buffer.remaining();
 										try {
 											channel.send(b.buffer, a);
-											toWriteLength[0] -= before - b.buffer.remaining();
+											toWriteLength.length -= before - b.buffer.remaining();
 										} catch (IOException e) {
 											LOGGER.warn("Write failed to: {}", a, e);
 											b.buffer.position(b.buffer.position() + b.buffer.remaining());
@@ -214,11 +218,12 @@ public final class DatagramReady implements Ready {
 						b.address = address;
 						b.buffer = buffer;
 						toWriteQueue.addLast(b);
-						toWriteLength[0] += b.buffer.remaining();
-						while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength[0] > WRITE_MAX_BUFFER_SIZE)) {
+						toWriteLength.length += b.buffer.remaining();
+						LOGGER.trace("Write buffer current size: {} bytes", toWriteLength.length);
+						while ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength.length > WRITE_MAX_BUFFER_SIZE)) {
 							AddressedByteBuffer r = toWriteQueue.removeFirst();
 							long l = r.buffer.remaining();
-							toWriteLength[0] -= l;
+							toWriteLength.length -= l;
 							LOGGER.warn("Dropping {} bytes that should have been sent to {}", l, r.address);
 						}
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
