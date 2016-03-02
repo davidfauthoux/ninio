@@ -25,7 +25,7 @@ import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-final class HttpRecycle implements AutoCloseable, Closeable {
+public final class HttpRecycle implements AutoCloseable, Closeable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpRecycle.Recycler.class);
 	
