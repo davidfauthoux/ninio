@@ -16,11 +16,11 @@ import com.davfx.ninio.core.Address;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class SocketReady {
+public final class SocketConnectorFactory implements ConnectorFactory {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(SocketReady.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SocketConnectorFactory.class);
 
-	private static final Config CONFIG = ConfigFactory.load(SocketReady.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(SocketConnectorFactory.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.read.size").intValue();
 	// private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
@@ -28,28 +28,29 @@ public final class SocketReady {
 
 	private Executor executor = null;
 	private Address connectAddress = null;
-	private Connectable connectable = null;
+	private Connector connectable = null;
 
-	public SocketReady() {
+	public SocketConnectorFactory() {
 	}
 	
-	public SocketReady with(Executor executor) {
+	public SocketConnectorFactory with(Executor executor) {
 		this.executor = executor;
 		return this;
 	}
 
-	public SocketReady connect(Address connectAddress) {
+	public SocketConnectorFactory connect(Address connectAddress) {
 		this.connectAddress = connectAddress;
 		return this;
 	}
 
-	public Connectable create() {
-		Connectable c = connectable;
+	@Override
+	public Connector create() {
+		Connector c = connectable;
 		if (c != null) {
 			c.disconnect();
 		}
 		final Address thisConnectAddress = connectAddress;
-		connectable = new SimpleConnectable(executor, new SimpleConnectable.Connect() {
+		connectable = new SimpleConnector(executor, new SimpleConnector.Connect() {
 			private SocketChannel currentChannel = null;
 			private SelectionKey currentInboundKey = null;
 			private SelectionKey currentSelectionKey = null;
@@ -59,7 +60,7 @@ public final class SocketReady {
 
 			@Override
 			public void connect(final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -78,7 +79,7 @@ public final class SocketReady {
 							try {
 								// channel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
 								channel.configureBlocking(false);
-								final SelectionKey inboundKey = channel.register(InternalQueue.selector, SelectionKey.OP_CONNECT);
+								final SelectionKey inboundKey = channel.register(InternalQueue.SELECTOR, SelectionKey.OP_CONNECT);
 								currentInboundKey = inboundKey;
 								inboundKey.attach(new SelectionKeyVisitor() {
 									@Override
@@ -89,7 +90,7 @@ public final class SocketReady {
 						
 										try {
 											channel.finishConnect();
-											final SelectionKey selectionKey = channel.register(InternalQueue.selector, 0);
+											final SelectionKey selectionKey = channel.register(InternalQueue.SELECTOR, 0);
 											currentSelectionKey = selectionKey;
 				
 											selectionKey.attach(new SelectionKeyVisitor() {
@@ -236,7 +237,7 @@ public final class SocketReady {
 
 			@Override
 			public void disconnect() {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -251,7 +252,7 @@ public final class SocketReady {
 			
 			@Override
 			public void send(final Address address, final ByteBuffer buffer) {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (address != null) {

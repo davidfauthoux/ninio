@@ -8,7 +8,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class Version3PacketParser {
+public final class Version3PacketParser {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Version3PacketParser.class);
 	

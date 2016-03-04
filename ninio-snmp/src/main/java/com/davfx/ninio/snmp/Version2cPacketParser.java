@@ -8,7 +8,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class Version2cPacketParser {
+public final class Version2cPacketParser {
 	/*%%%
 	public static void main(String[] args) throws Exception {
 		try (DataInputStream in = new DataInputStream(new FileInputStream(new File("tcpdump.output.bin")))) {

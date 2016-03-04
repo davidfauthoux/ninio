@@ -1,6 +1,6 @@
 package com.davfx.ninio.core.v3;
 
-public interface Connectable extends Connected {
+public interface Connector extends Connected {
 	void connect();
 	void disconnect();
 }

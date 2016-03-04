@@ -16,11 +16,11 @@ import com.davfx.ninio.core.Address;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class DatagramReady {
+public final class DatagramConnectorFactory implements ConnectorFactory {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(DatagramReady.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(DatagramConnectorFactory.class);
 
-	private static final Config CONFIG = ConfigFactory.load(DatagramReady.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(DatagramConnectorFactory.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
@@ -32,28 +32,29 @@ public final class DatagramReady {
 
 	private Executor executor = null;
 	private Address bindAddress = null;
-	private Connectable connectable = null;
+	private Connector connectable = null;
 
-	public DatagramReady() {
+	public DatagramConnectorFactory() {
 	}
 	
-	public DatagramReady with(Executor executor) {
+	public DatagramConnectorFactory with(Executor executor) {
 		this.executor = executor;
 		return this;
 	}
 
-	public DatagramReady bind(Address bindAddress) {
+	public DatagramConnectorFactory bind(Address bindAddress) {
 		this.bindAddress = bindAddress;
 		return this;
 	}
 
-	public Connectable create() {
-		Connectable c = connectable;
+	@Override
+	public Connector create() {
+		Connector c = connectable;
 		if (c != null) {
 			c.disconnect();
 		}
 		final Address thisBindAddress = bindAddress;
-		connectable = new SimpleConnectable(executor, new SimpleConnectable.Connect() {
+		connectable = new SimpleConnector(executor, new SimpleConnector.Connect() {
 			private DatagramChannel currentChannel = null;
 			private SelectionKey currentSelectionKey = null;
 
@@ -62,7 +63,7 @@ public final class DatagramReady {
 
 			@Override
 			public void connect(final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -79,7 +80,7 @@ public final class DatagramReady {
 								channel.configureBlocking(false);
 								channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
 								channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
-								final SelectionKey selectionKey = channel.register(InternalQueue.selector, 0);
+								final SelectionKey selectionKey = channel.register(InternalQueue.SELECTOR, 0);
 								currentSelectionKey = selectionKey;
 								
 								selectionKey.attach(new SelectionKeyVisitor() {
@@ -220,7 +221,7 @@ public final class DatagramReady {
 
 			@Override
 			public void disconnect() {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -234,7 +235,7 @@ public final class DatagramReady {
 			
 			@Override
 			public void send(final Address address, final ByteBuffer buffer) {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {

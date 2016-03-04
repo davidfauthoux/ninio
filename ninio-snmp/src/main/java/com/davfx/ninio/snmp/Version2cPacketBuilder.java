@@ -2,7 +2,7 @@ package com.davfx.ninio.snmp;
 
 import java.nio.ByteBuffer;
 
-final class Version2cPacketBuilder {
+public final class Version2cPacketBuilder {
 	private final ByteBuffer buffer;
 
 	private Version2cPacketBuilder(String community, int requestId, Oid oid, int type, int bulkLength) {

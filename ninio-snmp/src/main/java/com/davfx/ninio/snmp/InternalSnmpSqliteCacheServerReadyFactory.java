@@ -51,8 +51,7 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 	private static final String NO_COMMUNITY = "xxx";
 	
 	private final Queue queue;
-	private final ReadyFactory wrappee;
-	
+
 	private static final class RequestKey {
 		public final Address address;
 		public final int request;
@@ -90,6 +89,8 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 	}
 	
 	private final Cache cache = new Cache();
+	
+	private final ReadyFactory wrappee;
 
 	private final Closeable closeable;
 	private final Connection sqlConnection;
@@ -180,8 +181,8 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 	
 	@Override
 	public Ready create() {
-		LOGGER.trace("Ready created");
 		final Ready wrappeeReady = wrappee.create();
+		LOGGER.trace("Ready created");
 		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(Address bindAddress, final ReadyConnection connection) {
@@ -370,7 +371,29 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 	
 	private void setError(Cache cache, Address address, Oid oid, int request, int errorStatus, int errorIndex) {
 		double now = DateUtils.now();
-		
+		/*
+		try {
+			try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `value`, `firstOfBulk`, `lastOfBulk` FROM `data` WHERE `address`= ? AND `oid` = ?")) {
+				int k = 1;
+				s.setString(k++, address.toString());
+				s.setString(k++, oid.toString());
+				ResultSet rs = s.executeQuery();
+				while (rs.next()) {
+					String value = rs.getString("value");
+					boolean firstOfBulk = rs.getBoolean("firstOfBulk");
+					boolean lastOfBulk = rs.getBoolean("lastOfBulk");
+					if (!lastOfBulk) {
+						System.out.println("*******************");
+						System.exit(0);
+					}
+					break;
+				}
+			}
+		} catch (SQLException se) {
+			LOGGER.error("SQL error", se);
+		}
+		*/
+			
 		LOGGER.trace("Set GET error in cache: oid = {}, errorStatus = {}", oid, errorStatus);
 		try {
 			try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `data` (`address`, `oid`, `timestamp`, `errorStatus`, `errorIndex`, `value`, `firstOfBulk`, `lastOfBulk`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
@@ -544,43 +567,40 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 					boolean firstOfBulk = rs.getBoolean("firstOfBulk");
 					boolean lastOfBulk = rs.getBoolean("lastOfBulk");
 
-					try {
-						if (first) {
-							if (oid.equals(r.oid)) {
-								/*%%% if (errorStatus != 0) {
-									LOGGER.trace("Error for GETNEXT {}: {} ({})", r.oid, errorStatus, requestId);
-									ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
-									r.connection.handle(address, builtBuffer);
-									return true;
-								}*/
-								if (lastOfBulk) {
-									return false;
-								}
-								continue;
-							} else if (firstOfBulk) {
-								return false;
-							}
-						}
-						
-						if (firstOfBulk) {
-							return false;
-						}
-						
-						if (value == null) {
+					if (first) {
+						if (oid.equals(r.oid)) {
+							/*%%% if (errorStatus != 0) {
+								LOGGER.trace("Error for GETNEXT {}: {} ({})", r.oid, errorStatus, requestId);
+								ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
+								r.connection.handle(address, builtBuffer);
+								return true;
+							}*/
 							if (lastOfBulk) {
 								return false;
 							}
+							first = false;
 							continue;
+						} else if (firstOfBulk) {
+							return false;
 						}
-
-						LOGGER.trace("Solved for GETNEXT {}: {} ({})", r.oid, oid, requestId);
-						ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(oid, value)));
-						r.connection.handle(address, builtBuffer);
-						return true;
-						
-					} finally {
-						first = false;
 					}
+					
+					if (firstOfBulk) {
+						return false;
+					}
+					
+					if (value == null) {
+						if (lastOfBulk) {
+							return false;
+						}
+						first = false;
+						continue;
+					}
+
+					LOGGER.trace("Solved for GETNEXT {}: {} ({})", r.oid, oid, requestId);
+					ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, 0, 0, Arrays.asList(new Result(oid, value)));
+					r.connection.handle(address, builtBuffer);
+					return true;
 				}
 				return false;
 			}
@@ -630,50 +650,53 @@ public final class InternalSnmpSqliteCacheServerReadyFactory implements ReadyFac
 					boolean firstOfBulk = rs.getBoolean("firstOfBulk");
 					boolean lastOfBulk = rs.getBoolean("lastOfBulk");
 
-					try {
-						if (first) {
-							if (oid.equals(r.oid)) {
-								/*%%%% if (errorStatus != 0) {
-									LOGGER.trace("Error for GETBULK {}: {} ({})", r.oid, errorStatus, requestId);
-									ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
-									r.connection.handle(address, builtBuffer);
-									return true;
-								}
-								*/
-								if (lastOfBulk) {
-									return false;
-								}
-								continue;
-							} else if (firstOfBulk) {
+					if (first) {
+						if (oid.equals(r.oid)) {
+							/*%%%% if (errorStatus != 0) {
+								LOGGER.trace("Error for GETBULK {}: {} ({})", r.oid, errorStatus, requestId);
+								ByteBuffer builtBuffer = build(requestId, NO_COMMUNITY, errorStatus, errorIndex, null);
+								r.connection.handle(address, builtBuffer);
+								return true;
+							}
+							*/
+							if (lastOfBulk) {
 								return false;
 							}
-						}
-						
-						if (firstOfBulk) {
-							break;
-						}
-						
-						if (value == null) {
-							if (lastOfBulk) {
-								break;
-							}
+							first = false;
 							continue;
+						} else if (firstOfBulk) {
+							return false;
 						}
-
-						LOGGER.trace("Solved for GETBULK {}: {} ({})", r.oid, oid, requestId);
-						rr.add(new Result(oid, value));
-
-						if (lastOfBulk || (rr.size() == r.bulkLength)) {
+					}
+					
+					if (firstOfBulk) {
+						break;
+					}
+					
+					if (value == null) {
+						if (lastOfBulk) {
 							break;
 						}
-
-					} finally {
 						first = false;
+						continue;
 					}
+
+					LOGGER.trace("Solved for GETBULK {}: {} ({})", r.oid, oid, requestId);
+					rr.add(new Result(oid, value));
+
+					if (lastOfBulk || (rr.size() == r.bulkLength)) {
+						break;
+					}
+
+					first = false;
 				}
 			}
 		} catch (SQLException se) {
 			LOGGER.error("SQL error", se);
+			return false;
+		}
+		
+		if (rr.isEmpty()) {
 			return false;
 		}
 

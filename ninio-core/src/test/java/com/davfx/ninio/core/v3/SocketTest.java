@@ -28,7 +28,7 @@ public class SocketTest {
 			final int port = 8080;
 	
 			final Wait wait = new Wait();
-			final Acceptable server = new SocketListen().with(executor).bind(new Address(null, port)).create();
+			final Acceptable server = new SocketServer().with(executor).bind(new Address(null, port)).create();
 			try {
 				server.failing(new Failing() {
 					@Override
@@ -46,9 +46,9 @@ public class SocketTest {
 					}
 				});
 				
-				server.accept(new Acceptable.Listening() {
+				server.accept(new ListenConnectingable() {
 					@Override
-					public void connecting(final Connectable connectable) {
+					public void connecting(final Connector connectable) {
 						connectable.failing(new Failing() {
 							@Override
 							public void failed(IOException e) {
@@ -85,7 +85,7 @@ public class SocketTest {
 
 				wait.waitFor();
 
-				final Connectable client = new SocketReady().with(executor).connect(new Address(Address.LOCALHOST, port)).create();
+				final Connector client = new SocketConnectorFactory().with(executor).connect(new Address(Address.LOCALHOST, port)).create();
 				try {
 					client.failing(new Failing() {
 						@Override

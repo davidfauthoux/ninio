@@ -6,7 +6,7 @@ import java.util.concurrent.Executor;
 
 import com.davfx.ninio.core.Address;
 
-final class SimpleConnectable implements Connectable {
+final class SimpleConnector implements Connector {
 	Connecting connecting = null;
 	Closing closing = null;
 	Failing failing = null;
@@ -19,7 +19,7 @@ final class SimpleConnectable implements Connectable {
 	
 	private final Executor executor;
 	private final Connect connect;
-	public SimpleConnectable(Executor executor, Connect connect) {
+	public SimpleConnector(Executor executor, Connect connect) {
 		this.executor = executor;
 		this.connect = connect;
 	}

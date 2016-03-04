@@ -2,7 +2,7 @@ package com.davfx.ninio.snmp;
 
 import java.nio.ByteBuffer;
 
-final class Version3PacketBuilder {
+public final class Version3PacketBuilder {
 	private final ByteBuffer buffer;
 
 	private static final class AuthBerPacket implements BerPacket {

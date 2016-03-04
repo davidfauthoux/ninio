@@ -7,19 +7,21 @@ import java.nio.channels.Selector;
 import java.nio.channels.spi.SelectorProvider;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.util.ClassThreadFactory;
 
-final class InternalQueue {
+public final class InternalQueue {
 	private static final Logger LOGGER = LoggerFactory.getLogger(InternalQueue.class);
 
 	private static final double WAIT_ON_SELECTOR_ERROR = 0.5d;
 	
-	static final Selector selector;
-	private static final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
+	static final Selector SELECTOR;
+	private static final ConcurrentLinkedQueue<Runnable> TO_RUN = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
+	public static Executor EXECUTOR;
 	static {
 		Selector s;
 		try {
@@ -28,19 +30,19 @@ final class InternalQueue {
 			LOGGER.error("Could not create selector", ioe);
 			throw new RuntimeException(ioe);
 		}
-		selector = s;
+		SELECTOR = s;
 
 		Thread t = new ClassThreadFactory(InternalQueue.class).newThread(new Runnable() {
 			@Override
 			public void run() {
 				while (true) {
 					try {
-						selector.select();
+						SELECTOR.select();
 
-						if (selector.isOpen()) {
+						if (SELECTOR.isOpen()) {
 							Set<SelectionKey> s;
 							try {
-								s = selector.selectedKeys();
+								s = SELECTOR.selectedKeys();
 							} catch (ClosedSelectorException ce) {
 								s = null;
 							}
@@ -63,8 +65,8 @@ final class InternalQueue {
 						}
 					}
 
-					while (!toRun.isEmpty()) {
-						Runnable r = toRun.poll();
+					while (!TO_RUN.isEmpty()) {
+						Runnable r = TO_RUN.poll();
 						try {
 							r.run();
 						} catch (Throwable e) {
@@ -76,10 +78,13 @@ final class InternalQueue {
 		});
 		t.setDaemon(true);
 		t.start();
-	}
-	
-	static void post(Runnable runnable) {
-		toRun.add(runnable);
-		selector.wakeup();
+		
+		EXECUTOR = new Executor() {
+			@Override
+			public void execute(Runnable command) {
+				TO_RUN.add(command);
+				SELECTOR.wakeup();
+			}
+		};
 	}
 }

@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
 import com.google.common.base.Charsets;
 import com.google.common.io.BaseEncoding;
 
-final class AuthRemoteEngine {
+public final class AuthRemoteEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AuthRemoteEngine.class);
 
 	private static final int ENCRYPTION_MARGIN = 64;

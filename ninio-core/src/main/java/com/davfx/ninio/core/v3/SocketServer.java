@@ -19,10 +19,10 @@ import com.davfx.ninio.core.Address;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class SocketListen {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SocketListen.class);
+public final class SocketServer {
+	private static final Logger LOGGER = LoggerFactory.getLogger(SocketServer.class);
 
-	private static final Config CONFIG = ConfigFactory.load(SocketListen.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(SocketServer.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.read.size").intValue();
 	// private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
@@ -34,21 +34,21 @@ public final class SocketListen {
 	private Address bindAddress = null;
 	private Acceptable acceptable = null;
 
-	public SocketListen() {
+	public SocketServer() {
 	}
 	
-	public SocketListen with(Executor executor) {
+	public SocketServer with(Executor executor) {
 		this.executor = executor;
 		return this;
 	}
 
-	public SocketListen bind(Address bindAddress) {
+	public SocketServer bind(Address bindAddress) {
 		this.bindAddress = bindAddress;
 		return this;
 	}
 
 	private void removed(final SocketChannel outboundChannel) {
-		InternalQueue.post(new Runnable() {
+		InternalQueue.EXECUTOR.execute(new Runnable() {
 			@Override
 			public void run() {
 				try {
@@ -85,11 +85,11 @@ public final class SocketListen {
 			}
 			
 			@Override
-			public void accept(final Listening listening) {
+			public void accept(final ListenConnectingable listening) {
 				final Accepting thisAccepting = accepting;
 				final Failing thisFailing = failing;
 				
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -108,7 +108,7 @@ public final class SocketListen {
 								
 								LOGGER.debug("-> Server channel ready to accept on: {}", thisBindAddress);
 
-								final SelectionKey acceptSelectionKey = serverChannel.register(InternalQueue.selector, 0);
+								final SelectionKey acceptSelectionKey = serverChannel.register(InternalQueue.SELECTOR, 0);
 								currentAcceptSelectionKey = acceptSelectionKey;
 								
 								acceptSelectionKey.attach(new SelectionKeyVisitor() {
@@ -126,12 +126,12 @@ public final class SocketListen {
 											outboundChannels.add(outboundChannel);
 											LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
 											
-											final Connectable connectable = new InnerSocketReady(thisExecutor, outboundChannel).create();
+											final Connector connectable = new InnerSocketReady(thisExecutor, outboundChannel).create();
 											
 											thisExecutor.execute(new Runnable() {
 												@Override
 												public void run() {
-													listening.connecting(new Connectable() {
+													listening.connecting(new Connector() {
 														@Override
 														public void send(Address address, ByteBuffer buffer) {
 															connectable.send(address, buffer);
@@ -237,7 +237,7 @@ public final class SocketListen {
 
 			@Override
 			public void close() {
-				InternalQueue.post(new Runnable() {
+				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
 						for (SocketChannel s : outboundChannels) {
@@ -262,23 +262,23 @@ public final class SocketListen {
 	
 	private static final class InnerSocketReady {
 		
-		private static final Logger LOGGER = LoggerFactory.getLogger(SocketReady.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(SocketConnectorFactory.class);
 
 		private final Executor executor;
 		private final SocketChannel socketChannel;
-		private Connectable connectable = null;
+		private Connector connectable = null;
 
 		public InnerSocketReady(Executor executor, SocketChannel socketChannel) {
 			this.socketChannel = socketChannel;
 			this.executor = executor;
 		}
 
-		public Connectable create() {
-			Connectable c = connectable;
+		public Connector create() {
+			Connector c = connectable;
 			if (c != null) {
 				c.disconnect();
 			}
-			connectable = new SimpleConnectable(executor, new SimpleConnectable.Connect() {
+			connectable = new SimpleConnector(executor, new SimpleConnector.Connect() {
 				private SocketChannel currentChannel = null;
 				private SelectionKey currentSelectionKey = null;
 
@@ -287,7 +287,7 @@ public final class SocketListen {
 
 				@Override
 				public void connect(final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-					InternalQueue.post(new Runnable() {
+					InternalQueue.EXECUTOR.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (currentChannel != null) {
@@ -304,7 +304,7 @@ public final class SocketListen {
 									// channel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
 									channel.configureBlocking(false);
 
-									final SelectionKey selectionKey = channel.register(InternalQueue.selector, 0);
+									final SelectionKey selectionKey = channel.register(InternalQueue.SELECTOR, 0);
 									currentSelectionKey = selectionKey;
 		
 									selectionKey.attach(new SelectionKeyVisitor() {
@@ -422,7 +422,7 @@ public final class SocketListen {
 
 				@Override
 				public void disconnect() {
-					InternalQueue.post(new Runnable() {
+					InternalQueue.EXECUTOR.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (currentChannel != null) {
@@ -436,7 +436,7 @@ public final class SocketListen {
 				
 				@Override
 				public void send(final Address address, final ByteBuffer buffer) {
-					InternalQueue.post(new Runnable() {
+					InternalQueue.EXECUTOR.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (address != null) {
