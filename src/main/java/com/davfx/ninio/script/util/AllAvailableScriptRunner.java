@@ -1,13 +1,18 @@
 package com.davfx.ninio.script.util;
 
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.common.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.common.ClassThreadFactory;
 import com.davfx.ninio.common.Queue;
+import com.davfx.ninio.common.Trust;
 import com.davfx.ninio.http.HttpClientConfigurator;
 import com.davfx.ninio.http.util.SimpleHttpClient;
 import com.davfx.ninio.ping.PingClientConfigurator;
@@ -27,6 +32,8 @@ import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class AllAvailableScriptRunner implements AutoCloseable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(AllAvailableScriptRunner.class);
+
 	private static final Config CONFIG = ConfigUtils.load(AllAvailableScriptRunner.class);
 	
 	private static final int THREADING = CONFIG.getInt("script.threading");
@@ -64,6 +71,16 @@ public final class AllAvailableScriptRunner implements AutoCloseable {
 		udpReadyFactory = new ByAddressDatagramReadyFactory(queue);
 		
 		httpConfigurator = new HttpClientConfigurator(queue, scheduledExecutor);
+		Trust trust;
+		try {
+			trust = new Trust();
+		} catch (IOException e) {
+			LOGGER.error("Could not initialize trust", e);
+			trust = null;
+		}
+		if (trust != null) {
+			httpConfigurator.withTrust(trust);
+		}
 		remoteConfigurator = new WaitingRemoteClientConfigurator(scheduledExecutor, scheduledExecutor);
 		telnetConfigurator = new TelnetClientConfigurator(queue);
 		sshConfigurator = new SshClientConfigurator(queue);
