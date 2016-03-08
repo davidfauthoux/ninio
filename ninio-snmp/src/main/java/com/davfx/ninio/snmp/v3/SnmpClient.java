@@ -118,6 +118,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			
 			@Override
 			public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+				final SnmpReceiver r = receiver;
+				final Failing f = failing;
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -136,7 +138,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							authRemoteEngines.put(address, authRemoteEngine);
 						}
 						
-						Instance i = new Instance(receiver, failing, oid, address, community, authRemoteEngine);
+						Instance i = new Instance(r, f, oid, address, community, authRemoteEngine);
 						instanceMapper.map(i);
 						writeGet(address, i.instanceId, community, authRemoteEngine, oid);
 					}

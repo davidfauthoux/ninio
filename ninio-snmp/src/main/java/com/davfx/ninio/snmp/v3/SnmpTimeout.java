@@ -83,41 +83,53 @@ public final class SnmpTimeout {
 				final CancelableSnmpReceiver r = new CancelableSnmpReceiver(receiver);
 				final CancelableFailing f = new CancelableFailing(failing);
 
-				future = executor.schedule(new Runnable() {
+				final Runnable schedule = new Runnable() {
 					@Override
 					public void run() {
-						f.failed(new IOException("Timeout"));
-						r.canceled = true;
-						f.canceled = true;
+						future = executor.schedule(new Runnable() {
+							@Override
+							public void run() {
+								f.failed(new IOException("Timeout"));
+								r.canceled = true;
+								f.canceled = true;
+								future = null;
+							}
+						}, (long) (timeout * 1000d), TimeUnit.SECONDS);
+					}
+				};
+				
+				final Runnable cancel = new Runnable() {
+					@Override
+					public void run() {
+						if (future != null) {
+							future.cancel(false);
+						}
 						future = null;
 					}
-				}, (long) (timeout * 1000d), TimeUnit.SECONDS);
+				};
 				
 				request.failing(new Failing() {
 					@Override
 					public void failed(IOException e) {
-						if (future != null) {
-							future.cancel(false);
-						}
-						future = null;
+						cancel.run();
 						f.failed(e);
 					}
 				});
+
 				request.receiving(new SnmpReceiver() {
 					@Override
 					public void received(Result result) {
+						schedule.run();
 						r.received(result);
 					}
 					@Override
 					public void finished() {
-						if (future != null) {
-							future.cancel(false);
-						}
-						future = null;
+						cancel.run();
 						r.finished();
 					}
 				});
 				
+				schedule.run();
 				request.get(address, community, authRemoteSpecification, oid);
 			}
 		};
