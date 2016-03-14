@@ -10,8 +10,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.common.ByAddressDatagramReadyFactory;
 import com.davfx.ninio.common.CountingReadyFactory;
+import com.davfx.ninio.common.DatagramReadyFactory;
 import com.davfx.ninio.common.LogCount;
 import com.davfx.ninio.common.Queue;
 import com.davfx.ninio.common.ReadyFactory;
@@ -129,7 +129,7 @@ public final class ProxyUtils {
 		//%% } else if (datagramMode.equals("sync.java")) {
 			//%% configurators.put(DATAGRAM_TYPE, new SimpleServerSideConfigurator(new SyncDatagramReadyFactory(new SyncDatagramReady.Receiver())));
 		} else if (datagramMode.equals("async")) {
-			datagramReadyFactory = new ByAddressDatagramReadyFactory(queue); // Never closed, but could be when proxy server is closed
+			datagramReadyFactory = new DatagramReadyFactory(); //%%%%%% new ByAddressDatagramReadyFactory(queue); // Never closed, but could be when proxy server is closed
 		} else {
 			throw new ConfigException.BadValue("proxy.mode.datagram", "Only sync.tcmpdump|async modes allowed");
 		}
