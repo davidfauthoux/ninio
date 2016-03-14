@@ -42,6 +42,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 
 	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
 
+	public static final int DEFAULT_PORT = 161;
+
 	private static final int BULK_SIZE = CONFIG.getInt("ninio.snmp.bulkSize");
 	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
 	private static final double AUHT_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
@@ -89,6 +91,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				instanceMapper.handle(instanceId, errorStatus, errorIndex, results);
 			}
 		});
+		connector.connect();
 	}
 	
 	@Override
