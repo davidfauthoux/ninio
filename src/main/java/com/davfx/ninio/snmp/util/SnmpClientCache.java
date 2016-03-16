@@ -73,7 +73,49 @@ public final class SnmpClientCache implements AutoCloseable {
 			}
 			@Override
 			public void connect(final SnmpClientHandler clientHandler) {
-				if ((CACHE_EXPIRE_THRESHOLD > 0) && (clients.size() >= CACHE_EXPIRE_THRESHOLD)) {
+				if (CACHE_EXPIRE_THRESHOLD == 0) {
+					SnmpClientConfigurator clientConfigurator = new SnmpClientConfigurator(configurator);
+					if (community != null) {
+						clientConfigurator.withCommunity(community);
+					}
+					if ((authLogin != null) && (authPassword != null) && (authDigestAlgorithm != null) && (privLogin != null) && (privPassword != null) && (privEncryptionAlgorithm != null)) {
+						clientConfigurator.withLoginPassword(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
+					}
+					if (!Double.isNaN(timeoutFromBeginning)) {
+						clientConfigurator.withTimeoutFromBeginning(timeoutFromBeginning);
+					}
+
+					final SnmpClient client = new SnmpClient(clientConfigurator.withAddress(address));
+					
+					client.connect(new CacheFailSnmpClientHandler(new SnmpClientHandler() {
+						@Override
+						public void failed(IOException e) {
+							clientHandler.failed(e);
+							client.close();
+						}
+						@Override
+						public void close() {
+							clientHandler.close();
+							client.close();
+						}
+						@Override
+						public void launched(final Callback callback) {
+							clientHandler.launched(new Callback() {
+								@Override
+								public void close() {
+									client.close();
+								}
+								@Override
+								public void get(Oid oid, GetCallback getCallback) {
+									callback.get(oid, getCallback);
+								}
+							});
+						}
+					}));
+					return;
+				}
+
+				if (clients.size() >= CACHE_EXPIRE_THRESHOLD) {
 					Iterator<Hold> i = clients.values().iterator();
 					while (i.hasNext()) {
 						Hold c = i.next();
