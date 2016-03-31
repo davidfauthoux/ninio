@@ -386,10 +386,22 @@ public final class SnmpClient implements Closeable {
 			
 			if (shouldRepeatWhat == 0) {
 				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-					LOGGER.trace("Retrying GET after receiving auth engine completion message");
+					LOGGER.trace("Repeating after receiving auth engine completion message");
 					instanceMapper.map(this);
 					sendTimestamp = new Date();
-					write.get(instanceMapper.configurator.address, instanceId, requestOid);
+					switch (shouldRepeatWhat) { 
+					case 0:
+						write.get(instanceMapper.configurator.address, instanceId, requestOid);
+						break;
+					case 1:
+						write.getNext(instanceMapper.configurator.address, instanceId, requestOid);
+						break;
+					case 2:
+						write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
+						break;
+					default:
+						break;
+					}
 				} else {
 					boolean fallback = false;
 					if (errorStatus != 0) {
