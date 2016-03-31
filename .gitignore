@@ -6,6 +6,8 @@ release.properties
 .settings
 .project
 .classpath
+/.idea/
+/*.iml
 *.class
 
 /bin/
