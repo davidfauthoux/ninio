@@ -11,7 +11,7 @@
 
 	<groupId>com.davfx</groupId>
 	<artifactId>ninio</artifactId>
-	<version>0.1.2c</version>
+	<version>0.1.2d-SNAPSHOT</version>
 	<name>${project.groupId}:${project.artifactId}</name>
 	<description>A Java NIO HTTP client/server as light as possible</description>
 	<url>https://github.com/davidfauthoux/ninio</url>
