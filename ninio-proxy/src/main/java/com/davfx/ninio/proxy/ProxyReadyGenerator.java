@@ -167,24 +167,28 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 																connections.remove(connectionId);
 																LOGGER.trace("Connections size = {}", connections.size());
 															}
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(0);
-																out.flush();
-															} catch (IOException ioe) {
+															synchronized (out) {
 																try {
-																	out.close();
-																} catch (IOException e) {
+																	out.writeInt(connectionId);
+																	out.writeInt(0);
+																	out.flush();
+																} catch (IOException ioe) {
+																	try {
+																		out.close();
+																	} catch (IOException e) {
+																	}
+																	//%% LOGGER.trace("Connection lost", ioe);
 																}
-																//%% LOGGER.trace("Connection lost", ioe);
 															}
 														}
 														
 														@Override
 														public void failed(IOException e) {
-															try {
-																out.close();
-															} catch (IOException ioe) {
+															synchronized (out) {
+																try {
+																	out.close();
+																} catch (IOException ioe) {
+																}
 															}
 															LOGGER.warn("Connection cut", e);
 														}
@@ -195,27 +199,29 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 																return;
 															}
 															int len = buffer.remaining();
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(len);
-																if (address == null) {
-																	out.writeBoolean(false);
-																} else {
-																	out.writeBoolean(true);
-																	out.writeUTF(address.getHost());
-																	out.writeInt(address.getPort());
-																}
-																out.write(buffer.array(), buffer.arrayOffset(), len);
-																if (throttle != null) {
-																	throttle.sent(len);
-																}
-																out.flush();
-															} catch (IOException ioe) {
+															synchronized (out) {
 																try {
-																	out.close();
-																} catch (IOException e) {
+																	out.writeInt(connectionId);
+																	out.writeInt(len);
+																	if (address == null) {
+																		out.writeBoolean(false);
+																	} else {
+																		out.writeBoolean(true);
+																		out.writeUTF(address.getHost());
+																		out.writeInt(address.getPort());
+																	}
+																	out.write(buffer.array(), buffer.arrayOffset(), len);
+																	if (throttle != null) {
+																		throttle.sent(len);
+																	}
+																	out.flush();
+																} catch (IOException ioe) {
+																	try {
+																		out.close();
+																	} catch (IOException e) {
+																	}
+																	LOGGER.trace("Connection lost", ioe);
 																}
-																LOGGER.trace("Connection lost", ioe);
 															}
 														}
 													});
@@ -292,24 +298,26 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 					connections.put(connectionId, new Pair<>(address, connection));
 				}
 
-				try {
-					out.writeInt(connectionId);
-					out.writeInt(-ProxyCommons.Commands.ESTABLISH_CONNECTION);
-					if (address == null) {
-						out.writeBoolean(false);
-					} else {
-						out.writeBoolean(true);
-						out.writeUTF(address.getHost());
-						out.writeInt(address.getPort());
-					}
-					proxyClientSide.write(connecterType, out);
-					out.flush();
-				} catch (IOException ioe) {
-					LOGGER.error("Could not establish connection", ioe);
-					// Close the socket
+				synchronized (out) {
 					try {
-						out.close();
-					} catch (IOException e) {
+						out.writeInt(connectionId);
+						out.writeInt(-ProxyCommons.Commands.ESTABLISH_CONNECTION);
+						if (address == null) {
+							out.writeBoolean(false);
+						} else {
+							out.writeBoolean(true);
+							out.writeUTF(address.getHost());
+							out.writeInt(address.getPort());
+						}
+						proxyClientSide.write(connecterType, out);
+						out.flush();
+					} catch (IOException ioe) {
+						LOGGER.error("Could not establish connection", ioe);
+						// Close the socket
+						try {
+							out.close();
+						} catch (IOException e) {
+						}
 					}
 				}
 			}

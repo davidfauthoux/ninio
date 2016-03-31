@@ -248,7 +248,7 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 						b.buffer = buffer;
 						toWriteQueue.add(b);
 						toWriteLength += b.buffer.remaining();
-						LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", b.buffer.remaining(), toWriteLength);
+						LOGGER.trace("Write buffer: {} bytes (to {}) (current size: {} bytes)", b.buffer.remaining(), address, toWriteLength);
 						
 						DatagramChannel channel = currentChannel;
 						SelectionKey selectionKey = currentSelectionKey;

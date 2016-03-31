@@ -172,14 +172,16 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 													@Override
 													public void failed(IOException e) {
 														LOGGER.warn("Could not connect to {}", address, e);
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(-ProxyCommons.Commands.FAIL_CONNECTION);
-															out.flush();
-														} catch (IOException ioe) {
+														synchronized (out) {
 															try {
-																out.close();
-															} catch (IOException se) {
+																out.writeInt(connectionId);
+																out.writeInt(-ProxyCommons.Commands.FAIL_CONNECTION);
+																out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
 															}
 														}
 													}
@@ -194,28 +196,32 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 															establishedConnections.put(connectionId, new Pair<Address, CloseableByteBufferHandler>(address, write));
 														}
 	
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(-ProxyCommons.Commands.ESTABLISH_CONNECTION);
-															out.flush();
-														} catch (IOException ioe) {
+														synchronized (out) {
 															try {
-																out.close();
-															} catch (IOException se) {
+																out.writeInt(connectionId);
+																out.writeInt(-ProxyCommons.Commands.ESTABLISH_CONNECTION);
+																out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
 															}
 														}
 													}
 													
 													@Override
 													public void close() {
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(0);
-															out.flush();
-														} catch (IOException ioe) {
+														synchronized (out) {
 															try {
-																out.close();
-															} catch (IOException se) {
+																out.writeInt(connectionId);
+																out.writeInt(0);
+																out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
 															}
 														}
 													}
@@ -225,22 +231,24 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 														if (!buffer.hasRemaining()) {
 															return;
 														}
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(buffer.remaining());
-															if (address == null) {
-																out.writeBoolean(false);
-															} else {
-																out.writeBoolean(true);
-																out.writeUTF(address.getHost());
-																out.writeInt(address.getPort());
-															}
-															out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
-															out.flush();
-														} catch (IOException ioe) {
+														synchronized (out) {
 															try {
-																out.close();
-															} catch (IOException se) {
+																out.writeInt(connectionId);
+																out.writeInt(buffer.remaining());
+																if (address == null) {
+																	out.writeBoolean(false);
+																} else {
+																	out.writeBoolean(true);
+																	out.writeUTF(address.getHost());
+																	out.writeInt(address.getPort());
+																}
+																out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
+																out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
 															}
 														}
 														buffer.position(buffer.position() + buffer.remaining());
