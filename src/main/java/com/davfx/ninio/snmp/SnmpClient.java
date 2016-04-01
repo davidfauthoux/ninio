@@ -262,6 +262,10 @@ public final class SnmpClient implements Closeable {
 				write.handle(to, builder.getBuffer());
 			}
 		}
+		
+		public void close() {
+			write.close();
+		}
 	}
 	
 	private static final class Instance { // extends CheckAllocationObject {
@@ -326,6 +330,7 @@ public final class SnmpClient implements Closeable {
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
 				//%% allResults = null;
+				write.close();
 				c.failed(new IOException("Timeout from beginning [" + t + " seconds] requesting: " + instanceMapper.configurator.address + " (" + instanceMapper.configurator.community + ") " + initialRequestOid));
 				return;
 			}
