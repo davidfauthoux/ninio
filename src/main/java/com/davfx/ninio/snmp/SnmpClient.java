@@ -384,25 +384,25 @@ public final class SnmpClient implements Closeable {
 				return;
 			}
 			
-			if (shouldRepeatWhat == 0) {
-				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-					LOGGER.trace("Repeating after receiving auth engine completion message");
-					instanceMapper.map(this);
-					sendTimestamp = new Date();
-					switch (shouldRepeatWhat) { 
-					case 0:
-						write.get(instanceMapper.configurator.address, instanceId, requestOid);
-						break;
-					case 1:
-						write.getNext(instanceMapper.configurator.address, instanceId, requestOid);
-						break;
-					case 2:
-						write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
-						break;
-					default:
-						break;
-					}
-				} else {
+			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
+				LOGGER.trace("Repeating after receiving auth engine completion message");
+				instanceMapper.map(this);
+				sendTimestamp = new Date();
+				switch (shouldRepeatWhat) { 
+				case 0:
+					write.get(instanceMapper.configurator.address, instanceId, requestOid);
+					break;
+				case 1:
+					write.getNext(instanceMapper.configurator.address, instanceId, requestOid);
+					break;
+				case 2:
+					write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
+					break;
+				default:
+					break;
+				}
+			} else {
+				if (shouldRepeatWhat == 0) {
 					boolean fallback = false;
 					if (errorStatus != 0) {
 						LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
@@ -442,62 +442,62 @@ public final class SnmpClient implements Closeable {
 						shouldRepeatWhat = 1;
 						write.getNext(instanceMapper.configurator.address, instanceId, requestOid);
 					}
-				}
-			} else {
-				if (errorStatus != 0) {
-					//%% shouldRepeatWhat = -1;
-					requestOid = null;
-					SnmpClientHandler.Callback.GetCallback c = callback;
-					callback = null;
-					//%% allResults = null;
-					c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
 				} else {
-					Oid lastOid = null;
-					for (Result r : results) {
-						LOGGER.trace("Received in bulk: {}", r);
-					}
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							continue;
-						}
-						if (!initialRequestOid.isPrefix(r.getOid())) {
-							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
-							lastOid = null;
-							break;
-						}
-						LOGGER.trace("Addind to results: {}", r);
-						if ((configurator.getLimit > 0) && (countResults >= configurator.getLimit)) {
-						//%% if ((getLimit > 0) && (allResults.size() == getLimit)) {
-							LOGGER.warn("{} reached limit", requestOid);
-							lastOid = null;
-							break;
-						}
-						countResults++;
-						callback.result(r);
-						//%% allResults.add(r);
-						lastOid = r.getOid();
-					}
-					if (lastOid != null) {
-						LOGGER.trace("Continuing from: {}", lastOid);
-						
-						requestOid = lastOid;
-						
-						instanceMapper.map(this);
-						sendTimestamp = new Date();
-						shouldRepeatWhat = 2;
-						write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
-					} else {
-						// Stop here
+					if (errorStatus != 0) {
 						//%% shouldRepeatWhat = -1;
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;
 						callback = null;
-						/*%%
-						List<Result> r = allResults;
-						allResults = null;
-						c.finished(r);
-						*/
-						c.close();
+						//%% allResults = null;
+						c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
+					} else {
+						Oid lastOid = null;
+						for (Result r : results) {
+							LOGGER.trace("Received in bulk: {}", r);
+						}
+						for (Result r : results) {
+							if (r.getValue() == null) {
+								continue;
+							}
+							if (!initialRequestOid.isPrefix(r.getOid())) {
+								LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+								lastOid = null;
+								break;
+							}
+							LOGGER.trace("Addind to results: {}", r);
+							if ((configurator.getLimit > 0) && (countResults >= configurator.getLimit)) {
+							//%% if ((getLimit > 0) && (allResults.size() == getLimit)) {
+								LOGGER.warn("{} reached limit", requestOid);
+								lastOid = null;
+								break;
+							}
+							countResults++;
+							callback.result(r);
+							//%% allResults.add(r);
+							lastOid = r.getOid();
+						}
+						if (lastOid != null) {
+							LOGGER.trace("Continuing from: {}", lastOid);
+							
+							requestOid = lastOid;
+							
+							instanceMapper.map(this);
+							sendTimestamp = new Date();
+							shouldRepeatWhat = 2;
+							write.getBulk(instanceMapper.configurator.address, instanceId, requestOid, configurator.bulkSize);
+						} else {
+							// Stop here
+							//%% shouldRepeatWhat = -1;
+							requestOid = null;
+							SnmpClientHandler.Callback.GetCallback c = callback;
+							callback = null;
+							/*%%
+							List<Result> r = allResults;
+							allResults = null;
+							c.finished(r);
+							*/
+							c.close();
+						}
 					}
 				}
 			}
