@@ -76,16 +76,18 @@ public final class SocketServer {
 			private Failing failing = null;
 			
 			@Override
-			public void accepting(Accepting accepting) {
+			public Acceptable accepting(Accepting accepting) {
 				this.accepting = accepting;
+				return this;
 			}
 			@Override
-			public void failing(Failing failing) {
+			public Acceptable failing(Failing failing) {
 				this.failing = failing;
+				return this;
 			}
 			
 			@Override
-			public void accept(final ListenConnectingable listening) {
+			public Acceptable accept(final ListenConnectingable listening) {
 				final Accepting thisAccepting = accepting;
 				final Failing thisFailing = failing;
 				
@@ -126,53 +128,60 @@ public final class SocketServer {
 											outboundChannels.add(outboundChannel);
 											LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
 											
-											final Connector connectable = new InnerSocketReady(thisExecutor, outboundChannel).create();
+											final Connector connector = new InnerSocketReady(thisExecutor, outboundChannel).create();
 											
 											thisExecutor.execute(new Runnable() {
 												@Override
 												public void run() {
 													listening.connecting(new Connector() {
 														@Override
-														public void send(Address address, ByteBuffer buffer) {
-															connectable.send(address, buffer);
+														public Connector send(Address address, ByteBuffer buffer) {
+															connector.send(address, buffer);
+															return connector;
 														}
 														@Override
-														public void receiving(Receiver receiver) {
-															connectable.receiving(receiver);
+														public Connector receiving(Receiver receiver) {
+															connector.receiving(receiver);
+															return connector;
 														}
 														@Override
-														public void failing(final Failing failing) {
-															connectable.failing(new Failing() {
+														public Connector failing(final Failing failing) {
+															connector.failing(new Failing() {
 																@Override
 																public void failed(final IOException e) {
 																	removed(outboundChannel);
 																	failing.failed(e);
 																}
 															});
+															return connector;
 														}
 														@Override
-														public void connecting(Connecting connecting) {
-															connectable.connecting(connecting);
+														public Connector connecting(Connecting connecting) {
+															connector.connecting(connecting);
+															return connector;
 														}
 														@Override
-														public void closing(final Closing closing) {
-															connectable.closing(new Closing() {
+														public Connector closing(final Closing closing) {
+															connector.closing(new Closing() {
 																@Override
 																public void closed() {
 																	removed(outboundChannel);
 																	closing.closed();
 																}
 															});
+															return connector;
 														}
 														
 														@Override
-														public void disconnect() {
+														public Connector disconnect() {
 															removed(outboundChannel);
-															connectable.disconnect();
+															connector.disconnect();
+															return connector;
 														}
 														@Override
-														public void connect() {
-															connectable.connect();
+														public Connector connect() {
+															connector.connect();
+															return connector;
 														}
 													});
 												}
@@ -223,6 +232,7 @@ public final class SocketServer {
 						}
 					}
 				});
+				return this;
 			}
 			
 			private void close(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey) {
@@ -236,7 +246,7 @@ public final class SocketServer {
 			}
 
 			@Override
-			public void close() {
+			public Acceptable close() {
 				InternalQueue.EXECUTOR.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -255,6 +265,7 @@ public final class SocketServer {
 						currentAcceptSelectionKey = null;
 					}
 				});
+				return this;
 			}
 		};
 		return acceptable;

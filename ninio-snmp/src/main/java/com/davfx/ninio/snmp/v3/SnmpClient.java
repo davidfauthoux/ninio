@@ -48,17 +48,33 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
 	private static final double AUHT_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
 	
-	private final Executor executor;
-	private final Connector connector;
+	private Executor executor = InternalQueue.EXECUTOR;
+	private ConnectorFactory connectorFactory = new DatagramConnectorFactory();
+	
+	private Connector connector = null;
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final InstanceMapper instanceMapper = new InstanceMapper();
 	private final Cache<Address, AuthRemoteEngine> authRemoteEngines = CacheBuilder.newBuilder().expireAfterWrite((long) (AUHT_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
 
 	public SnmpClient() {
-		this(InternalQueue.EXECUTOR, new DatagramConnectorFactory());
 	}
-	public SnmpClient(Executor executor, ConnectorFactory connectorFactory) {
+
+	public SnmpClient with(Executor executor) {
 		this.executor = executor;
+		return this;
+	}
+	public SnmpClient with(ConnectorFactory connectorFactory) {
+		this.connectorFactory = connectorFactory;
+		return this;
+	}
+
+	public SnmpClient connect() {
+		Connector c = connector;
+		connector = null;
+		if (c != null) {
+			c.disconnect();
+		}
+
 		connector = connectorFactory.create();
 		connector.receiving(new Receiver() {
 			@Override
@@ -92,6 +108,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 		});
 		connector.connect();
+		return this;
 	}
 	
 	@Override
@@ -102,25 +119,34 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				instanceMapper.close();
 			}
 		});
-		connector.disconnect();
+		Connector c = connector;
+		connector = null;
+		if (c != null) {
+			c.disconnect();
+		}
 	}
 	
-	public SnmpRequest create() {
+	public SnmpRequest request() {
+		if (connector == null) {
+			throw new IllegalStateException("Not connected");
+		}
 		return new SnmpRequest() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
 			
 			@Override
-			public void receiving(SnmpReceiver receiver) {
+			public SnmpRequest receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
+				return this;
 			}
 			@Override
-			public void failing(Failing failing) {
+			public SnmpRequest failing(Failing failing) {
 				this.failing = failing;
+				return this;
 			}
 			
 			@Override
-			public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+			public SnmpRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
 				final SnmpReceiver r = receiver;
 				final Failing f = failing;
 				executor.execute(new Runnable() {
@@ -146,6 +172,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						writeGet(address, i.instanceId, community, authRemoteEngine, oid);
 					}
 				});
+				return this;
 			}
 		};
 	}

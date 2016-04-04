@@ -46,6 +46,7 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 	@Override
 	public Connector create() {
 		Connector c = connectable;
+		connectable = null;
 		if (c != null) {
 			c.disconnect();
 		}

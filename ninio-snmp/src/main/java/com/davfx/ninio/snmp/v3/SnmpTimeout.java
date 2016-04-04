@@ -69,17 +69,19 @@ public final class SnmpTimeout {
 			private ScheduledFuture<?> future = null;
 
 			@Override
-			public void receiving(SnmpReceiver receiver) {
+			public SnmpRequest receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
+				return this;
 			}
 			
 			@Override
-			public void failing(Failing failing) {
+			public SnmpRequest failing(Failing failing) {
 				this.failing = failing;
+				return this;
 			}
 			
 			@Override
-			public void get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid) {
+			public SnmpRequest get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid) {
 				final CancelableSnmpReceiver r = new CancelableSnmpReceiver(receiver);
 				final CancelableFailing f = new CancelableFailing(failing);
 
@@ -94,7 +96,7 @@ public final class SnmpTimeout {
 								f.canceled = true;
 								future = null;
 							}
-						}, (long) (timeout * 1000d), TimeUnit.SECONDS);
+						}, (long) (timeout * 1000d), TimeUnit.MILLISECONDS);
 					}
 				};
 				
@@ -131,6 +133,7 @@ public final class SnmpTimeout {
 				
 				schedule.run();
 				request.get(address, community, authRemoteSpecification, oid);
+				return this;
 			}
 		};
 	}
