@@ -231,7 +231,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			connector.send(to, b);
 		}
 	}
-	/*
 	private void writeGetNext(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
 		if (authEngine == null) {
 			Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, oid);
@@ -245,15 +244,14 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			connector.send(to, b);
 		}
 	}
-	*/
-	private void writeGetBulk(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid, int bulkLength) {
+	private void writeGetBulk(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
 		if (authEngine == null) {
-			Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, bulkLength);
+			Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, BULK_SIZE);
 			ByteBuffer b = builder.getBuffer();
 			LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
 			connector.send(to, b);
 		} else {
-			Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, oid, bulkLength);
+			Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, oid, BULK_SIZE);
 			ByteBuffer b = builder.getBuffer();
 			LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
 			connector.send(to, b);
@@ -318,7 +316,19 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
 					instanceMapper.map(this);
 					LOGGER.trace("Retrying GET after receiving auth engine completion message ({})", instanceId);
-					writeGet(address, instanceId, community, authEngine, requestOid);
+					switch (shouldRepeatWhat) { 
+					case BerConstants.GET:
+						writeGet(address, instanceId, community, authEngine, requestOid);
+						break;
+					case BerConstants.GETNEXT:
+						writeGetNext(address, instanceId, community, authEngine, requestOid);
+						break;
+					case BerConstants.GETBULK:
+						writeGetBulk(address, instanceId, community, authEngine, requestOid);
+						break;
+					default:
+						break;
+					}
 				} else {
 					boolean fallback = false;
 					if (errorStatus != 0) {
@@ -353,7 +363,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					if (fallback) {
 						instanceMapper.map(this);
 						shouldRepeatWhat = BerConstants.GETBULK;
-						writeGetBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
+						writeGetBulk(address, instanceId, community, authEngine, requestOid);
 					}
 				}
 			} else {
@@ -393,7 +403,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						
 						instanceMapper.map(this);
 						shouldRepeatWhat = BerConstants.GETBULK;
-						writeGetBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
+						writeGetBulk(address, instanceId, community, authEngine, requestOid);
 					} else {
 						// Stop here
 						requestOid = null;
