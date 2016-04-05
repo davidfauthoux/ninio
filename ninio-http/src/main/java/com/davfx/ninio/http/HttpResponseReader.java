@@ -37,7 +37,7 @@ final class HttpResponseReader {
 	private final Multimap<String, String> headers = HashMultimap.create();
 	//%% private boolean failClose = false;
 	private boolean closed = false;
-	private boolean ended = false;
+	//%% private boolean ended = false;
 	private boolean http11;
 	
 	private final HttpClientHandler handler;
@@ -111,7 +111,8 @@ final class HttpResponseReader {
 		}
 		try {
 			
-			if (ended || closed) {
+			//%% if (ended || closed) {
+			if (closed) {
 				throw new IOException("Too much data");
 			}
 			
@@ -191,17 +192,17 @@ final class HttpResponseReader {
 						chunkHeaderRead = false;
 						//%% failClose = false;
 						if (chunkLength == 0) {
+							//%% ended = true;
+							if (!closed) {
+								closed = true;
+								handler.close();
+							}
 							if (recyclingHandler != null) {
 								if (keepAlive) {
 									recyclingHandler.recycle();
 								} else {
 									recyclingHandler.close();
 								}
-							}
-							ended = true;
-							if (!closed) {
-								closed = true;
-								handler.close();
 							}
 						}
 					}
@@ -252,17 +253,17 @@ final class HttpResponseReader {
 					}
 					if (countRead == contentLength) {
 						//%% failClose = false;
+						//%% ended = true;
+						if (!closed) {
+							closed = true;
+							handler.close();
+						}
 						if (recyclingHandler != null) {
 							if (keepAlive) {
 								recyclingHandler.recycle();
 							} else {
 								recyclingHandler.close();
 							}
-						}
-						ended = true;
-						if (!closed) {
-							closed = true;
-							handler.close();
 						}
 					}
 				} else {
