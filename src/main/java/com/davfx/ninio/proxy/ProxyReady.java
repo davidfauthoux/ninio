@@ -14,6 +14,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +38,9 @@ final class ProxyReady {
 
 	public static final double DEFAULT_CONNECTION_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.connection");
 	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
+
+	private static final ScheduledExecutorService FLUSH_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
+	private static final double FLUSH_PERIOD = 1d;
 
 	private final Address proxyServerAddress;
 
@@ -148,109 +154,123 @@ final class ProxyReady {
 							});
 							return;
 						}
-			
+
 						connections = new HashMap<>();
 			
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								listener.connected();
-	
-								while (true) {
-									try {
-										LOGGER.trace("Client waiting for connection ID");
-										final int connectionId = in.readInt();
-										int len = in.readInt();
-										if (len < 0) {
-											int command = -len;
-											Pair<Address, ReadyConnection> currentConnection;
-											synchronized (lock) {
-												currentConnection = connections.get(connectionId);
-											}
-											if (command == ProxyCommons.COMMAND_ESTABLISH_CONNECTION) {
-												if (currentConnection != null) {
-													currentConnection.second.connected(new FailableCloseableByteBufferHandler() {
-														@Override
-														public void close() {
-															synchronized (lock) {
-																connections.remove(connectionId);
-																LOGGER.trace("Connections size = {}", connections.size());
-															}
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(0);
-																out.flush();
-															} catch (IOException ioe) {
-																try {
-																	out.close();
-																} catch (IOException e) {
-																}
-																LOGGER.trace("Connection lost", ioe);
-															}
-														}
-														
-														@Override
-														public void failed(IOException e) {
-															try {
-																out.close();
-															} catch (IOException ioe) {
-															}
-															LOGGER.warn("Connection cut", e);
-														}
-														
-														@Override
-														public void handle(Address address, ByteBuffer buffer) {
-															if (!buffer.hasRemaining()) {
-																return;
-															}
-															int len = buffer.remaining();
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(len);
-																out.write(buffer.array(), buffer.arrayOffset(), len);
-																if (throttle != null) {
-																	throttle.sent(len);
-																}
-																out.flush();
-															} catch (IOException ioe) {
-																try {
-																	out.close();
-																} catch (IOException e) {
-																}
-																LOGGER.trace("Connection lost", ioe);
-															}
-														}
-													});
-												}
-											} else if (command == ProxyCommons.COMMAND_FAIL_CONNECTION) {
-												if (currentConnection != null) {
-													currentConnection.second.failed(new IOException("Failed"));
-												}
-											}
-										} else if (len == 0) {
-											Pair<Address, ReadyConnection> currentConnection;
-											synchronized (lock) {
-												currentConnection = connections.remove(connectionId);
-												LOGGER.trace("Connections size = {}", connections.size());
-											}
-											if (currentConnection != null) {
-												currentConnection.second.close();
-											}
-										} else {
-											Pair<Address, ReadyConnection> currentConnection;
-											synchronized (lock) {
-												currentConnection = connections.get(connectionId);
-											}
-											final byte[] b = new byte[len];
-											in.readFully(b);
-											if (currentConnection != null) {
-												currentConnection.second.handle(currentConnection.first, ByteBuffer.wrap(b));
-											}
+
+								ScheduledFuture<?> flushing = FLUSH_EXECUTOR.scheduleAtFixedRate(new Runnable() {
+									@Override
+									public void run() {
+										try {
+											out.flush();
+										} catch (IOException e) {
 										}
-									} catch (IOException ioe) {
-										LOGGER.warn("Connection lost with server", ioe);
-										break;
 									}
+								}, 0L, (long) (FLUSH_PERIOD * 1000d), TimeUnit.MILLISECONDS);
+
+								try {
+									while (true) {
+										try {
+											LOGGER.trace("Client waiting for connection ID");
+											final int connectionId = in.readInt();
+											int len = in.readInt();
+											if (len < 0) {
+												int command = -len;
+												Pair<Address, ReadyConnection> currentConnection;
+												synchronized (lock) {
+													currentConnection = connections.get(connectionId);
+												}
+												if (command == ProxyCommons.COMMAND_ESTABLISH_CONNECTION) {
+													if (currentConnection != null) {
+														currentConnection.second.connected(new FailableCloseableByteBufferHandler() {
+															@Override
+															public void close() {
+																synchronized (lock) {
+																	connections.remove(connectionId);
+																	LOGGER.trace("Connections size = {}", connections.size());
+																}
+																try {
+																	out.writeInt(connectionId);
+																	out.writeInt(0);
+																	out.flush();
+																} catch (IOException ioe) {
+																	try {
+																		out.close();
+																	} catch (IOException e) {
+																	}
+																	LOGGER.trace("Connection lost", ioe);
+																}
+															}
+															
+															@Override
+															public void failed(IOException e) {
+																try {
+																	out.close();
+																} catch (IOException ioe) {
+																}
+																LOGGER.warn("Connection cut", e);
+															}
+															
+															@Override
+															public void handle(Address address, ByteBuffer buffer) {
+																if (!buffer.hasRemaining()) {
+																	return;
+																}
+																int len = buffer.remaining();
+																try {
+																	out.writeInt(connectionId);
+																	out.writeInt(len);
+																	out.write(buffer.array(), buffer.arrayOffset(), len);
+																	if (throttle != null) {
+																		throttle.sent(len);
+																	}
+																	out.flush();
+																} catch (IOException ioe) {
+																	try {
+																		out.close();
+																	} catch (IOException e) {
+																	}
+																	LOGGER.trace("Connection lost", ioe);
+																}
+															}
+														});
+													}
+												} else if (command == ProxyCommons.COMMAND_FAIL_CONNECTION) {
+													if (currentConnection != null) {
+														currentConnection.second.failed(new IOException("Failed"));
+													}
+												}
+											} else if (len == 0) {
+												Pair<Address, ReadyConnection> currentConnection;
+												synchronized (lock) {
+													currentConnection = connections.remove(connectionId);
+													LOGGER.trace("Connections size = {}", connections.size());
+												}
+												if (currentConnection != null) {
+													currentConnection.second.close();
+												}
+											} else {
+												Pair<Address, ReadyConnection> currentConnection;
+												synchronized (lock) {
+													currentConnection = connections.get(connectionId);
+												}
+												final byte[] b = new byte[len];
+												in.readFully(b);
+												if (currentConnection != null) {
+													currentConnection.second.handle(currentConnection.first, ByteBuffer.wrap(b));
+												}
+											}
+										} catch (IOException ioe) {
+											LOGGER.warn("Connection lost with server", ioe);
+											break;
+										}
+									}
+								} finally {
+									flushing.cancel(false);
 								}
 			
 								try {

@@ -14,6 +14,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +49,9 @@ public final class ProxyServer {
 		}
 		server.start();
 	}
+	
+	private static final ScheduledExecutorService FLUSH_EXECUTOR = Executors.newSingleThreadScheduledExecutor();
+	private static final double FLUSH_PERIOD = 1d;
 	
 	public static final double DEFAULT_READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "proxy.timeout.read");
 	
@@ -96,113 +102,127 @@ public final class ProxyServer {
 									DataInputStream in = new DataInputStream(socket.getInputStream());
 									LOGGER.debug("Accepted connection from: {}", socket.getInetAddress());
 
-									while (true) {
-										LOGGER.trace("Server waiting for connection ID");
-										final int connectionId = in.readInt();
-										int len = in.readInt();
-										if (len < 0) {
-											int command = -len;
-											if (command == ProxyCommons.COMMAND_ESTABLISH_CONNECTION) {
-												final Address address = new Address(in.readUTF(), in.readInt());
-												ReadyFactory factory = proxyUtils.read(in);
-												Ready r = new QueueReady(queue, factory.create(queue));
-												r.connect(address, new ReadyConnection() {
-													@Override
-													public void failed(IOException e) {
-														LOGGER.warn("Could not connect to {}", address, e);
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(-ProxyCommons.COMMAND_FAIL_CONNECTION);
-															out.flush();
-														} catch (IOException ioe) {
+									ScheduledFuture<?> flushing = FLUSH_EXECUTOR.scheduleAtFixedRate(new Runnable() {
+										@Override
+										public void run() {
+											try {
+												out.flush();
+											} catch (IOException e) {
+											}
+										}
+									}, 0L, (long) (FLUSH_PERIOD * 1000d), TimeUnit.MILLISECONDS);
+									
+									try {
+										while (true) {
+											LOGGER.trace("Server waiting for connection ID");
+											final int connectionId = in.readInt();
+											int len = in.readInt();
+											if (len < 0) {
+												int command = -len;
+												if (command == ProxyCommons.COMMAND_ESTABLISH_CONNECTION) {
+													final Address address = new Address(in.readUTF(), in.readInt());
+													ReadyFactory factory = proxyUtils.read(in);
+													Ready r = new QueueReady(queue, factory.create(queue));
+													r.connect(address, new ReadyConnection() {
+														@Override
+														public void failed(IOException e) {
+															LOGGER.warn("Could not connect to {}", address, e);
 															try {
-																out.close();
-															} catch (IOException se) {
+																out.writeInt(connectionId);
+																out.writeInt(-ProxyCommons.COMMAND_FAIL_CONNECTION);
+																// out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
 															}
 														}
-													}
-													
-													@Override
-													public void connected(FailableCloseableByteBufferHandler write) {
-														synchronized (establishedConnections) {
-															if (closed.get()) {
-																write.close();
+														
+														@Override
+														public void connected(FailableCloseableByteBufferHandler write) {
+															synchronized (establishedConnections) {
+																if (closed.get()) {
+																	write.close();
+																	return;
+																}
+																establishedConnections.put(connectionId, new Pair<Address, CloseableByteBufferHandler>(address, write));
+															}
+	
+															try {
+																out.writeInt(connectionId);
+																out.writeInt(-ProxyCommons.COMMAND_ESTABLISH_CONNECTION);
+																// out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
+															}
+														}
+														
+														@Override
+														public void close() {
+															try {
+																out.writeInt(connectionId);
+																out.writeInt(0);
+																// out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
+															}
+														}
+														
+														@Override
+														public void handle(Address address, ByteBuffer buffer) {
+															if (!buffer.hasRemaining()) {
 																return;
 															}
-															establishedConnections.put(connectionId, new Pair<Address, CloseableByteBufferHandler>(address, write));
-														}
-
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(-ProxyCommons.COMMAND_ESTABLISH_CONNECTION);
-															out.flush();
-														} catch (IOException ioe) {
 															try {
-																out.close();
-															} catch (IOException se) {
+																out.writeInt(connectionId);
+																out.writeInt(buffer.remaining());
+																out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
+																// out.flush();
+															} catch (IOException ioe) {
+																try {
+																	out.close();
+																} catch (IOException se) {
+																}
 															}
+															buffer.position(buffer.position() + buffer.remaining());
 														}
-													}
-													
-													@Override
-													public void close() {
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(0);
-															out.flush();
-														} catch (IOException ioe) {
-															try {
-																out.close();
-															} catch (IOException se) {
-															}
-														}
-													}
-													
-													@Override
-													public void handle(Address address, ByteBuffer buffer) {
-														if (!buffer.hasRemaining()) {
-															return;
-														}
-														try {
-															out.writeInt(connectionId);
-															out.writeInt(buffer.remaining());
-															out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
-															out.flush();
-														} catch (IOException ioe) {
-															try {
-																out.close();
-															} catch (IOException se) {
-															}
-														}
-														buffer.position(buffer.position() + buffer.remaining());
-													}
-												});
-											}
-										} else if (len == 0) {
-											Pair<Address, CloseableByteBufferHandler> connection;
-											synchronized (establishedConnections) {
-												connection = establishedConnections.remove(connectionId);
-											}
-											if (connection != null) {
-												if (connection.second != null) {
-													connection.second.close();
+													});
 												}
-											}
-										} else {
-											byte[] b = new byte[len];
-											in.readFully(b);
-											Pair<Address, CloseableByteBufferHandler> connection;
-											synchronized (establishedConnections) {
-												connection = establishedConnections.get(connectionId);
-											}
-											if (connection != null) {
-												if (!hostsToFilter.contains(connection.first.getHost())) {
+											} else if (len == 0) {
+												Pair<Address, CloseableByteBufferHandler> connection;
+												synchronized (establishedConnections) {
+													connection = establishedConnections.remove(connectionId);
+												}
+												if (connection != null) {
 													if (connection.second != null) {
-														connection.second.handle(connection.first, ByteBuffer.wrap(b));
+														connection.second.close();
+													}
+												}
+											} else {
+												byte[] b = new byte[len];
+												in.readFully(b);
+												Pair<Address, CloseableByteBufferHandler> connection;
+												synchronized (establishedConnections) {
+													connection = establishedConnections.get(connectionId);
+												}
+												if (connection != null) {
+													if (!hostsToFilter.contains(connection.first.getHost())) {
+														if (connection.second != null) {
+															connection.second.handle(connection.first, ByteBuffer.wrap(b));
+														}
 													}
 												}
 											}
 										}
+									} finally {
+										flushing.cancel(false);
 									}
 								} catch (IOException e) {
 									LOGGER.info("Socket closed by peer", e);
