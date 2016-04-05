@@ -405,8 +405,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		private final String community;
 		private final AuthRemoteEngine authEngine;
 
-		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, double timeoutFromBeginning,
-				Address address, String community, AuthRemoteEngine authEngine) {
+		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, double timeoutFromBeginning, Address address, String community, AuthRemoteEngine authEngine) {
 			// super(Instance.class);
 			this.instanceMapper = instanceMapper;
 			this.callback = callback;
@@ -507,28 +506,28 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 			
-			if (shouldRepeatWhat == BerConstants.GET) {
-				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-					instanceMapper.map(this);
-					LOGGER.trace("Repeating after receiving auth engine completion message ({})", instanceId);
-					sendTimestamp = DateUtils.now();
-					switch (shouldRepeatWhat) { 
-					case BerConstants.GET:
-						// write.get(instanceMapper.address, instanceId, requestOid);
-						write.get(address, instanceId, community, authEngine, requestOid);
-						break;
-					case BerConstants.GETNEXT:
-						// write.getNext(instanceMapper.address, instanceId, requestOid);
-						write.getNext(address, instanceId, community, authEngine, requestOid);
-						break;
-					case BerConstants.GETBULK:
-						// write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
-						write.getBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
-						break;
-					default:
-						break;
-					}
-				} else {
+			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
+				instanceMapper.map(this);
+				LOGGER.trace("Repeating after receiving auth engine completion message ({})", instanceId);
+				sendTimestamp = DateUtils.now();
+				switch (shouldRepeatWhat) { 
+				case BerConstants.GET:
+					// write.get(instanceMapper.address, instanceId, requestOid);
+					write.get(address, instanceId, community, authEngine, requestOid);
+					break;
+				case BerConstants.GETNEXT:
+					// write.getNext(instanceMapper.address, instanceId, requestOid);
+					write.getNext(address, instanceId, community, authEngine, requestOid);
+					break;
+				case BerConstants.GETBULK:
+					// write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
+					write.getBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
+					break;
+				default:
+					break;
+				}
+			} else {
+				if (shouldRepeatWhat == BerConstants.GET) {
 					boolean fallback = false;
 					if (errorStatus != 0) {
 						LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
@@ -568,54 +567,54 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						// write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
 						write.getBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
 					}
-				}
-			} else {
-				if (errorStatus != 0) {
-					requestOid = null;
-					SnmpClientHandler.Callback.GetCallback c = callback;
-					callback = null;
-					c.close();
-					//%% c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
 				} else {
-					Oid lastOid = null;
-					for (Result r : results) {
-						LOGGER.trace("Received in bulk: {}", r);
-					}
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							continue;
-						}
-						if (!initialRequestOid.isPrefixOf(r.getOid())) {
-							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
-							lastOid = null;
-							break;
-						}
-						LOGGER.trace("Addind to results: {}", r);
-						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-							LOGGER.warn("{} reached limit", requestOid);
-							lastOid = null;
-							break;
-						}
-						countResults++;
-						callback.result(r);
-						lastOid = r.getOid();
-					}
-					if (lastOid != null) {
-						LOGGER.trace("Continuing from: {}", lastOid);
-						
-						requestOid = lastOid;
-						
-						instanceMapper.map(this);
-						sendTimestamp = DateUtils.now();
-						shouldRepeatWhat = BerConstants.GETBULK;
-						// write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
-						write.getBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
-					} else {
-						// Stop here
+					if (errorStatus != 0) {
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;
 						callback = null;
 						c.close();
+						//%% c.failed(new IOException("Request failed with error: " + errorStatus + "/" + errorIndex));
+					} else {
+						Oid lastOid = null;
+						for (Result r : results) {
+							LOGGER.trace("Received in bulk: {}", r);
+						}
+						for (Result r : results) {
+							if (r.getValue() == null) {
+								continue;
+							}
+							if (!initialRequestOid.isPrefixOf(r.getOid())) {
+								LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+								lastOid = null;
+								break;
+							}
+							LOGGER.trace("Addind to results: {}", r);
+							if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
+								LOGGER.warn("{} reached limit", requestOid);
+								lastOid = null;
+								break;
+							}
+							countResults++;
+							callback.result(r);
+							lastOid = r.getOid();
+						}
+						if (lastOid != null) {
+							LOGGER.trace("Continuing from: {}", lastOid);
+							
+							requestOid = lastOid;
+							
+							instanceMapper.map(this);
+							sendTimestamp = DateUtils.now();
+							shouldRepeatWhat = BerConstants.GETBULK;
+							// write.getBulk(instanceMapper.address, instanceId, requestOid, BULK_SIZE);
+							write.getBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
+						} else {
+							// Stop here
+							requestOid = null;
+							SnmpClientHandler.Callback.GetCallback c = callback;
+							callback = null;
+							c.close();
+						}
 					}
 				}
 			}
