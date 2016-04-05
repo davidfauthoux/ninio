@@ -339,24 +339,24 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 			
-			if (shouldRepeatWhat == BerConstants.GET) {
-				if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-					instanceMapper.map(this);
-					LOGGER.trace("Retrying GET after receiving auth engine completion message ({})", instanceId);
-					switch (shouldRepeatWhat) { 
-					case BerConstants.GET:
-						writeGet(address, instanceId, community, authEngine, requestOid);
-						break;
-					case BerConstants.GETNEXT:
-						writeGetNext(address, instanceId, community, authEngine, requestOid);
-						break;
-					case BerConstants.GETBULK:
-						writeGetBulk(address, instanceId, community, authEngine, requestOid);
-						break;
-					default:
-						break;
-					}
-				} else {
+			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
+				instanceMapper.map(this);
+				LOGGER.trace("Retrying GET after receiving auth engine completion message ({})", instanceId);
+				switch (shouldRepeatWhat) { 
+				case BerConstants.GET:
+					writeGet(address, instanceId, community, authEngine, requestOid);
+					break;
+				case BerConstants.GETNEXT:
+					writeGetNext(address, instanceId, community, authEngine, requestOid);
+					break;
+				case BerConstants.GETBULK:
+					writeGetBulk(address, instanceId, community, authEngine, requestOid);
+					break;
+				default:
+					break;
+				}
+			} else {
+				if (shouldRepeatWhat == BerConstants.GET) {
 					boolean fallback = false;
 					if (errorStatus != 0) {
 						LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
@@ -392,51 +392,51 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						shouldRepeatWhat = BerConstants.GETBULK;
 						writeGetBulk(address, instanceId, community, authEngine, requestOid);
 					}
-				}
-			} else {
-				if (errorStatus != 0) {
-					requestOid = null;
-					receiver.finished();
-					receiver = null; //TODO verif reentrance
-					failing = null;
 				} else {
-					Oid lastOid = null;
-					for (Result r : results) {
-						LOGGER.trace("Received in bulk: {}", r);
-					}
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							continue;
-						}
-						if (!initialRequestOid.isPrefixOf(r.getOid())) {
-							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
-							lastOid = null;
-							break;
-						}
-						LOGGER.trace("Addind to results: {}", r);
-						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-							LOGGER.warn("{} reached limit", requestOid);
-							lastOid = null;
-							break;
-						}
-						countResults++;
-						receiver.received(r);
-						lastOid = r.getOid();
-					}
-					if (lastOid != null) {
-						LOGGER.trace("Continuing from: {}", lastOid);
-						
-						requestOid = lastOid;
-						
-						instanceMapper.map(this);
-						shouldRepeatWhat = BerConstants.GETBULK;
-						writeGetBulk(address, instanceId, community, authEngine, requestOid);
-					} else {
-						// Stop here
+					if (errorStatus != 0) {
 						requestOid = null;
 						receiver.finished();
 						receiver = null; //TODO verif reentrance
 						failing = null;
+					} else {
+						Oid lastOid = null;
+						for (Result r : results) {
+							LOGGER.trace("Received in bulk: {}", r);
+						}
+						for (Result r : results) {
+							if (r.getValue() == null) {
+								continue;
+							}
+							if (!initialRequestOid.isPrefixOf(r.getOid())) {
+								LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+								lastOid = null;
+								break;
+							}
+							LOGGER.trace("Addind to results: {}", r);
+							if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
+								LOGGER.warn("{} reached limit", requestOid);
+								lastOid = null;
+								break;
+							}
+							countResults++;
+							receiver.received(r);
+							lastOid = r.getOid();
+						}
+						if (lastOid != null) {
+							LOGGER.trace("Continuing from: {}", lastOid);
+							
+							requestOid = lastOid;
+							
+							instanceMapper.map(this);
+							shouldRepeatWhat = BerConstants.GETBULK;
+							writeGetBulk(address, instanceId, community, authEngine, requestOid);
+						} else {
+							// Stop here
+							requestOid = null;
+							receiver.finished();
+							receiver = null; //TODO verif reentrance
+							failing = null;
+						}
 					}
 				}
 			}
