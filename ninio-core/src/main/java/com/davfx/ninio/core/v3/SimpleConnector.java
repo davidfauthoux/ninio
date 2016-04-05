@@ -12,9 +12,10 @@ final class SimpleConnector implements Connector {
 	Failing failing = null;
 	Receiver receiver = null;
 	
-	static interface Connect extends Sender {
+	static interface Connect {
 		void connect(Connecting connecting, Closing closing, Failing failing, Receiver receiver);
 		void disconnect();
+		void send(Address address, ByteBuffer buffer);
 	}
 	
 	private final Executor executor;
@@ -24,26 +25,30 @@ final class SimpleConnector implements Connector {
 		this.connect = connect;
 	}
 	@Override
-	public void connecting(Connecting connecting) {
+	public Connector connecting(Connecting connecting) {
 		this.connecting = connecting;
+		return this;
 	}
 	@Override
-	public void closing(Closing closing) {
+	public Connector closing(Closing closing) {
 		this.closing = closing;
+		return this;
 	}
 	@Override
-	public void failing(Failing failing) {
+	public Connector failing(Failing failing) {
 		this.failing = failing;
+		return this;
 	}
 	@Override
-	public void receiving(Receiver receiver) {
+	public Connector receiving(Receiver receiver) {
 		this.receiver = receiver;
+		return this;
 	}
 	@Override
-	public void connect() {
+	public Connector connect() {
 		if (executor == null) {
 			connect.connect(connecting, closing, failing, receiver);
-			return;
+			return this;
 		}
 		final Connecting co = connecting;
 		final Closing cl = closing;
@@ -102,14 +107,17 @@ final class SimpleConnector implements Connector {
 				});
 			}
 		});
+		return this;
 	}
 	@Override
-	public void disconnect() {
+	public Connector disconnect() {
 		connect.disconnect();
+		return this;
 	}
 	
 	@Override
-	public void send(Address address, ByteBuffer buffer) {
+	public Connector send(Address address, ByteBuffer buffer) {
 		connect.send(address, buffer);
+		return this;
 	}
 }

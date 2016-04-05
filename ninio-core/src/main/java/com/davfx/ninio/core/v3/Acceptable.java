@@ -1,7 +1,8 @@
 package com.davfx.ninio.core.v3;
 
-public interface Acceptable extends Failingable {
-	void accepting(Accepting accepting);
-	void accept(ListenConnectingable listening);
-	void close();
+public interface Acceptable {
+	Acceptable accepting(Accepting accepting);
+	Acceptable accept(ListenConnectingable listening);
+	Acceptable close();
+	Acceptable failing(Failing failing);
 }
