@@ -452,7 +452,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
 				callback = null;
-				write.close();
 				// c.failed(new IOException("Timeout from beginning [" + t + " seconds] requesting: " + instanceMapper.address + " " + initialRequestOid));
 				c.failed(new IOException("Timeout from beginning [" + t + " seconds] requesting: " + address + " " + initialRequestOid));
 				return;
