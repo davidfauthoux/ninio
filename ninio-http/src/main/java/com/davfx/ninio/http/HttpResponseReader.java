@@ -155,10 +155,14 @@ final class HttpResponseReader {
 						break;
 					}
 
+					keepAlive = http11;
+					/*%%
 					if (http11) {
 						keepAlive = true; // (contentLength >= 0); // Websocket ready!
 					}
+					*/
 					for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
+						keepAlive = false;
 						if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
 							keepAlive = false;
 						} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
