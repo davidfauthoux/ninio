@@ -142,7 +142,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			while (!requestLineRead) {
 				String line = lineReader.handle(buffer);
 				if (line == null) {
-					return;
+					break;
 				}
 				LOGGER.trace("Request line: {}", line);
 				setRequestLine(line);

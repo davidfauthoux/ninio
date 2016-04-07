@@ -91,17 +91,21 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 		Deque<Recycler> oldRecyclers = recyclers.get(request.address);
 
 		if (oldRecyclers != null) {
+			LOGGER.trace("Has {} connections to {} to recycle", request.address, oldRecyclers.size());
 			while (!oldRecyclers.isEmpty()) {
-				LOGGER.trace("Recycling connection to {}", request.address);
 				final Recycler oldRecycler = oldRecyclers.removeFirst();
 				if (oldRecyclers.isEmpty()) {
 					recyclers.remove(request.address);
 				}
+				LOGGER.trace("Recycling connection to {} (closed = {})", request.address, oldRecycler.closed);
 				if (!oldRecycler.closed) {
 					oldRecycler.reader = reader;
 					oldRecycler.handler = handler;
 					oldRecycler.closeDate = 0d;
-					oldRecycler.write.handle(null, request.toByteBuffer());
+
+					final CloseableByteBufferHandler write = oldRecycler.write;
+					write.handle(null, request.toByteBuffer());
+					
 					oldRecycler.handler.ready(new CloseableByteBufferHandler() {
 						@Override
 						public void close() {
@@ -109,9 +113,10 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 						
 						@Override
 						public void handle(Address address, ByteBuffer buffer) {
-							oldRecycler.write.handle(address, buffer);							
+							write.handle(address, buffer);							
 						}
 					});
+					
 					return;
 				}
 			}
@@ -128,32 +133,14 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 			ready = readyFactory.create();
 		}
 		ready.connect(request.address, new ReadyConnection() {
-			private HttpResponseReader.RecyclingHandler recyclingHandler;
 			@Override
 			public void handle(Address address, ByteBuffer buffer) {
 				if (newRecycler.reader == null) {
 					return;
 				}
 				
-				newRecycler.reader.handle(buffer, recyclingHandler);
-			}
-			
-			@Override
-			public void failed(IOException e) {
-				newRecycler.closed = true;
-				if (newRecycler.reader == null) {
-					return;
-				}
-				newRecycler.reader.failed(e);
-			}
-			
-			@Override
-			public void connected(final FailableCloseableByteBufferHandler write) {
-				if (newRecycler.handler == null) {
-					return;
-				}
-				
-				recyclingHandler = new HttpResponseReader.RecyclingHandler() {
+				final CloseableByteBufferHandler write = newRecycler.write;
+				newRecycler.reader.handle(buffer, new HttpResponseReader.RecyclingHandler() {
 					@Override
 					public void recycle() {
 						if (RECYCLERS_TIME_TO_LIVE == 0d) {
@@ -170,28 +157,30 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 							recyclers.put(request.address, oldRecyclers);
 						}
 						oldRecyclers.add(newRecycler);
+						LOGGER.trace("Will recycle connection to {} (currently {})", request.address, oldRecyclers.size());
 					}
+					
 					@Override
 					public void close() {
 						write.close();
 					}
-				};
-
-				newRecycler.write = new CloseableByteBufferHandler() {
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						write.handle(address, buffer);
-					}
-					@Override
-					public void close() {
-						write.close();
-						newRecycler.closed = true;
-						if (newRecycler.reader == null) {
-							return;
-						}
-						newRecycler.reader.close();
-					}
-				};
+				});
+			}
+			
+			@Override
+			public void failed(IOException e) {
+				LOGGER.trace("Recycled connection to {} failed", request.address, e);
+				newRecycler.closed = true;
+				if (newRecycler.reader == null) {
+					return;
+				}
+				newRecycler.reader.failed(e);
+			}
+			
+			@Override
+			public void connected(final FailableCloseableByteBufferHandler write) {
+				newRecycler.write = write;
+				
 				write.handle(null, request.toByteBuffer());
 				newRecycler.handler.ready(new CloseableByteBufferHandler() {
 					@Override
@@ -199,13 +188,14 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 					}
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
-						newRecycler.write.handle(address, buffer);
+						/*%%% newRecycler.*/write.handle(address, buffer);
 					}
 				});
 			}
 			
 			@Override
 			public void close() {
+				LOGGER.trace("Recycled connection to {} closed", request.address);
 				newRecycler.closed = true;
 				if (newRecycler.reader == null) {
 					return;

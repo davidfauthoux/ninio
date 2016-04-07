@@ -23,7 +23,7 @@ final class HttpResponseReader {
 	private boolean responseLineRead = false;
 	private boolean chunked = false;
 	private GzipReader gzipReader = null;
-	private boolean keepAlive = true;
+	private boolean keepAlive = true; // Initialized to true to fail on close
 	private boolean chunkHeaderRead = false;
 	private boolean chunkFooterRead = true;
 	private long contentLength = -1;
@@ -255,6 +255,7 @@ final class HttpResponseReader {
 						//%% failClose = false;
 						//%% ended = true;
 						closed();
+						LOGGER.trace("Data full received ({} bytes, keepAlive = {})", countRead, keepAlive);
 						if (recyclingHandler != null) {
 							if (keepAlive) {
 								recyclingHandler.recycle();
