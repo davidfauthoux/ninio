@@ -26,12 +26,21 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
 
-	private Executor executor = null;
+	//%% private final InternalQueue queue;
+
+	private Executor executor = Shared.EXECUTOR;
+	
 	private Address connectAddress = null;
 	private Connector connectable = null;
 
 	public SocketConnectorFactory() {
 	}
+
+	/*%%
+	public SocketConnectorFactory(InternalQueue queue) {
+		this.queue = queue;
+	}
+	*/
 	
 	public SocketConnectorFactory with(Executor executor) {
 		this.executor = executor;
@@ -50,8 +59,16 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 		if (c != null) {
 			c.disconnect();
 		}
+		
+		final Executor thisExecutor = executor;
 		final Address thisConnectAddress = connectAddress;
-		connectable = new SimpleConnector(executor, new SimpleConnector.Connect() {
+		
+		connectable = new Connector() {
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
 			private SocketChannel currentChannel = null;
 			private SelectionKey currentInboundKey = null;
 			private SelectionKey currentSelectionKey = null;
@@ -60,8 +77,37 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 			private long toWriteLength = 0L;
 
 			@Override
-			public void connect(final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+			public Connector closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public Connector connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return null;
+			}
+			
+			@Override
+			public Connector failing(Failing failing) {
+				this.failing = failing;
+				return null;
+			}
+			
+			@Override
+			public Connector receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return null;
+			}
+			
+			@Override
+			public Connector connect() {
+				final Connecting thisConnecting = connecting;
+				final Closing thisClosing = closing;
+				final Failing thisFailing = failing;
+				final Receiver thisReceiver = receiver;
+
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -80,7 +126,8 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 							try {
 								// channel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
 								channel.configureBlocking(false);
-								final SelectionKey inboundKey = channel.register(InternalQueue.SELECTOR, SelectionKey.OP_CONNECT);
+								final SelectionKey inboundKey = InternalQueue.register(channel);
+								inboundKey.interestOps(inboundKey.interestOps() | SelectionKey.OP_CONNECT);
 								currentInboundKey = inboundKey;
 								inboundKey.attach(new SelectionKeyVisitor() {
 									@Override
@@ -91,7 +138,7 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 						
 										try {
 											channel.finishConnect();
-											final SelectionKey selectionKey = channel.register(InternalQueue.SELECTOR, 0);
+											final SelectionKey selectionKey = InternalQueue.register(channel);
 											currentSelectionKey = selectionKey;
 				
 											selectionKey.attach(new SelectionKeyVisitor() {
@@ -100,18 +147,24 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 													if (!channel.isOpen()) {
 														return;
 													}
+													
 													if (key.isReadable()) {
-														ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
+														final ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
 														try {
 															if (channel.read(readBuffer) < 0) {
 																disconnect(channel, inboundKey, selectionKey);
 																currentChannel = null;
 																currentInboundKey = null;
 																currentSelectionKey = null;
-																if (closing != null) {
-																	closing.closed();
+																if (thisClosing != null) {
+																	thisExecutor.execute(new Runnable() {
+																		@Override
+																		public void run() {
+																			thisClosing.closed();
+																		}
+																	});
 																}
-																readBuffer = null;
+																return;
 															}
 														} catch (IOException e) {
 															LOGGER.trace("Connection failed", e);
@@ -119,16 +172,25 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 															currentChannel = null;
 															currentInboundKey = null;
 															currentSelectionKey = null;
-															if (closing != null) {
-																closing.closed();
+															if (thisClosing != null) {
+																thisExecutor.execute(new Runnable() {
+																	@Override
+																	public void run() {
+																		thisClosing.closed();
+																	}
+																});
 															}
-															readBuffer = null;
+															return;
 														}
-														if (readBuffer != null) {
-															readBuffer.flip();
-															if (receiver != null) {
-																receiver.received(null, readBuffer);
-															}
+
+														readBuffer.flip();
+														if (thisReceiver != null) {
+															thisExecutor.execute(new Runnable() {
+																@Override
+																public void run() {
+																	thisReceiver.received(null, readBuffer);
+																}
+															});
 														}
 													} else if (key.isWritable()) {
 														while (true) {
@@ -138,6 +200,7 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 															}
 															long before = b.remaining();
 															try {
+																LOGGER.trace("Actual write buffer: {} bytes", b.remaining());
 																channel.write(b);
 																toWriteLength -= before - b.remaining();
 															} catch (IOException e) {
@@ -146,8 +209,13 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 																currentChannel = null;
 																currentInboundKey = null;
 																currentSelectionKey = null;
-																if (closing != null) {
-																	closing.closed();
+																if (thisClosing != null) {
+																	thisExecutor.execute(new Runnable() {
+																		@Override
+																		public void run() {
+																			thisClosing.closed();
+																		}
+																	});
 																}
 																return;
 															}
@@ -174,14 +242,28 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 												selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 											}
 				
-										} catch (IOException e) {
+											if (thisConnecting != null) {
+												thisExecutor.execute(new Runnable() {
+													@Override
+													public void run() {
+														thisConnecting.connected();
+													}
+												});
+											}
+											
+										} catch (final IOException e) {
 											LOGGER.trace("Connection failed", e);
 											disconnect(channel, inboundKey, null);
 											currentChannel = null;
 											currentInboundKey = null;
 											currentSelectionKey = null;
-											if (failing != null) {
-												failing.failed(e);
+											if (thisFailing != null) {
+												thisExecutor.execute(new Runnable() {
+													@Override
+													public void run() {
+														thisFailing.failed(e);
+													}
+												});
 											}
 										}
 									}
@@ -205,18 +287,21 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 								throw e;
 							}
 				
-						} catch (IOException e) {
-							if (failing != null) {
-								failing.failed(e);
+						} catch (final IOException e) {
+							if (thisFailing != null) {
+								thisExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										thisFailing.failed(e);
+									}
+								});
 							}
 							return;
 						}
-
-						if (connecting != null) {
-							connecting.connected();
-						}
 					}
 				});
+				
+				return this;
 			}
 			
 			private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey) {
@@ -237,8 +322,8 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 			}
 
 			@Override
-			public void disconnect() {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+			public Connector disconnect() {
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -249,11 +334,13 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 						currentSelectionKey = null;
 					}
 				});
+				
+				return this;
 			}
 			
 			@Override
-			public void send(final Address address, final ByteBuffer buffer) {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+			public Connector send(final Address address, final ByteBuffer buffer) {
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (address != null) {
@@ -286,8 +373,11 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 					}
 				});
+				
+				return this;
 			}
-		});
+		};
+		
 		return connectable;
 	}
 }

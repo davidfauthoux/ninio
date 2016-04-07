@@ -32,8 +32,9 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpServer.class);
 	
 	private ConnectorFactory connectorFactory = new DatagramConnectorFactory();
+	private SnmpServerHandler handler = null;
+
 	private Connector connector = null;
-	private SnmpServerHandler handler;
 
 	public SnmpServer() {
 	}
@@ -49,13 +50,17 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 	}
 	
 	public SnmpServer connect() {
-		Connector c = connector;
+		Connector thisConnector = connector;
 		connector = null;
-		if (c != null) {
-			c.disconnect();
+		if (thisConnector != null) {
+			thisConnector.disconnect();
 		}
 		connector = connectorFactory.create();
-		connector.receiving(new Receiver() {
+		thisConnector = connector;
+		final Connector thisThisConnector = thisConnector;
+		final SnmpServerHandler thisHandler = handler;
+		
+		thisConnector.receiving(new Receiver() {
 			@Override
 			public void received(Address address, ByteBuffer buffer) {
 				int requestId;
@@ -98,91 +103,99 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 				if (request == BerConstants.GET) {
 					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
 
-					handler.from(oid, new SnmpServerHandler.Callback() {
-						@Override
-						public boolean handle(Oid handleOid, String value) {
-							// if (!oid.isPrefix(handleOid)) {
-							// return false;
-							// }
-							if (handleOid.equals(oid)) {
-								next.add(new Pair<>(handleOid, ber(value)));
-								return false;
+					if (thisHandler != null) {
+						thisHandler.from(oid, new SnmpServerHandler.Callback() {
+							@Override
+							public boolean handle(Oid handleOid, String value) {
+								// if (!oid.isPrefix(handleOid)) {
+								// return false;
+								// }
+								if (handleOid.equals(oid)) {
+									next.add(new Pair<>(handleOid, ber(value)));
+									return false;
+								}
+								return true;
 							}
-							return true;
-						}
-					});
+						});
+					}
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GET {}: None", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
+						thisThisConnector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 
 					LOGGER.trace("GET {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next));
+					thisThisConnector.send(address, build(requestId, community, 0, 0, next));
 					return;
 				}
 				
 				if (request == BerConstants.GETNEXT) {
 					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
 
-					handler.from(oid, new SnmpServerHandler.Callback() {
-						@Override
-						public boolean handle(Oid handleOid, String value) {
-							if (handleOid.equals(oid)) {
-								// Skipped
-								return true;
-							} else {
-								if (next.isEmpty()) {
-									next.add(new Pair<>(handleOid, ber(value)));
+					if (thisHandler != null) {
+						thisHandler.from(oid, new SnmpServerHandler.Callback() {
+							@Override
+							public boolean handle(Oid handleOid, String value) {
+								if (handleOid.equals(oid)) {
+									// Skipped
+									return true;
+								} else {
+									if (next.isEmpty()) {
+										next.add(new Pair<>(handleOid, ber(value)));
+									}
+									return false;
 								}
-								return false;
 							}
-						}
-					});
+						});
+					}
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETNEXT {}: No next", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
+						thisThisConnector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 
 					LOGGER.trace("GETNEXT {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next));
+					thisThisConnector.send(address, build(requestId, community, 0, 0, next));
 					return;
 				}
 				
 				if (request == BerConstants.GETBULK) {
 					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
 
-					handler.from(oid, new SnmpServerHandler.Callback() {
-						@Override
-						public boolean handle(Oid handleOid, String value) {
-							// if (!oid.isPrefix(handleOid)) {
-							// return false;
-							// }
-							if (handleOid.equals(oid)) {
-								// Skipped
-							} else {
-								next.add(new Pair<>(handleOid, ber(value)));
+					if (thisHandler != null) {
+						thisHandler.from(oid, new SnmpServerHandler.Callback() {
+							@Override
+							public boolean handle(Oid handleOid, String value) {
+								// if (!oid.isPrefix(handleOid)) {
+								// return false;
+								// }
+								if (handleOid.equals(oid)) {
+									// Skipped
+								} else {
+									next.add(new Pair<>(handleOid, ber(value)));
+								}
+								return next.size() < bulkLength;
 							}
-							return next.size() < bulkLength;
-						}
-					});
+						});
+					}
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETBULK {}: No next", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
+						thisThisConnector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
 						return;
 					}
 
 					LOGGER.trace("GETBULK {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next));
+					thisThisConnector.send(address, build(requestId, community, 0, 0, next));
 					return;
 				}
 			}
 		});
-		connector.connect();
+		
+		thisThisConnector.connect();
+		
 		return this;
 	}
 
@@ -217,10 +230,10 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 
 	@Override
 	public void close() {
-		Connector c = connector;
+		Connector thisConnector = connector;
 		connector = null;
-		if (c != null) {
-			c.disconnect();
+		if (thisConnector != null) {
+			thisConnector.disconnect();
 		}
 	}
 	

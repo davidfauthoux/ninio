@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.TreeMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
@@ -13,6 +11,7 @@ import org.junit.Test;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.DatagramConnectorFactory;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.Shared;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.util.Lock;
@@ -69,12 +68,10 @@ public class SnmpServerTest {
 	public void testTimeout() throws Exception {
 		int port = 8080;
 		final Lock<String, IOException> lock = new Lock<>();
-		ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 		try (SnmpClient snmpClient = new SnmpClient()) {
-			snmpClient.with(executor);
-			SnmpTimeout.hook(executor, snmpClient
-				.connect()
-				.request(), 0.25d)
+			SnmpRequest request = snmpClient.connect().request();
+			request = SnmpTimeout.hook(Shared.EXECUTOR, request, 0.25d);
+			request
 				.failing(new Failing() {
 					@Override
 					public void failed(IOException e) {

@@ -20,8 +20,8 @@ import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.ConnectorFactory;
 import com.davfx.ninio.core.v3.DatagramConnectorFactory;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.InternalQueue;
 import com.davfx.ninio.core.v3.Receiver;
+import com.davfx.ninio.core.v3.Shared;
 import com.davfx.ninio.snmp.AuthRemoteEngine;
 import com.davfx.ninio.snmp.AuthRemoteSpecification;
 import com.davfx.ninio.snmp.BerConstants;
@@ -48,13 +48,14 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
 	private static final double AUHT_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
 	
-	private Executor executor = InternalQueue.EXECUTOR;
+	private Executor executor = Shared.EXECUTOR;
 	private ConnectorFactory connectorFactory = new DatagramConnectorFactory();
 	
 	private Connector connector = null;
+	private InstanceMapper instanceMapper = null;
+
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final InstanceMapper instanceMapper = new InstanceMapper();
-	private final Cache<Address, AuthRemoteEngine> authRemoteEngines = CacheBuilder.newBuilder().expireAfterWrite((long) (AUHT_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
+	private final Cache<Address, AuthRemoteEngine> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUHT_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
 
 	public SnmpClient() {
 	}
@@ -63,73 +64,96 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		this.executor = executor;
 		return this;
 	}
+	
 	public SnmpClient with(ConnectorFactory connectorFactory) {
 		this.connectorFactory = connectorFactory;
 		return this;
 	}
 
 	public SnmpClient connect() {
-		Connector c = connector;
+		Connector thisConnector = connector;
 		connector = null;
-		if (c != null) {
-			c.disconnect();
+		if (thisConnector != null) {
+			thisConnector.disconnect();
 		}
 
 		connector = connectorFactory.create();
-		connector.receiving(new Receiver() {
+		thisConnector = connector;
+
+		final Executor thisExecutor = executor;
+		
+		instanceMapper = new InstanceMapper(requestIdProvider);
+		final InstanceMapper thisInstanceMapper = instanceMapper;
+
+		thisConnector.receiving(new Receiver() {
 			@Override
-			public void received(Address address, ByteBuffer buffer) {
-				LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
-				int instanceId;
-				int errorStatus;
-				int errorIndex;
-				Iterable<Result> results;
-				try {
-					AuthRemoteEngine authRemoteEngine = authRemoteEngines.getIfPresent(address);
-					if (authRemoteEngine == null) {
-						Version2cPacketParser parser = new Version2cPacketParser(buffer);
-						instanceId = parser.getRequestId();
-						errorStatus = parser.getErrorStatus();
-						errorIndex = parser.getErrorIndex();
-						results = parser.getResults();
-					} else {
-						Version3PacketParser parser = new Version3PacketParser(authRemoteEngine, buffer);
-						instanceId = parser.getRequestId();
-						errorStatus = parser.getErrorStatus();
-						errorIndex = parser.getErrorIndex();
-						results = parser.getResults();
+			public void received(final Address address, final ByteBuffer buffer) {
+				thisExecutor.execute(new Runnable() {
+					@Override
+					public void run() {
+						LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
+						int instanceId;
+						int errorStatus;
+						int errorIndex;
+						Iterable<Result> results;
+						try {
+							AuthRemoteEngine authRemoteEngine = authRemoteEngines.getIfPresent(address);
+							if (authRemoteEngine == null) {
+								Version2cPacketParser parser = new Version2cPacketParser(buffer);
+								instanceId = parser.getRequestId();
+								errorStatus = parser.getErrorStatus();
+								errorIndex = parser.getErrorIndex();
+								results = parser.getResults();
+							} else {
+								Version3PacketParser parser = new Version3PacketParser(authRemoteEngine, buffer);
+								instanceId = parser.getRequestId();
+								errorStatus = parser.getErrorStatus();
+								errorIndex = parser.getErrorIndex();
+								results = parser.getResults();
+							}
+						} catch (Exception e) {
+							LOGGER.error("Invalid packet", e);
+							return;
+						}
+						
+						thisInstanceMapper.handle(instanceId, errorStatus, errorIndex, results);
 					}
-				} catch (Exception e) {
-					LOGGER.error("Invalid packet", e);
-					return;
-				}
-				
-				instanceMapper.handle(instanceId, errorStatus, errorIndex, results);
+				});
 			}
 		});
-		connector.connect();
+		
+		thisConnector.connect();
+		
 		return this;
 	}
 	
 	@Override
 	public void close() {
-		executor.execute(new Runnable() {
-			@Override
-			public void run() {
-				instanceMapper.close();
-			}
-		});
-		Connector c = connector;
+		final Executor thisExecutor = executor;
+
+		final InstanceMapper thisInstanceMapper = instanceMapper;
+		instanceMapper = null;
+		if (thisInstanceMapper != null) {
+			thisExecutor.execute(new Runnable() {
+				@Override
+				public void run() {
+					thisInstanceMapper.close();
+				}
+			});
+		}
+		
+		Connector thisConnector = connector;
 		connector = null;
-		if (c != null) {
-			c.disconnect();
+		if (thisConnector != null) {
+			thisConnector.disconnect();
 		}
 	}
 	
 	public SnmpRequest request() {
-		if (connector == null) {
-			throw new IllegalStateException("Not connected");
-		}
+		final Executor thisExecutor = executor;
+		final InstanceMapper thisInstanceMapper = instanceMapper;
+		final Connector thisConnector = connector;
+
 		return new SnmpRequest() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
@@ -149,7 +173,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			public SnmpRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
 				final SnmpReceiver r = receiver;
 				final Failing f = failing;
-				executor.execute(new Runnable() {
+				thisExecutor.execute(new Runnable() {
 					@Override
 					public void run() {
 						AuthRemoteEngine authRemoteEngine = null;
@@ -167,9 +191,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							authRemoteEngines.put(address, authRemoteEngine);
 						}
 						
-						Instance i = new Instance(r, f, oid, address, community, authRemoteEngine);
-						instanceMapper.map(i);
-						writeGet(address, i.instanceId, community, authRemoteEngine, oid);
+						Instance i = new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEngine);
+						thisInstanceMapper.map(i);
+						writeGet(thisConnector, address, i.instanceId, community, authRemoteEngine, oid);
 					}
 				});
 				return this;
@@ -199,10 +223,12 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private final class InstanceMapper {
+	private static final class InstanceMapper {
+		private final RequestIdProvider requestIdProvider;
 		private final Map<Integer, Instance> instances = new HashMap<>();
 		
-		public InstanceMapper() {
+		public InstanceMapper(RequestIdProvider requestIdProvider) {
+			this.requestIdProvider = requestIdProvider;
 		}
 		
 		public void map(Instance instance) {
@@ -245,7 +271,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private void writeGet(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
+	private static void writeGet(Connector connector, Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
 		if (authEngine == null) {
 			Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);
 			ByteBuffer b = builder.getBuffer();
@@ -258,7 +284,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			connector.send(to, b);
 		}
 	}
-	private void writeGetNext(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
+	private static void writeGetNext(Connector connector, Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
 		if (authEngine == null) {
 			Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, oid);
 			ByteBuffer b = builder.getBuffer();
@@ -271,7 +297,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			connector.send(to, b);
 		}
 	}
-	private void writeGetBulk(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
+	private static void writeGetBulk(Connector connector, Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
 		if (authEngine == null) {
 			Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, BULK_SIZE);
 			ByteBuffer b = builder.getBuffer();
@@ -285,7 +311,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private final class Instance {
+	private static final class Instance {
+		private final Connector connector;
+		private final InstanceMapper instanceMapper;
+		
 		private SnmpReceiver receiver;
 		private Failing failing;
 		
@@ -299,7 +328,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		private final String community;
 		private final AuthRemoteEngine authEngine;
 
-		public Instance(SnmpReceiver receiver, Failing failing, Oid requestOid, Address address, String community, AuthRemoteEngine authEngine) {
+		public Instance(Connector connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Failing failing, Oid requestOid, Address address, String community, AuthRemoteEngine authEngine) {
+			this.connector = connector;
+			this.instanceMapper = instanceMapper;
+			
 			this.receiver = receiver;
 			this.failing = failing;
 
@@ -326,7 +358,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED) {
 				requestOid = null;
 				failing.failed(new IOException("Authentication failed"));
-				receiver = null; //TODO verif reentrance
+				receiver = null;
 				failing = null;
 				return;
 			}
@@ -334,7 +366,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			if (errorStatus == BerConstants.ERROR_STATUS_TIMEOUT) {
 				requestOid = null;
 				failing.failed(new IOException("Timeout"));
-				receiver = null; //TODO verif reentrance
+				receiver = null;
 				failing = null;
 				return;
 			}
@@ -344,13 +376,13 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				LOGGER.trace("Retrying GET after receiving auth engine completion message ({})", instanceId);
 				switch (shouldRepeatWhat) { 
 				case BerConstants.GET:
-					writeGet(address, instanceId, community, authEngine, requestOid);
+					writeGet(connector, address, instanceId, community, authEngine, requestOid);
 					break;
 				case BerConstants.GETNEXT:
-					writeGetNext(address, instanceId, community, authEngine, requestOid);
+					writeGetNext(connector, address, instanceId, community, authEngine, requestOid);
 					break;
 				case BerConstants.GETBULK:
-					writeGetBulk(address, instanceId, community, authEngine, requestOid);
+					writeGetBulk(connector, address, instanceId, community, authEngine, requestOid);
 					break;
 				default:
 					break;
@@ -382,7 +414,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							requestOid = null;
 							receiver.received(found);
 							receiver.finished();
-							receiver = null; //TODO verif reentrance
+							receiver = null;
 							failing = null;
 							return;
 						}
@@ -390,13 +422,13 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					if (fallback) {
 						instanceMapper.map(this);
 						shouldRepeatWhat = BerConstants.GETBULK;
-						writeGetBulk(address, instanceId, community, authEngine, requestOid);
+						writeGetBulk(connector, address, instanceId, community, authEngine, requestOid);
 					}
 				} else {
 					if (errorStatus != 0) {
 						requestOid = null;
 						receiver.finished();
-						receiver = null; //TODO verif reentrance
+						receiver = null;
 						failing = null;
 					} else {
 						Oid lastOid = null;
@@ -429,12 +461,12 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							
 							instanceMapper.map(this);
 							shouldRepeatWhat = BerConstants.GETBULK;
-							writeGetBulk(address, instanceId, community, authEngine, requestOid);
+							writeGetBulk(connector, address, instanceId, community, authEngine, requestOid);
 						} else {
 							// Stop here
 							requestOid = null;
 							receiver.finished();
-							receiver = null; //TODO verif reentrance
+							receiver = null;
 							failing = null;
 						}
 					}

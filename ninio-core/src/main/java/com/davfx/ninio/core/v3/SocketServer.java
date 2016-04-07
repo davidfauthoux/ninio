@@ -30,12 +30,21 @@ public final class SocketServer {
 
 	private final Set<SocketChannel> outboundChannels = new HashSet<>();
 	
-	private Executor executor = null;
+	//%% private final InternalQueue queue;
+
+	private Executor executor = Shared.EXECUTOR;
+	
 	private Address bindAddress = null;
 	private Acceptable acceptable = null;
 
 	public SocketServer() {
 	}
+	
+	/*%%
+	public SocketServer(InternalQueue queue) {
+		this.queue = queue;
+	}
+	*/
 	
 	public SocketServer with(Executor executor) {
 		this.executor = executor;
@@ -48,7 +57,7 @@ public final class SocketServer {
 	}
 
 	private void removed(final SocketChannel outboundChannel) {
-		InternalQueue.EXECUTOR.execute(new Runnable() {
+		InternalQueue.execute(new Runnable() {
 			@Override
 			public void run() {
 				try {
@@ -66,8 +75,10 @@ public final class SocketServer {
 		if (c != null) {
 			c.close();
 		}
+		
 		final Executor thisExecutor = executor;
 		final Address thisBindAddress = bindAddress;
+		
 		acceptable = new Acceptable() {
 			private ServerSocketChannel currentChannel = null;
 			private SelectionKey currentAcceptSelectionKey = null;
@@ -80,6 +91,7 @@ public final class SocketServer {
 				this.accepting = accepting;
 				return this;
 			}
+			
 			@Override
 			public Acceptable failing(Failing failing) {
 				this.failing = failing;
@@ -91,7 +103,7 @@ public final class SocketServer {
 				final Accepting thisAccepting = accepting;
 				final Failing thisFailing = failing;
 				
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -110,7 +122,7 @@ public final class SocketServer {
 								
 								LOGGER.debug("-> Server channel ready to accept on: {}", thisBindAddress);
 
-								final SelectionKey acceptSelectionKey = serverChannel.register(InternalQueue.SELECTOR, 0);
+								final SelectionKey acceptSelectionKey = InternalQueue.register(serverChannel);
 								currentAcceptSelectionKey = acceptSelectionKey;
 								
 								acceptSelectionKey.attach(new SelectionKeyVisitor() {
@@ -128,7 +140,7 @@ public final class SocketServer {
 											outboundChannels.add(outboundChannel);
 											LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
 											
-											final Connector connector = new InnerSocketReady(thisExecutor, outboundChannel).create();
+											final Connector connector = new InnerSocketReady(/*%% queue, */thisExecutor, outboundChannel).create();
 											
 											thisExecutor.execute(new Runnable() {
 												@Override
@@ -247,7 +259,7 @@ public final class SocketServer {
 
 			@Override
 			public Acceptable close() {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						for (SocketChannel s : outboundChannels) {
@@ -275,21 +287,30 @@ public final class SocketServer {
 		
 		private static final Logger LOGGER = LoggerFactory.getLogger(SocketConnectorFactory.class);
 
-		private final Executor executor;
+		//%% private final InternalQueue queue;
+
+		private final Executor thisExecutor;
 		private final SocketChannel socketChannel;
 		private Connector connectable = null;
 
-		public InnerSocketReady(Executor executor, SocketChannel socketChannel) {
+		public InnerSocketReady(/*%% InternalQueue queue, */Executor executor, SocketChannel socketChannel) {
+			//%% this.queue = queue;
+			thisExecutor = executor;
 			this.socketChannel = socketChannel;
-			this.executor = executor;
 		}
-
+		
 		public Connector create() {
 			Connector c = connectable;
 			if (c != null) {
 				c.disconnect();
 			}
-			connectable = new SimpleConnector(executor, new SimpleConnector.Connect() {
+
+			connectable = new Connector() {
+				private Connecting connecting = null;
+				private Closing closing = null;
+				private Failing failing = null;
+				private Receiver receiver = null;
+				
 				private SocketChannel currentChannel = null;
 				private SelectionKey currentSelectionKey = null;
 
@@ -297,8 +318,37 @@ public final class SocketServer {
 				private long toWriteLength = 0L;
 
 				@Override
-				public void connect(final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-					InternalQueue.EXECUTOR.execute(new Runnable() {
+				public Connector closing(Closing closing) {
+					this.closing = closing;
+					return this;
+				}
+			
+				@Override
+				public Connector connecting(Connecting connecting) {
+					this.connecting = connecting;
+					return null;
+				}
+				
+				@Override
+				public Connector failing(Failing failing) {
+					this.failing = failing;
+					return null;
+				}
+				
+				@Override
+				public Connector receiving(Receiver receiver) {
+					this.receiver = receiver;
+					return null;
+				}
+				
+				@Override
+				public Connector connect() {
+					final Connecting thisConnecting = connecting;
+					final Closing thisClosing = closing;
+					final Failing thisFailing = failing;
+					final Receiver thisReceiver = receiver;
+
+					InternalQueue.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (currentChannel != null) {
@@ -315,7 +365,7 @@ public final class SocketServer {
 									// channel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
 									channel.configureBlocking(false);
 
-									final SelectionKey selectionKey = channel.register(InternalQueue.SELECTOR, 0);
+									final SelectionKey selectionKey = InternalQueue.register(channel);
 									currentSelectionKey = selectionKey;
 		
 									selectionKey.attach(new SelectionKeyVisitor() {
@@ -325,32 +375,46 @@ public final class SocketServer {
 												return;
 											}
 											if (key.isReadable()) {
-												ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
+												final ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
 												try {
 													if (channel.read(readBuffer) < 0) {
 														disconnect(channel, selectionKey);
 														currentChannel = null;
 														currentSelectionKey = null;
-														if (closing != null) {
-															closing.closed();
+														if (thisClosing != null) {
+															thisExecutor.execute(new Runnable() {
+																@Override
+																public void run() {
+																	thisClosing.closed();
+																}
+															});
 														}
-														readBuffer = null;
+														return;
 													}
 												} catch (IOException e) {
 													LOGGER.trace("Connection failed", e);
 													disconnect(channel, selectionKey);
 													currentChannel = null;
 													currentSelectionKey = null;
-													if (closing != null) {
-														closing.closed();
+													if (thisClosing != null) {
+														thisExecutor.execute(new Runnable() {
+															@Override
+															public void run() {
+																thisClosing.closed();
+															}
+														});
 													}
-													readBuffer = null;
+													return;
 												}
-												if (readBuffer != null) {
-													readBuffer.flip();
-													if (receiver != null) {
-														receiver.received(null, readBuffer);
-													}
+												
+												readBuffer.flip();
+												if (thisReceiver != null) {
+													thisExecutor.execute(new Runnable() {
+														@Override
+														public void run() {
+															thisReceiver.received(null, readBuffer);
+														}
+													});
 												}
 											} else if (key.isWritable()) {
 												while (true) {
@@ -367,8 +431,13 @@ public final class SocketServer {
 														disconnect(channel, selectionKey);
 														currentChannel = null;
 														currentSelectionKey = null;
-														if (closing != null) {
-															closing.closed();
+														if (thisClosing != null) {
+															thisExecutor.execute(new Runnable() {
+																@Override
+																public void run() {
+																	thisClosing.closed();
+																}
+															});
 														}
 														return;
 													}
@@ -403,18 +472,30 @@ public final class SocketServer {
 									throw e;
 								}
 					
-							} catch (IOException e) {
-								if (failing != null) {
-									failing.failed(e);
+							} catch (final IOException e) {
+								if (thisFailing != null) {
+									thisExecutor.execute(new Runnable() {
+										@Override
+										public void run() {
+											thisFailing.failed(e);
+										}
+									});
 								}
 								return;
 							}
 
-							if (connecting != null) {
-								connecting.connected();
+							if (thisConnecting != null) {
+								thisExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										thisConnecting.connected();
+									}
+								});
 							}
 						}
 					});
+					
+					return this;
 				}
 				
 				private void disconnect(SocketChannel channel, SelectionKey selectionKey) {
@@ -432,8 +513,8 @@ public final class SocketServer {
 				}
 
 				@Override
-				public void disconnect() {
-					InternalQueue.EXECUTOR.execute(new Runnable() {
+				public Connector disconnect() {
+					InternalQueue.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (currentChannel != null) {
@@ -443,11 +524,13 @@ public final class SocketServer {
 							currentSelectionKey = null;
 						}
 					});
+					
+					return this;
 				}
 				
 				@Override
-				public void send(final Address address, final ByteBuffer buffer) {
-					InternalQueue.EXECUTOR.execute(new Runnable() {
+				public Connector send(final Address address, final ByteBuffer buffer) {
+					InternalQueue.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (address != null) {
@@ -480,8 +563,11 @@ public final class SocketServer {
 							selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 						}
 					});
+					
+					return this;
 				}
-			});
+			};
+			
 			return connectable;
 		}
 	}

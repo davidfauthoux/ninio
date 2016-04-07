@@ -30,12 +30,20 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 		ByteBuffer buffer;
 	}
 
-	private Executor executor = null;
+	//%% private final InternalQueue queue;
+
+	private Executor executor = Shared.EXECUTOR;
+	
 	private Address bindAddress = null;
 	private Connector connectable = null;
 
 	public DatagramConnectorFactory() {
 	}
+	/*%%
+	public DatagramConnectorFactory(InternalQueue queue) {
+		this.queue = queue;
+	}
+	*/
 	
 	public DatagramConnectorFactory with(Executor executor) {
 		this.executor = executor;
@@ -54,8 +62,16 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 		if (c != null) {
 			c.disconnect();
 		}
+		
+		final Executor thisExecutor = executor;
 		final Address thisBindAddress = bindAddress;
-		connectable = new SimpleConnector(executor, new SimpleConnector.Connect() {
+		
+		connectable = new Connector() {
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
 			private DatagramChannel currentChannel = null;
 			private SelectionKey currentSelectionKey = null;
 
@@ -63,8 +79,37 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 			private long toWriteLength = 0L;
 
 			@Override
-			public void connect(final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+			public Connector closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public Connector connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return null;
+			}
+			
+			@Override
+			public Connector failing(Failing failing) {
+				this.failing = failing;
+				return null;
+			}
+			
+			@Override
+			public Connector receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return null;
+			}
+			
+			@Override
+			public Connector connect() {
+				final Connecting thisConnecting = connecting;
+				final Closing thisClosing = closing;
+				final Failing thisFailing = failing;
+				final Receiver thisReceiver = receiver;
+
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -81,7 +126,7 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 								channel.configureBlocking(false);
 								channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
 								channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
-								final SelectionKey selectionKey = channel.register(InternalQueue.SELECTOR, 0);
+								final SelectionKey selectionKey = InternalQueue.register(channel);
 								currentSelectionKey = selectionKey;
 								
 								selectionKey.attach(new SelectionKeyVisitor() {
@@ -90,8 +135,9 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 										if (!channel.isOpen()) {
 											return;
 										}
+										
 										if (key.isReadable()) {
-											ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
+											final ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
 											InetSocketAddress from;
 											try {
 												from = (InetSocketAddress) channel.receive(readBuffer);
@@ -100,16 +146,26 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 												disconnect(channel, selectionKey);
 												currentChannel = null;
 												currentSelectionKey = null;
-												if (closing != null) {
-													closing.closed();
+												if (thisClosing != null) {
+													thisExecutor.execute(new Runnable() {
+														@Override
+														public void run() {
+															thisClosing.closed();
+														}
+													});
 												}
-												from = null;
+												return;
 											}
-											if (from != null) {
-												readBuffer.flip();
-												if (receiver != null) {
-													receiver.received(new Address(from.getHostString(), from.getPort()), readBuffer);
-												}
+
+											readBuffer.flip();
+											if (thisReceiver != null) {
+												final Address a = new Address(from.getHostString(), from.getPort());
+												thisExecutor.execute(new Runnable() {
+													@Override
+													public void run() {
+														thisReceiver.received(a, readBuffer);
+													}
+												});
 											}
 										} else if (key.isWritable()) {
 											while (true) {
@@ -123,8 +179,13 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 													} catch (IOException e) {
 														LOGGER.trace("Connection failed", e);
 														disconnect(channel, selectionKey);
-														if (closing != null) {
-															closing.closed();
+														if (thisClosing != null) {
+															thisExecutor.execute(new Runnable() {
+																@Override
+																public void run() {
+																	thisClosing.closed();
+																}
+															});
 														}
 														return;
 													}
@@ -196,17 +257,30 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 								disconnect(channel, null);
 								throw e;
 							}
-						} catch (IOException e) {
-							if (failing != null) {
-								failing.failed(e);
+						} catch (final IOException e) {
+							if (thisFailing != null) {
+								thisExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										thisFailing.failed(e);
+									}
+								});
 							}
 							return;
 						}
-						if (connecting != null) {
-							connecting.connected();
+
+						if (thisConnecting != null) {
+							thisExecutor.execute(new Runnable() {
+								@Override
+								public void run() {
+									thisConnecting.connected();
+								}
+							});
 						}
 					}
 				});
+				
+				return this;
 			}
 			
 			private void disconnect(DatagramChannel channel, SelectionKey selectionKey) {
@@ -221,8 +295,8 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 			}
 
 			@Override
-			public void disconnect() {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+			public Connector disconnect() {
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (currentChannel != null) {
@@ -232,11 +306,12 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 						currentSelectionKey = null;
 					}
 				});
+				return this;
 			}
 			
 			@Override
-			public void send(final Address address, final ByteBuffer buffer) {
-				InternalQueue.EXECUTOR.execute(new Runnable() {
+			public Connector send(final Address address, final ByteBuffer buffer) {
+				InternalQueue.execute(new Runnable() {
 					@Override
 					public void run() {
 						if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
@@ -268,8 +343,11 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 					}
 				});
+				
+				return this;
 			}
-		});
+		};
+		
 		return connectable;
 	}
 }
