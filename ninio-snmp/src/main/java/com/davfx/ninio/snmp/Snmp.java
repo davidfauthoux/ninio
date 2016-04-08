@@ -19,7 +19,7 @@ public final class Snmp {
 	private static final Queue DEFAULT_QUEUE = new Queue();
 
 	private Queue queue = DEFAULT_QUEUE;
-	private double timeoutFromBeginning = ConfigUtils.getDuration(CONFIG, "ninio.snmp.defaultTimeoutFromBeginning");
+	private double timeout = ConfigUtils.getDuration(CONFIG, "ninio.snmp.defaultTimeout");
 	private Address address = new Address(Address.LOCALHOST, DEFAULT_PORT);
 	private ReadyFactory readyFactory = null;
 	private String community = CONFIG.getString("ninio.snmp.defaultCommunity");
@@ -38,8 +38,8 @@ public final class Snmp {
 		return this;
 	}
 	
-	public Snmp timeout(double timeoutFromBeginning) {
-		this.timeoutFromBeginning = timeoutFromBeginning;
+	public Snmp timeout(double timeout) {
+		this.timeout = timeout;
 		return this;
 	}
 	
@@ -74,7 +74,7 @@ public final class Snmp {
 			}
 			@Override
 			public void launched(final Callback callback) {
-				callback.get(address, community, authRemoteSpecification, timeoutFromBeginning, oid, new Callback.GetCallback() {
+				callback.get(address, community, authRemoteSpecification, timeout, oid, new Callback.GetCallback() {
 					@Override
 					public void failed(IOException e) {
 						callback.close();

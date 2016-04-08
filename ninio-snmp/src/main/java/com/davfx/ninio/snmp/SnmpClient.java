@@ -200,7 +200,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 								});
 							}
 							@Override
-							public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final double timeoutFromBeginning, final Oid oid, final GetCallback callback) {
+							public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final double timeout, final Oid oid, final GetCallback callback) {
 							// public void get(Oid oid, GetCallback callback) {
 								queue.post(new Runnable() {
 									@Override
@@ -220,7 +220,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 											authRemoteEngines.put(address, authRemoteEngine);
 										}
 										
-										Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning, address, community, authRemoteEngine);
+										Instance i = new Instance(instanceMapper, callback, w, oid, timeout, address, community, authRemoteEngine);
 										// Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning);
 										instanceMapper.map(i);
 										w.get(address, i.instanceId, community, authRemoteEngine, oid);
@@ -394,8 +394,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		private final Oid initialRequestOid;
 		private Oid requestOid;
 		private int countResults = 0;
-		private final double timeoutFromBeginning;
-		private final double beginningTimestamp = DateUtils.now();
+		private final double timeout;
 		private double sendTimestamp = DateUtils.now();
 		private int shouldRepeatWhat = BerConstants.GET;
 		public int instanceId;
@@ -405,13 +404,13 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		private final String community;
 		private final AuthRemoteEngine authEngine;
 
-		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, double timeoutFromBeginning, Address address, String community, AuthRemoteEngine authEngine) {
+		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, double timeout, Address address, String community, AuthRemoteEngine authEngine) {
 			// super(Instance.class);
 			this.instanceMapper = instanceMapper;
 			this.callback = callback;
 			this.write = write;
 			this.requestOid = requestOid;
-			this.timeoutFromBeginning = timeoutFromBeginning;
+			this.timeout = timeout;
 			initialRequestOid = requestOid;
 			
 			this.address = address;
@@ -446,8 +445,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 			
-			double t = now - beginningTimestamp;
-			if (t >= timeoutFromBeginning) {
+			double t = now - sendTimestamp;
+			if (t >= timeout) {
 				shouldRepeatWhat = 0;
 				requestOid = null;
 				SnmpClientHandler.Callback.GetCallback c = callback;
@@ -457,7 +456,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 
-			if ((now - sendTimestamp) >= (MIN_TIME_TO_REPEAT + repeatRandomizationRandomized)) {
+			if (t >= (MIN_TIME_TO_REPEAT + repeatRandomizationRandomized)) {
 				// LOGGER.trace("Repeating {} {}", instanceMapper.address, requestOid);
 				LOGGER.trace("Repeating {} {}", address, requestOid);
 				switch (shouldRepeatWhat) { 

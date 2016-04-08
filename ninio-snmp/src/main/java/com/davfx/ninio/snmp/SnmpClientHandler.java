@@ -9,7 +9,7 @@ public interface SnmpClientHandler extends Closeable, Failable {
 		interface GetCallback extends Closeable, Failable {
 			void result(Result result);
 		}
-		void get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, double timeoutFromBeginning, Oid oid, GetCallback callback);
+		void get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, double timeout, Oid oid, GetCallback callback);
 	}
 	void launched(Callback callback);
 }
