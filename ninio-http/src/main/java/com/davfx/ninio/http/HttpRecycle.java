@@ -91,7 +91,7 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 		Deque<Recycler> oldRecyclers = recyclers.get(request.address);
 
 		if (oldRecyclers != null) {
-			LOGGER.trace("Has {} connections to {} to recycle", request.address, oldRecyclers.size());
+			LOGGER.trace("Has {} connections to {} to recycle", oldRecyclers.size(), request.address);
 			while (!oldRecyclers.isEmpty()) {
 				final Recycler oldRecycler = oldRecyclers.removeFirst();
 				if (oldRecyclers.isEmpty()) {
@@ -104,6 +104,7 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 					oldRecycler.closeDate = 0d;
 
 					final CloseableByteBufferHandler write = oldRecycler.write;
+					LOGGER.trace("Sending request {} to recycled connection", request);
 					write.handle(null, request.toByteBuffer());
 					
 					oldRecycler.handler.ready(new CloseableByteBufferHandler() {
@@ -181,6 +182,7 @@ public final class HttpRecycle implements AutoCloseable, Closeable {
 			public void connected(final FailableCloseableByteBufferHandler write) {
 				newRecycler.write = write;
 				
+				LOGGER.trace("Sending request {} to new connection", request);
 				write.handle(null, request.toByteBuffer());
 				newRecycler.handler.ready(new CloseableByteBufferHandler() {
 					@Override

@@ -255,7 +255,7 @@ final class HttpResponseReader {
 						//%% failClose = false;
 						//%% ended = true;
 						closed();
-						LOGGER.trace("Data full received ({} bytes, keepAlive = {})", countRead, keepAlive);
+						LOGGER.trace("Data fully received ({} bytes, keepAlive = {})", countRead, keepAlive);
 						if (recyclingHandler != null) {
 							if (keepAlive) {
 								recyclingHandler.recycle();
