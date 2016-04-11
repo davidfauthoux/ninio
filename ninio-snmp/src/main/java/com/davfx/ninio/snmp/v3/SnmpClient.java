@@ -46,7 +46,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 
 	private static final int BULK_SIZE = CONFIG.getInt("ninio.snmp.bulkSize");
 	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
-	private static final double AUHT_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
+	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
 	
 	private Executor executor = Shared.EXECUTOR;
 	private ConnectorFactory connectorFactory = new DatagramConnectorFactory();
@@ -55,7 +55,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private InstanceMapper instanceMapper = null;
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final Cache<Address, AuthRemoteEngine> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUHT_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
+	private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
 
 	public SnmpClient() {
 	}
@@ -84,6 +84,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		
 		instanceMapper = new InstanceMapper(requestIdProvider);
 		final InstanceMapper thisInstanceMapper = instanceMapper;
+		final Connector thisThisConnector = thisConnector;
 
 		thisConnector.receiving(new Receiver() {
 			@Override
@@ -96,16 +97,16 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						int errorStatus;
 						int errorIndex;
 						Iterable<Result> results;
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
 						try {
-							AuthRemoteEngine authRemoteEngine = authRemoteEngines.getIfPresent(address);
-							if (authRemoteEngine == null) {
+							if (authRemoteEnginePendingRequestManager == null) {
 								Version2cPacketParser parser = new Version2cPacketParser(buffer);
 								instanceId = parser.getRequestId();
 								errorStatus = parser.getErrorStatus();
 								errorIndex = parser.getErrorIndex();
 								results = parser.getResults();
 							} else {
-								Version3PacketParser parser = new Version3PacketParser(authRemoteEngine, buffer);
+								Version3PacketParser parser = new Version3PacketParser(authRemoteEnginePendingRequestManager.engine, buffer);
 								instanceId = parser.getRequestId();
 								errorStatus = parser.getErrorStatus();
 								errorIndex = parser.getErrorIndex();
@@ -114,6 +115,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						} catch (Exception e) {
 							LOGGER.error("Invalid packet", e);
 							return;
+						}
+						
+						if (authRemoteEnginePendingRequestManager != null) {
+							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisThisConnector);
+							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, thisThisConnector);
 						}
 						
 						thisInstanceMapper.handle(instanceId, errorStatus, errorIndex, results);
@@ -149,6 +155,88 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
+	private static final class AuthRemoteEnginePendingRequestManager {
+		private static final Oid DISCOVER_OID = new Oid(new int[] { 1, 1 });
+		
+		public static final class PendingRequest {
+			public final int request;
+			public final int instanceId;
+			public final Oid oid;
+
+			public PendingRequest(int request, int instanceId, Oid oid) {
+				this.request = request;
+				this.instanceId = instanceId;
+				this.oid = oid;
+			}
+		}
+		
+		public AuthRemoteEngine engine = null;
+		public final List<PendingRequest> pendingRequests = new LinkedList<>();
+		
+		public AuthRemoteEnginePendingRequestManager() {
+		}
+		
+		public void update(AuthRemoteSpecification authRemoteSpecification) {
+			if (engine == null) {
+				engine = new AuthRemoteEngine(authRemoteSpecification);
+			} else {
+				if (!engine.authRemoteSpecification.equals(authRemoteSpecification)) {
+					engine = new AuthRemoteEngine(authRemoteSpecification);
+				}
+			}
+		}
+		
+		public void discoverIfNecessary(Address address, Connector connector) {
+			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, Integer.MAX_VALUE, DISCOVER_OID);
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, Integer.MAX_VALUE, b.remaining());
+				connector.send(address, b);
+			}
+		}
+		
+		public void registerPendingRequest(PendingRequest r) {
+			pendingRequests.add(r);
+		}
+		
+		public void sendPendingRequestsIfReady(Address address, Connector connector) {
+			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+				return;
+			}
+			
+			for (PendingRequest r : pendingRequests) {
+				switch (r.request) { 
+				case BerConstants.GET: {
+						Version3PacketBuilder builder = Version3PacketBuilder.get(engine, r.instanceId, r.oid);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b);
+					}
+					break;
+				case BerConstants.GETNEXT:
+					{
+						Version3PacketBuilder builder = Version3PacketBuilder.getNext(engine, r.instanceId, r.oid);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b);
+					}
+					break;
+				case BerConstants.GETBULK:
+					{
+						Version3PacketBuilder builder = Version3PacketBuilder.getBulk(engine, r.instanceId, r.oid, BULK_SIZE);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b);
+					}
+					break;
+				default:
+					break;
+				}
+			}
+			pendingRequests.clear();
+		}
+	}
+	
 	public SnmpRequest request() {
 		final Executor thisExecutor = executor;
 		final InstanceMapper thisInstanceMapper = instanceMapper;
@@ -176,22 +264,20 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				thisExecutor.execute(new Runnable() {
 					@Override
 					public void run() {
-						AuthRemoteEngine authRemoteEngine = null;
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 						if (authRemoteSpecification != null) {
-							authRemoteEngine = authRemoteEngines.getIfPresent(address);
-							if (authRemoteEngine != null) {
-								if (!authRemoteEngine.authRemoteSpecification.equals(authRemoteSpecification)) {
-									authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
-								}
+							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+							if (authRemoteEnginePendingRequestManager == null) {
+								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+								authRemoteEnginePendingRequestManager.update(authRemoteSpecification);
+								authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisConnector);
 							} else {
-								authRemoteEngine = new AuthRemoteEngine(authRemoteSpecification);
+								authRemoteEnginePendingRequestManager.update(authRemoteSpecification);
 							}
 						}
-						if (authRemoteEngine != null) {
-							authRemoteEngines.put(address, authRemoteEngine);
-						}
 						
-						new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEngine);
+						new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
 					}
 				});
 				return this;
@@ -284,9 +370,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 
 		private final Address address;
 		private final String community;
-		private final AuthRemoteEngine authEngine;
+		private final AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
 
-		public Instance(Connector connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Failing failing, Oid requestOid, Address address, String community, AuthRemoteEngine authEngine) {
+		public Instance(Connector connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Failing failing, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
@@ -298,7 +384,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			
 			this.address = address;
 			this.community = community;
-			this.authEngine = authEngine;
+			this.authRemoteEnginePendingRequestManager = authRemoteEnginePendingRequestManager;
 
 			instanceMapper.map(this);
 			shouldRepeatWhat = BerConstants.GET;
@@ -313,48 +399,35 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		private void write() {
-			switch (shouldRepeatWhat) { 
-			case BerConstants.GET:
-				if (authEngine == null) {
+			if (authRemoteEnginePendingRequestManager == null) {
+				switch (shouldRepeatWhat) { 
+				case BerConstants.GET: {
 					Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, requestOid);
 					ByteBuffer b = builder.getBuffer();
 					LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
 					connector.send(address, b);
-				} else {
-					Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, requestOid);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
-					connector.send(address, b);
+					break;
 				}
-				break;
-			case BerConstants.GETNEXT:
-				if (authEngine == null) {
+				case BerConstants.GETNEXT: {
 					Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, requestOid);
 					ByteBuffer b = builder.getBuffer();
 					LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
 					connector.send(address, b);
-				} else {
-					Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, requestOid);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
-					connector.send(address, b);
+					break;
 				}
-				break;
-			case BerConstants.GETBULK:
-				if (authEngine == null) {
+				case BerConstants.GETBULK: {
 					Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, requestOid, BULK_SIZE);
 					ByteBuffer b = builder.getBuffer();
 					LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
 					connector.send(address, b);
-				} else {
-					Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, requestOid, BULK_SIZE);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
-					connector.send(address, b);
+					break;
 				}
-				break;
-			default:
-				break;
+				default:
+					break;
+				}
+			} else {
+				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(shouldRepeatWhat, instanceId, requestOid));
+				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 			}
 		}
 	
@@ -371,6 +444,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 
+			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
+				// Ignored
+				return;
+			}
+
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED) {
 				fail(new IOException("Authentication failed"));
 				return;
@@ -381,13 +459,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 			
-			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-				instanceMapper.map(this);
-				LOGGER.trace("Retrying GET after receiving auth engine completion message ({})", instanceId);
-				write();
-				return;
-			}
-
 			if (shouldRepeatWhat == BerConstants.GET) {
 				boolean fallback = false;
 				if (errorStatus != 0) {

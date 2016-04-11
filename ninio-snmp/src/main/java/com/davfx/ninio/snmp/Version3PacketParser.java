@@ -101,12 +101,26 @@ public final class Version3PacketParser {
 							Oid oid = pdu.readOid();
 							String value = pdu.readValue();
 							LOGGER.trace("<- {} = {}", oid, value);
-							if (/*%%%%%%%% !authEngine.isReady() && */(authEngine.getId() != null) && AUTH_ERROR_UNKNOWN_ENGINE_ID_OID.isPrefixOf(oid)) {
+							
+							
+							if (AUTH_ERROR_UNKNOWN_ENGINE_ID_OID.isPrefixOf(oid)) {
+								LOGGER.trace("Engine not known ({}), requestId = {}", oid, requestId);
+								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED;
+							} else if (AUTH_ERROR_NOT_IN_TIME_WINDOW_OID.isPrefixOf(oid)) {
+								LOGGER.trace("Engine not synced ({}), requestId = {}", oid, requestId);
+								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED;
+							} else if (AUTH_ERROR_OID_PREFIX.isPrefixOf(oid)) {
+								LOGGER.error("Authentication failed ({}), requestId = {}", oid, requestId);
+								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;
+							}
+
+							/*%%%%%%%%%
+							if ((authEngine.getId() != null) && AUTH_ERROR_UNKNOWN_ENGINE_ID_OID.isPrefixOf(oid)) {
 								LOGGER.trace("Engine not known ({}), requestId = {}", oid, requestId);
 								errorStatus = BerConstants.ERROR_STATUS_RETRY;
 								errorIndex = 0;
 								requestId = Integer.MAX_VALUE;
-							} else if (/*%%%%%%%% authEngine.isReady() && (previousEngineTime == 0) && (previousEngineBootCount == 0) && */(authEngine.getTime() != 0) && (authEngine.getBootCount() != 0) && AUTH_ERROR_NOT_IN_TIME_WINDOW_OID.isPrefixOf(oid)) {
+							} else if ((authEngine.getTime() != 0) && (authEngine.getBootCount() != 0) && AUTH_ERROR_NOT_IN_TIME_WINDOW_OID.isPrefixOf(oid)) {
 								LOGGER.trace("Engine not synced ({}), requestId = {}", oid, requestId);
 								errorStatus = BerConstants.ERROR_STATUS_RETRY;
 								errorIndex = 0;
@@ -117,6 +131,8 @@ public final class Version3PacketParser {
 								errorIndex = 0;
 								requestId = Integer.MAX_VALUE;
 							}
+							*/
+							
 							// OidValue value = pdu.readOidValue();
 							results.add(new Result(oid, value));
 						}
@@ -158,7 +174,7 @@ public final class Version3PacketParser {
 		}
 		ber.endReadSequence();
 
-		authEngine.setReady();
+		//%%%%% authEngine.setReady();
 	}
 
 	public Iterable<Result> getResults() {

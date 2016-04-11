@@ -56,7 +56,7 @@ public final class Version3PacketBuilder {
 		
 		boolean encrypt = false;
 		int securityFlags = 0x0;
-		if (authEngine.isReady()) {
+		if (authEngine.getId() != null) {
 			if (authEngine.getAuthLogin() != null) {
 				securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
 				if (authEngine.getPrivLogin() != null) {
@@ -80,8 +80,8 @@ public final class Version3PacketBuilder {
 		
 		root.add(new BytesSequenceBerPacket(new SequenceBerPacket(BerConstants.SEQUENCE)
 				.add(new BytesBerPacket(ByteBuffer.wrap(authEngine.getId())))
-				.add(new IntegerBerPacket(authEngine.getBootCount()))
-				.add(new IntegerBerPacket(authEngine.getTime()))
+				.add(new IntegerBerPacket(authEngine.getBootCount() == 0 ? 1 : authEngine.getBootCount()))
+				.add(new IntegerBerPacket(authEngine.getTime() == 0 ? 1 : authEngine.getTime()))
 				.add(new BytesBerPacket(BerPacketUtils.bytes(authEngine.getAuthLogin())))
 				.add(auth)
 				.add(priv)));

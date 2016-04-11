@@ -2,7 +2,7 @@ package com.davfx.ninio.snmp;
 
 public final class BerConstants {
 
-	public static final int ERROR_STATUS_RETRY = -1;
+	public static final int ERROR_STATUS_AUTHENTICATION_NOT_SYNCED = -1;
 	public static final int ERROR_STATUS_AUTHENTICATION_FAILED = -2;
 	public static final int ERROR_STATUS_TIMEOUT = -3; // Used in cache server
 

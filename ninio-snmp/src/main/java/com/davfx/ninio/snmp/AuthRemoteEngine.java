@@ -40,7 +40,7 @@ public final class AuthRemoteEngine {
     private long timeResetAt = 0L;
     private int time = 0;
     
-    private boolean ready = false;
+    //%%% private boolean ready = false;
     
 	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification) {
 		this.authRemoteSpecification = authRemoteSpecification;
@@ -61,6 +61,7 @@ public final class AuthRemoteEngine {
 		privKeyLength = authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 	}
 	
+	/*%%
 	public boolean isReady() {
 		return ready;
 	}
@@ -68,6 +69,7 @@ public final class AuthRemoteEngine {
 	public void setReady() {
 		ready = true;
 	}
+	*/
 
 	public String getAuthLogin() {
 		return authRemoteSpecification.authLogin;
