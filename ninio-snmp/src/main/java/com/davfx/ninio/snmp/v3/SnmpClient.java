@@ -191,9 +191,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							authRemoteEngines.put(address, authRemoteEngine);
 						}
 						
-						Instance i = new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEngine);
-						thisInstanceMapper.map(i);
-						writeGet(thisConnector, address, i.instanceId, community, authRemoteEngine, oid);
+						new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEngine);
 					}
 				});
 				return this;
@@ -271,46 +269,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private static void writeGet(Connector connector, Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
-		if (authEngine == null) {
-			Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);
-			ByteBuffer b = builder.getBuffer();
-			LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
-			connector.send(to, b);
-		} else {
-			Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, oid);
-			ByteBuffer b = builder.getBuffer();
-			LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
-			connector.send(to, b);
-		}
-	}
-	private static void writeGetNext(Connector connector, Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
-		if (authEngine == null) {
-			Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, oid);
-			ByteBuffer b = builder.getBuffer();
-			LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
-			connector.send(to, b);
-		} else {
-			Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, oid);
-			ByteBuffer b = builder.getBuffer();
-			LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
-			connector.send(to, b);
-		}
-	}
-	private static void writeGetBulk(Connector connector, Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
-		if (authEngine == null) {
-			Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, BULK_SIZE);
-			ByteBuffer b = builder.getBuffer();
-			LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
-			connector.send(to, b);
-		} else {
-			Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, oid, BULK_SIZE);
-			ByteBuffer b = builder.getBuffer();
-			LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
-			connector.send(to, b);
-		}
-	}
-	
 	private static final class Instance {
 		private final Connector connector;
 		private final InstanceMapper instanceMapper;
@@ -341,11 +299,69 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			this.address = address;
 			this.community = community;
 			this.authEngine = authEngine;
+
+			instanceMapper.map(this);
+			shouldRepeatWhat = BerConstants.GET;
+			write();
 		}
 		
 		public void close() {
 			shouldRepeatWhat = 0;
 			requestOid = null;
+			receiver = null;
+			failing = null;
+		}
+		
+		private void write() {
+			switch (shouldRepeatWhat) { 
+			case BerConstants.GET:
+				if (authEngine == null) {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					connector.send(address, b);
+				} else {
+					Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
+					connector.send(address, b);
+				}
+				break;
+			case BerConstants.GETNEXT:
+				if (authEngine == null) {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					connector.send(address, b);
+				} else {
+					Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
+					connector.send(address, b);
+				}
+				break;
+			case BerConstants.GETBULK:
+				if (authEngine == null) {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, requestOid, BULK_SIZE);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					connector.send(address, b);
+				} else {
+					Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, requestOid, BULK_SIZE);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
+					connector.send(address, b);
+				}
+				break;
+			default:
+				break;
+			}
+		}
+	
+		private void fail(IOException e) {
+			shouldRepeatWhat = 0;
+			requestOid = null;
+			failing.failed(new IOException("Timeout"));
 			receiver = null;
 			failing = null;
 		}
@@ -356,119 +372,102 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED) {
-				requestOid = null;
-				failing.failed(new IOException("Authentication failed"));
-				receiver = null;
-				failing = null;
+				fail(new IOException("Authentication failed"));
 				return;
 			}
 			
 			if (errorStatus == BerConstants.ERROR_STATUS_TIMEOUT) {
-				requestOid = null;
-				failing.failed(new IOException("Timeout"));
-				receiver = null;
-				failing = null;
+				fail(new IOException("Timeout"));
 				return;
 			}
 			
 			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
 				instanceMapper.map(this);
 				LOGGER.trace("Retrying GET after receiving auth engine completion message ({})", instanceId);
-				switch (shouldRepeatWhat) { 
-				case BerConstants.GET:
-					writeGet(connector, address, instanceId, community, authEngine, requestOid);
-					break;
-				case BerConstants.GETNEXT:
-					writeGetNext(connector, address, instanceId, community, authEngine, requestOid);
-					break;
-				case BerConstants.GETBULK:
-					writeGetBulk(connector, address, instanceId, community, authEngine, requestOid);
-					break;
-				default:
-					break;
+				write();
+				return;
+			}
+
+			if (shouldRepeatWhat == BerConstants.GET) {
+				boolean fallback = false;
+				if (errorStatus != 0) {
+					LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
+					fallback = true;
+				} else {
+					Result found = null;
+					for (Result r : results) {
+						if (r.getValue() == null) {
+							LOGGER.trace(r.getOid() + " fallback to GETNEXT/GETBULK");
+							fallback = true;
+							break;
+						} else if (!requestOid.equals(r.getOid())) {
+							LOGGER.trace("{} not as expected: {}, fallbacking to GETNEXT/GETBULK", r.getOid(), requestOid);
+							fallback = true;
+							break;
+						}
+						
+						// Cannot return more than one
+						LOGGER.trace("Scalar found: {}", r);
+						found = r;
+					}
+					if (found != null) {
+						requestOid = null;
+						receiver.received(found);
+						receiver.finished();
+						receiver = null;
+						failing = null;
+						return;
+					}
+				}
+				if (fallback) {
+					instanceMapper.map(this);
+					shouldRepeatWhat = BerConstants.GETBULK;
+					write();
 				}
 			} else {
-				if (shouldRepeatWhat == BerConstants.GET) {
-					boolean fallback = false;
-					if (errorStatus != 0) {
-						LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
-						fallback = true;
-					} else {
-						Result found = null;
-						for (Result r : results) {
-							if (r.getValue() == null) {
-								LOGGER.trace(r.getOid() + " fallback to GETNEXT/GETBULK");
-								fallback = true;
-								break;
-							} else if (!requestOid.equals(r.getOid())) {
-								LOGGER.trace("{} not as expected: {}, fallbacking to GETNEXT/GETBULK", r.getOid(), requestOid);
-								fallback = true;
-								break;
-							}
-							
-							// Cannot return more than one
-							LOGGER.trace("Scalar found: {}", r);
-							found = r;
-						}
-						if (found != null) {
-							requestOid = null;
-							receiver.received(found);
-							receiver.finished();
-							receiver = null;
-							failing = null;
-							return;
-						}
+				if (errorStatus != 0) {
+					requestOid = null;
+					receiver.finished();
+					receiver = null;
+					failing = null;
+				} else {
+					Oid lastOid = null;
+					for (Result r : results) {
+						LOGGER.trace("Received in bulk: {}", r);
 					}
-					if (fallback) {
+					for (Result r : results) {
+						if (r.getValue() == null) {
+							continue;
+						}
+						if (!initialRequestOid.isPrefixOf(r.getOid())) {
+							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+							lastOid = null;
+							break;
+						}
+						LOGGER.trace("Addind to results: {}", r);
+						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
+							LOGGER.warn("{} reached limit", requestOid);
+							lastOid = null;
+							break;
+						}
+						countResults++;
+						receiver.received(r);
+						lastOid = r.getOid();
+					}
+					if (lastOid != null) {
+						LOGGER.trace("Continuing from: {}", lastOid);
+						
+						requestOid = lastOid;
+						
 						instanceMapper.map(this);
 						shouldRepeatWhat = BerConstants.GETBULK;
-						writeGetBulk(connector, address, instanceId, community, authEngine, requestOid);
-					}
-				} else {
-					if (errorStatus != 0) {
+						write();
+					} else {
+						// Stop here
 						requestOid = null;
 						receiver.finished();
 						receiver = null;
 						failing = null;
-					} else {
-						Oid lastOid = null;
-						for (Result r : results) {
-							LOGGER.trace("Received in bulk: {}", r);
-						}
-						for (Result r : results) {
-							if (r.getValue() == null) {
-								continue;
-							}
-							if (!initialRequestOid.isPrefixOf(r.getOid())) {
-								LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
-								lastOid = null;
-								break;
-							}
-							LOGGER.trace("Addind to results: {}", r);
-							if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-								LOGGER.warn("{} reached limit", requestOid);
-								lastOid = null;
-								break;
-							}
-							countResults++;
-							receiver.received(r);
-							lastOid = r.getOid();
-						}
-						if (lastOid != null) {
-							LOGGER.trace("Continuing from: {}", lastOid);
-							
-							requestOid = lastOid;
-							
-							instanceMapper.map(this);
-							shouldRepeatWhat = BerConstants.GETBULK;
-							writeGetBulk(connector, address, instanceId, community, authEngine, requestOid);
-						} else {
-							// Stop here
-							requestOid = null;
-							receiver.finished();
-							receiver = null;
-							failing = null;
-						}
 					}
 				}
 			}

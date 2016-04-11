@@ -23,7 +23,7 @@ public final class AuthRemoteEngine {
 	private static final int ENCRYPTION_MARGIN = 64;
 	
 	private int bootCount = 0;
-	private int time = 0;
+	private int resetTime = 0;
 	private byte[] id = new byte[0];
 
 	public final AuthRemoteSpecification authRemoteSpecification;
@@ -38,6 +38,7 @@ public final class AuthRemoteEngine {
     private final int privKeyLength;
 
     private long timeResetAt = 0L;
+    private int time = 0;
     
     private boolean ready = false;
     
@@ -113,14 +114,15 @@ public final class AuthRemoteEngine {
 	public void renewTime() {
 		if (timeResetAt > 0L) {
 			int oldTime = time;
-			time += (int) ((System.currentTimeMillis() - timeResetAt) / 1000L);
-			LOGGER.trace("Auth engine time: {} -> {}", oldTime, time);
+			time = resetTime + ((int) ((System.currentTimeMillis() - timeResetAt) / 1000L));
+			LOGGER.trace("Auth engine time: ({}) {} -> {}", resetTime, oldTime, time);
 		}
 	}
-	public void resetTime(int time) {
-		LOGGER.trace("Auth engine reset time: {} -> {}", this.time, time);
+	public void resetTime(int resetTime) {
+		LOGGER.trace("Auth engine reset time: {} ({}) -> {}", this.resetTime, time, resetTime);
 		timeResetAt = System.currentTimeMillis();
-		this.time = time;
+		this.resetTime = resetTime;
+		this.time = resetTime;
 	}
 
 	public byte[] getAuthKey() {

@@ -180,9 +180,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					
 					@Override
 					public void connected(final FailableCloseableByteBufferHandler write) {
-						// final SnmpWriter w = new SnmpWriter(write, community, authEngine);
-						final SnmpWriter w = new SnmpWriter(write);
-						
 						instanceMapper.write = write;
 						
 						clientHandler.launched(new SnmpClientHandler.Callback() {
@@ -220,10 +217,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 											authRemoteEngines.put(address, authRemoteEngine);
 										}
 										
-										Instance i = new Instance(instanceMapper, callback, w, oid, timeout, address, community, authRemoteEngine);
-										// Instance i = new Instance(instanceMapper, callback, w, oid, timeoutFromBeginning);
-										instanceMapper.map(i);
-										w.get(address, i.instanceId, community, authRemoteEngine, oid);
+										new Instance(instanceMapper, callback, write, oid, timeout, address, community, authRemoteEngine);
 									}
 								});
 							}
@@ -328,84 +322,27 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private static final class SnmpWriter { // extends CheckAllocationObject {
-		private final CloseableByteBufferHandler write;
-		// private final String community;
-		// private final AuthRemoteEngine authEngine;
-		public SnmpWriter(CloseableByteBufferHandler write) {
-		// public SnmpWriter(CloseableByteBufferHandler write, String community, AuthRemoteEngine authEngine) {
-			// super(SnmpWriter.class);
-			this.write = write;
-			// this.community = community;
-			// this.authEngine = authEngine;
-		}
-		
-		public void close() {
-			write.close();
-		}
-		
-		public void get(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
-			if (authEngine == null) {
-				Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, oid);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
-				write.handle(to, b);
-			} else {
-				Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, oid);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
-				write.handle(to, b);
-			}
-		}
-		public void getNext(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid) {
-			if (authEngine == null) {
-				Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, oid);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
-				write.handle(to, b);
-			} else {
-				Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, oid);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
-				write.handle(to, b);
-			}
-		}
-		public void getBulk(Address to, int instanceId, String community, AuthRemoteEngine authEngine, Oid oid, int bulkLength) {
-			if (authEngine == null) {
-				Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, oid, bulkLength);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", oid, instanceId, community, b.remaining());
-				write.handle(to, b);
-			} else {
-				Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, oid, bulkLength);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", oid, instanceId, b.remaining());
-				write.handle(to, b);
-			}
-		}
-	}
-	
-	private static final class Instance { // extends CheckAllocationObject {
+	private static final class Instance {
 		private static final Random RANDOM = new Random(System.currentTimeMillis());
 
 		private final InstanceMapper instanceMapper;
 		private SnmpClientHandler.Callback.GetCallback callback;
-		private final SnmpWriter write;
+		private final CloseableByteBufferHandler write;
 		private final Oid initialRequestOid;
 		private Oid requestOid;
 		private int countResults = 0;
 		private final double timeout;
-		private double sendTimestamp = DateUtils.now();
-		private int shouldRepeatWhat = BerConstants.GET;
+		private double sendTimestamp;
+		private int shouldRepeatWhat;
 		public int instanceId;
 		private final double repeatRandomizationRandomized;
 
 		private final Address address;
 		private final String community;
 		private final AuthRemoteEngine authEngine;
-		private boolean callingWithIncompleteAuthEngine;
+		//%%%% private boolean callingWithIncompleteAuthEngine;
 
-		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, SnmpWriter write, Oid requestOid, double timeout, Address address, String community, AuthRemoteEngine authEngine) {
+		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, CloseableByteBufferHandler write, Oid requestOid, double timeout, Address address, String community, AuthRemoteEngine authEngine) {
 			// super(Instance.class);
 			this.instanceMapper = instanceMapper;
 			this.callback = callback;
@@ -419,6 +356,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			this.authEngine = authEngine;
 			
 			repeatRandomizationRandomized = (RANDOM.nextDouble() * REPEAT_RANDOMIZATION) - (1d / 2d); // [ -0.5, 0.5 [
+
+			instanceMapper.map(this);
+			sendTimestamp = DateUtils.now();
+			shouldRepeatWhat = BerConstants.GET;
+			write();
 		}
 		
 		public void closeAll() {
@@ -459,19 +401,52 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		private void write() {
+			/*%%%%%%
 			if (authEngine != null) {
-				callingWithIncompleteAuthEngine = authEngine.isReady() || (authEngine.getId() == null) || (authEngine.getEncryptionParameters() == null) || (authEngine.getBootCount() == 0) || (authEngine.getTime() == 0);
-			}
-			
+				callingWithIncompleteAuthEngine = !authEngine.isReady() || (authEngine.getId() == null) || (authEngine.getEncryptionParameters() == null) || (authEngine.getBootCount() == 0) || (authEngine.getTime() == 0);
+				LOGGER.trace("Auth engine incomplete = {}, instance = {}", callingWithIncompleteAuthEngine, instanceId);
+			} else {
+				callingWithIncompleteAuthEngine = false;
+			}*/
 			switch (shouldRepeatWhat) { 
 			case BerConstants.GET:
-				write.get(address, instanceId, community, authEngine, requestOid);
+				if (authEngine == null) {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					write.handle(address, b);
+				} else {
+					Version3PacketBuilder builder = Version3PacketBuilder.get(authEngine, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
+					write.handle(address, b);
+				}
 				break;
 			case BerConstants.GETNEXT:
-				write.getNext(address, instanceId, community, authEngine, requestOid);
+				if (authEngine == null) {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					write.handle(address, b);
+				} else {
+					Version3PacketBuilder builder = Version3PacketBuilder.getNext(authEngine, instanceId, requestOid);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
+					write.handle(address, b);
+				}
 				break;
 			case BerConstants.GETBULK:
-				write.getBulk(address, instanceId, community, authEngine, requestOid, BULK_SIZE);
+				if (authEngine == null) {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, requestOid, BULK_SIZE);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					write.handle(address, b);
+				} else {
+					Version3PacketBuilder builder = Version3PacketBuilder.getBulk(authEngine, instanceId, requestOid, BULK_SIZE);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", requestOid, instanceId, b.remaining());
+					write.handle(address, b);
+				}
 				break;
 			default:
 				break;
@@ -506,14 +481,14 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 			
 			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-				if (callingWithIncompleteAuthEngine) {
-					instanceMapper.map(this);
-					LOGGER.trace("Repeating after receiving auth engine completion message ({})", instanceId);
-					sendTimestamp = DateUtils.now();
-					write();
-				} else {
-					fail(new IOException("Authentication failed"));
-				}
+				//%%%%% if (callingWithIncompleteAuthEngine) {
+				instanceMapper.map(this);
+				LOGGER.trace("Repeating after receiving auth engine completion message ({})", instanceId);
+				sendTimestamp = DateUtils.now();
+				write();
+				//%%%%% } else {
+				//%%%%% fail(new IOException("Authentication failed"));
+				//%%%%% }
 				return;
 			}
 
