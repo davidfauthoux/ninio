@@ -43,10 +43,12 @@ public final class Version2cPacketParser {
 				throw new IOException("Invalid version: " + version + " should be " + BerConstants.VERSION_2C);
 			}
 			ber.readBytes(); // community
-			if (ber.beginReadSequence() != BerConstants.RESPONSE) {
-				throw new IOException("Not a response packet");
-			}
+			
+			int s = ber.beginReadSequence();
 			{
+				if (s != BerConstants.RESPONSE) {
+					throw new IOException("Not a response packet");
+				}
 				requestId = ber.readInteger();
 				errorStatus = ber.readInteger();
 				errorIndex = ber.readInteger();

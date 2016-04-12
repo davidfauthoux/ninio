@@ -176,21 +176,23 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		public AuthRemoteEnginePendingRequestManager() {
 		}
 		
-		public void update(AuthRemoteSpecification authRemoteSpecification) {
+		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, Connector connector) {
 			if (engine == null) {
 				engine = new AuthRemoteEngine(authRemoteSpecification);
+				discoverIfNecessary(address, connector);
 			} else {
 				if (!engine.authRemoteSpecification.equals(authRemoteSpecification)) {
 					engine = new AuthRemoteEngine(authRemoteSpecification);
+					discoverIfNecessary(address, connector);
 				}
 			}
 		}
 		
 		public void discoverIfNecessary(Address address, Connector connector) {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
-				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, Integer.MAX_VALUE, DISCOVER_OID);
+				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
 				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, Integer.MAX_VALUE, b.remaining());
+				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
 				connector.send(address, b);
 			}
 		}
@@ -270,11 +272,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							if (authRemoteEnginePendingRequestManager == null) {
 								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
 								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
-								authRemoteEnginePendingRequestManager.update(authRemoteSpecification);
-								authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisConnector);
-							} else {
-								authRemoteEnginePendingRequestManager.update(authRemoteSpecification);
 							}
+							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, thisConnector);
 						}
 						
 						new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
@@ -288,8 +287,14 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final class RequestIdProvider {
 
 		private static final Random RANDOM = new SecureRandom();
+
+		public static final int IGNORE_ID = 0;
+		
+		private static final int MAX_ID = Integer.MAX_VALUE / 2;
 		private static final int INITIAL_VARIABILITY = 100000;
-		private static int NEXT = Integer.MAX_VALUE;
+		
+		private static int NEXT = IGNORE_ID;
+		
 		private static final Object LOCK = new Object();
 
 		public RequestIdProvider() {
@@ -297,8 +302,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		
 		public int get() {
 			synchronized (LOCK) {
-				if (NEXT == Integer.MAX_VALUE) {
-					NEXT = RANDOM.nextInt(INITIAL_VARIABILITY);
+				if (NEXT == MAX_ID) {
+					NEXT = IGNORE_ID + 1 + RANDOM.nextInt(INITIAL_VARIABILITY);
 				}
 				int k = NEXT;
 				NEXT++;
@@ -316,6 +321,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		public void map(Instance instance) {
+			instances.remove(instance.instanceId);
+			
 			int instanceId = requestIdProvider.get();
 
 			if (instances.containsKey(instanceId)) {
@@ -366,7 +373,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		private Oid requestOid;
 		private int countResults = 0;
 		private int shouldRepeatWhat = BerConstants.GET;
-		public int instanceId;
+		public int instanceId = RequestIdProvider.IGNORE_ID;
 
 		private final Address address;
 		private final String community;

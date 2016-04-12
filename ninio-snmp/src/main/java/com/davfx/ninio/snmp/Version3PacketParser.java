@@ -92,6 +92,11 @@ public final class Version3PacketParser {
 				errorStatus = pdu.readInteger();
 				errorIndex = pdu.readInteger();
 				LOGGER.trace("REPORT error = {}/{}", errorStatus, errorIndex);
+				
+				if (errorStatus == 0) {
+					errorStatus = BerConstants.ERROR_STATUS_UNKNOWN;
+					errorIndex = 0;
+				}
 
 				pdu.beginReadSequence();
 				{
@@ -106,35 +111,19 @@ public final class Version3PacketParser {
 							if (AUTH_ERROR_UNKNOWN_ENGINE_ID_OID.isPrefixOf(oid)) {
 								LOGGER.trace("Engine not known ({}), requestId = {}", oid, requestId);
 								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED;
+								errorIndex = 0;
 							} else if (AUTH_ERROR_NOT_IN_TIME_WINDOW_OID.isPrefixOf(oid)) {
 								LOGGER.trace("Engine not synced ({}), requestId = {}", oid, requestId);
 								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED;
+								errorIndex = 0;
 							} else if (AUTH_ERROR_OID_PREFIX.isPrefixOf(oid)) {
 								LOGGER.error("Authentication failed ({}), requestId = {}", oid, requestId);
 								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;
+								errorIndex = 0;
 							}
 
-							/*%%%%%%%%%
-							if ((authEngine.getId() != null) && AUTH_ERROR_UNKNOWN_ENGINE_ID_OID.isPrefixOf(oid)) {
-								LOGGER.trace("Engine not known ({}), requestId = {}", oid, requestId);
-								errorStatus = BerConstants.ERROR_STATUS_RETRY;
-								errorIndex = 0;
-								requestId = Integer.MAX_VALUE;
-							} else if ((authEngine.getTime() != 0) && (authEngine.getBootCount() != 0) && AUTH_ERROR_NOT_IN_TIME_WINDOW_OID.isPrefixOf(oid)) {
-								LOGGER.trace("Engine not synced ({}), requestId = {}", oid, requestId);
-								errorStatus = BerConstants.ERROR_STATUS_RETRY;
-								errorIndex = 0;
-								requestId = Integer.MAX_VALUE;
-							} else if (AUTH_ERROR_OID_PREFIX.isPrefixOf(oid)) {
-								LOGGER.error("Authentication failed ({}), requestId = {}", oid, requestId);
-								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;
-								errorIndex = 0;
-								requestId = Integer.MAX_VALUE;
-							}
-							*/
-							
 							// OidValue value = pdu.readOidValue();
-							results.add(new Result(oid, value));
+							//%% results.add(new Result(oid, value));
 						}
 						pdu.endReadSequence();
 					}
