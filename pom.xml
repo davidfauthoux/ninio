@@ -4,6 +4,8 @@
 	<groupId>com.davfx.ninio</groupId>
 	<artifactId>ninio</artifactId>
 	<version>2.2.5-SNAPSHOT</version>
+	<!-- mvn versions:set -DgenerateBackupPoms=false -->
+
 	<packaging>pom</packaging>
 
 	<name>${project.groupId}:${project.artifactId}</name>

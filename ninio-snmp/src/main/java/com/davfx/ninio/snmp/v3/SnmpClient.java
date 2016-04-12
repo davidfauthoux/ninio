@@ -290,10 +290,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 
 		public static final int IGNORE_ID = 0;
 		
-		private static final int MAX_ID = Integer.MAX_VALUE / 2;
-		private static final int INITIAL_VARIABILITY = 100000;
+		private static final int MAX_ID = 2_000_000_000;
+		private static final int INITIAL_VARIABILITY = 100_000;
 		
-		private static int NEXT = IGNORE_ID;
+		private static int NEXT = MAX_ID;
 		
 		private static final Object LOCK = new Object();
 
