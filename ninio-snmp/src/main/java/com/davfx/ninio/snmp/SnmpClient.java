@@ -165,6 +165,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 		}
 		
+		public void reset() {
+			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
+		}
+		
 		public void discoverIfNecessary(Address address, ByteBufferHandler write) {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
@@ -209,6 +213,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					}
 					break;
 				default:
+					{
+						LOGGER.error("Invalid writing v3: {} #{}, request type = {}", r.oid, r.instanceId, r.request);
+					}
 					break;
 				}
 			}
@@ -228,8 +235,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				
 				ready.connect(null, new ReadyConnection() {
 				// ready.connect(address, new ReadyConnection() {
-					private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
-
 					@Override
 					public void handle(Address address, ByteBuffer buffer) {
 						if (instanceMapper.terminated) {
@@ -241,7 +246,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						int errorStatus;
 						int errorIndex;
 						Iterable<Result> results;
-						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = instanceMapper.authRemoteEngines.getIfPresent(address);
 						try {
 							if (authRemoteEnginePendingRequestManager == null) {
 								Version2cPacketParser parser = new Version2cPacketParser(buffer);
@@ -262,6 +267,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						}
 						
 						if (authRemoteEnginePendingRequestManager != null) {
+							if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
+								authRemoteEnginePendingRequestManager.reset();
+							}
+
 							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, instanceMapper.write);
 							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, instanceMapper.write);
 						}
@@ -304,10 +313,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 									public void run() {
 										AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 										if (authRemoteSpecification != null) {
-											authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+											authRemoteEnginePendingRequestManager = instanceMapper.authRemoteEngines.getIfPresent(address);
 											if (authRemoteEnginePendingRequestManager == null) {
 												authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-												authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+												instanceMapper.authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
 											}
 											authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, write);
 										}
@@ -334,6 +343,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	
 	private static final class InstanceMapper { // extends CheckAllocationObject {
 		// private final Address address;
+		private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
+
 		private final Map<Integer, Instance> instances = new HashMap<>();
 		private RequestIdProvider requestIdProvider;
 		
@@ -408,6 +419,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			if (terminated) {
 				return;
 			}
+			
+			for (Map.Entry<Address, AuthRemoteEnginePendingRequestManager> e : authRemoteEngines.asMap().entrySet()) {
+				e.getValue().discoverIfNecessary(e.getKey(), write);
+			}
+			
 			for (Instance i : instances.values()) {
 				i.repeat(now);
 			}
@@ -492,11 +508,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 
 			if (t >= (MIN_TIME_TO_REPEAT + repeatRandomizationRandomized)) {
-				// LOGGER.trace("Repeating {} {}", instanceMapper.address, requestOid);
 				LOGGER.trace("Repeating {} {}", address, requestOid);
 				write();
 			}
-			return;
 		}
 		
 		private void write() {
@@ -533,6 +547,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 		
 		private void fail(IOException e) {
+			LOGGER.trace("Failed ({}:{})", address, requestOid, e);
 			shouldRepeatWhat = 0;
 			requestOid = null;
 			SnmpClientHandler.Callback.GetCallback c = callback;
@@ -550,7 +565,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 			
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
-				// Ignored
+				fail(new IOException("Authentication engine not synced"));
 				return;
 			}
 
@@ -584,17 +599,17 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			if (shouldRepeatWhat == BerConstants.GET) {
 				boolean fallback = false;
 				if (errorStatus != 0) {
-					LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
+					LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{} ({}:{})", errorStatus, errorIndex, address, requestOid);
 					fallback = true;
 				} else {
 					Result found = null;
 					for (Result r : results) {
 						if (r.getValue() == null) {
-							LOGGER.trace(r.getOid() + " fallback to GETNEXT/GETBULK");
+							LOGGER.trace("{} fallback to GETNEXT/GETBULK ({}:{})", r.getOid(), address, requestOid);
 							fallback = true;
 							break;
 						} else if (!requestOid.equals(r.getOid())) {
-							LOGGER.trace("{} not as expected: {}, fallbacking to GETNEXT/GETBULK", r.getOid(), requestOid);
+							LOGGER.trace("{} not as expected: {}, fallbacking to GETNEXT/GETBULK ({}:{})", r.getOid(), requestOid, address, requestOid);
 							fallback = true;
 							break;
 						}
@@ -620,6 +635,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				}
 			} else {
 				if (errorStatus != 0) {
+					LOGGER.error("Error in GETBULK response, error = {} ({}:{})", errorStatus, address, requestOid);
 					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
@@ -627,23 +643,23 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				} else {
 					Oid lastOid = null;
 					for (Result r : results) {
-						LOGGER.trace("Received in bulk: {}", r);
+						LOGGER.trace("Received in bulk: {} ({}:{})", r, address, requestOid);
 					}
 					if (!results.iterator().hasNext()) {
-						LOGGER.error("No result in GETBULK response: {}", requestOid);
+						LOGGER.error("No result in GETBULK response ({}:{})", address, requestOid);
 					}
 					for (Result r : results) {
 						if (r.getValue() == null) {
 							continue;
 						}
 						if (!initialRequestOid.isPrefixOf(r.getOid())) {
-							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+							LOGGER.trace("{} not prefixed by {} ({}:{})", r.getOid(), initialRequestOid, address, requestOid);
 							lastOid = null;
 							break;
 						}
-						LOGGER.trace("Addind to results: {}", r);
+						LOGGER.trace("Addind to results: {} ({}:{})", r, address, requestOid);
 						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-							LOGGER.warn("{} reached limit", requestOid);
+							LOGGER.warn("{} reached limit ({}:{})", requestOid, address, requestOid);
 							lastOid = null;
 							break;
 						}
@@ -652,7 +668,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						lastOid = r.getOid();
 					}
 					if (lastOid != null) {
-						LOGGER.trace("Continuing from: {}", lastOid);
+						LOGGER.trace("Continuing from: {} ({}:{})", lastOid, address, requestOid);
 						
 						requestOid = lastOid;
 						
@@ -661,6 +677,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						shouldRepeatWhat = BerConstants.GETBULK;
 						write();
 					} else {
+						LOGGER.trace("Stop ({}:{})", address, requestOid);
 						// Stop here
 						requestOid = null;
 						SnmpClientHandler.Callback.GetCallback c = callback;

@@ -118,6 +118,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						}
 						
 						if (authRemoteEnginePendingRequestManager != null) {
+							if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
+								authRemoteEnginePendingRequestManager.reset();
+							}
+
 							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisThisConnector);
 							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, thisThisConnector);
 						}
@@ -188,6 +192,10 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 		}
 		
+		public void reset() {
+			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
+		}
+
 		public void discoverIfNecessary(Address address, Connector connector) {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
@@ -452,7 +460,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
-				// Ignored
+				fail(new IOException("Authentication engine not synced"));
 				return;
 			}
 
