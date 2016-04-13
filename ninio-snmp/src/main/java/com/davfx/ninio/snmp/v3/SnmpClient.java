@@ -98,6 +98,12 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						int errorIndex;
 						Iterable<Result> results;
 						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+						boolean ready;
+						if (authRemoteEnginePendingRequestManager != null) {
+							ready = authRemoteEnginePendingRequestManager.isReady();
+						} else {
+							ready = true;
+						}
 						try {
 							if (authRemoteEnginePendingRequestManager == null) {
 								Version2cPacketParser parser = new Version2cPacketParser(buffer);
@@ -118,8 +124,8 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						}
 						
 						if (authRemoteEnginePendingRequestManager != null) {
-							if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
-								authRemoteEnginePendingRequestManager.resetIfNecessary();
+							if (ready && (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED)) {
+								authRemoteEnginePendingRequestManager.reset();
 							}
 
 							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisThisConnector);
@@ -192,14 +198,17 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 		}
 		
-		public void resetIfNecessary() {
+		public boolean isReady() {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
-				return;
+				return false;
 			}
-			
+			return true;
+		}
+		
+		public void reset() {
 			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
 		}
-
+		
 		public void discoverIfNecessary(Address address, Connector connector) {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
