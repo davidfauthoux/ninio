@@ -119,7 +119,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 						
 						if (authRemoteEnginePendingRequestManager != null) {
 							if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
-								authRemoteEnginePendingRequestManager.reset();
+								authRemoteEnginePendingRequestManager.resetIfNecessary();
 							}
 
 							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisThisConnector);
@@ -192,7 +192,11 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 		}
 		
-		public void reset() {
+		public void resetIfNecessary() {
+			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+				return;
+			}
+			
 			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
 		}
 
