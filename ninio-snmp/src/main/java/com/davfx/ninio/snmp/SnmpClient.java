@@ -169,7 +169,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
 				return;
 			}
-			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
+			//engine = new AuthRemoteEngine(engine.authRemoteSpecification);
 		}
 		
 		public void discoverIfNecessary(Address address, ByteBufferHandler write) {
