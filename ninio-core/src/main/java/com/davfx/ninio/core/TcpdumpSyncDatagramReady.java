@@ -337,11 +337,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 	}
 	
 	@Override
-	public void connect(Address address, final ReadyConnection connection) {
-		if (address != null) {
-			connection.failed(new IOException("Invalid address: " + address + ", must be null"));
-			return;
-		}
+	public void connect(final Address address, final ReadyConnection connection) {
 		if (receiver == null) {
 			connection.failed(new IOException("Invalid receiver"));
 			return;
@@ -364,8 +360,7 @@ public final class TcpdumpSyncDatagramReady implements Ready {
 			@Override
 			public void handle(Address a, ByteBuffer buffer) {
 				if (a == null) {
-					LOGGER.error("Dropping datagram sent to null address");
-					return;
+					a = address;
 				}
 				LOGGER.trace("Sending datagram to: {}", a);
 				try {
