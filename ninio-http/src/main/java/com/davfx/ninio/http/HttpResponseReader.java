@@ -105,174 +105,184 @@ final class HttpResponseReader {
 	}
 	
 	public void handle(ByteBuffer buffer, RecyclingHandler recyclingHandler) {
-		if (!buffer.hasRemaining()) {
-			return;
-		}
-		try {
-			
-			//%% if (ended || closed) {
+		while (buffer.hasRemaining()) {
 			if (closed) {
-				throw new IOException("Too much data");
+				return;
 			}
-		
-			//%% failClose = true;
-			while (!responseLineRead) {
-				String line = lineReader.handle(buffer);
-				if (line == null) {
-					return;
+			try {
+				
+				//%% if (ended || closed) {
+				if (closed) {
+					throw new IOException("Too much data");
 				}
-				LOGGER.trace("Response line: {}", line);
-				setResponseLine(line);
-				responseLineRead = true;
-			}
-			while (!headersRead) {
-				String line = lineReader.handle(buffer);
-				if (line == null) {
-					return;
-				}
-				if (line.isEmpty()) {
-					LOGGER.trace("Header line empty");
-					headersRead = true;
-					
-					for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
-						try {
-							contentLength = Long.parseLong(contentLengthValue);
-							break;
-						} catch (NumberFormatException e) {
-							throw new IOException("Invalid Content-Length: " + contentLengthValue);
-						}
-					}
-					
-					for (String contentEncodingValue : headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
-						if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-							gzipReader = new GzipReader(handler);
-						}
-						break;
-					}
-					
-					for (String transferEncodingValue : headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-						chunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
-						break;
-					}
-
-					keepAlive = http11;
-					/*%%
-					if (http11) {
-						keepAlive = true; // (contentLength >= 0); // Websocket ready!
-					}
-					*/
-					for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
-						keepAlive = false;
-						if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-							keepAlive = false;
-						} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-							keepAlive = true;
-						}
-						break;
-					}
-					LOGGER.trace("Keep alive = {}", keepAlive);
-					
-					handler.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
-				} else {
-					LOGGER.trace("Header line: {}", line);
-					addHeader(line);
-				}
-			}
 			
-			if (chunked) {
+				//%% failClose = true;
+				while (!responseLineRead) {
+					String line = lineReader.handle(buffer);
+					if (line == null) {
+						break;
+					}
+					LOGGER.trace("Response line: {}", line);
+					setResponseLine(line);
+					responseLineRead = true;
+				}
 				
-				while (true) {
-				
-					while (!chunkFooterRead) {
+				if (responseLineRead) {
+					while (!headersRead) {
 						String line = lineReader.handle(buffer);
 						if (line == null) {
-							return;
+							break;
 						}
-						if (!line.isEmpty()) {
-							throw new IOException("Invalid chunk footer");
-						}
-						chunkFooterRead = true;
-						chunkHeaderRead = false;
-						//%% failClose = false;
-						if (chunkLength == 0) {
-							//%% ended = true;
-							closed();
-							if (recyclingHandler != null) {
-								if (keepAlive) {
-									recyclingHandler.recycle();
-								} else {
-									recyclingHandler.close();
+						if (line.isEmpty()) {
+							LOGGER.trace("Header line empty");
+							headersRead = true;
+							
+							for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
+								try {
+									contentLength = Long.parseLong(contentLengthValue);
+									break;
+								} catch (NumberFormatException e) {
+									throw new IOException("Invalid Content-Length: " + contentLengthValue);
 								}
 							}
-						}
-					}
-
-					while (!chunkHeaderRead) {
-						String line = lineReader.handle(buffer);
-						if (line == null) {
-							return;
-						}
-						//%% failClose = true;
-						/*%%
-						int i = line.indexOf(HttpSpecification.EXTENSION_SEPARATOR);
-						if (i > 0) { // extensions ignored
-							line = line.substring(0, i);
-						}
-						*/
-						try {
-							chunkLength = Integer.parseInt(line, 16);
-						} catch (NumberFormatException e) {
-							throw new IOException("Invalid chunk size: " + line);
-						}
-						chunkHeaderRead = true;
-					}
-					
-					if (!buffer.hasRemaining()) {
-						return;
-					}
-						
-					if (chunkHeaderRead && (chunkCountRead < chunkLength)) {
-						long totalToRead = contentLength - countRead;
-						long toRead = chunkLength - chunkCountRead;
-						handleContent(buffer, toRead, totalToRead);
-					}
-					
-					if (chunkCountRead == chunkLength) {
-						chunkFooterRead = false;
-						chunkCountRead = 0;
-					}
-				
-				}
-	
-			} else {
-			
-				if (contentLength >= 0) {
-					if (countRead < contentLength) {
-						long toRead = contentLength - countRead;
-						handleContent(buffer, toRead, toRead);
-					}
-					if (countRead == contentLength) {
-						//%% failClose = false;
-						//%% ended = true;
-						closed();
-						LOGGER.trace("Data fully received ({} bytes, keepAlive = {})", countRead, keepAlive);
-						if (recyclingHandler != null) {
-							if (keepAlive) {
-								recyclingHandler.recycle();
-							} else {
-								recyclingHandler.close();
+							
+							for (String contentEncodingValue : headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
+								if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+									gzipReader = new GzipReader(handler);
+								}
+								break;
 							}
+							
+							for (String transferEncodingValue : headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+								chunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
+								break;
+							}
+		
+							keepAlive = http11;
+							/*%%
+							if (http11) {
+								keepAlive = true; // (contentLength >= 0); // Websocket ready!
+							}
+							*/
+							for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
+								keepAlive = false;
+								if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+									keepAlive = false;
+								} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+									keepAlive = true;
+								}
+								break;
+							}
+							LOGGER.trace("Keep alive = {}", keepAlive);
+							
+							handler.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
+							
+							if (keepAlive && (chunked || (contentLength >= 0))) {
+								if (recyclingHandler != null) {
+									recyclingHandler.recycle();
+								}
+							}
+
+						} else {
+							LOGGER.trace("Header line: {}", line);
+							addHeader(line);
 						}
 					}
-				} else {
-					//%% failClose = false;
-					handleContent(buffer, -1, -1);
-				}
-
-			}
+					
+					if (headersRead) {
+						
+						if (chunked) {
+							
+							while (true) {
+							
+								while (!chunkFooterRead) {
+									String line = lineReader.handle(buffer);
+									if (line == null) {
+										return;
+									}
+									if (!line.isEmpty()) {
+										throw new IOException("Invalid chunk footer");
+									}
+									chunkFooterRead = true;
+									chunkHeaderRead = false;
+									//%% failClose = false;
+									if (chunkLength == 0) {
+										//%% ended = true;
+										closed();
+										if (recyclingHandler != null) {
+											if (!keepAlive) {
+												recyclingHandler.close();
+											}
+										}
+									}
+								}
 			
-		} catch (IOException e) {
-			failed(e);
+								while (!chunkHeaderRead) {
+									String line = lineReader.handle(buffer);
+									if (line == null) {
+										return;
+									}
+									//%% failClose = true;
+									/*%%
+									int i = line.indexOf(HttpSpecification.EXTENSION_SEPARATOR);
+									if (i > 0) { // extensions ignored
+										line = line.substring(0, i);
+									}
+									*/
+									try {
+										chunkLength = Integer.parseInt(line, 16);
+									} catch (NumberFormatException e) {
+										throw new IOException("Invalid chunk size: " + line);
+									}
+									chunkHeaderRead = true;
+								}
+								
+								if (!buffer.hasRemaining()) {
+									return;
+								}
+									
+								if (chunkHeaderRead && (chunkCountRead < chunkLength)) {
+									long totalToRead = contentLength - countRead;
+									long toRead = chunkLength - chunkCountRead;
+									handleContent(buffer, toRead, totalToRead);
+								}
+								
+								if (chunkCountRead == chunkLength) {
+									chunkFooterRead = false;
+									chunkCountRead = 0;
+								}
+							
+							}
+				
+						} else {
+						
+							if (contentLength >= 0) {
+								if (countRead < contentLength) {
+									long toRead = contentLength - countRead;
+									handleContent(buffer, toRead, toRead);
+								}
+								if (countRead == contentLength) {
+									//%% failClose = false;
+									//%% ended = true;
+									closed();
+									LOGGER.trace("Data fully received ({} bytes, keepAlive = {})", countRead, keepAlive);
+									if (recyclingHandler != null) {
+										if (!keepAlive) {
+											recyclingHandler.close();
+										}
+									}
+								}
+							} else {
+								//%% failClose = false;
+								handleContent(buffer, -1, -1);
+							}
+			
+						}
+					}
+				}
+			} catch (IOException e) {
+				failed(e);
+			}
 		}
 	}
 	

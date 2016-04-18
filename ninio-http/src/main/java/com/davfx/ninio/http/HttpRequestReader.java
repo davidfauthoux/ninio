@@ -46,6 +46,8 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 	private final HttpServerHandler handler;
 	private final CloseableByteBufferHandler write;
 	
+	private CloseableByteBufferHandler currentPipeliningWrite = null;
+	
 	private final Map<String, String> headerSanitization = new HashMap<String, String>();
 	
 	public HttpRequestReader(Address address, boolean secure, HttpServerHandler handler, CloseableByteBufferHandler write) {
@@ -133,114 +135,134 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 	
 	@Override
 	public void handle(Address address, ByteBuffer buffer) {
-		if (!buffer.hasRemaining()) {
-			return;
-		}
-		try {
-			failClose = true;
-			
-			while (!requestLineRead) {
-				String line = lineReader.handle(buffer);
-				if (line == null) {
-					break;
-				}
-				LOGGER.trace("Request line: {}", line);
-				setRequestLine(line);
-				requestLineRead = true;
+		while (buffer.hasRemaining()) {
+			if (closed) {
+				return;
 			}
-	
-			while (!headersRead) {
-				String line = lineReader.handle(buffer);
-				if (line == null) {
-					return;
+			try {
+				failClose = true;
+				
+				while (!requestLineRead) {
+					String line = lineReader.handle(buffer);
+					if (line == null) {
+						break;
+					}
+					LOGGER.trace("Request line: {}", line);
+					setRequestLine(line);
+					requestLineRead = true;
 				}
-				if (line.isEmpty()) {
-					LOGGER.trace("Header line empty");
-					headersRead = true;
-
-					for (String accept : headers.get(HttpHeaderKey.ACCEPT_ENCODING)) {
-						for (String a : Splitter.on(',').splitToList(accept)) {
-							if (a.trim().equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-								enableGzip = accept.contains(HttpHeaderValue.GZIP);
-								break;
-							}
-						}
-						if (enableGzip) {
+		
+				if (requestLineRead) {
+					while (!headersRead) {
+						String line = lineReader.handle(buffer);
+						if (line == null) {
 							break;
 						}
-					}
-					
-					handler.handle(new HttpRequest(address, secure, requestMethod, HttpPath.of(requestPath), ImmutableMultimap.copyOf(headers)));
-
-					if (requestMethod == HttpMethod.POST) {
-						contentLength = -1;
-						for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
-							try {
-								contentLength = Long.parseLong(contentLengthValue);
-							} catch (NumberFormatException nfe) {
-								throw new IOException("Invalid Content-Length: " + contentLengthValue);
+						if (line.isEmpty()) {
+							LOGGER.trace("Header line empty");
+							headersRead = true;
+		
+							for (String accept : headers.get(HttpHeaderKey.ACCEPT_ENCODING)) {
+								for (String a : Splitter.on(',').splitToList(accept)) {
+									if (a.trim().equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+										enableGzip = accept.contains(HttpHeaderValue.GZIP);
+										break;
+									}
+								}
+								if (enableGzip) {
+									break;
+								}
 							}
-							break;
+							
+							handler.handle(new HttpRequest(address, secure, requestMethod, HttpPath.of(requestPath), ImmutableMultimap.copyOf(headers)));
+		
+							if (requestMethod == HttpMethod.POST) {
+								contentLength = -1;
+								for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
+									try {
+										contentLength = Long.parseLong(contentLengthValue);
+									} catch (NumberFormatException nfe) {
+										throw new IOException("Invalid Content-Length: " + contentLengthValue);
+									}
+									break;
+								}
+								if (contentLength < 0) {
+									//TODO [Not required] Chunked transfer coding
+									throw new IOException("Content-Length required");
+								}
+							} else {
+								contentLength = 0;
+							}
+						} else {
+							LOGGER.trace("Header line: {}", line);
+							addHeader(line);
 						}
-						if (contentLength < 0) {
-							//TODO [Not required] Chunked transfer coding
-							throw new IOException("Content-Length required");
-						}
-					} else {
-						contentLength = 0;
 					}
-				} else {
-					LOGGER.trace("Header line: {}", line);
-					addHeader(line);
-				}
-			}
-
-			LOGGER.trace("Content length = {}, buffer size = {}", contentLength, buffer.remaining());
-
-			if (countRead < contentLength) {
-				if (buffer.hasRemaining()) {
-					ByteBuffer d;
-					long toRead = contentLength - countRead;
-					if (buffer.remaining() > toRead) {
-						d = buffer.duplicate();
-						d.limit((int) (buffer.position() + toRead));
-						buffer.position((int) (buffer.position() + toRead));
-					} else {
-						d = buffer.duplicate();
-						buffer.position(buffer.position() + buffer.remaining());
-					}
-					countRead += d.remaining();
-					handler.handle(null, d);
-				}
-			}
-	
-			if (!ready && (countRead == contentLength)) {
-				ready = true;
-				LOGGER.trace("Ready");
-				handler.ready(new InnerWrite());
-			}
+		
+					if (headersRead) {
+						LOGGER.trace("Content length = {}, buffer size = {}", contentLength, buffer.remaining());
 			
-			if (buffer.hasRemaining()) {
-				countRead += buffer.remaining();
-				handler.handle(null, buffer);
-			}
+						if (countRead < contentLength) {
+							if (buffer.hasRemaining()) {
+								ByteBuffer d;
+								long toRead = contentLength - countRead;
+								if (buffer.remaining() > toRead) {
+									d = buffer.duplicate();
+									d.limit((int) (buffer.position() + toRead));
+									buffer.position((int) (buffer.position() + toRead));
+								} else {
+									d = buffer.duplicate();
+									buffer.position(buffer.position() + buffer.remaining());
+								}
+								countRead += d.remaining();
+								handler.handle(null, d);
+							}
+						}
+				
+						if (countRead == contentLength) {
+							if (!ready) {
+								if (chunked || ((writeContentLength >= 0) && (countWrite == writeContentLength))) {
+									failClose = false;
+									countRead = 0;
+									requestLineRead = false; // another connection possible
+									headersRead = false;
+									ready = false;
+									headers.clear();
+									LOGGER.trace("Keep alive");
+									return; // keep alive
+								}
 
-			//%% }
-		} catch (IOException e) {
-			if (!closed) {
-				closed = true;
-				write.close();
-				handler.failed(e);
+								ready = true;
+								LOGGER.trace("Ready");
+								//TODO copy headers
+								InnerWrite w = new InnerWrite();
+								if (currentInnerWrite != null) {
+									currentInnerWrite.after = w;
+								}
+								currentInnerWrite = w;
+								handler.ready(w);
+							}
+						}
+					}
+				}
+			} catch (IOException e) {
+				if (!closed) {
+					closed = true;
+					write.close();
+					handler.failed(e);
+				}
 			}
 		}
 	}
 	
-	private final class InnerWrite implements HttpServerHandler.Write {
+	private static final class InnerWrite implements HttpServerHandler.Write {
 		private long countWrite = 0;
 		private long writeContentLength = -1;
 		private boolean chunked = false;
 		private GzipWriter gzipWriter = null;
 		private boolean innerClosed = false;
+		
+		public InnerWrite after = null;
 		
 		public InnerWrite() {
 		}
@@ -260,8 +282,8 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			
 			if (http11) {
 				if (chunked) {
-					write.handle(address, ZERO_BYTE_BUFFER.duplicate());
-					write.handle(address, EMPTY_LINE_BYTE_BUFFER.duplicate());
+					toWrite.handle(address, ZERO_BYTE_BUFFER.duplicate());
+					toWrite.handle(address, EMPTY_LINE_BYTE_BUFFER.duplicate());
 				}
 				
 				if (chunked || ((writeContentLength >= 0) && (countWrite == writeContentLength))) {
@@ -272,6 +294,11 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 					ready = false;
 					headers.clear();
 					LOGGER.trace("Keep alive");
+					
+					if (after != null) {
+						TODO
+					}
+					
 					return; // keep alive
 				}
 			}
@@ -279,7 +306,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			closed = true;
 			
 			LOGGER.trace("Actually closed");
-			write.close();
+			toWrite.close();
 		}
 		
 		@Override
@@ -289,7 +316,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			}
 			
 			closed = true;
-			write.close();
+			toWrite.close();
 		}
 
 		@Override
@@ -344,7 +371,7 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 			}
 			// Don't fallback anymore in case of no content length, because of websockets // if (writeContentLength == -1) { chunked = true; }
 			
-			write.handle(null, LineReader.toBuffer((http11 ? HttpSpecification.HTTP11 : HttpSpecification.HTTP10) + HttpSpecification.START_LINE_SEPARATOR + response.status + HttpSpecification.START_LINE_SEPARATOR + response.reason));
+			toWrite.handle(null, LineReader.toBuffer((http11 ? HttpSpecification.HTTP11 : HttpSpecification.HTTP10) + HttpSpecification.START_LINE_SEPARATOR + response.status + HttpSpecification.START_LINE_SEPARATOR + response.reason));
 			for (Map.Entry<String, String> h : response.headers.entries()) {
 				String k = h.getKey();
 				String v = h.getValue();
@@ -359,15 +386,15 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				if (k.equals(HttpHeaderKey.CONTENT_ENCODING)) {
 					continue;
 				}
-				write.handle(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
+				toWrite.handle(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
 			}
 			if (gzipWriter != null) {
-				write.handle(null, GZIP_BYTE_BUFFER.duplicate());
+				toWrite.handle(null, GZIP_BYTE_BUFFER.duplicate());
 			}
 			if (chunked) {
-				write.handle(null, CHUNKED_BYTE_BUFFER.duplicate());
+				toWrite.handle(null, CHUNKED_BYTE_BUFFER.duplicate());
 			}
-			write.handle(null, EMPTY_LINE_BYTE_BUFFER.duplicate());
+			toWrite.handle(null, EMPTY_LINE_BYTE_BUFFER.duplicate());
 		}
 		
 		@Override
@@ -388,12 +415,12 @@ final class HttpRequestReader implements CloseableByteBufferHandler {
 				return;
 			}
 			if (chunked) {
-				write.handle(null, LineReader.toBuffer(Integer.toHexString(buffer.remaining())));
+				toWrite.handle(null, LineReader.toBuffer(Integer.toHexString(buffer.remaining())));
 			}
 			countWrite += buffer.remaining();
-			write.handle(null, buffer);
+			toWrite.handle(null, buffer);
 			if (chunked) {
-				write.handle(null, EMPTY_LINE_BYTE_BUFFER.duplicate());
+				toWrite.handle(null, EMPTY_LINE_BYTE_BUFFER.duplicate());
 			}
 		}
 	}
