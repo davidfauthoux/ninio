@@ -44,6 +44,10 @@ public final class HexTcpdumpReader implements TcpdumpReader {
 			
 			lineCount++;
 			
+			if (line.isEmpty()) {
+				continue;
+			}
+			
 			try {
 				char first = line.charAt(0);
 				if (first == ' ') {

@@ -210,7 +210,7 @@ final class ProxyReadyGenerator implements AutoCloseable, Closeable {
 																		out.writeUTF(address.getHost());
 																		out.writeInt(address.getPort());
 																	}
-																	out.write(buffer.array(), buffer.arrayOffset(), len);
+																	out.write(buffer.array(), buffer.arrayOffset() + buffer.position(), len);
 																	if (throttle != null) {
 																		throttle.sent(len);
 																	}

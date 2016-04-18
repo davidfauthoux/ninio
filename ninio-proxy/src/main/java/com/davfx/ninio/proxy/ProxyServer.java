@@ -242,7 +242,7 @@ public final class ProxyServer implements AutoCloseable, Closeable {
 																	out.writeUTF(address.getHost());
 																	out.writeInt(address.getPort());
 																}
-																out.write(buffer.array(), buffer.arrayOffset(), buffer.remaining());
+																out.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 																out.flush();
 															} catch (IOException ioe) {
 																try {
