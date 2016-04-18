@@ -20,7 +20,7 @@ import com.davfx.util.Lock;
 
 public class SnmpCacheTest {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpCacheTest.InnerCount.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpCacheTest.class);
 	
 	private static final class InnerCount implements Count {
 		private final String prefix;
