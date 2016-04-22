@@ -31,9 +31,9 @@ public class SnmpServerTest {
 		int port = 8080;
 		try (SnmpServer snmpServer = new SnmpServer()) {
 			snmpServer
-				.with(new DatagramConnectorFactory().bind(new Address(Address.LOCALHOST, port)))
+				.with(new DatagramConnectorFactory())
 				.handle(new FromMapSnmpServerHandler(map))
-				.connect();
+				.connect(new Address(Address.LOCALHOST, port));
 
 			final Lock<List<Result>, IOException> lock = new Lock<>();
 			try (SnmpClient snmpClient = new SnmpClient()) {

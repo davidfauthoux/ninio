@@ -16,11 +16,5 @@
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-core</artifactId>
 		</dependency>
-
-		<dependency>
-			<groupId>com.davfx.ninio</groupId>
-			<artifactId>ninio-proxy</artifactId>
-			<scope>test</scope>
-		</dependency>
 	</dependencies>
 </project>

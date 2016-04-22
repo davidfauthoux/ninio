@@ -34,7 +34,6 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 
 	private Executor executor = Shared.EXECUTOR;
 	
-	private Address bindAddress = null;
 	private Connector connectable = null;
 
 	public DatagramConnectorFactory() {
@@ -50,13 +49,8 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 		return this;
 	}
 
-	public DatagramConnectorFactory bind(Address bindAddress) {
-		this.bindAddress = bindAddress;
-		return this;
-	}
-
 	@Override
-	public Connector create() {
+	public Connector create(final Address bindAddress) {
 		Connector c = connectable;
 		connectable = null;
 		if (c != null) {
@@ -64,7 +58,6 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 		}
 		
 		final Executor thisExecutor = executor;
-		final Address thisBindAddress = bindAddress;
 		
 		connectable = new Connector() {
 			private Connecting connecting = null;
@@ -236,21 +229,21 @@ public final class DatagramConnectorFactory implements ConnectorFactory {
 									selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 								}
 								
-								if (thisBindAddress != null) {
+								if (bindAddress != null) {
 									try {
 										InetSocketAddress a;
-										if (thisBindAddress.getHost() == null) {
-											a = new InetSocketAddress(thisBindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+										if (bindAddress.getHost() == null) {
+											a = new InetSocketAddress(bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 										} else {
-											a = new InetSocketAddress(thisBindAddress.getHost(), thisBindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+											a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 										}
 										if (a.isUnresolved()) {
-											throw new IOException("Unresolved address: " + thisBindAddress.getHost() + ":" + thisBindAddress.getPort());
+											throw new IOException("Unresolved address: " + bindAddress.getHost() + ":" + bindAddress.getPort());
 										}
 										channel.socket().bind(a);
 									} catch (IOException e) {
 										disconnect(channel, selectionKey);
-										throw new IOException("Could not bind to: " + thisBindAddress, e);
+										throw new IOException("Could not bind to: " + bindAddress, e);
 									}
 								}
 							} catch (IOException e) {

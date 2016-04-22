@@ -30,7 +30,6 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 
 	private Executor executor = Shared.EXECUTOR;
 	
-	private Address connectAddress = null;
 	private Connector connectable = null;
 
 	public SocketConnectorFactory() {
@@ -47,13 +46,8 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 		return this;
 	}
 
-	public SocketConnectorFactory connect(Address connectAddress) {
-		this.connectAddress = connectAddress;
-		return this;
-	}
-
 	@Override
-	public Connector create() {
+	public Connector create(final Address connectAddress) {
 		Connector c = connectable;
 		connectable = null;
 		if (c != null) {
@@ -61,7 +55,6 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 		}
 		
 		final Executor thisExecutor = executor;
-		final Address thisConnectAddress = connectAddress;
 		
 		connectable = new Connector() {
 			private Connecting connecting = null;
@@ -269,18 +262,16 @@ public final class SocketConnectorFactory implements ConnectorFactory {
 									}
 								});
 								
-								if (thisConnectAddress != null) {
-									try {
-										InetSocketAddress a = new InetSocketAddress(thisConnectAddress.getHost(), thisConnectAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-										if (a.isUnresolved()) {
-											throw new IOException("Unresolved address: " + thisConnectAddress.getHost() + ":" + thisConnectAddress.getPort());
-										}
-										LOGGER.debug("Connecting to: {}", a);
-										channel.connect(a);
-									} catch (IOException e) {
-										disconnect(channel, inboundKey, null);
-										throw new IOException("Could not connect to: " + thisConnectAddress, e);
+								try {
+									InetSocketAddress a = new InetSocketAddress(connectAddress.getHost(), connectAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+									if (a.isUnresolved()) {
+										throw new IOException("Unresolved address: " + connectAddress.getHost() + ":" + connectAddress.getPort());
 									}
+									LOGGER.debug("Connecting to: {}", a);
+									channel.connect(a);
+								} catch (IOException e) {
+									disconnect(channel, inboundKey, null);
+									throw new IOException("Could not connect to: " + connectAddress, e);
 								}
 							} catch (IOException e) {
 								disconnect(channel, null, null);

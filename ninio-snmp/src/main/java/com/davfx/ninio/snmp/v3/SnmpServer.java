@@ -49,13 +49,13 @@ public final class SnmpServer implements AutoCloseable, Closeable {
 		return this;
 	}
 	
-	public SnmpServer connect() {
+	public SnmpServer connect(Address bindAddress) {
 		Connector thisConnector = connector;
 		connector = null;
 		if (thisConnector != null) {
 			thisConnector.disconnect();
 		}
-		connector = connectorFactory.create();
+		connector = connectorFactory.create(bindAddress);
 		thisConnector = connector;
 		final Connector thisThisConnector = thisConnector;
 		final SnmpServerHandler thisHandler = handler;

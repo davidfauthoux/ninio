@@ -48,6 +48,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			connector.receiving(new Receiver() {
 				@Override
 				public void received(Address address, ByteBuffer buffer) {
+					LOGGER.debug("------> {} {}", buffer.remaining(), receiver);
 					if (receiver != null) {
 						receiver.received(address, buffer);
 					}
@@ -57,20 +58,30 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			connector.closing(new Closing() {
 				@Override
 				public void closed() {
+					LOGGER.debug("{} CLOSING {} {}", this, closing, receiver);
 					if (closing != null) {
 						closing.closed();
 					}
 				}
 			});
+
+			connector.connect();
 		}
 	}
 	
 	private final Map<Long, ReusableConnector> reusableConnectors = new HashMap<>();
 	private long nextReusableConnectorId = 0L;
 	
+	private boolean pipelining = false;
+	
 	public HttpClient() {
 	}
 
+	public HttpClient pipelining(boolean pipelining) {
+		this.pipelining = pipelining;
+		return this;
+	}
+	
 	public HttpClient with(Executor executor) {
 		this.executor = executor;
 		return this;
@@ -103,6 +114,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 
 	public SnmpRequest request() {
 		final Executor thisExecutor = executor;
+		final boolean thisPipelining = pipelining;
 		
 		return new SnmpRequest() {
 			private SnmpReceiver receiver = null;
@@ -122,12 +134,81 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				return this;
 			}
 			
+			private void prepare(final SnmpReceiver r, final Failing f, HttpRequest request) {
+				connector.closing = new Closing() {
+					@Override
+					public void closed() {
+						thisExecutor.execute(new Runnable() {
+							@Override
+							public void run() {
+								reusableConnectors.remove(id);
+		
+								try {
+									parseClosed(r);
+								} catch (IOException ioe) {
+									f.failed(ioe);
+								}
+		
+								connector = null;
+							}
+						});
+					}
+				};
+
+				connector.receiver = new Receiver() {
+					@Override
+					public void received(final Address address, final ByteBuffer buffer) {
+						thisExecutor.execute(new Runnable() {
+							@Override
+							public void run() {
+								try {
+									parse(buffer, new SnmpReceiver() {
+										@Override
+										public void received(ByteBuffer buffer) {
+											r.received(buffer);
+										}
+										@Override
+										public void received(HttpResponse response) {
+											r.received(response);
+										}
+										@Override
+										public void ended() {
+											r.ended();
+											if (!thisPipelining) {
+												if (connector != null) {
+													if (keepAlive) {
+														connector.reusable = true;
+													} else {
+														connector.connector.disconnect();
+														reusableConnectors.remove(id);
+													}
+													connector = null;
+												}
+											}
+										}
+									});
+								} catch (IOException ioe) {
+									LOGGER.error("Connection error", ioe);
+									connector.connector.disconnect();
+									reusableConnectors.remove(id);
+									connector = null;
+									f.failed(ioe);
+								}
+							}
+						});
+					}
+				};
+				
+				LOGGER.debug("Sending request: {}", request);
+				connector.connector.send(null, request.toByteBuffer());
+			}
+			
 			@Override
 			public Send create(final HttpRequest request) {
 				final SnmpReceiver r = receiver;
 				final Failing f = failing;
 				
-				//TODO handle request Connection:close
+				//%% //TO DO handle request Connection:close
 				
 				thisExecutor.execute(new Runnable() {
 					@Override
@@ -141,50 +222,11 @@ public final class HttpClient implements AutoCloseable, Closeable {
 							ReusableConnector reusedConnector = e.getValue();
 							if (reusedConnector.reusable && (reusedConnector.secure == request.secure)) {
 								id = reusedId;
+
+								LOGGER.debug("Recycling connection {}", id);
 								
 								connector = reusedConnector;
-								
-								final long thisId = id;
-								connector.closing = new Closing() {
-									@Override
-									public void closed() {
-										reusableConnectors.remove(thisId);
-
-										try {
-											parseClosed(r);
-										} catch (IOException ioe) {
-											LOGGER.error("Connection error", ioe);
-											connector.connector.disconnect();
-											reusableConnectors.remove(id);
-											connector = null;
-											f.failed(ioe);
-										}
-
-										connector = null;
-									}
-								};
-
-								connector.receiver = new Receiver() {
-									@Override
-									public void received(final Address address, final ByteBuffer buffer) {
-										thisExecutor.execute(new Runnable() {
-											@Override
-											public void run() {
-												try {
-													parse(buffer, r);
-												} catch (IOException ioe) {
-													LOGGER.error("Connection error", ioe);
-													connector.connector.disconnect();
-													reusableConnectors.remove(id);
-													connector = null;
-													f.failed(ioe);
-												}
-											}
-										});
-									}
-								};
-								
-								connector.connector.send(null, request.toByteBuffer());
+								prepare(r, f, request);
 								return;
 							}
 						}
@@ -192,52 +234,10 @@ public final class HttpClient implements AutoCloseable, Closeable {
 						id = nextReusableConnectorId;
 						nextReusableConnectorId++;
 						
-						connector = new ReusableConnector(request.secure ? secureConnectorFactory.create() : connectorFactory.create(), request.secure);
+						connector = new ReusableConnector(request.secure ? secureConnectorFactory.create(request.address) : connectorFactory.create(request.address), request.secure);
 						reusableConnectors.put(id, connector);
 
-						final long thisId = id;
-						connector.closing = new Closing() {
-							@Override
-							public void closed() {
-								reusableConnectors.remove(thisId);
-
-								try {
-									parseClosed(r);
-								} catch (IOException ioe) {
-									LOGGER.error("Connection error", ioe);
-									connector.connector.disconnect();
-									reusableConnectors.remove(id);
-									connector = null;
-									f.failed(ioe);
-								}
-
-								connector = null;
-							}
-						};
-						
-						connector.receiver = new Receiver() {
-							@Override
-							public void received(final Address address, final ByteBuffer buffer) {
-								thisExecutor.execute(new Runnable() {
-									@Override
-									public void run() {
-										try {
-											parse(buffer, r);
-										} catch (IOException ioe) {
-											LOGGER.error("Connection error", ioe);
-											connector.connector.disconnect();
-											reusableConnectors.remove(id);
-											connector = null;
-											f.failed(ioe);
-										}
-									}
-								});
-							}
-						};
-						
-						connector.connector.connect();
-						LOGGER.debug("Sending request: {}", request);
-						connector.connector.send(null, request.toByteBuffer());
+						prepare(r, f, request);
 					}
 				});
 
@@ -260,9 +260,11 @@ public final class HttpClient implements AutoCloseable, Closeable {
 						thisExecutor.execute(new Runnable() {
 							@Override
 							public void run() {
-								if (connector != null) {
-									connector.reusable = true;
-									connector = null;
+								if (thisPipelining) {
+									if (connector != null) {
+										connector.reusable = true;
+										connector = null;
+									}
 								}
 							}
 						});
@@ -290,8 +292,11 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			private boolean responseLineRead = false;
 			private boolean headersRead = false;
 
+			private boolean keepAlive = false;
+
 			private int responseCode;
 			private String responseReason;
+			private boolean http11;
 			private final Multimap<String, String> headers = HashMultimap.create();
 			private boolean chunked;
 			private long contentLength;
@@ -324,9 +329,9 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				}
 				String responseVersion = responseLine.substring(0, i);
 				if (responseVersion.equals(HttpSpecification.HTTP10)) {
-					//%% http11 = false;
+					http11 = false;
 				} else if (responseVersion.equals(HttpSpecification.HTTP11)) {
-					//%% http11 = true;
+					http11 = true;
 				} else {
 					throw new IOException("Unsupported version");
 				}
@@ -340,6 +345,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			}
 		
 			private void parse(ByteBuffer buffer, final SnmpReceiver receiver) throws IOException {
+				LOGGER.debug("PARSING {} {}", buffer.remaining(), receiver);
 				while (!responseLineRead) {
 					String line = lineReader.handle(buffer);
 					if (line == null) {
@@ -386,7 +392,6 @@ public final class HttpClient implements AutoCloseable, Closeable {
 							break;
 						}
 		
-						/*%%
 						keepAlive = http11;
 						for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
 							keepAlive = false;
@@ -396,7 +401,6 @@ public final class HttpClient implements AutoCloseable, Closeable {
 							break;
 						}
 						LOGGER.trace("Keep alive = {}", keepAlive);
-						*/
 						
 						receiver.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
 						
@@ -491,6 +495,8 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				countRead += deflated.remaining();
 				buffer.position((int) (buffer.position() + deflated.remaining()));
 		
+				LOGGER.debug("Content received (read = {})", countRead);
+				
 				if (gzipReader == null) {
 					receiver.received(deflated);
 					return;
@@ -517,7 +523,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 					}
 	
 					if (countRead < contentLength) {
-						throw new IOException("Connection reset by peer, expecting more data");
+						throw new IOException("Connection reset by peer, expecting more data (read = " + countRead + ", contentLength = " + contentLength + ")");
 					}
 
 					// receiver.ended(); // Already sent

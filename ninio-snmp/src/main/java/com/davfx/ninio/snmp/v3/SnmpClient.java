@@ -77,7 +77,7 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			thisConnector.disconnect();
 		}
 
-		connector = connectorFactory.create();
+		connector = connectorFactory.create(null);
 		thisConnector = connector;
 
 		final Executor thisExecutor = executor;
