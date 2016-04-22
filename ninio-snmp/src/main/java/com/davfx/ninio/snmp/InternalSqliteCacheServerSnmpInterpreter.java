@@ -8,7 +8,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.proxy.InternalSqliteCacheServerReadyFactory;
+import com.davfx.ninio.core.InternalSqliteCacheServerReadyFactory;
 
 //Transforms all values to string
 //Does not tell community on response
@@ -26,7 +26,7 @@ public final class InternalSqliteCacheServerSnmpInterpreter implements InternalS
 			ber.beginReadSequence();
 			{
 				int version = ber.readInteger();
-				if (version == BerConstants.VERSION_2C) {
+				if (version != BerConstants.VERSION_2C) {
 					throw new IOException("Invalid version: " + version + " should be " + BerConstants.VERSION_2C);
 				}
 				ber.readBytes(); // community
@@ -71,7 +71,7 @@ public final class InternalSqliteCacheServerSnmpInterpreter implements InternalS
 			ber.beginReadSequence();
 			{
 				int version = ber.readInteger();
-				if (version == BerConstants.VERSION_2C) {
+				if (version != BerConstants.VERSION_2C) {
 					throw new IOException("Invalid version: " + version + " should be " + BerConstants.VERSION_2C);
 				}
 				ber.readBytes(); // community
@@ -93,6 +93,8 @@ public final class InternalSqliteCacheServerSnmpInterpreter implements InternalS
 	
 	@Override
 	public ByteBuffer transform(ByteBuffer packet, Integer requestId) {
+		LOGGER.trace("Transforming packet with requestId = {}", requestId);
+		
 		int errorStatus;
 		int errorIndex;
 		List<Result> results = new LinkedList<>();
@@ -112,7 +114,7 @@ public final class InternalSqliteCacheServerSnmpInterpreter implements InternalS
 					if (s != BerConstants.RESPONSE) {
 						throw new IOException("Not a response packet");
 					}
-					requestId = ber.readInteger();
+					ber.readInteger();
 					errorStatus = ber.readInteger();
 					errorIndex = ber.readInteger();
 

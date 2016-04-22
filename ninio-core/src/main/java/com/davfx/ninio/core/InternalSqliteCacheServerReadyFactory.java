@@ -1,9 +1,8 @@
-package com.davfx.ninio.proxy;
+package com.davfx.ninio.core;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -14,27 +13,14 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.QueueReady;
-import com.davfx.ninio.core.Ready;
-import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.util.ConfigUtils;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFactory, Closeable, AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(InternalSqliteCacheServerReadyFactory.class);
 
-	private static final Config CONFIG = ConfigFactory.load(InternalSqliteCacheServerReadyFactory.class.getClassLoader());
-
-	private static final double CACHE_EXPIRATION = ConfigUtils.getDuration(CONFIG, "ninio.proxy.cache.expiration");
+	private final double expiration;
 	
 	public static final class Context<T> {
 		public final String key;
@@ -50,6 +36,15 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 		ByteBuffer transform(ByteBuffer packet, T sub);
 	}
 	
+	private static final class CacheByAddress<T> {
+		public final Cache<String, Cache<T, Double>> requestsByKey;
+		public final Cache<T, String> subToKey;
+		public CacheByAddress(double expiration) {
+			requestsByKey = CacheBuilder.newBuilder().expireAfterAccess((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
+			subToKey = CacheBuilder.newBuilder().expireAfterWrite((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
+		}
+	}
+	
 	private final Queue queue;
 	
 	private final File database;
@@ -59,10 +54,15 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 	
 	private final Interpreter<T> interpreter;
 	
-	public InternalSqliteCacheServerReadyFactory(Interpreter<T> interpreter, File database, Queue queue, ReadyFactory wrappee) {
+	private final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress;
+	
+	public InternalSqliteCacheServerReadyFactory(double expiration, Interpreter<T> interpreter, File database, Queue queue, ReadyFactory wrappee) {
+		this.expiration = expiration;
 		this.queue = queue;
 		this.wrappee = wrappee;
-		
+
+		cacheByDestinationAddress = CacheBuilder.newBuilder().expireAfterAccess((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
+
 		this.interpreter = interpreter;
 		
 		this.database = database;
@@ -92,11 +92,6 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 		return System.currentTimeMillis() / 1000d;
 	}
 	
-	private static final class CacheByAddress<T> {
-		public final Cache<String, Cache<T, Double>> requestsByKey = CacheBuilder.newBuilder().expireAfterAccess((long) (CACHE_EXPIRATION * 1000d), TimeUnit.MILLISECONDS).build();
-		public final Cache<T, String> subToKey = CacheBuilder.newBuilder().expireAfterWrite((long) (CACHE_EXPIRATION * 1000d), TimeUnit.MILLISECONDS).build();
-	}
-	
 	@Override
 	public Ready create() {
 		final Ready wrappeeReady = wrappee.create();
@@ -104,6 +99,7 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 		return new QueueReady(queue, new Ready() {
 			@Override
 			public void connect(Address bindAddress, final ReadyConnection connection) {
+				LOGGER.trace("Connecting {}", bindAddress);
 				if (bindAddress != null) {
 					LOGGER.error("Invalid bind address (should be null): {}", bindAddress);
 					connection.failed(new IOException("Invalid bind address (should be null): " + bindAddress));
@@ -111,8 +107,6 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 				}
 				
 				wrappeeReady.connect(bindAddress, new ReadyConnection() {
-					private final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress = CacheBuilder.newBuilder().expireAfterAccess((long) (CACHE_EXPIRATION * 1000d), TimeUnit.MILLISECONDS).build();
-					
 					@Override
 					public void failed(IOException e) {
 						connection.failed(e);
@@ -136,25 +130,31 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 								
 								Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
 								if (context == null) {
+									LOGGER.trace("Invalid request (address = {})", address);
 									return;
 								}
 
 								CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
 								if (cache == null) {
-									cache = new CacheByAddress<T>();
+									LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
+									cache = new CacheByAddress<T>(expiration);
 									cacheByDestinationAddress.put(address, cache);
 								}
 
 								Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
 								if (subs == null) {
-									subs = CacheBuilder.newBuilder().expireAfterWrite((long) (CACHE_EXPIRATION * 1000d), TimeUnit.MILLISECONDS).build();
+									subs = CacheBuilder.newBuilder().expireAfterWrite((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
 									cache.requestsByKey.put(context.key, subs);
 
 									subs.put(context.sub, now);
 									cache.subToKey.put(context.sub, context.key);
 
+									LOGGER.trace("New request (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+									
 									write.handle(address, sourceBuffer);
 								} else {
+									LOGGER.trace("Request already sent (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+									
 									subs.put(context.sub, now);
 									cache.subToKey.put(context.sub, context.key);
 
@@ -165,15 +165,19 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 											s.setString(k++, context.key);
 											ResultSet rs = s.executeQuery();
 											while (rs.next()) {
-												Blob packet = rs.getBlob("packet");
-												ByteBuffer bb = ByteBuffer.wrap(packet.getBytes(1L, (int) packet.length()));
+												ByteBuffer bb = ByteBuffer.wrap(rs.getBytes("packet"));
+												
+												LOGGER.trace("Response exists (address = {}, key = {}, sub = {})", address, context.key, context.sub);
 												
 												connection.handle(address, interpreter.transform(bb, context.sub));
+												return;
 											}
 										}
 									} catch (SQLException se) {
 										LOGGER.error("SQL error", se);
 									}
+
+									LOGGER.error("Response does not exist (address = {}, key = {}, sub = {})", address, context.key, context.sub);
 								}
 							}
 						});
@@ -183,21 +187,25 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 					public void handle(Address address, ByteBuffer sourceBuffer) {
 						T sub = interpreter.handleResponse(sourceBuffer.duplicate());
 						if (sub == null) {
+							LOGGER.trace("Invalid response (address = {})", address);
 							return;
 						}
 
 						CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
 						if (cache == null) {
+							LOGGER.trace("No cache (address = {}, sub = {})", address, sub);
 							return;
 						}
 						
 						String key = cache.subToKey.getIfPresent(sub);
 						if (key == null) {
+							LOGGER.trace("No key (address = {}, sub = {})", address, sub);
 							return;
 						}
 						
 						Cache<T, Double> subs = cache.requestsByKey.getIfPresent(key);
 						if (subs == null) {
+							LOGGER.trace("No corresponding subs (address = {}, sub = {}, key = {})", address, sub, key);
 							return;
 						}
 						
@@ -210,14 +218,16 @@ public final class InternalSqliteCacheServerReadyFactory<T> implements ReadyFact
 						subs.invalidateAll();
 						cache.subToKey.invalidateAll();
 
+						LOGGER.trace("New response (address = {}, sub = {}, key = {})", address, sub, key);
+
 						try {
-							Blob blob = sqlConnection.createBlob();
-							blob.setBytes(1L, sourceBuffer.array(), sourceBuffer.arrayOffset() + sourceBuffer.position(), sourceBuffer.remaining());
+							byte[] bytes = new byte[sourceBuffer.remaining()];
+							sourceBuffer.get(bytes);
 							try (PreparedStatement s = sqlConnection.prepareStatement("REPLACE INTO `data` (`address`, `key`, `packet`) VALUES (?, ?, ?)")) {
 								int k = 1;
 								s.setString(k++, address.toString());
 								s.setString(k++, key);
-								s.setBlob(k++, blob);
+								s.setBytes(k++, bytes);
 								s.executeUpdate();
 							}
 						} catch (SQLException se) {

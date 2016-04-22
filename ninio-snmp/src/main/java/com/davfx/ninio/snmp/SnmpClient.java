@@ -278,7 +278,9 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 							LOGGER.error("Invalid packet", e);
 							return;
 						}
-						
+
+						LOGGER.trace("SNMP packet instanceId = {}", instanceId);
+
 						if (authRemoteEnginePendingRequestManager != null) {
 							if (ready && (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED)) {
 								authRemoteEnginePendingRequestManager.reset();
