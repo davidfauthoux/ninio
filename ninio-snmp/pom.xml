@@ -16,6 +16,10 @@
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-core</artifactId>
 		</dependency>
+		<dependency>
+			<groupId>com.davfx.ninio</groupId>
+			<artifactId>ninio-proxy</artifactId>
+		</dependency>
 
 		<dependency>
 			<groupId>org.xerial</groupId>
