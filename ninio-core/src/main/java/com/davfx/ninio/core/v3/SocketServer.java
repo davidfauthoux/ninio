@@ -34,7 +34,6 @@ public final class SocketServer {
 
 	private Executor executor = Shared.EXECUTOR;
 	
-	private Address bindAddress = null;
 	private Acceptable acceptable = null;
 
 	public SocketServer() {
@@ -48,11 +47,6 @@ public final class SocketServer {
 	
 	public SocketServer with(Executor executor) {
 		this.executor = executor;
-		return this;
-	}
-
-	public SocketServer bind(Address bindAddress) {
-		this.bindAddress = bindAddress;
 		return this;
 	}
 
@@ -70,14 +64,13 @@ public final class SocketServer {
 		});
 	}
 	
-	public Acceptable create() {
+	public Acceptable create(final Address bindAddress) {
 		Acceptable c = acceptable;
 		if (c != null) {
 			c.close();
 		}
 		
 		final Executor thisExecutor = executor;
-		final Address thisBindAddress = bindAddress;
 		
 		acceptable = new Acceptable() {
 			private ServerSocketChannel currentChannel = null;
@@ -120,7 +113,7 @@ public final class SocketServer {
 								serverChannel.configureBlocking(false);
 								// serverChannel.socket().setReceiveBufferSize();
 								
-								LOGGER.debug("-> Server channel ready to accept on: {}", thisBindAddress);
+								LOGGER.debug("-> Server channel ready to accept on: {}", bindAddress);
 
 								final SelectionKey acceptSelectionKey = InternalQueue.register(serverChannel);
 								currentAcceptSelectionKey = acceptSelectionKey;
@@ -134,7 +127,7 @@ public final class SocketServer {
 										
 										ServerSocketChannel ssc = (ServerSocketChannel) key.channel();
 										try {
-											LOGGER.debug("-> Accepting client on: {}", thisBindAddress);
+											LOGGER.debug("-> Accepting client on: {}", bindAddress);
 											final SocketChannel outboundChannel = ssc.accept();
 											
 											outboundChannels.add(outboundChannel);
@@ -200,39 +193,39 @@ public final class SocketServer {
 											});
 										} catch (IOException e) {
 											close(serverChannel, acceptSelectionKey);
-											LOGGER.error("Error while accepting on: {}", thisBindAddress, e);
+											LOGGER.error("Error while accepting on: {}", bindAddress, e);
 										}
 									}
 								});
 	
 								try {
 									InetSocketAddress a;
-									if (thisBindAddress.getHost() == null) {
-										a = new InetSocketAddress(thisBindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+									if (bindAddress.getHost() == null) {
+										a = new InetSocketAddress(bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 									} else {
-										a = new InetSocketAddress(thisBindAddress.getHost(), thisBindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+										a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 									}
 									if (a.isUnresolved()) {
-										throw new IOException("Unresolved address: " + thisBindAddress.getHost() + ":" + thisBindAddress.getPort());
+										throw new IOException("Unresolved address: " + bindAddress.getHost() + ":" + bindAddress.getPort());
 									}
 									LOGGER.debug("-> Bound on: {}", a);
 									serverChannel.socket().bind(a);
 									acceptSelectionKey.interestOps(acceptSelectionKey.interestOps() | SelectionKey.OP_ACCEPT);
 								} catch (IOException e) {
 									close(serverChannel, acceptSelectionKey);
-									throw new IOException("Could not bind to: " + thisBindAddress, e);
+									throw new IOException("Could not bind to: " + bindAddress, e);
 								}
 	
 							} catch (IOException e) {
 								close(serverChannel, null);
-								LOGGER.error("Error while creating server socket on: {}", thisBindAddress, e);
+								LOGGER.error("Error while creating server socket on: {}", bindAddress, e);
 								if (thisFailing != null) {
 									thisFailing.failed(e);
 								}
 								return;
 							}
 						} catch (IOException ee) {
-							LOGGER.error("Error while creating server socket on: {}", thisBindAddress, ee);
+							LOGGER.error("Error while creating server socket on: {}", bindAddress, ee);
 							if (thisFailing != null) {
 								thisFailing.failed(ee);
 							}

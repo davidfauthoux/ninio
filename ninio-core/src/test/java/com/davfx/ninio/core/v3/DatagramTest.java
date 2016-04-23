@@ -28,7 +28,7 @@ public class DatagramTest {
 			final int port = 8080;
 	
 			final Wait wait = new Wait();
-			final Connector server = new DatagramConnectorFactory().with(executor).bind(new Address(null, port)).create();
+			final Connector server = new DatagramConnectorFactory().with(executor).create(new Address(null, port));
 			try {
 				server.failing(new Failing() {
 					@Override
@@ -63,7 +63,7 @@ public class DatagramTest {
 				server.connect();
 				wait.waitFor();
 
-				final Connector client = new DatagramConnectorFactory().with(executor).create();
+				final Connector client = new DatagramConnectorFactory().with(executor).create(null);
 				try {
 					client.failing(new Failing() {
 						@Override
