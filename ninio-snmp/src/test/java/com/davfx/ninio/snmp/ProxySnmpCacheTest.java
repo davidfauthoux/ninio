@@ -6,6 +6,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,7 @@ public class ProxySnmpCacheTest {
 	
 	private static final File DATABASE = new File("src/test/resources/snmpcache.db");
 	
+	@Ignore
 	@Test
 	public void test() throws Exception {
 		int snmpServerPort = 8080;
@@ -130,6 +132,7 @@ public class ProxySnmpCacheTest {
 		DATABASE.delete();
 	}
 	
+	@Ignore
 	@Test
 	public void testExpiration() throws Exception {
 		int snmpServerPort = 8080;
