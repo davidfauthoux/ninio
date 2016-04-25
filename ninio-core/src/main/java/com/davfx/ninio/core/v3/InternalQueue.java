@@ -15,17 +15,9 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.util.ClassThreadFactory;
 
-final class InternalQueue implements AutoCloseable {
+final class InternalQueue implements Queue, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(InternalQueue.class);
 
-	private static InternalQueue INTERNAL_QUEUE = new InternalQueue();
-	public static void execute(Runnable command) {
-		INTERNAL_QUEUE.internalExecute(command);
-	}
-	public static SelectionKey register(SelectableChannel channel) throws ClosedChannelException {
-		return INTERNAL_QUEUE.internalRegister(channel);
-	}
-	
 	private static final double WAIT_ON_SELECTOR_ERROR = 10d;
 	
 	private final Selector selector;
@@ -94,12 +86,14 @@ final class InternalQueue implements AutoCloseable {
 		t.start();
 	}
 	
-	private void internalExecute(Runnable command) {
+	@Override
+	public void execute(Runnable command) {
 		toRun.add(command);
 		selector.wakeup();
 	}
 	
-	private SelectionKey internalRegister(SelectableChannel channel) throws ClosedChannelException {
+	@Override
+	public SelectionKey register(SelectableChannel channel) throws ClosedChannelException {
 		return channel.register(selector, 0);
 	}
 	

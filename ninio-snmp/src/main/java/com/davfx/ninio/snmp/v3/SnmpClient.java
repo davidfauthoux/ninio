@@ -15,11 +15,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.ConnectorFactory;
-import com.davfx.ninio.core.v3.DatagramConnectorFactory;
+import com.davfx.ninio.core.v3.Datagram;
+import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.NinioBuilder;
+import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.Shared;
 import com.davfx.ninio.snmp.AuthRemoteEngine;
@@ -37,7 +38,7 @@ import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class SnmpClient implements AutoCloseable, Closeable {
+public final class SnmpClient implements Disconnectable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
 	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
@@ -47,49 +48,52 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 	private static final int BULK_SIZE = CONFIG.getInt("ninio.snmp.bulkSize");
 	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
 	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
+
+	public static interface Builder extends NinioBuilder<SnmpClient> {
+		Builder with(Executor executor);
+		Builder with(Datagram.Builder connectorFactory);
+	}
 	
-	private Executor executor = Shared.EXECUTOR;
-	private ConnectorFactory connectorFactory = new DatagramConnectorFactory();
+	public static NinioBuilder<SnmpClient> builder() {
+		return new Builder() {
+			private Executor executor = Shared.EXECUTOR;
+			private Datagram.Builder connectorFactory = Datagram.builder();
+			
+			@Override
+			public Builder with(Executor executor) {
+				this.executor = executor;
+				return this;
+			}
+			
+			@Override
+			public Builder with(Datagram.Builder connectorFactory) {
+				this.connectorFactory = connectorFactory;
+				return this;
+			}
+
+			@Override
+			public SnmpClient create(Queue queue) {
+				return new SnmpClient(queue, executor, connectorFactory);
+			}
+		};
+	}
 	
-	private Connector connector = null;
-	private InstanceMapper instanceMapper = null;
+	private final Executor executor;
+	
+	private final Connector connector;
+	private final InstanceMapper instanceMapper;
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
 
-	public SnmpClient() {
-	}
-
-	public SnmpClient with(Executor executor) {
+	public SnmpClient(Queue queue, final Executor executor, Datagram.Builder connectorFactory) {
 		this.executor = executor;
-		return this;
-	}
-	
-	public SnmpClient with(ConnectorFactory connectorFactory) {
-		this.connectorFactory = connectorFactory;
-		return this;
-	}
-
-	public SnmpClient connect() {
-		Connector thisConnector = connector;
-		connector = null;
-		if (thisConnector != null) {
-			thisConnector.disconnect();
-		}
-
-		connector = connectorFactory.create(null);
-		thisConnector = connector;
-
-		final Executor thisExecutor = executor;
-		
 		instanceMapper = new InstanceMapper(requestIdProvider);
-		final InstanceMapper thisInstanceMapper = instanceMapper;
-		final Connector thisThisConnector = thisConnector;
 
-		thisConnector.receiving(new Receiver() {
+		connector = connectorFactory.receiving(new Receiver() {
 			@Override
-			public void received(final Address address, final ByteBuffer buffer) {
-				thisExecutor.execute(new Runnable() {
+			public void received(final Connector connector, final Address address, final ByteBuffer buffer) {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
@@ -128,41 +132,27 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 								authRemoteEnginePendingRequestManager.reset();
 							}
 
-							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisThisConnector);
-							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, thisThisConnector);
+							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, connector);
+							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 						}
 						
-						thisInstanceMapper.handle(instanceId, errorStatus, errorIndex, results);
+						instanceMapper.handle(instanceId, errorStatus, errorIndex, results);
 					}
 				});
 			}
-		});
-		
-		thisConnector.connect();
-		
-		return this;
+		}).create(queue);
 	}
 	
 	@Override
 	public void close() {
-		final Executor thisExecutor = executor;
-
-		final InstanceMapper thisInstanceMapper = instanceMapper;
-		instanceMapper = null;
-		if (thisInstanceMapper != null) {
-			thisExecutor.execute(new Runnable() {
-				@Override
-				public void run() {
-					thisInstanceMapper.close();
-				}
-			});
-		}
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				instanceMapper.close();
+			}
+		});
 		
-		Connector thisConnector = connector;
-		connector = null;
-		if (thisConnector != null) {
-			thisConnector.disconnect();
-		}
+		connector.close();
 	}
 	
 	private static final class AuthRemoteEnginePendingRequestManager {

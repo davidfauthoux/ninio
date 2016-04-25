@@ -5,5 +5,5 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.core.Address;
 
 public interface Receiver {
-	void received(Address address, ByteBuffer buffer);
+	void received(Connector connector, Address address, ByteBuffer buffer);
 }

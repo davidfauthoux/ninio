@@ -9,8 +9,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.v3.DatagramConnectorFactory;
+import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.Shared;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
@@ -20,67 +21,76 @@ public class SnmpServerTest {
 	
 	@Test
 	public void test() throws Exception {
-		TreeMap<Oid, String> map = new TreeMap<>();
-		map.put(new Oid("1.1.1"), "val1.1.1");
-		map.put(new Oid("1.1.1.1"), "val1.1.1.1");
-		map.put(new Oid("1.1.1.2"), "val1.1.1.2");
-		map.put(new Oid("1.1.2"), "val1.1.2");
-		map.put(new Oid("1.1.3.1"), "val1.1.3.1");
-		map.put(new Oid("1.1.3.2"), "val1.1.3.2");
-		
-		int port = 8080;
-		try (SnmpServer snmpServer = new SnmpServer()) {
-			snmpServer
-				.with(new DatagramConnectorFactory())
-				.handle(new FromMapSnmpServerHandler(map))
-				.connect(new Address(Address.LOCALHOST, port));
-
-			final Lock<List<Result>, IOException> lock = new Lock<>();
-			try (SnmpClient snmpClient = new SnmpClient()) {
-				snmpClient
-					.connect()
-					.request()
-					.receiving(new SnmpReceiver() {
-						private final List<Result> r = new LinkedList<>();
-						@Override
-						public void received(Result result) {
-							r.add(result);
-						}
-						@Override
-						public void finished() {
-							lock.set(r);
-						}
-					})
-					.failing(new Failing() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-					})
-					.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
-				lock.waitFor();
+		try (Ninio ninio = Ninio.create()) {
+			TreeMap<Oid, String> map = new TreeMap<>();
+			map.put(new Oid("1.1.1"), "val1.1.1");
+			map.put(new Oid("1.1.1.1"), "val1.1.1.1");
+			map.put(new Oid("1.1.1.2"), "val1.1.1.2");
+			map.put(new Oid("1.1.2"), "val1.1.2");
+			map.put(new Oid("1.1.3.1"), "val1.1.3.1");
+			map.put(new Oid("1.1.3.2"), "val1.1.3.2");
+			
+			int port = 8080;
+			Disconnectable snmpServer = ninio.create(SnmpServer.builder()
+					.bind(new Address(Address.LOCALHOST, port))
+					.handle(new FromMapSnmpServerHandler(map)));
+			try {
+				final Lock<List<Result>, IOException> lock = new Lock<>();
+				SnmpClient snmpClient = ninio.create(SnmpClient.builder());
+				try {
+						snmpClient
+						.request()
+						.receiving(new SnmpReceiver() {
+							private final List<Result> r = new LinkedList<>();
+							@Override
+							public void received(Result result) {
+								r.add(result);
+							}
+							@Override
+							public void finished() {
+								lock.set(r);
+							}
+						})
+						.failing(new Failing() {
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
+							}
+						})
+						.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
+					lock.waitFor();
+				} finally {
+					snmpClient.close();
+				}
+				Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
+			} finally {
+				snmpServer.close();
 			}
-			Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
 		}
 	}
 	
 	@Test
 	public void testTimeout() throws Exception {
-		int port = 8080;
-		final Lock<String, IOException> lock = new Lock<>();
-		try (SnmpClient snmpClient = new SnmpClient()) {
-			SnmpReceiverRequest request = snmpClient.connect().request();
-			request = SnmpTimeout.hook(Shared.EXECUTOR, request, 0.25d);
-			request
-				.failing(new Failing() {
-					@Override
-					public void failed(IOException e) {
-						lock.set(e.getMessage());
-					}
-				})
-				.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
-			lock.waitFor();
+		try (Ninio ninio = Ninio.create()) {
+			int port = 8080;
+			final Lock<String, IOException> lock = new Lock<>();
+			SnmpClient snmpClient = ninio.create(SnmpClient.builder());
+			try {
+				SnmpReceiverRequest request = snmpClient.request();
+				request = SnmpTimeout.hook(Shared.EXECUTOR, request, 0.25d);
+				request
+					.failing(new Failing() {
+						@Override
+						public void failed(IOException e) {
+							lock.set(e.getMessage());
+						}
+					})
+					.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
+				lock.waitFor();
+			} finally {
+				snmpClient.close();
+			}
+			Assertions.assertThat(lock.waitFor()).isEqualTo("Timeout");
 		}
-		Assertions.assertThat(lock.waitFor()).isEqualTo("Timeout");
 	}
 }

@@ -23,83 +23,81 @@ public class DatagramTest {
 	public void testDatagram() throws Exception {
 		final Lock<String, IOException> lock = new Lock<>();
 		
-		ExecutorService executor = Executors.newSingleThreadExecutor();
-		try {
-			final int port = 8080;
-	
-			final Wait wait = new Wait();
-			final Connector server = new DatagramConnectorFactory().with(executor).create(new Address(null, port));
+		try (Ninio ninio = Ninio.create()) {
+			ExecutorService executor = Executors.newSingleThreadExecutor();
 			try {
-				server.failing(new Failing() {
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed <--", e);
-						lock.fail(e);
-					}
-				});
-				server.closing(new Closing() {
-					@Override
-					public void closed() {
-						LOGGER.debug("Closed <--");
-						lock.fail(new IOException("Closed"));
-					}
-				});
-				server.receiving(new Receiver() {
-					@Override
-					public void received(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.debug("Received {} <--: {}", address, s);
-						server.send(address, ByteBuffer.wrap("response".getBytes(Charsets.UTF_8)));
-					}
-				});
-				server.connecting(new Connecting() {
-					@Override
-					public void connected() {
-						LOGGER.debug("Connected <--");
-						wait.run();
-					}
-				});
-				
-				server.connect();
-				wait.waitFor();
-
-				final Connector client = new DatagramConnectorFactory().with(executor).create(null);
-				try {
-					client.failing(new Failing() {
+				final int port = 8080;
+		
+				final Wait wait = new Wait();
+				final Connector server = ninio.create(Datagram.builder().with(executor).bind(new Address(null, port))
+					.failing(new Failing() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Failed <--", e);
 							lock.fail(e);
 						}
-					});
-					client.closing(new Closing() {
+					})
+					.closing(new Closing() {
 						@Override
 						public void closed() {
 							LOGGER.debug("Closed <--");
 							lock.fail(new IOException("Closed"));
 						}
-					});
-					client.receiving(new Receiver() {
+					})
+					.receiving(new Receiver() {
 						@Override
-						public void received(Address address, ByteBuffer buffer) {
+						public void received(Connector connector, Address address, ByteBuffer buffer) {
 							String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-							LOGGER.warn("Received {} -->: {}", address, s);
-							lock.set(s);
+							LOGGER.debug("Received {} <--: {}", address, s);
+							connector.send(address, ByteBuffer.wrap("response".getBytes(Charsets.UTF_8)));
 						}
-					});
+					})
+					.connecting(new Connecting() {
+						@Override
+						public void connected(Connector connector) {
+							LOGGER.debug("Connected <--");
+							wait.run();
+						}
+					}));
+				try {
+					wait.waitFor();
 	
-					client.connect();
-					client.send(new Address(Address.LOCALHOST, port), ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
-
-					Assertions.assertThat(lock.waitFor()).isEqualTo("response");
+					final Connector client = ninio.create(Datagram.builder().with(executor)
+						.failing(new Failing() {
+							@Override
+							public void failed(IOException e) {
+								LOGGER.warn("Failed <--", e);
+								lock.fail(e);
+							}
+						})
+						.closing(new Closing() {
+							@Override
+							public void closed() {
+								LOGGER.debug("Closed <--");
+								lock.fail(new IOException("Closed"));
+							}
+						})
+						.receiving(new Receiver() {
+							@Override
+							public void received(Connector c, Address address, ByteBuffer buffer) {
+								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+								LOGGER.warn("Received {} -->: {}", address, s);
+								lock.set(s);
+							}
+						}));
+					try {
+						client.send(new Address(Address.LOCALHOST, port), ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
+	
+						Assertions.assertThat(lock.waitFor()).isEqualTo("response");
+					} finally {
+						client.close();
+					}
 				} finally {
-					client.disconnect();
+					server.close();
 				}
 			} finally {
-				server.disconnect();
+				executor.shutdown();
 			}
-		} finally {
-			executor.shutdown();
 		}
 	}
 	

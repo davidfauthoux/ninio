@@ -23,111 +23,107 @@ public class SocketTest {
 	public void testSocket() throws Exception {
 		final Lock<String, IOException> lock = new Lock<>();
 		
-		ExecutorService executor = Executors.newSingleThreadExecutor();
-		try {
-			final int port = 8080;
-	
-			final Wait wait = new Wait();
-			final Acceptable server = new SocketServer().with(executor).create(new Address(null, port));
+		try (Ninio ninio = Ninio.create()) {
+			ExecutorService executor = Executors.newSingleThreadExecutor();
 			try {
-				server.failing(new Failing() {
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed <--", e);
-						lock.fail(e);
-					}
-				});
-				
-				server.accepting(new Accepting() {
-					@Override
-					public void connected() {
-						LOGGER.debug("Accepting connected <--");
-						wait.run();
-					}
-				});
-				
-				server.accept(new ListenConnectingable() {
-					@Override
-					public void connecting(final Connector connectable) {
-						connectable.failing(new Failing() {
-							@Override
-							public void failed(IOException e) {
-								LOGGER.warn("Socket failed <--", e);
-								lock.fail(e);
-							}
-						});
-						connectable.connecting(new Connecting() {
-							@Override
-							public void connected() {
-								LOGGER.debug("Socket connected <--");
-								wait.run();
-							}
-						});
-						connectable.closing(new Closing() {
-							@Override
-							public void closed() {
-								LOGGER.debug("Socket closed <--");
-								lock.fail(new IOException("Closed"));
-							}
-						});
-						connectable.receiving(new Receiver() {
-							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-								LOGGER.debug("Received {} <--: {}", address, s);
-								connectable.send(null, ByteBuffer.wrap("response".getBytes(Charsets.UTF_8)));
-							}
-						});
-						
-						connectable.connect();
-					}
-				});
-
-				wait.waitFor();
-
-				final Connector client = new SocketConnectorFactory().with(executor).create(new Address(Address.LOCALHOST, port));
-				try {
-					client.failing(new Failing() {
+				final int port = 8080;
+		
+				final Wait wait = new Wait();
+				final Disconnectable server = ninio.create(SocketServer.builder().with(executor).bind(new Address(null, port))
+					.failing(new Failing() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Failed <--", e);
 							lock.fail(e);
 						}
-					});
-					client.closing(new Closing() {
+					})
+					.connecting(new ListenConnecting() {
 						@Override
-						public void closed() {
-							LOGGER.debug("Closed <--");
-							lock.fail(new IOException("Closed"));
+						public void connected(Disconnectable connector) {
+							LOGGER.debug("Server connected <--");
+							wait.run();
 						}
-					});
-					client.receiving(new Receiver() {
+					})
+					.listening(new Listening() {
 						@Override
-						public void received(Address address, ByteBuffer buffer) {
-							String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-							LOGGER.warn("Received {} -->: {}", address, s);
-							lock.set(s);
+						public void connecting(ConnectorBuilder connectable) {
+							connectable
+							.failing(new Failing() {
+								@Override
+								public void failed(IOException e) {
+									LOGGER.warn("Socket failed <--", e);
+									lock.fail(e);
+								}
+							})
+							.connecting(new Connecting() {
+								@Override
+								public void connected(Connector connector) {
+									LOGGER.debug("Socket connected <--");
+									wait.run();
+								}
+							})
+							.closing(new Closing() {
+								@Override
+								public void closed() {
+									LOGGER.debug("Socket closed <--");
+									lock.fail(new IOException("Closed"));
+								}
+							})
+							.receiving(new Receiver() {
+								@Override
+								public void received(Connector connector, Address address, ByteBuffer buffer) {
+									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+									LOGGER.debug("Received {} <--: {}", address, s);
+									connector.send(null, ByteBuffer.wrap("response".getBytes(Charsets.UTF_8)));
+								}
+							});
 						}
-					});
-					client.connecting(new Connecting() {
-						@Override
-						public void connected() {
-							LOGGER.debug("Client socket connected <--");
-						}
-					});
-
-					client.connect();
-					client.send(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
-
-					Assertions.assertThat(lock.waitFor()).isEqualTo("response");
+					}));
+				try {
+					wait.waitFor();
+	
+					final Connector client = ninio.create(Socket.builder().with(executor).to(new Address(Address.LOCALHOST, port))
+						.failing(new Failing() {
+							@Override
+							public void failed(IOException e) {
+								LOGGER.warn("Failed <--", e);
+								lock.fail(e);
+							}
+						})
+						.closing(new Closing() {
+							@Override
+							public void closed() {
+								LOGGER.debug("Closed <--");
+								lock.fail(new IOException("Closed"));
+							}
+						})
+						.receiving(new Receiver() {
+							@Override
+							public void received(Connector c, Address address, ByteBuffer buffer) {
+								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+								LOGGER.warn("Received {} -->: {}", address, s);
+								lock.set(s);
+							}
+						})
+						.connecting(new Connecting() {
+							@Override
+							public void connected(Connector connector) {
+								LOGGER.debug("Client socket connected <--");
+							}
+						}));
+					try {
+						client.send(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
+	
+						Assertions.assertThat(lock.waitFor()).isEqualTo("response");
+					} finally {
+						client.close();
+					}
 				} finally {
-					client.disconnect();
+					server.close();
 				}
 			} finally {
-				server.close();
+				executor.shutdown();
 			}
-		} finally {
-			executor.shutdown();
 		}
 	}
 	

@@ -11,14 +11,15 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferHandler;
-import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.ConnectorFactory;
+import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.NinioBuilder;
+import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.Shared;
-import com.davfx.ninio.core.v3.SocketConnectorFactory;
+import com.davfx.ninio.core.v3.Socket;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpRequest;
@@ -28,12 +29,57 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 
-public final class HttpClient implements AutoCloseable, Closeable {
+public final class HttpClient implements Disconnectable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 
-	private Executor executor = Shared.EXECUTOR;
-	private ConnectorFactory connectorFactory = new SocketConnectorFactory();
-	private ConnectorFactory secureConnectorFactory = new SocketConnectorFactory();
+	public static interface Builder extends NinioBuilder<HttpClient> {
+		Builder pipelining(boolean pipelining);
+		Builder with(Executor executor);
+		Builder with(Socket.Builder connectorFactory);
+		Builder withSecure(Socket.Builder secureConnectorFactory);
+	}
+	
+	public static NinioBuilder<HttpClient> builder() {
+		return new Builder() {
+			private Executor executor = Shared.EXECUTOR;
+			private Socket.Builder connectorFactory = Socket.builder();
+			private Socket.Builder secureConnectorFactory = Socket.builder();
+			private boolean pipelining = false;
+			
+			@Override
+			public Builder pipelining(boolean pipelining) {
+				this.pipelining = pipelining;
+				return this;
+			}
+			
+			@Override
+			public Builder with(Executor executor) {
+				this.executor = executor;
+				return this;
+			}
+			
+			@Override
+			public Builder with(Socket.Builder connectorFactory) {
+				this.connectorFactory = connectorFactory;
+				return this;
+			}
+
+			@Override
+			public Builder withSecure(Socket.Builder secureConnectorFactory) {
+				this.secureConnectorFactory = secureConnectorFactory;
+				return this;
+			}
+
+			@Override
+			public HttpClient create(Queue queue) {
+				return new HttpClient(queue, executor, connectorFactory, secureConnectorFactory, pipelining);
+			}
+		};
+	}
+	
+	private final Executor executor;
+	private final Socket.Builder connectorFactory;
+	private final Socket.Builder secureConnectorFactory;
 	
 	private static final class ReusableConnector {
 		public final Connector connector;
@@ -41,21 +87,21 @@ public final class HttpClient implements AutoCloseable, Closeable {
 		public boolean reusable = false;
 		public Receiver receiver = null;
 		public Closing closing = null;
-		public ReusableConnector(Connector connector, boolean secure) {
-			this.connector = connector;
+		
+		public ReusableConnector(Socket.Builder factory, Queue queue, boolean secure) {
 			this.secure = secure;
 			
-			connector.receiving(new Receiver() {
+			factory.receiving(new Receiver() {
 				@Override
-				public void received(Address address, ByteBuffer buffer) {
+				public void received(Connector connector, Address address, ByteBuffer buffer) {
 					LOGGER.debug("------> {} {}", buffer.remaining(), receiver);
 					if (receiver != null) {
-						receiver.received(address, buffer);
+						receiver.received(connector, address, buffer);
 					}
 				}
 			});
 			
-			connector.closing(new Closing() {
+			factory.closing(new Closing() {
 				@Override
 				public void closed() {
 					LOGGER.debug("{} CLOSING {} {}", this, closing, receiver);
@@ -65,46 +111,32 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				}
 			});
 
-			connector.connect();
+			connector = factory.create(queue);
 		}
 	}
+	
+	private final Queue queue;
 	
 	private final Map<Long, ReusableConnector> reusableConnectors = new HashMap<>();
 	private long nextReusableConnectorId = 0L;
 	
-	private boolean pipelining = false;
+	private final boolean pipelining;
 	
-	public HttpClient() {
-	}
-
-	public HttpClient pipelining(boolean pipelining) {
-		this.pipelining = pipelining;
-		return this;
-	}
-	
-	public HttpClient with(Executor executor) {
+	private HttpClient(Queue queue, Executor executor, Socket.Builder connectorFactory, Socket.Builder secureConnectorFactory, boolean pipelining) {
+		this.queue = queue;
 		this.executor = executor;
-		return this;
-	}
-	
-	public HttpClient with(ConnectorFactory connectorFactory) {
 		this.connectorFactory = connectorFactory;
-		return this;
-	}
-	public HttpClient withSecure(ConnectorFactory secureConnectorFactory) {
 		this.secureConnectorFactory = secureConnectorFactory;
-		return this;
+		this.pipelining = pipelining;
 	}
 
 	@Override
 	public void close() {
-		final Executor thisExecutor = executor;
-
-		thisExecutor.execute(new Runnable() {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
 				for (ReusableConnector connector : reusableConnectors.values()) {
-					connector.connector.disconnect();
+					connector.connector.close();
 				}
 				reusableConnectors.clear();
 			}
@@ -113,9 +145,6 @@ public final class HttpClient implements AutoCloseable, Closeable {
 
 
 	public HttpReceiverRequest request() {
-		final Executor thisExecutor = executor;
-		final boolean thisPipelining = pipelining;
-		
 		return new HttpReceiverRequest() {
 			private HttpReceiver receiver = null;
 			private Failing failing = null;
@@ -138,7 +167,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				connector.closing = new Closing() {
 					@Override
 					public void closed() {
-						thisExecutor.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								reusableConnectors.remove(id);
@@ -157,8 +186,8 @@ public final class HttpClient implements AutoCloseable, Closeable {
 
 				connector.receiver = new Receiver() {
 					@Override
-					public void received(final Address address, final ByteBuffer buffer) {
-						thisExecutor.execute(new Runnable() {
+					public void received(Connector c, final Address address, final ByteBuffer buffer) {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								try {
@@ -174,12 +203,12 @@ public final class HttpClient implements AutoCloseable, Closeable {
 										@Override
 										public void ended() {
 											r.ended();
-											if (!thisPipelining) {
+											if (!pipelining) {
 												if (connector != null) {
 													if (keepAlive) {
 														connector.reusable = true;
 													} else {
-														connector.connector.disconnect();
+														connector.connector.close();
 														reusableConnectors.remove(id);
 													}
 													connector = null;
@@ -189,7 +218,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 									});
 								} catch (IOException ioe) {
 									LOGGER.error("Connection error", ioe);
-									connector.connector.disconnect();
+									connector.connector.close();
 									reusableConnectors.remove(id);
 									connector = null;
 									f.failed(ioe);
@@ -210,7 +239,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				
 				//%% //TO DO handle request Connection:close
 				
-				thisExecutor.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (id >= 0L) {
@@ -234,7 +263,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 						id = nextReusableConnectorId;
 						nextReusableConnectorId++;
 						
-						connector = new ReusableConnector(request.secure ? secureConnectorFactory.create(request.address) : connectorFactory.create(request.address), request.secure);
+						connector = new ReusableConnector(request.secure ? secureConnectorFactory.with(executor).to(request.address) : connectorFactory.with(executor).to(request.address), queue, request.secure);
 						reusableConnectors.put(id, connector);
 
 						prepare(r, f, request);
@@ -245,7 +274,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				return new Send() {
 					@Override
 					public void post(final ByteBuffer buffer) {
-						thisExecutor.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								if (connector != null) {
@@ -257,10 +286,10 @@ public final class HttpClient implements AutoCloseable, Closeable {
 					
 					@Override
 					public void finish() {
-						thisExecutor.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
-								if (thisPipelining) {
+								if (pipelining) {
 									if (connector != null) {
 										connector.reusable = true;
 										connector = null;
@@ -272,11 +301,11 @@ public final class HttpClient implements AutoCloseable, Closeable {
 
 					@Override
 					public void cancel() {
-						thisExecutor.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								if (connector != null) {
-									connector.connector.disconnect();
+									connector.connector.close();
 									reusableConnectors.remove(id);
 									connector = null;
 								}
