@@ -18,6 +18,7 @@ import com.davfx.ninio.core.DatagramReadyFactory;
 import com.davfx.ninio.core.Queue;
 import com.davfx.util.Lock;
 
+@Deprecated
 public class SnmpCacheTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpCacheTest.class);

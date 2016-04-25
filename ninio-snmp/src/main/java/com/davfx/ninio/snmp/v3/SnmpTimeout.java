@@ -23,25 +23,25 @@ public final class SnmpTimeout {
 	}
 	
 	// !! executor MUST be the same as the one used in SnmpClient
-	public static SnmpRequest hook(final ScheduledExecutorService executor, final SnmpRequest request, final double timeout) {
-		return new SnmpRequest() {
+	public static SnmpReceiverRequest hook(final ScheduledExecutorService executor, final SnmpReceiverRequest request, final double timeout) {
+		return new SnmpReceiverRequest() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
 
 			@Override
-			public SnmpRequest receiving(SnmpReceiver receiver) {
+			public SnmpReceiverRequest receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			
 			@Override
-			public SnmpRequest failing(Failing failing) {
+			public SnmpReceiverRequest failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
 			@Override
-			public SnmpRequest get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid) {
+			public SnmpReceiverRequest get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid) {
 				final SnmpReceiver thisReceiver = receiver;
 				final Failing thisFailing = failing;
 

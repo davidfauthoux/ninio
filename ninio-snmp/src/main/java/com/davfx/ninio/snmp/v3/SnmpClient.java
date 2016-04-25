@@ -260,28 +260,28 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	public SnmpRequest request() {
+	public SnmpReceiverRequest request() {
 		final Executor thisExecutor = executor;
 		final InstanceMapper thisInstanceMapper = instanceMapper;
 		final Connector thisConnector = connector;
 
-		return new SnmpRequest() {
+		return new SnmpReceiverRequest() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
 			
 			@Override
-			public SnmpRequest receiving(SnmpReceiver receiver) {
+			public SnmpReceiverRequest receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			@Override
-			public SnmpRequest failing(Failing failing) {
+			public SnmpReceiverRequest failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
 			@Override
-			public SnmpRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+			public SnmpReceiverRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
 				final SnmpReceiver r = receiver;
 				final Failing f = failing;
 				thisExecutor.execute(new Runnable() {

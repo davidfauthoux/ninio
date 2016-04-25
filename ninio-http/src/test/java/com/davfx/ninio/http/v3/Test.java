@@ -40,7 +40,7 @@ public class Test {
 		url = "http://www.this-page-intentionally-left-blank.org/index.html";
 
 		try (HttpClient client = new HttpClient()) {
-			SnmpRequest r = client.request();
+			HttpReceiverRequest r = client.request();
 
 			r.failing(new Failing() {
 				@Override
@@ -49,7 +49,7 @@ public class Test {
 				}
 			});
 			
-			r.receiving(new SnmpReceiver() {
+			r.receiving(new HttpReceiver() {
 				@Override
 				public void received(HttpResponse response) {
 					LOGGER.debug("RESPONSE {}", response);
@@ -71,14 +71,14 @@ public class Test {
 		
 		try (HttpClient client = new HttpClient()) {
 			{
-				SnmpRequest r = client.request();
+				HttpReceiverRequest r = client.request();
 				r.failing(new Failing() {
 					@Override
 					public void failed(IOException e) {
 						LOGGER.error("Failed", e);
 					}
 				});
-				r.receiving(new SnmpReceiver() {
+				r.receiving(new HttpReceiver() {
 					@Override
 					public void received(HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
@@ -97,14 +97,14 @@ public class Test {
 				Thread.sleep(5000);
 			}
 			{
-				SnmpRequest r = client.request();
+				HttpReceiverRequest r = client.request();
 				r.failing(new Failing() {
 					@Override
 					public void failed(IOException e) {
 						LOGGER.error("Failed", e);
 					}
 				});
-				r.receiving(new SnmpReceiver() {
+				r.receiving(new HttpReceiver() {
 					@Override
 					public void received(HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);

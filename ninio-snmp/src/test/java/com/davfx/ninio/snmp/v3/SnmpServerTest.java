@@ -69,7 +69,7 @@ public class SnmpServerTest {
 		int port = 8080;
 		final Lock<String, IOException> lock = new Lock<>();
 		try (SnmpClient snmpClient = new SnmpClient()) {
-			SnmpRequest request = snmpClient.connect().request();
+			SnmpReceiverRequest request = snmpClient.connect().request();
 			request = SnmpTimeout.hook(Shared.EXECUTOR, request, 0.25d);
 			request
 				.failing(new Failing() {

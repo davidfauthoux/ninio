@@ -112,29 +112,29 @@ public final class HttpClient implements AutoCloseable, Closeable {
 	}
 
 
-	public SnmpRequest request() {
+	public HttpReceiverRequest request() {
 		final Executor thisExecutor = executor;
 		final boolean thisPipelining = pipelining;
 		
-		return new SnmpRequest() {
-			private SnmpReceiver receiver = null;
+		return new HttpReceiverRequest() {
+			private HttpReceiver receiver = null;
 			private Failing failing = null;
 
 			private long id = -1L;
 			private ReusableConnector connector = null;
 
 			@Override
-			public SnmpRequest receiving(SnmpReceiver receiver) {
+			public HttpReceiverRequest receiving(HttpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			@Override
-			public SnmpRequest failing(Failing failing) {
+			public HttpReceiverRequest failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
-			private void prepare(final SnmpReceiver r, final Failing f, HttpRequest request) {
+			private void prepare(final HttpReceiver r, final Failing f, HttpRequest request) {
 				connector.closing = new Closing() {
 					@Override
 					public void closed() {
@@ -162,7 +162,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 							@Override
 							public void run() {
 								try {
-									parse(buffer, new SnmpReceiver() {
+									parse(buffer, new HttpReceiver() {
 										@Override
 										public void received(ByteBuffer buffer) {
 											r.received(buffer);
@@ -205,7 +205,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 			
 			@Override
 			public Send create(final HttpRequest request) {
-				final SnmpReceiver r = receiver;
+				final HttpReceiver r = receiver;
 				final Failing f = failing;
 				
 				//%% //TO DO handle request Connection:close
@@ -344,7 +344,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				responseReason = responseLine.substring(j + 1);
 			}
 		
-			private void parse(ByteBuffer buffer, final SnmpReceiver receiver) throws IOException {
+			private void parse(ByteBuffer buffer, final HttpReceiver receiver) throws IOException {
 				LOGGER.debug("PARSING {} {}", buffer.remaining(), receiver);
 				while (!responseLineRead) {
 					String line = lineReader.handle(buffer);
@@ -483,7 +483,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				}
 			}
 			
-		    private void handleContent(ByteBuffer buffer, long toRead, long totalRemainingToRead, final SnmpReceiver receiver) throws IOException {
+		    private void handleContent(ByteBuffer buffer, long toRead, long totalRemainingToRead, final HttpReceiver receiver) throws IOException {
 		    	ByteBuffer deflated = buffer.duplicate(); // We must duplicated this buffer because it can be used later by the user, but must be continued in the handle loop
 		    	if (toRead >= 0) {
 					if (deflated.remaining() > toRead) {
@@ -510,7 +510,7 @@ public final class HttpClient implements AutoCloseable, Closeable {
 				});
 		    }
 		    
-			private void parseClosed(SnmpReceiver receiver) throws IOException {
+			private void parseClosed(HttpReceiver receiver) throws IOException {
 				if (chunked) {
 					if (!chunkFooterRead) {
 						throw new IOException("Connection reset by peer in chunked stream");
