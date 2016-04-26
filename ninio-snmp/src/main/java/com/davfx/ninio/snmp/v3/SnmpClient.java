@@ -250,47 +250,47 @@ public final class SnmpClient implements Disconnectable {
 		}
 	}
 	
-	public SnmpReceiverRequest request() {
-		final Executor thisExecutor = executor;
-		final InstanceMapper thisInstanceMapper = instanceMapper;
-		final Connector thisConnector = connector;
-
-		return new SnmpReceiverRequest() {
+	public SnmpReceiverRequestBuilder request() {
+		return new SnmpReceiverRequestBuilder() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
 			
 			@Override
-			public SnmpReceiverRequest receiving(SnmpReceiver receiver) {
+			public SnmpReceiverRequestBuilder receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			@Override
-			public SnmpReceiverRequest failing(Failing failing) {
+			public SnmpReceiverRequestBuilder failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
 			@Override
-			public SnmpReceiverRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+			public SnmpReceiverRequest build() {
 				final SnmpReceiver r = receiver;
 				final Failing f = failing;
-				thisExecutor.execute(new Runnable() {
+				return new SnmpReceiverRequest() {
 					@Override
-					public void run() {
-						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
-						if (authRemoteSpecification != null) {
-							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
-							if (authRemoteEnginePendingRequestManager == null) {
-								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+					public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
+								if (authRemoteSpecification != null) {
+									authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+									if (authRemoteEnginePendingRequestManager == null) {
+										authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+										authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+									}
+									authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connector);
+								}
+								
+								new Instance(connector, instanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
 							}
-							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, thisConnector);
-						}
-						
-						new Instance(thisConnector, thisInstanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
+						});
 					}
-				});
-				return this;
+				};
 			}
 		};
 	}

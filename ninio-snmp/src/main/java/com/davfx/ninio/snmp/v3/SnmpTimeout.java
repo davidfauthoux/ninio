@@ -23,25 +23,25 @@ public final class SnmpTimeout {
 	}
 	
 	// !! executor MUST be the same as the one used in SnmpClient
-	public static SnmpReceiverRequest hook(final ScheduledExecutorService executor, final SnmpReceiverRequest request, final double timeout) {
-		return new SnmpReceiverRequest() {
+	public static SnmpReceiverRequestBuilder hook(final ScheduledExecutorService executor, final SnmpReceiverRequestBuilder request, final double timeout) {
+		return new SnmpReceiverRequestBuilder() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
 
 			@Override
-			public SnmpReceiverRequest receiving(SnmpReceiver receiver) {
+			public SnmpReceiverRequestBuilder receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			
 			@Override
-			public SnmpReceiverRequest failing(Failing failing) {
+			public SnmpReceiverRequestBuilder failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
 			@Override
-			public SnmpReceiverRequest get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid) {
+			public SnmpReceiverRequest build() {
 				final SnmpReceiver thisReceiver = receiver;
 				final Failing thisFailing = failing;
 
@@ -122,8 +122,15 @@ public final class SnmpTimeout {
 				});
 				
 				schedule.run();
-				request.get(address, community, authRemoteSpecification, oid);
-				return this;
+
+				final SnmpReceiverRequest r = request.build();
+				
+				return new SnmpReceiverRequest() {
+					@Override
+					public void get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid) {
+						r.get(address, community, authRemoteSpecification, oid);
+					}
+				};
 			}
 		};
 	}

@@ -2,7 +2,6 @@ package com.davfx.ninio.http.v3;
 
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.http.HttpRequest;
 
 public interface HttpReceiverRequest {
@@ -12,6 +11,4 @@ public interface HttpReceiverRequest {
 		void cancel();
 	}
 	Send create(HttpRequest request);
-	HttpReceiverRequest failing(Failing failing);
-	HttpReceiverRequest receiving(HttpReceiver receiver);
 }

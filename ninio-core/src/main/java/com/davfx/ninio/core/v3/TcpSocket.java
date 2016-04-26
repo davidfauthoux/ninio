@@ -258,7 +258,7 @@ public final class TcpSocket implements Connector {
 							if (a.isUnresolved()) {
 								throw new IOException("Unresolved address: " + connectAddress.getHost() + ":" + connectAddress.getPort());
 							}
-							LOGGER.debug("Connecting to: {}", a);
+							LOGGER.trace("Connecting to: {}", a);
 							channel.connect(a);
 						} catch (IOException e) {
 							disconnect(channel, inboundKey, null);

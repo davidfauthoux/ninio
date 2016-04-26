@@ -43,14 +43,14 @@ public class Test {
 		
 		try (HttpClient client = ninio.create(HttpClient.builder())) {
 			{
-				HttpReceiverRequest r = client.request();
-				r.failing(new Failing() {
+				client.request()
+				.failing(new Failing() {
 					@Override
 					public void failed(IOException e) {
 						LOGGER.error("Failed", e);
 					}
-				});
-				r.receiving(new HttpReceiver() {
+				})
+				.receiving(new HttpReceiver() {
 					@Override
 					public void received(HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
@@ -58,25 +58,26 @@ public class Test {
 					
 					@Override
 					public void received(ByteBuffer buffer) {
-						LOGGER.debug("Received {}", buffer.remaining());// new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
+						LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
 					}
 					@Override
 					public void ended() {
 						LOGGER.debug("ENDED");
 					}
-				});
-				r.create(HttpRequest.of(url)).finish();
+				})
+				.build()
+				.create(HttpRequest.of(url)).finish();
 				Thread.sleep(5000);
 			}
 			{
-				HttpReceiverRequest r = client.request();
-				r.failing(new Failing() {
+				client.request()
+				.failing(new Failing() {
 					@Override
 					public void failed(IOException e) {
 						LOGGER.error("Failed", e);
 					}
-				});
-				r.receiving(new HttpReceiver() {
+				})
+				.receiving(new HttpReceiver() {
 					@Override
 					public void received(HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
@@ -84,14 +85,15 @@ public class Test {
 					
 					@Override
 					public void received(ByteBuffer buffer) {
-						LOGGER.debug("Received {}", buffer.remaining());// new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
+						LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
 					}
 					@Override
 					public void ended() {
 						LOGGER.debug("ENDED");
 					}
-				});
-				r.create(HttpRequest.of(url)).finish();
+				})
+				.build()
+				.create(HttpRequest.of(url)).finish();
 				Thread.sleep(10000000);
 			}
 		}

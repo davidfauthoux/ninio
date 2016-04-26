@@ -57,6 +57,7 @@ public class SnmpServerTest {
 								lock.fail(e);
 							}
 						})
+						.build()
 						.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
 					lock.waitFor();
 				} finally {
@@ -76,16 +77,14 @@ public class SnmpServerTest {
 			final Lock<String, IOException> lock = new Lock<>();
 			SnmpClient snmpClient = ninio.create(SnmpClient.builder());
 			try {
-				SnmpReceiverRequest request = snmpClient.request();
+				SnmpReceiverRequestBuilder request = snmpClient.request().failing(new Failing() {
+					@Override
+					public void failed(IOException e) {
+						lock.set(e.getMessage());
+					}
+				});
 				request = SnmpTimeout.hook(Shared.EXECUTOR, request, 0.25d);
-				request
-					.failing(new Failing() {
-						@Override
-						public void failed(IOException e) {
-							lock.set(e.getMessage());
-						}
-					})
-					.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
+				request.build().get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
 				lock.waitFor();
 			} finally {
 				snmpClient.close();
