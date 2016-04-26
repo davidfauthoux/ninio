@@ -476,88 +476,69 @@ public final class SnmpClient implements Disconnectable {
 				fail(new IOException("Timeout"));
 				return;
 			}
-			
+
+			if (errorStatus != 0) {
+				LOGGER.trace("Received error: {}/{}", errorStatus, errorIndex);
+			}
+
 			if (shouldRepeatWhat == BerConstants.GET) {
-				boolean fallback = false;
-				if (errorStatus != 0) {
-					LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{}", errorStatus, errorIndex);
-					fallback = true;
-				} else {
-					Result found = null;
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							LOGGER.trace(r.getOid() + " fallback to GETNEXT/GETBULK");
-							fallback = true;
-							break;
-						} else if (!requestOid.equals(r.getOid())) {
-							LOGGER.trace("{} not as expected: {}, fallbacking to GETNEXT/GETBULK", r.getOid(), requestOid);
-							fallback = true;
-							break;
-						}
-						
-						// Cannot return more than one
+				Result found = null;
+				for (Result r : results) {
+					if (requestOid.equals(r.getOid())) {
 						LOGGER.trace("Scalar found: {}", r);
 						found = r;
 					}
-					if (found != null) {
-						requestOid = null;
-						receiver.received(found);
-						receiver.finished();
-						receiver = null;
-						failing = null;
-						return;
-					}
 				}
-				if (fallback) {
+				if (found != null) {
+					requestOid = null;
+					receiver.received(found);
+					receiver.finished();
+					receiver = null;
+					failing = null;
+					return;
+				} else {
 					instanceMapper.map(this);
 					shouldRepeatWhat = BerConstants.GETBULK;
 					write();
 				}
 			} else {
-				if (errorStatus != 0) {
+				Oid lastOid = null;
+				for (Result r : results) {
+					LOGGER.trace("Received in bulk: {}", r);
+				}
+				for (Result r : results) {
+					if (r.getValue() == null) {
+						continue;
+					}
+					if (!initialRequestOid.isPrefixOf(r.getOid())) {
+						LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+						lastOid = null;
+						break;
+					}
+					LOGGER.trace("Addind to results: {}", r);
+					if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
+						LOGGER.warn("{} reached limit", requestOid);
+						lastOid = null;
+						break;
+					}
+					countResults++;
+					receiver.received(r);
+					lastOid = r.getOid();
+				}
+				if (lastOid != null) {
+					LOGGER.trace("Continuing from: {}", lastOid);
+					
+					requestOid = lastOid;
+					
+					instanceMapper.map(this);
+					shouldRepeatWhat = BerConstants.GETBULK;
+					write();
+				} else {
+					// Stop here
 					requestOid = null;
 					receiver.finished();
 					receiver = null;
 					failing = null;
-				} else {
-					Oid lastOid = null;
-					for (Result r : results) {
-						LOGGER.trace("Received in bulk: {}", r);
-					}
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							continue;
-						}
-						if (!initialRequestOid.isPrefixOf(r.getOid())) {
-							LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
-							lastOid = null;
-							break;
-						}
-						LOGGER.trace("Addind to results: {}", r);
-						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-							LOGGER.warn("{} reached limit", requestOid);
-							lastOid = null;
-							break;
-						}
-						countResults++;
-						receiver.received(r);
-						lastOid = r.getOid();
-					}
-					if (lastOid != null) {
-						LOGGER.trace("Continuing from: {}", lastOid);
-						
-						requestOid = lastOid;
-						
-						instanceMapper.map(this);
-						shouldRepeatWhat = BerConstants.GETBULK;
-						write();
-					} else {
-						// Stop here
-						requestOid = null;
-						receiver.finished();
-						receiver = null;
-						failing = null;
-					}
 				}
 			}
 		}

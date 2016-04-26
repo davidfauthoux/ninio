@@ -611,94 +611,68 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 			*/
 
+			if (errorStatus != 0) {
+				LOGGER.trace("Received error: {}/{} ({}:{})", errorStatus, errorIndex, address, requestOid);
+			}
+
 			if (shouldRepeatWhat == BerConstants.GET) {
-				boolean fallback = false;
-				if (errorStatus != 0) {
-					LOGGER.trace("Fallbacking to GETNEXT/GETBULK after receiving error: {}/{} ({}:{})", errorStatus, errorIndex, address, requestOid);
-					fallback = true;
-				} else {
-					Result found = null;
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							LOGGER.trace("{} fallback to GETNEXT/GETBULK ({}:{})", r.getOid(), address, requestOid);
-							fallback = true;
-							break;
-						} else if (!requestOid.equals(r.getOid())) {
-							LOGGER.trace("{} not as expected: {}, fallbacking to GETNEXT/GETBULK ({}:{})", r.getOid(), requestOid, address, requestOid);
-							fallback = true;
-							break;
-						}
-						
-						// Cannot return more than one
+				Result found = null;
+				for (Result r : results) {
+					if (requestOid.equals(r.getOid())) {
 						LOGGER.trace("Scalar found: {}", r);
 						found = r;
 					}
-					if (found != null) {
-						requestOid = null;
-						SnmpClientHandler.Callback.GetCallback c = callback;
-						callback = null;
-						c.result(found);
-						c.close();
-						return;
-					}
 				}
-				if (fallback) {
+				if (found != null) {
+					requestOid = null;
+					SnmpClientHandler.Callback.GetCallback c = callback;
+					callback = null;
+					c.result(found);
+					c.close();
+					return;
+				} else {
 					instanceMapper.map(this);
 					sendTimestamp = DateUtils.now();
 					shouldRepeatWhat = BerConstants.GETBULK;
 					write();
 				}
 			} else {
-				if (errorStatus != 0) {
-					LOGGER.error("Error in GETBULK response, error = {} ({}:{})", errorStatus, address, requestOid);
+				Oid lastOid = null;
+				for (Result r : results) {
+					LOGGER.trace("Received in bulk: {} ({}:{})", r, address, requestOid);
+				}
+				for (Result r : results) {
+					if (!initialRequestOid.isPrefixOf(r.getOid())) {
+						LOGGER.trace("{} not prefixed by {} ({}:{})", r.getOid(), initialRequestOid, address, requestOid);
+						lastOid = null;
+						break;
+					}
+					LOGGER.trace("Addind to results: {} ({}:{})", r, address, requestOid);
+					if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
+						LOGGER.warn("{} reached limit ({}:{})", requestOid, address, requestOid);
+						lastOid = null;
+						break;
+					}
+					countResults++;
+					callback.result(r);
+					lastOid = r.getOid();
+				}
+				if (lastOid != null) {
+					LOGGER.trace("Continuing from: {} ({}:{})", lastOid, address, requestOid);
+					
+					requestOid = lastOid;
+					
+					instanceMapper.map(this);
+					sendTimestamp = DateUtils.now();
+					shouldRepeatWhat = BerConstants.GETBULK;
+					write();
+				} else {
+					LOGGER.trace("Stop ({}:{})", address, requestOid);
+					// Stop here
 					requestOid = null;
 					SnmpClientHandler.Callback.GetCallback c = callback;
 					callback = null;
 					c.close();
-				} else {
-					Oid lastOid = null;
-					for (Result r : results) {
-						LOGGER.trace("Received in bulk: {} ({}:{})", r, address, requestOid);
-					}
-					if (!results.iterator().hasNext()) {
-						LOGGER.error("No result in GETBULK response ({}:{})", address, requestOid);
-					}
-					for (Result r : results) {
-						if (r.getValue() == null) {
-							continue;
-						}
-						if (!initialRequestOid.isPrefixOf(r.getOid())) {
-							LOGGER.trace("{} not prefixed by {} ({}:{})", r.getOid(), initialRequestOid, address, requestOid);
-							lastOid = null;
-							break;
-						}
-						LOGGER.trace("Addind to results: {} ({}:{})", r, address, requestOid);
-						if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-							LOGGER.warn("{} reached limit ({}:{})", requestOid, address, requestOid);
-							lastOid = null;
-							break;
-						}
-						countResults++;
-						callback.result(r);
-						lastOid = r.getOid();
-					}
-					if (lastOid != null) {
-						LOGGER.trace("Continuing from: {} ({}:{})", lastOid, address, requestOid);
-						
-						requestOid = lastOid;
-						
-						instanceMapper.map(this);
-						sendTimestamp = DateUtils.now();
-						shouldRepeatWhat = BerConstants.GETBULK;
-						write();
-					} else {
-						LOGGER.trace("Stop ({}:{})", address, requestOid);
-						// Stop here
-						requestOid = null;
-						SnmpClientHandler.Callback.GetCallback c = callback;
-						callback = null;
-						c.close();
-					}
 				}
 			}
 		}

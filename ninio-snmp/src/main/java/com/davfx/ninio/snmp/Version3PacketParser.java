@@ -121,9 +121,6 @@ public final class Version3PacketParser {
 								errorStatus = BerConstants.ERROR_STATUS_AUTHENTICATION_FAILED;
 								errorIndex = 0;
 							}
-
-							// OidValue value = pdu.readOidValue();
-							//%% results.add(new Result(oid, value));
 						}
 						pdu.endReadSequence();
 					}
@@ -147,8 +144,9 @@ public final class Version3PacketParser {
 							Oid oid = pdu.readOid();
 							String value = pdu.readValue();
 							LOGGER.trace("<- {} = {}", oid, value);
-							// OidValue value = pdu.readOidValue();
-							results.add(new Result(oid, value));
+							if (value != null) {
+								results.add(new Result(oid, value));
+							}
 						}
 						pdu.endReadSequence();
 					}

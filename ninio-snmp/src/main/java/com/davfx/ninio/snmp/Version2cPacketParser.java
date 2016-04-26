@@ -62,9 +62,9 @@ public final class Version2cPacketParser {
 							String value = ber.readValue();
 							if (value == null) {
 								LOGGER.trace("Opaque value: {}", oid);
+							} else {
+								results.add(new Result(oid, value));
 							}
-							// OidValue value = ber.readOidValue();
-							results.add(new Result(oid, value));
 						}
 						ber.endReadSequence();
 					}
