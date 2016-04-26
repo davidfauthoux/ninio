@@ -29,7 +29,7 @@ public class DatagramTest {
 				final int port = 8080;
 		
 				final Wait wait = new Wait();
-				final Connector server = ninio.create(Datagram.builder().with(executor).bind(new Address(null, port))
+				final Connector server = ninio.create(UdpSocket.builder().with(executor).bind(new Address(null, port))
 					.failing(new Failing() {
 						@Override
 						public void failed(IOException e) {
@@ -62,7 +62,7 @@ public class DatagramTest {
 				try {
 					wait.waitFor();
 	
-					final Connector client = ninio.create(Datagram.builder().with(executor)
+					final Connector client = ninio.create(UdpSocket.builder().with(executor)
 						.failing(new Failing() {
 							@Override
 							public void failed(IOException e) {

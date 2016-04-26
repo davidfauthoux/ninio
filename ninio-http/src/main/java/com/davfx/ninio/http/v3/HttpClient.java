@@ -19,7 +19,7 @@ import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.Shared;
-import com.davfx.ninio.core.v3.Socket;
+import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpRequest;
@@ -35,15 +35,15 @@ public final class HttpClient implements Disconnectable {
 	public static interface Builder extends NinioBuilder<HttpClient> {
 		Builder pipelining(boolean pipelining);
 		Builder with(Executor executor);
-		Builder with(Socket.Builder connectorFactory);
-		Builder withSecure(Socket.Builder secureConnectorFactory);
+		Builder with(TcpSocket.Builder connectorFactory);
+		Builder withSecure(TcpSocket.Builder secureConnectorFactory);
 	}
 	
-	public static NinioBuilder<HttpClient> builder() {
+	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = Shared.EXECUTOR;
-			private Socket.Builder connectorFactory = Socket.builder();
-			private Socket.Builder secureConnectorFactory = Socket.builder();
+			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
+			private TcpSocket.Builder secureConnectorFactory = TcpSocket.builder();
 			private boolean pipelining = false;
 			
 			@Override
@@ -59,13 +59,13 @@ public final class HttpClient implements Disconnectable {
 			}
 			
 			@Override
-			public Builder with(Socket.Builder connectorFactory) {
+			public Builder with(TcpSocket.Builder connectorFactory) {
 				this.connectorFactory = connectorFactory;
 				return this;
 			}
 
 			@Override
-			public Builder withSecure(Socket.Builder secureConnectorFactory) {
+			public Builder withSecure(TcpSocket.Builder secureConnectorFactory) {
 				this.secureConnectorFactory = secureConnectorFactory;
 				return this;
 			}
@@ -78,8 +78,8 @@ public final class HttpClient implements Disconnectable {
 	}
 	
 	private final Executor executor;
-	private final Socket.Builder connectorFactory;
-	private final Socket.Builder secureConnectorFactory;
+	private final TcpSocket.Builder connectorFactory;
+	private final TcpSocket.Builder secureConnectorFactory;
 	
 	private static final class ReusableConnector {
 		public final Connector connector;
@@ -88,7 +88,7 @@ public final class HttpClient implements Disconnectable {
 		public Receiver receiver = null;
 		public Closing closing = null;
 		
-		public ReusableConnector(Socket.Builder factory, Queue queue, boolean secure) {
+		public ReusableConnector(TcpSocket.Builder factory, Queue queue, boolean secure) {
 			this.secure = secure;
 			
 			factory.receiving(new Receiver() {
@@ -122,7 +122,7 @@ public final class HttpClient implements Disconnectable {
 	
 	private final boolean pipelining;
 	
-	private HttpClient(Queue queue, Executor executor, Socket.Builder connectorFactory, Socket.Builder secureConnectorFactory, boolean pipelining) {
+	private HttpClient(Queue queue, Executor executor, TcpSocket.Builder connectorFactory, TcpSocket.Builder secureConnectorFactory, boolean pipelining) {
 		this.queue = queue;
 		this.executor = executor;
 		this.connectorFactory = connectorFactory;

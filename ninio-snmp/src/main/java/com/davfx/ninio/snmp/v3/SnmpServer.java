@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.Datagram;
+import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
@@ -36,7 +36,7 @@ public final class SnmpServer implements Disconnectable {
 	
 	public static interface Builder extends NinioBuilder<Disconnectable> {
 		Builder with(Executor executor);
-		Builder with(Datagram.Builder connectorFactory);
+		Builder with(UdpSocket.Builder connectorFactory);
 		Builder bind(Address bindAddress);
 
 		Builder handle(SnmpServerHandler handler);
@@ -45,7 +45,7 @@ public final class SnmpServer implements Disconnectable {
 	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = Shared.EXECUTOR;
-			private Datagram.Builder connectorFactory = Datagram.builder();
+			private UdpSocket.Builder connectorFactory = UdpSocket.builder();
 			
 			private SnmpServerHandler handler = null;
 			
@@ -69,7 +69,7 @@ public final class SnmpServer implements Disconnectable {
 			}
 
 			@Override
-			public Builder with(Datagram.Builder connectorFactory) {
+			public Builder with(UdpSocket.Builder connectorFactory) {
 				this.connectorFactory = connectorFactory;
 				return this;
 			}
@@ -83,7 +83,7 @@ public final class SnmpServer implements Disconnectable {
 
 	private final Connector connector;
 
-	private SnmpServer(Queue queue, final Executor executor, final Address bindAddress, Datagram.Builder connectorFactory, final SnmpServerHandler handler) {
+	private SnmpServer(Queue queue, final Executor executor, final Address bindAddress, UdpSocket.Builder connectorFactory, final SnmpServerHandler handler) {
 		connector = connectorFactory.receiving(new Receiver() {
 			@Override
 			public void received(Connector connector, Address address, ByteBuffer buffer) {

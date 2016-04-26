@@ -19,10 +19,10 @@ import com.davfx.ninio.core.Address;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class SocketServer implements Disconnectable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SocketServer.class);
+public final class TcpSocketServer implements Disconnectable {
+	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocketServer.class);
 
-	private static final Config CONFIG = ConfigFactory.load(SocketServer.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(TcpSocketServer.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.read.size").intValue();
 	// private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
@@ -78,7 +78,7 @@ public final class SocketServer implements Disconnectable {
 
 			@Override
 			public Disconnectable create(Queue queue) {
-				return new SocketServer(queue, executor, bindAddress, connecting, listening, failing);
+				return new TcpSocketServer(queue, executor, bindAddress, connecting, listening, failing);
 			}
 		};
 	}
@@ -104,7 +104,7 @@ public final class SocketServer implements Disconnectable {
 		});
 	}
 	
-	private SocketServer(final Queue queue, final Executor executor, final Address bindAddress, final ListenConnecting connecting, final Listening listening, final Failing failing) {
+	private TcpSocketServer(final Queue queue, final Executor executor, final Address bindAddress, final ListenConnecting connecting, final Listening listening, final Failing failing) {
 		this.queue = queue;
 		
 		queue.execute(new Runnable() {
@@ -194,7 +194,7 @@ public final class SocketServer implements Disconnectable {
 				}
 
 				if (connecting != null) {
-					connecting.connected(SocketServer.this);
+					connecting.connected(TcpSocketServer.this);
 				}
 			}
 		});
@@ -268,7 +268,7 @@ public final class SocketServer implements Disconnectable {
 	
 	private static final class InnerSocketReady implements Connector {
 		
-		private static final Logger LOGGER = LoggerFactory.getLogger(Socket.class);
+		private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocket.class);
 
 		private final Queue queue;
 

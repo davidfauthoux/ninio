@@ -16,11 +16,11 @@ import com.davfx.ninio.core.Address;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class Datagram implements Connector {
+public final class UdpSocket implements Connector {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(Datagram.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
-	private static final Config CONFIG = ConfigFactory.load(Datagram.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(UdpSocket.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
@@ -83,7 +83,7 @@ public final class Datagram implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new Datagram(queue, executor, bindAddress, connecting, closing, failing, receiver);
+				return new UdpSocket(queue, executor, bindAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -101,7 +101,7 @@ public final class Datagram implements Connector {
 	private final Deque<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	public Datagram(final Queue queue, final Executor executor, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	public UdpSocket(final Queue queue, final Executor executor, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -158,7 +158,7 @@ public final class Datagram implements Connector {
 										executor.execute(new Runnable() {
 											@Override
 											public void run() {
-												receiver.received(Datagram.this, a, readBuffer);
+												receiver.received(UdpSocket.this, a, readBuffer);
 											}
 										});
 									}
@@ -268,7 +268,7 @@ public final class Datagram implements Connector {
 					executor.execute(new Runnable() {
 						@Override
 						public void run() {
-							connecting.connected(Datagram.this);
+							connecting.connected(UdpSocket.this);
 						}
 					});
 				}

@@ -16,7 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.Datagram;
+import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
@@ -51,13 +51,13 @@ public final class SnmpClient implements Disconnectable {
 
 	public static interface Builder extends NinioBuilder<SnmpClient> {
 		Builder with(Executor executor);
-		Builder with(Datagram.Builder connectorFactory);
+		Builder with(UdpSocket.Builder connectorFactory);
 	}
 	
-	public static NinioBuilder<SnmpClient> builder() {
+	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = Shared.EXECUTOR;
-			private Datagram.Builder connectorFactory = Datagram.builder();
+			private UdpSocket.Builder connectorFactory = UdpSocket.builder();
 			
 			@Override
 			public Builder with(Executor executor) {
@@ -66,7 +66,7 @@ public final class SnmpClient implements Disconnectable {
 			}
 			
 			@Override
-			public Builder with(Datagram.Builder connectorFactory) {
+			public Builder with(UdpSocket.Builder connectorFactory) {
 				this.connectorFactory = connectorFactory;
 				return this;
 			}
@@ -86,7 +86,7 @@ public final class SnmpClient implements Disconnectable {
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
 
-	public SnmpClient(Queue queue, final Executor executor, Datagram.Builder connectorFactory) {
+	public SnmpClient(Queue queue, final Executor executor, UdpSocket.Builder connectorFactory) {
 		this.executor = executor;
 		instanceMapper = new InstanceMapper(requestIdProvider);
 

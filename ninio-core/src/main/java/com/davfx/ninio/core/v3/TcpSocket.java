@@ -16,11 +16,11 @@ import com.davfx.ninio.core.Address;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class Socket implements Connector {
+public final class TcpSocket implements Connector {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(Socket.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocket.class);
 
-	private static final Config CONFIG = ConfigFactory.load(Socket.class.getClassLoader());
+	private static final Config CONFIG = ConfigFactory.load(TcpSocket.class.getClassLoader());
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.read.size").intValue();
 	// private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
@@ -84,7 +84,7 @@ public final class Socket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new Socket(queue, executor, connectAddress, connecting, closing, failing, receiver);
+				return new TcpSocket(queue, executor, connectAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -98,7 +98,7 @@ public final class Socket implements Connector {
 	private final Deque<ByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	private Socket(final Queue queue, final Executor executor, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private TcpSocket(final Queue queue, final Executor executor, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -172,7 +172,7 @@ public final class Socket implements Connector {
 													executor.execute(new Runnable() {
 														@Override
 														public void run() {
-															receiver.received(Socket.this, null, readBuffer);
+															receiver.received(TcpSocket.this, null, readBuffer);
 														}
 													});
 												}
@@ -230,7 +230,7 @@ public final class Socket implements Connector {
 										executor.execute(new Runnable() {
 											@Override
 											public void run() {
-												connecting.connected(Socket.this);
+												connecting.connected(TcpSocket.this);
 											}
 										});
 									}
