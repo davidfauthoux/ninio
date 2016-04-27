@@ -21,13 +21,12 @@ public final class TcpSocket implements Connector {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocket.class);
 
 	private static final Config CONFIG = ConfigFactory.load(TcpSocket.class.getClassLoader());
-	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.read.size").intValue();
-	// private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
 
 	public static interface Builder extends NinioBuilder<Connector> {
 		Builder with(Executor executor);
+		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder to(Address connectAddress);
 
 		Builder failing(Failing failing);
@@ -39,6 +38,7 @@ public final class TcpSocket implements Connector {
 	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = Shared.EXECUTOR;
+			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 			
 			private Address connectAddress = null;
 			
@@ -71,8 +71,15 @@ public final class TcpSocket implements Connector {
 				return this;
 			}
 			
+			@Override
 			public Builder with(Executor executor) {
 				this.executor = executor;
+				return this;
+			}
+
+			@Override
+			public Builder with(ByteBufferAllocator byteBufferAllocator) {
+				this.byteBufferAllocator = byteBufferAllocator;
 				return this;
 			}
 
@@ -84,7 +91,7 @@ public final class TcpSocket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new TcpSocket(queue, executor, connectAddress, connecting, closing, failing, receiver);
+				return new TcpSocket(queue, executor, byteBufferAllocator, connectAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -98,7 +105,7 @@ public final class TcpSocket implements Connector {
 	private final Deque<ByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	private TcpSocket(final Queue queue, final Executor executor, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private TcpSocket(final Queue queue, final Executor executor, final ByteBufferAllocator byteBufferAllocator, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -133,7 +140,7 @@ public final class TcpSocket implements Connector {
 											}
 											
 											if (key.isReadable()) {
-												final ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
+												final ByteBuffer readBuffer = byteBufferAllocator.allocate();
 												try {
 													if (channel.read(readBuffer) < 0) {
 														disconnect(channel, inboundKey, selectionKey);

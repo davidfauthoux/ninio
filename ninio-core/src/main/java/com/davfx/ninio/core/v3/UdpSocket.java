@@ -21,12 +21,11 @@ public final class UdpSocket implements Connector {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
 	private static final Config CONFIG = ConfigFactory.load(UdpSocket.class.getClassLoader());
-	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.read.size").intValue();
-	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.size").intValue();
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
 
 	public static interface Builder extends NinioBuilder<Connector> {
 		Builder with(Executor executor);
+		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
 
 		Builder failing(Failing failing);
@@ -38,6 +37,7 @@ public final class UdpSocket implements Connector {
 	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = Shared.EXECUTOR;
+			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 			
 			private Address bindAddress = null;
 			
@@ -70,11 +70,18 @@ public final class UdpSocket implements Connector {
 				return this;
 			}
 			
+			@Override
 			public Builder with(Executor executor) {
 				this.executor = executor;
 				return this;
 			}
 
+			@Override
+			public Builder with(ByteBufferAllocator byteBufferAllocator) {
+				this.byteBufferAllocator = byteBufferAllocator;
+				return this;
+			}
+			
 			@Override
 			public Builder bind(Address bindAddress) {
 				this.bindAddress = bindAddress;
@@ -83,7 +90,7 @@ public final class UdpSocket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new UdpSocket(queue, executor, bindAddress, connecting, closing, failing, receiver);
+				return new UdpSocket(queue, executor, byteBufferAllocator, bindAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -101,7 +108,7 @@ public final class UdpSocket implements Connector {
 	private final Deque<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	public UdpSocket(final Queue queue, final Executor executor, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	public UdpSocket(final Queue queue, final Executor executor, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -119,8 +126,8 @@ public final class UdpSocket implements Connector {
 					currentChannel = channel;
 					try {
 						channel.configureBlocking(false);
-						channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
-						channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
+						//%% channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
+						//%% channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
 						final SelectionKey selectionKey = queue.register(channel);
 						currentSelectionKey = selectionKey;
 						
@@ -132,7 +139,7 @@ public final class UdpSocket implements Connector {
 								}
 								
 								if (key.isReadable()) {
-									final ByteBuffer readBuffer = ByteBuffer.allocate(READ_BUFFER_SIZE);
+									final ByteBuffer readBuffer = byteBufferAllocator.allocate();
 									InetSocketAddress from;
 									try {
 										from = (InetSocketAddress) channel.receive(readBuffer);
