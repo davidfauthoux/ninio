@@ -6,7 +6,7 @@ import com.davfx.ninio.http.HttpRequest;
 
 public interface HttpReceiverRequest {
 	interface Send {
-		void post(ByteBuffer buffer);
+		Send post(ByteBuffer buffer);
 		void finish();
 		void cancel();
 	}

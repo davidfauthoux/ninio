@@ -53,16 +53,16 @@ public class Test {
 				})
 				.receiving(new HttpReceiver() {
 					@Override
-					public void received(HttpResponse response) {
+					public void received(HttpClient client, HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
 					}
 					
 					@Override
-					public void received(ByteBuffer buffer) {
+					public void received(HttpClient client, ByteBuffer buffer) {
 						LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
 					}
 					@Override
-					public void ended() {
+					public void ended(HttpClient client) {
 						LOGGER.debug("ENDED");
 					}
 				})
@@ -80,16 +80,16 @@ public class Test {
 				})
 				.receiving(new HttpReceiver() {
 					@Override
-					public void received(HttpResponse response) {
+					public void received(HttpClient client, HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
 					}
 					
 					@Override
-					public void received(ByteBuffer buffer) {
+					public void received(HttpClient client, ByteBuffer buffer) {
 						LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
 					}
 					@Override
-					public void ended() {
+					public void ended(HttpClient client) {
 						LOGGER.debug("ENDED");
 					}
 				})

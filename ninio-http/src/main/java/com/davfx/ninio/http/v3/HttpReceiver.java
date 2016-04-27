@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.http.HttpResponse;
 
 public interface HttpReceiver {
-	void received(HttpResponse response);
-	void received(ByteBuffer buffer);
-	void ended();
+	void received(HttpClient client, HttpResponse response);
+	void received(HttpClient client, ByteBuffer buffer);
+	void ended(HttpClient client);
 }

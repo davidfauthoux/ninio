@@ -146,7 +146,6 @@ public final class HttpClient implements Disconnectable {
 		});
 	}
 
-
 	public HttpReceiverRequestBuilder request() {
 		return new HttpReceiverRequestBuilder() {
 			private HttpReceiver receiver = null;
@@ -174,13 +173,14 @@ public final class HttpClient implements Disconnectable {
 				final HttpReceiver r = receiver;
 				final Failing f = failing;
 				final int thisMaxRedirections = maxRedirections;
-				final HttpReceiverRequestBuilder builder = this;
 				return new HttpReceiverRequest() {
 					private long id = -1L;
 					private ReusableConnector connector = null;
 
 					private void prepare(HttpRequest request) {
-						final HttpReceiver rr = new RedirectHttpReceiver(thisMaxRedirections, request, builder, r);
+						RedirectHttpReceiver redirect = new RedirectHttpReceiver(thisMaxRedirections, request, r, f);
+						final HttpReceiver rr = redirect.receiver();
+						final Failing ff = redirect.failing();
 						
 						connector.closing = new Closing() {
 							@Override
@@ -193,7 +193,7 @@ public final class HttpClient implements Disconnectable {
 										try {
 											parseClosed(rr);
 										} catch (IOException ioe) {
-											f.failed(ioe);
+											ff.failed(ioe);
 										}
 				
 										connector = null;
@@ -211,16 +211,16 @@ public final class HttpClient implements Disconnectable {
 										try {
 											parse(buffer, new HttpReceiver() {
 												@Override
-												public void received(ByteBuffer buffer) {
-													rr.received(buffer);
+												public void received(HttpClient c, ByteBuffer buffer) {
+													rr.received(HttpClient.this, buffer);
 												}
 												@Override
-												public void received(HttpResponse response) {
-													rr.received(response);
+												public void received(HttpClient c, HttpResponse response) {
+													rr.received(HttpClient.this, response);
 												}
 												@Override
-												public void ended() {
-													rr.ended();
+												public void ended(HttpClient c) {
+													rr.ended(HttpClient.this);
 													if (!pipelining) {
 														if (connector != null) {
 															if (keepAlive) {
@@ -239,7 +239,7 @@ public final class HttpClient implements Disconnectable {
 											connector.connector.close();
 											reusableConnectors.remove(id);
 											connector = null;
-											f.failed(ioe);
+											ff.failed(ioe);
 										}
 									}
 								});
@@ -286,7 +286,7 @@ public final class HttpClient implements Disconnectable {
 						//TODO Content-Encoding gzip??
 						return new Send() {
 							@Override
-							public void post(final ByteBuffer buffer) {
+							public Send post(final ByteBuffer buffer) {
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
@@ -295,6 +295,7 @@ public final class HttpClient implements Disconnectable {
 										}
 									}
 								});
+								return this;
 							}
 							
 							@Override
@@ -443,7 +444,7 @@ public final class HttpClient implements Disconnectable {
 								}
 								LOGGER.trace("Keep alive = {}", keepAlive);
 								
-								receiver.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
+								receiver.received(HttpClient.this, new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
 								
 								countRead = 0;
 							} else {
@@ -467,7 +468,7 @@ public final class HttpClient implements Disconnectable {
 									chunkFooterRead = true;
 									chunkCountRead = 0;
 									if (chunkLength == 0) {
-										receiver.ended();
+										receiver.ended(HttpClient.this);
 									} else {
 										chunkHeaderRead = false;
 									}
@@ -515,7 +516,7 @@ public final class HttpClient implements Disconnectable {
 									if (buffer.hasRemaining()) {
 										throw new IOException("Connection reset, too much data");
 									}
-									receiver.ended();
+									receiver.ended(HttpClient.this);
 								}
 							} else {
 								handleContent(buffer, -1, -1, receiver);
@@ -539,14 +540,14 @@ public final class HttpClient implements Disconnectable {
 						LOGGER.trace("Content received (read = {})", countRead);
 						
 						if (gzipReader == null) {
-							receiver.received(deflated);
+							receiver.received(HttpClient.this, deflated);
 							return;
 						}
 						
 						gzipReader.handle(deflated, totalRemainingToRead, new ByteBufferHandler() {
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
-								receiver.received(buffer);
+								receiver.received(HttpClient.this, buffer);
 							}
 						});
 				    }
@@ -556,10 +557,10 @@ public final class HttpClient implements Disconnectable {
 							if (!chunkFooterRead) {
 								throw new IOException("Connection reset by peer in chunked stream");
 							}
-							receiver.ended();
+							receiver.ended(HttpClient.this);
 						} else {
 							if (contentLength < 0L) {
-								receiver.ended();
+								receiver.ended(HttpClient.this);
 								return;
 							}
 			
