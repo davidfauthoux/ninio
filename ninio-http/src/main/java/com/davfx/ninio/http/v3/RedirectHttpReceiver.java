@@ -12,7 +12,7 @@ import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpSpecification;
 
-public final class RedirectHttpReceiver implements HttpReceiver {
+final class RedirectHttpReceiver implements HttpReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedirectHttpReceiver.class);
 
 	private final int maxRedirections;
