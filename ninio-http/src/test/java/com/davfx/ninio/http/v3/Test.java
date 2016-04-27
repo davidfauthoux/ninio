@@ -40,6 +40,7 @@ public class Test {
 
 		String url = "http://david.fauthoux.free.fr/pizzapassion/index.css";
 		url = "http://www.this-page-intentionally-left-blank.org/index.html";
+		url = "http://google.com";
 		
 		try (HttpClient client = ninio.create(HttpClient.builder())) {
 			{

@@ -28,9 +28,14 @@ import com.davfx.ninio.http.HttpSpecification;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public final class HttpClient implements Disconnectable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
+	
+	private static final Config CONFIG = ConfigFactory.load(HttpClient.class.getClassLoader());
+	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("ninio.http.redirect.max");
 
 	public static interface Builder extends NinioBuilder<HttpClient> {
 		Builder pipelining(boolean pipelining);
@@ -146,6 +151,7 @@ public final class HttpClient implements Disconnectable {
 		return new HttpReceiverRequestBuilder() {
 			private HttpReceiver receiver = null;
 			private Failing failing = null;
+			private int maxRedirections = DEFAULT_MAX_REDIRECTIONS;
 
 			@Override
 			public HttpReceiverRequestBuilder receiving(HttpReceiver receiver) {
@@ -157,16 +163,25 @@ public final class HttpClient implements Disconnectable {
 				this.failing = failing;
 				return this;
 			}
+			@Override
+			public HttpReceiverRequestBuilder maxRedirections(int maxRedirections) {
+				this.maxRedirections = maxRedirections;
+				return this;
+			}
 			
 			@Override
 			public HttpReceiverRequest build() {
 				final HttpReceiver r = receiver;
 				final Failing f = failing;
+				final int thisMaxRedirections = maxRedirections;
+				final HttpReceiverRequestBuilder builder = this;
 				return new HttpReceiverRequest() {
 					private long id = -1L;
 					private ReusableConnector connector = null;
 
 					private void prepare(HttpRequest request) {
+						final HttpReceiver rr = new RedirectHttpReceiver(thisMaxRedirections, request, builder, r);
+						
 						connector.closing = new Closing() {
 							@Override
 							public void closed() {
@@ -176,7 +191,7 @@ public final class HttpClient implements Disconnectable {
 										reusableConnectors.remove(id);
 				
 										try {
-											parseClosed(r);
+											parseClosed(rr);
 										} catch (IOException ioe) {
 											f.failed(ioe);
 										}
@@ -197,15 +212,15 @@ public final class HttpClient implements Disconnectable {
 											parse(buffer, new HttpReceiver() {
 												@Override
 												public void received(ByteBuffer buffer) {
-													r.received(buffer);
+													rr.received(buffer);
 												}
 												@Override
 												public void received(HttpResponse response) {
-													r.received(response);
+													rr.received(response);
 												}
 												@Override
 												public void ended() {
-													r.ended();
+													rr.ended();
 													if (!pipelining) {
 														if (connector != null) {
 															if (keepAlive) {
