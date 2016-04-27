@@ -19,6 +19,7 @@ import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.Shared;
+import com.davfx.ninio.core.v3.SslSocketBuilder;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.davfx.ninio.http.HttpHeaderValue;
@@ -48,7 +49,7 @@ public final class HttpClient implements Disconnectable {
 		return new Builder() {
 			private Executor executor = Shared.EXECUTOR;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
-			private TcpSocket.Builder secureConnectorFactory = TcpSocket.builder();
+			private TcpSocket.Builder secureConnectorFactory = new SslSocketBuilder(TcpSocket.builder());
 			private boolean pipelining = false;
 			
 			@Override
@@ -287,6 +288,9 @@ public final class HttpClient implements Disconnectable {
 						return new Send() {
 							@Override
 							public Send post(final ByteBuffer buffer) {
+								if (!request.headers.containsKey(HttpHeaderKey.CONTENT_LENGTH)) {
+									LOGGER.error("Header required: {}", HttpHeaderKey.CONTENT_LENGTH);
+								}
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
