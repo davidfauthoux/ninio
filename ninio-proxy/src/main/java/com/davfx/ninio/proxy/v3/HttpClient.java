@@ -19,7 +19,6 @@ import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.Shared;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
 import com.google.common.base.Charsets;
@@ -35,7 +34,7 @@ public final class HttpClient implements Disconnectable {
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = Shared.EXECUTOR;
+			private Executor executor = null;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
 			
 			@Override
@@ -52,6 +51,9 @@ public final class HttpClient implements Disconnectable {
 
 			@Override
 			public HttpClient create(Queue queue) {
+				if (executor == null) {
+					throw new NullPointerException("executor");
+				}
 				return new HttpClient(queue, executor, connectorFactory);
 			}
 		};
@@ -66,15 +68,13 @@ public final class HttpClient implements Disconnectable {
 	private int nextConnectionId = 0;
 
 	private static final class InnerConnection {
-		public final Executor executor;
 		public final Address address;
 		public final Failing failing;
 		public final Receiver receiver;
 		public final Closing closing;
 		public final Connecting connecting;
 		
-		public InnerConnection(Executor executor, Address address, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
-			this.executor = executor;
+		public InnerConnection(Address address, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
 			this.address = address;
 			this.failing = failing;
 			this.receiver = receiver;
@@ -106,8 +106,6 @@ public final class HttpClient implements Disconnectable {
 
 	public TcpSocket.Builder tcp() {
 		return new TcpSocket.Builder() {
-			private Executor executor = Shared.EXECUTOR;
-			
 			private Address connectAddress = null;
 			
 			private Connecting connecting = null;
@@ -138,12 +136,6 @@ public final class HttpClient implements Disconnectable {
 				this.receiver = receiver;
 				return this;
 			}
-			
-			@Override
-			public TcpSocket.Builder with(Executor executor) {
-				this.executor = executor;
-				return this;
-			}
 
 			@Override
 			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
@@ -158,15 +150,13 @@ public final class HttpClient implements Disconnectable {
 			
 			@Override
 			public Connector create(Queue ignoredQueue) {
-				return createConnector(executor, ProxyCommons.Types.TCP, null, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.TCP, null, connectAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}
 	
 	public UdpSocket.Builder udp() {
 		return new UdpSocket.Builder() {
-			private Executor executor = Shared.EXECUTOR;
-			
 			private Address bindAddress = null;
 			
 			private Connecting connecting = null;
@@ -199,12 +189,6 @@ public final class HttpClient implements Disconnectable {
 			}
 			
 			@Override
-			public UdpSocket.Builder with(Executor executor) {
-				this.executor = executor;
-				return this;
-			}
-
-			@Override
 			public UdpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 				return this;
 			}
@@ -217,13 +201,13 @@ public final class HttpClient implements Disconnectable {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(executor, ProxyCommons.Types.UDP, null, bindAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.UDP, null, bindAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}
 	
-	private Connector createConnector(Executor executor, final String type, final String header, Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
-		final InnerConnection innerConnection = new InnerConnection(executor, connectAddress, failing, receiver, closing, connecting);
+	private Connector createConnector(final String type, final String header, Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
+		final InnerConnection innerConnection = new InnerConnection(connectAddress, failing, receiver, closing, connecting);
 		return new Connector() {
 			private int connectionId;
 			
@@ -234,12 +218,7 @@ public final class HttpClient implements Disconnectable {
 				proxyExecutor.execute(new Runnable() {
 					private void closedRegisteredConnections(final IOException ioe) {
 						for (final InnerConnection c : connections.values()) {
-							c.executor.execute(new Runnable() {
-								@Override
-								public void run() {
-									c.failing.failed(ioe);
-								}
-							});
+							c.failing.failed(ioe);
 						}
 						connections.clear();
 					}
@@ -247,7 +226,6 @@ public final class HttpClient implements Disconnectable {
 					public void run() {
 						if (proxyConnector == null) {
 							proxyConnector = proxyConnectorFactory
-									.with(proxyExecutor)
 									.closing(new Closing() {
 										@Override
 										public void closed() {
@@ -357,12 +335,7 @@ public final class HttpClient implements Disconnectable {
 																		if (receivedInnerConnection != null) {
 																			final ByteBuffer b = receivedBuffer.duplicate();
 																			b.limit(Math.max(b.limit(), b.position() + readLength));
-																			receivedInnerConnection.executor.execute(new Runnable() {
-																				@Override
-																				public void run() {
-																					receivedInnerConnection.receiver.received(connector, new Address(readHost, readPort), b);
-																				}
-																			});
+																			receivedInnerConnection.receiver.received(connector, new Address(readHost, readPort), b);
 																		}
 																	}
 																}
@@ -382,12 +355,7 @@ public final class HttpClient implements Disconnectable {
 															if (receivedInnerConnection != null) {
 																final ByteBuffer b = receivedBuffer.duplicate();
 																b.limit(Math.max(b.limit(), b.position() + readLength));
-																receivedInnerConnection.executor.execute(new Runnable() {
-																	@Override
-																	public void run() {
-																		receivedInnerConnection.receiver.received(connector, null, b);
-																	}
-																});
+																receivedInnerConnection.receiver.received(connector, null, b);
 															}
 														}
 														break;
@@ -395,12 +363,7 @@ public final class HttpClient implements Disconnectable {
 													case ProxyCommons.Commands.CLOSE: {
 														connections.remove(connectionId);
 														if (receivedInnerConnection != null) {
-															receivedInnerConnection.executor.execute(new Runnable() {
-																@Override
-																public void run() {
-																	receivedInnerConnection.closing.closed();
-																}
-															});
+															receivedInnerConnection.closing.closed();
 														}
 														break;
 													}
@@ -446,12 +409,7 @@ public final class HttpClient implements Disconnectable {
 						}
 						proxyConnector.send(null, b);
 						
-						innerConnection.executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								innerConnection.connecting.connected(connector);
-							}
-						});
+						innerConnection.connecting.connected(connector);
 					}
 				});
 				return this;
