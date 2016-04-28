@@ -197,9 +197,6 @@ public final class HttpClient implements Disconnectable {
 							}
 							@Override
 							public void received(HttpResponse response) {
-								if (contentReceiver == null) {
-									return;
-								}
 								contentReceiver = rr.received(HttpClient.this, response);
 							}
 							@Override
