@@ -202,9 +202,6 @@ public final class HttpClient implements Disconnectable {
 						final InnerReceiver innerReceiver = new InnerReceiver() {
 							@Override
 							public void received(ByteBuffer buffer) {
-								if (contentReceiver == null) {
-									return;
-								}
 								contentReceiver.received(buffer);
 							}
 							@Override
@@ -213,9 +210,6 @@ public final class HttpClient implements Disconnectable {
 							}
 							@Override
 							public void ended() {
-								if (contentReceiver == null) {
-									return;
-								}
 								contentReceiver.ended();
 								contentReceiver = null;
 								if (!pipelining) {
@@ -240,6 +234,10 @@ public final class HttpClient implements Disconnectable {
 									public void run() {
 										reusableConnectors.remove(id);
 				
+										if (connector == null) {
+											return;
+										}
+										
 										try {
 											parseClosed(innerReceiver);
 										} catch (IOException ioe) {
@@ -259,6 +257,10 @@ public final class HttpClient implements Disconnectable {
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
+										if (connector == null) {
+											return;
+										}
+										
 										try {
 											parse(buffer, innerReceiver);
 										} catch (IOException ioe) {
@@ -543,7 +545,7 @@ public final class HttpClient implements Disconnectable {
 									handleContent(buffer, toRead, toRead, receiver);
 								}
 								if (countRead == contentLength) {
-									if (buffer.hasRemaining()) {
+									if (buffer.hasRemaining()) { //TODO pipeling
 										throw new IOException("Connection reset, too much data");
 									}
 									receiver.ended();
