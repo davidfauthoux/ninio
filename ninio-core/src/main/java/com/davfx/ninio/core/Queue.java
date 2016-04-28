@@ -36,7 +36,7 @@ public final class Queue implements AutoCloseable {
 	public Queue(final String name) {
 		this.name = name;
 		
-		LOGGER.debug("Queue created", new Exception());
+		LOGGER.debug("Queue created");
 		
 		Selector s;
 		try {

@@ -25,6 +25,7 @@ import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpSpecification;
+import com.google.common.base.Charsets;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
@@ -179,6 +180,7 @@ public final class HttpClient implements Disconnectable {
 				return new HttpReceiverRequest() {
 					private long id = -1L;
 					private ReusableConnector connector = null;
+					private HttpReceiver.ContentReceiver contentReceiver;
 
 					private void prepare(HttpRequest request) {
 						RedirectHttpReceiver redirect = new RedirectHttpReceiver(thisMaxRedirections, request, r, f);
@@ -186,17 +188,25 @@ public final class HttpClient implements Disconnectable {
 						final Failing ff = redirect.failing();
 						
 						final InnerReceiver innerReceiver = new InnerReceiver() {
-							private HttpReceiver.ContentReceiver contentReceiver;
 							@Override
 							public void received(ByteBuffer buffer) {
+								if (contentReceiver == null) {
+									return;
+								}
 								contentReceiver.received(HttpClient.this, buffer);
 							}
 							@Override
 							public void received(HttpResponse response) {
+								if (contentReceiver == null) {
+									return;
+								}
 								contentReceiver = rr.received(HttpClient.this, response);
 							}
 							@Override
 							public void ended() {
+								if (contentReceiver == null) {
+									return;
+								}
 								contentReceiver.ended(HttpClient.this);
 								contentReceiver = null;
 								if (!pipelining) {
@@ -228,6 +238,7 @@ public final class HttpClient implements Disconnectable {
 										}
 				
 										connector = null;
+										contentReceiver = null;
 									}
 								});
 							}
@@ -246,6 +257,7 @@ public final class HttpClient implements Disconnectable {
 											connector.connector.close();
 											reusableConnectors.remove(id);
 											connector = null;
+											contentReceiver = null;
 											ff.failed(ioe);
 										}
 									}
@@ -356,7 +368,6 @@ public final class HttpClient implements Disconnectable {
 					private GzipReader gzipReader;
 		
 					private boolean chunkHeaderRead = false;
-					private boolean chunkFooterRead = true;
 					private int chunkLength;
 					private int chunkCountRead;
 					private int countRead;
@@ -467,23 +478,6 @@ public final class HttpClient implements Disconnectable {
 							
 							while (true) {
 							
-								while (!chunkFooterRead) {
-									String line = lineReader.handle(buffer);
-									if (line == null) {
-										return;
-									}
-									if (!line.isEmpty()) {
-										throw new IOException("Invalid chunk footer");
-									}
-									chunkFooterRead = true;
-									chunkCountRead = 0;
-									if (chunkLength == 0) {
-										receiver.ended();
-									} else {
-										chunkHeaderRead = false;
-									}
-								}
-				
 								while (!chunkHeaderRead) {
 									String line = lineReader.handle(buffer);
 									if (line == null) {
@@ -495,22 +489,39 @@ public final class HttpClient implements Disconnectable {
 										throw new IOException("Invalid chunk size: " + line);
 									}
 									chunkHeaderRead = true;
+									chunkCountRead = 0;
 								}
-								
-								if (chunkCountRead < chunkLength) {
-									long totalToRead = contentLength - countRead;
-									long toRead = chunkLength - chunkCountRead;
-									handleContent(buffer, toRead, totalToRead, receiver);
-								}
-									
-								if (chunkCountRead == chunkLength) {
-									if (chunkLength == 0) {
-										if (buffer.hasRemaining()) {
-											throw new IOException("Connection reset, too much data in chunked stream");
+
+								if (chunkHeaderRead) {
+									if (chunkCountRead < chunkLength) {
+										if (!buffer.hasRemaining()) {
+											return;
 										}
+										long totalToRead = contentLength - countRead;
+										long toRead = chunkLength - chunkCountRead;
+										handleContent(buffer, toRead, totalToRead, receiver);
 									}
 										
-									chunkFooterRead = false;
+									if (chunkCountRead == chunkLength) {
+										while (chunkHeaderRead) {
+											String line = lineReader.handle(buffer);
+											if (line == null) {
+												return;
+											}
+											if (!line.isEmpty()) {
+												throw new IOException("Invalid chunk footer");
+											}
+											chunkHeaderRead = false;
+										}
+
+										if (chunkLength == 0) {
+											if (buffer.hasRemaining()) { //TODO pipeling
+												throw new IOException("Connection reset, too much data in chunked stream: " + new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), Charsets.UTF_8));
+											}
+
+											receiver.ended();
+										}
+									}
 								}
 							
 							}
@@ -564,7 +575,7 @@ public final class HttpClient implements Disconnectable {
 				    
 					private void parseClosed(InnerReceiver receiver) throws IOException {
 						if (chunked) {
-							if (!chunkFooterRead) {
+							if (chunkHeaderRead) {
 								throw new IOException("Connection reset by peer in chunked stream");
 							}
 							receiver.ended();
