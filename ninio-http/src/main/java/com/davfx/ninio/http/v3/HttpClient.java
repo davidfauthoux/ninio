@@ -298,6 +298,7 @@ public final class HttpClient implements Disconnectable {
 										LOGGER.trace("Recycling connection {}", id);
 										
 										connector = reusedConnector;
+										reusedConnector.reusable = false;
 										prepare(request);
 										return;
 									}
