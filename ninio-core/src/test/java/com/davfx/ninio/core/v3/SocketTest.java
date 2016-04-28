@@ -29,7 +29,7 @@ public class SocketTest {
 				final int port = 8080;
 		
 				final Wait wait = new Wait();
-				final Disconnectable server = ninio.create(TcpSocketServer.builder().with(executor).bind(new Address(null, port))
+				final Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(null, port))
 					.failing(new Failing() {
 						@Override
 						public void failed(IOException e) {
@@ -46,8 +46,8 @@ public class SocketTest {
 					})
 					.listening(new Listening() {
 						@Override
-						public void connecting(ConnectorBuilder connectable) {
-							connectable
+						public void connecting(Connector connector, SocketBuilder builder) {
+							builder
 							.failing(new Failing() {
 								@Override
 								public void failed(IOException e) {
@@ -82,7 +82,7 @@ public class SocketTest {
 				try {
 					wait.waitFor();
 	
-					final Connector client = ninio.create(TcpSocket.builder().with(executor).to(new Address(Address.LOCALHOST, port))
+					final Connector client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port))
 						.failing(new Failing() {
 							@Override
 							public void failed(IOException e) {

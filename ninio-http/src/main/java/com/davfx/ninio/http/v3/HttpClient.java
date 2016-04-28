@@ -179,9 +179,7 @@ public final class HttpClient implements Disconnectable {
 					private HttpReceiver.ContentReceiver contentReceiver;
 
 					private void prepare(HttpRequest request) {
-						RedirectHttpReceiver redirect = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, f);
-						final HttpReceiver rr = redirect.receiver();
-						final Failing ff = redirect.failing();
+						final HttpReceiver rr = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, f);
 						
 						final Disconnectable disconnectable = new Disconnectable() {
 							@Override
@@ -241,7 +239,7 @@ public final class HttpClient implements Disconnectable {
 										try {
 											parseClosed(innerReceiver);
 										} catch (IOException ioe) {
-											ff.failed(ioe);
+											f.failed(ioe);
 										}
 				
 										connector = null;
@@ -269,7 +267,7 @@ public final class HttpClient implements Disconnectable {
 											reusableConnectors.remove(id);
 											connector = null;
 											contentReceiver = null;
-											ff.failed(ioe);
+											f.failed(ioe);
 										}
 									}
 								});
