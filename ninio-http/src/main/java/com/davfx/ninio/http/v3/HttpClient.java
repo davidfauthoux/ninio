@@ -20,11 +20,7 @@ import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.SslSocketBuilder;
 import com.davfx.ninio.core.v3.TcpSocket;
-import com.davfx.ninio.http.HttpHeaderKey;
-import com.davfx.ninio.http.HttpHeaderValue;
-import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.HttpSpecification;
 import com.google.common.base.Charsets;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
@@ -183,9 +179,25 @@ public final class HttpClient implements Disconnectable {
 					private HttpReceiver.ContentReceiver contentReceiver;
 
 					private void prepare(HttpRequest request) {
-						RedirectHttpReceiver redirect = new RedirectHttpReceiver(thisMaxRedirections, request, r, f);
+						RedirectHttpReceiver redirect = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, f);
 						final HttpReceiver rr = redirect.receiver();
 						final Failing ff = redirect.failing();
+						
+						final Disconnectable disconnectable = new Disconnectable() {
+							@Override
+							public void close() {
+								executor.execute(new Runnable() {
+									@Override
+									public void run() {
+										if (connector != null) {
+											connector.connector.close();
+											reusableConnectors.remove(id);
+											connector = null;
+										}
+									}
+								});
+							}
+						};
 						
 						final InnerReceiver innerReceiver = new InnerReceiver() {
 							@Override
@@ -193,18 +205,18 @@ public final class HttpClient implements Disconnectable {
 								if (contentReceiver == null) {
 									return;
 								}
-								contentReceiver.received(HttpClient.this, buffer);
+								contentReceiver.received(buffer);
 							}
 							@Override
 							public void received(HttpResponse response) {
-								contentReceiver = rr.received(HttpClient.this, response);
+								contentReceiver = rr.received(disconnectable, response);
 							}
 							@Override
 							public void ended() {
 								if (contentReceiver == null) {
 									return;
 								}
-								contentReceiver.ended(HttpClient.this);
+								contentReceiver.ended();
 								contentReceiver = null;
 								if (!pipelining) {
 									if (connector != null) {

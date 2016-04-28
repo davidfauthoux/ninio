@@ -7,16 +7,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.http.HttpHeaderKey;
-import com.davfx.ninio.http.HttpPath;
-import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.HttpSpecification;
 
 final class RedirectHttpReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedirectHttpReceiver.class);
 
+	private final HttpClient client;
+	
 	private final int maxRedirections;
 	private final int levelOfRedirect;
 	private final HttpRequest request;
@@ -25,11 +24,12 @@ final class RedirectHttpReceiver {
 	
 	private boolean redirected = false;
 
-	public RedirectHttpReceiver(int maxRedirections, HttpRequest request, HttpReceiver receiver, Failing failing) {
-		this(maxRedirections, 0, request, receiver, failing);
+	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver receiver, Failing failing) {
+		this(client, maxRedirections, 0, request, receiver, failing);
 	}
 	
-	private RedirectHttpReceiver(int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver receiver, Failing failing) {
+	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver receiver, Failing failing) {
+		this.client = client;
 		this.maxRedirections = maxRedirections;
 		this.levelOfRedirect = levelOfRedirect;
 		this.request = request;
@@ -40,7 +40,7 @@ final class RedirectHttpReceiver {
 	public HttpReceiver receiver() {
 		return new HttpReceiver() {
 			@Override
-			public HttpReceiver.ContentReceiver received(HttpClient client, HttpResponse response) {
+			public HttpReceiver.ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 				if (levelOfRedirect < maxRedirections) {
 					String location = null;
 					for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
@@ -92,8 +92,8 @@ final class RedirectHttpReceiver {
 						
 						redirected = true;
 						
-						HttpRequest newRequest = new HttpRequest(newAddress, secure, request.method, HttpPath.of(newPath));
-						RedirectHttpReceiver r = new RedirectHttpReceiver(maxRedirections, levelOfRedirect + 1, newRequest, receiver, failing);
+						HttpRequest newRequest = new HttpRequest(newAddress, secure, request.method, newPath);
+						RedirectHttpReceiver r = new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, receiver, failing);
 						client
 						.request()
 						.failing(r.failing())
@@ -101,10 +101,10 @@ final class RedirectHttpReceiver {
 						.build().create(newRequest).finish();
 						return new HttpReceiver.ContentReceiver() {
 							@Override
-							public void received(HttpClient client, ByteBuffer buffer) {
+							public void received(ByteBuffer buffer) {
 							}
 							@Override
-							public void ended(HttpClient client) {
+							public void ended() {
 								redirected = false;
 							}
 						};

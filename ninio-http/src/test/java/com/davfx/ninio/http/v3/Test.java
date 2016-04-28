@@ -7,12 +7,11 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 
-//TODO Location:
 public class Test {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Test.class);
@@ -54,15 +53,15 @@ public class Test {
 				})
 				.receiving(new HttpReceiver() {
 					@Override
-					public ContentReceiver received(HttpClient client, HttpResponse response) {
+					public ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
 						return new ContentReceiver() {
 							@Override
-							public void received(HttpClient client, ByteBuffer buffer) {
+							public void received(ByteBuffer buffer) {
 								LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
 							}
 							@Override
-							public void ended(HttpClient client) {
+							public void ended() {
 								LOGGER.debug("ENDED");
 							}
 						};
@@ -82,15 +81,15 @@ public class Test {
 				})
 				.receiving(new HttpReceiver() {
 					@Override
-					public ContentReceiver received(HttpClient client, HttpResponse response) {
+					public ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
 						return new ContentReceiver() {
 							@Override
-							public void received(HttpClient client, ByteBuffer buffer) {
+							public void received(ByteBuffer buffer) {
 								LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
 							}
 							@Override
-							public void ended(HttpClient client) {
+							public void ended() {
 								LOGGER.debug("ENDED");
 							}
 						};
