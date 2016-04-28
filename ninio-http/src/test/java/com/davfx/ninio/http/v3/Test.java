@@ -2,6 +2,7 @@ package com.davfx.ninio.http.v3;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -42,7 +43,7 @@ public class Test {
 		url = "http://www.this-page-intentionally-left-blank.org/index.html";
 		url = "http://google.com";
 		
-		try (HttpClient client = ninio.create(HttpClient.builder())) {
+		try (HttpClient client = ninio.create(HttpClient.builder().with(Executors.newSingleThreadExecutor()))) {
 			{
 				client.request()
 				.failing(new Failing() {
@@ -53,17 +54,18 @@ public class Test {
 				})
 				.receiving(new HttpReceiver() {
 					@Override
-					public void received(HttpClient client, HttpResponse response) {
+					public ContentReceiver received(HttpClient client, HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
-					}
-					
-					@Override
-					public void received(HttpClient client, ByteBuffer buffer) {
-						LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
-					}
-					@Override
-					public void ended(HttpClient client) {
-						LOGGER.debug("ENDED");
+						return new ContentReceiver() {
+							@Override
+							public void received(HttpClient client, ByteBuffer buffer) {
+								LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
+							}
+							@Override
+							public void ended(HttpClient client) {
+								LOGGER.debug("ENDED");
+							}
+						};
 					}
 				})
 				.build()
@@ -80,17 +82,18 @@ public class Test {
 				})
 				.receiving(new HttpReceiver() {
 					@Override
-					public void received(HttpClient client, HttpResponse response) {
+					public ContentReceiver received(HttpClient client, HttpResponse response) {
 						LOGGER.debug("RESPONSE {}", response);
-					}
-					
-					@Override
-					public void received(HttpClient client, ByteBuffer buffer) {
-						LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
-					}
-					@Override
-					public void ended(HttpClient client) {
-						LOGGER.debug("ENDED");
+						return new ContentReceiver() {
+							@Override
+							public void received(HttpClient client, ByteBuffer buffer) {
+								LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
+							}
+							@Override
+							public void ended(HttpClient client) {
+								LOGGER.debug("ENDED");
+							}
+						};
 					}
 				})
 				.build()

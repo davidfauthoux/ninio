@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.LinkedList;
-import java.util.concurrent.Executor;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -20,7 +19,6 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 
 	private Trust trust = new Trust();
 	
-	private Executor executor = Shared.EXECUTOR;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 	
 	private Address connectAddress = null;
@@ -66,12 +64,6 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 	}
 	
 	@Override
-	public Builder with(Executor executor) {
-		this.executor = executor;
-		return this;
-	}
-
-	@Override
 	public Builder with(ByteBufferAllocator byteBufferAllocator) {
 		this.byteBufferAllocator = byteBufferAllocator;
 		return this;
@@ -104,7 +96,6 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 		final Receiver thisReceiver = receiver;
 		final ByteBufferAllocator thisByteBufferAllocator = byteBufferAllocator;
 		final Address thisConnectAddress = connectAddress;
-		final Executor thisExecutor = executor;
 
 		final Deque<ByteBuffer> sent = new LinkedList<ByteBuffer>();
 		final Deque<ByteBuffer> received = new LinkedList<ByteBuffer>();
@@ -262,7 +253,6 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 
 		final Connector connector = wrappee
 				.with(thisByteBufferAllocator)
-				.with(thisExecutor)
 				.connecting(thisConnecting)
 				.receiving(new Receiver() {
 					@Override
@@ -291,7 +281,7 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 				.to(thisConnectAddress)
 				.create(queue);
 
-		thisExecutor.execute(new Runnable() {
+		queue.execute(new Runnable() {
 			@Override
 			public void run() {
 				try {
@@ -299,6 +289,7 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 				} catch (IOException e) {
 					LOGGER.error("Could not begin handshake", e);
 					doClose.close(connector);
+					thisFailing.failed(e);
 				}
 			}
 		});

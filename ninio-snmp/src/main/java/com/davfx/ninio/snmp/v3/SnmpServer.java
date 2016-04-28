@@ -4,19 +4,17 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.Shared;
+import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.snmp.BerConstants;
 import com.davfx.ninio.snmp.BerPacket;
 import com.davfx.ninio.snmp.BerPacketUtils;
@@ -35,7 +33,6 @@ public final class SnmpServer implements Disconnectable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpServer.class);
 	
 	public static interface Builder extends NinioBuilder<Disconnectable> {
-		Builder with(Executor executor);
 		Builder with(UdpSocket.Builder connectorFactory);
 		Builder bind(Address bindAddress);
 
@@ -44,7 +41,6 @@ public final class SnmpServer implements Disconnectable {
 
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = Shared.EXECUTOR;
 			private UdpSocket.Builder connectorFactory = UdpSocket.builder();
 			
 			private SnmpServerHandler handler = null;
@@ -63,11 +59,6 @@ public final class SnmpServer implements Disconnectable {
 				return this;
 			}
 
-			public Builder with(Executor executor) {
-				this.executor = executor;
-				return this;
-			}
-
 			@Override
 			public Builder with(UdpSocket.Builder connectorFactory) {
 				this.connectorFactory = connectorFactory;
@@ -76,14 +67,14 @@ public final class SnmpServer implements Disconnectable {
 
 			@Override
 			public Disconnectable create(Queue queue) {
-				return new SnmpServer(queue, executor, bindAddress, connectorFactory, handler);
+				return new SnmpServer(queue, bindAddress, connectorFactory, handler);
 			}
 		};
 	}
 
 	private final Connector connector;
 
-	private SnmpServer(Queue queue, final Executor executor, final Address bindAddress, UdpSocket.Builder connectorFactory, final SnmpServerHandler handler) {
+	private SnmpServer(Queue queue, final Address bindAddress, UdpSocket.Builder connectorFactory, final SnmpServerHandler handler) {
 		connector = connectorFactory.receiving(new Receiver() {
 			@Override
 			public void received(Connector connector, Address address, ByteBuffer buffer) {

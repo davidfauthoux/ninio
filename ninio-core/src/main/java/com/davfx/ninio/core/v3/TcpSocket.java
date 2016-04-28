@@ -7,7 +7,6 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Deque;
 import java.util.LinkedList;
-import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +30,6 @@ public final class TcpSocket implements Connector {
 
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = Shared.EXECUTOR;
 			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 			
 			private Address connectAddress = null;
@@ -66,12 +64,6 @@ public final class TcpSocket implements Connector {
 			}
 			
 			@Override
-			public Builder with(Executor executor) {
-				this.executor = executor;
-				return this;
-			}
-
-			@Override
 			public Builder with(ByteBufferAllocator byteBufferAllocator) {
 				this.byteBufferAllocator = byteBufferAllocator;
 				return this;
@@ -85,7 +77,7 @@ public final class TcpSocket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new TcpSocket(queue, executor, byteBufferAllocator, connectAddress, connecting, closing, failing, receiver);
+				return new TcpSocket(queue, byteBufferAllocator, connectAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -99,7 +91,7 @@ public final class TcpSocket implements Connector {
 	private final Deque<ByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	private TcpSocket(final Queue queue, final Executor executor, final ByteBufferAllocator byteBufferAllocator, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private TcpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -142,12 +134,7 @@ public final class TcpSocket implements Connector {
 														currentInboundKey = null;
 														currentSelectionKey = null;
 														if (closing != null) {
-															executor.execute(new Runnable() {
-																@Override
-																public void run() {
-																	closing.closed();
-																}
-															});
+															closing.closed();
 														}
 														return;
 													}
@@ -158,24 +145,14 @@ public final class TcpSocket implements Connector {
 													currentInboundKey = null;
 													currentSelectionKey = null;
 													if (closing != null) {
-														executor.execute(new Runnable() {
-															@Override
-															public void run() {
-																closing.closed();
-															}
-														});
+														closing.closed();
 													}
 													return;
 												}
 
 												readBuffer.flip();
 												if (receiver != null) {
-													executor.execute(new Runnable() {
-														@Override
-														public void run() {
-															receiver.received(TcpSocket.this, null, readBuffer);
-														}
-													});
+													receiver.received(TcpSocket.this, null, readBuffer);
 												}
 											} else if (key.isWritable()) {
 												while (true) {
@@ -195,12 +172,7 @@ public final class TcpSocket implements Connector {
 														currentInboundKey = null;
 														currentSelectionKey = null;
 														if (closing != null) {
-															executor.execute(new Runnable() {
-																@Override
-																public void run() {
-																	closing.closed();
-																}
-															});
+															closing.closed();
 														}
 														return;
 													}
@@ -228,12 +200,7 @@ public final class TcpSocket implements Connector {
 									}
 		
 									if (connecting != null) {
-										executor.execute(new Runnable() {
-											@Override
-											public void run() {
-												connecting.connected(TcpSocket.this);
-											}
-										});
+										connecting.connected(TcpSocket.this);
 									}
 									
 								} catch (final IOException e) {
@@ -243,12 +210,7 @@ public final class TcpSocket implements Connector {
 									currentInboundKey = null;
 									currentSelectionKey = null;
 									if (failing != null) {
-										executor.execute(new Runnable() {
-											@Override
-											public void run() {
-												failing.failed(e);
-											}
-										});
+										failing.failed(e);
 									}
 								}
 							}
@@ -272,12 +234,7 @@ public final class TcpSocket implements Connector {
 		
 				} catch (final IOException e) {
 					if (failing != null) {
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								failing.failed(e);
-							}
-						});
+						failing.failed(e);
 					}
 					return;
 				}

@@ -40,7 +40,7 @@ final class RedirectHttpReceiver {
 	public HttpReceiver receiver() {
 		return new HttpReceiver() {
 			@Override
-			public void received(HttpClient client, HttpResponse response) {
+			public HttpReceiver.ContentReceiver received(HttpClient client, HttpResponse response) {
 				if (levelOfRedirect < maxRedirections) {
 					String location = null;
 					for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
@@ -81,8 +81,7 @@ final class RedirectHttpReceiver {
 										newPort = Integer.parseInt(portValue);
 									} catch (NumberFormatException e) {
 										LOGGER.debug("Bad location: {}", location);
-										receiver.received(client, response);
-										return;
+										return receiver.received(client, response);
 									}
 								}
 								newAddress = new Address(l.substring(0, j), newPort);
@@ -100,26 +99,19 @@ final class RedirectHttpReceiver {
 						.failing(r.failing())
 						.receiving(r.receiver())
 						.build().create(newRequest).finish();
-						return;
+						return new HttpReceiver.ContentReceiver() {
+							@Override
+							public void received(HttpClient client, ByteBuffer buffer) {
+							}
+							@Override
+							public void ended(HttpClient client) {
+								redirected = false;
+							}
+						};
 					}
 				}
 				
-				receiver.received(client, response);
-			}
-			
-			@Override
-			public void received(HttpClient client, ByteBuffer buffer) {
-				if (!redirected) {
-					receiver.received(client, buffer);
-				}
-			}
-			
-			@Override
-			public void ended(HttpClient client) {
-				if (!redirected) {
-					receiver.ended(client);
-					redirected = false;
-				}
+				return receiver.received(client, response);
 			}
 		};
 	}

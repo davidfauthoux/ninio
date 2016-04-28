@@ -16,13 +16,12 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.Shared;
+import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.snmp.AuthRemoteEngine;
 import com.davfx.ninio.snmp.AuthRemoteSpecification;
 import com.davfx.ninio.snmp.BerConstants;
@@ -56,7 +55,7 @@ public final class SnmpClient implements Disconnectable {
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = Shared.EXECUTOR;
+			private Executor executor = null;
 			private UdpSocket.Builder connectorFactory = UdpSocket.builder();
 			
 			@Override
@@ -73,6 +72,9 @@ public final class SnmpClient implements Disconnectable {
 
 			@Override
 			public SnmpClient create(Queue queue) {
+				if (executor == null) {
+					throw new NullPointerException("executor");
+				}
 				return new SnmpClient(queue, executor, connectorFactory);
 			}
 		};

@@ -7,7 +7,6 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.Deque;
 import java.util.LinkedList;
-import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +29,6 @@ public final class UdpSocket implements Connector {
 
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = Shared.EXECUTOR;
 			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 			
 			private Address bindAddress = null;
@@ -65,12 +63,6 @@ public final class UdpSocket implements Connector {
 			}
 			
 			@Override
-			public Builder with(Executor executor) {
-				this.executor = executor;
-				return this;
-			}
-
-			@Override
 			public Builder with(ByteBufferAllocator byteBufferAllocator) {
 				this.byteBufferAllocator = byteBufferAllocator;
 				return this;
@@ -84,7 +76,7 @@ public final class UdpSocket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new UdpSocket(queue, executor, byteBufferAllocator, bindAddress, connecting, closing, failing, receiver);
+				return new UdpSocket(queue, byteBufferAllocator, bindAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -102,7 +94,7 @@ public final class UdpSocket implements Connector {
 	private final Deque<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	public UdpSocket(final Queue queue, final Executor executor, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	public UdpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -143,25 +135,15 @@ public final class UdpSocket implements Connector {
 										currentChannel = null;
 										currentSelectionKey = null;
 										if (closing != null) {
-											executor.execute(new Runnable() {
-												@Override
-												public void run() {
-													closing.closed();
-												}
-											});
+											closing.closed();
 										}
 										return;
 									}
 
 									readBuffer.flip();
 									if (receiver != null) {
-										final Address a = new Address(from.getHostString(), from.getPort());
-										executor.execute(new Runnable() {
-											@Override
-											public void run() {
-												receiver.received(UdpSocket.this, a, readBuffer);
-											}
-										});
+										Address a = new Address(from.getHostString(), from.getPort());
+										receiver.received(UdpSocket.this, a, readBuffer);
 									}
 								} else if (key.isWritable()) {
 									while (true) {
@@ -176,12 +158,7 @@ public final class UdpSocket implements Connector {
 												LOGGER.trace("Connection failed", e);
 												disconnect(channel, selectionKey);
 												if (closing != null) {
-													executor.execute(new Runnable() {
-														@Override
-														public void run() {
-															closing.closed();
-														}
-													});
+													closing.closed();
 												}
 												return;
 											}
@@ -255,23 +232,13 @@ public final class UdpSocket implements Connector {
 					}
 				} catch (final IOException e) {
 					if (failing != null) {
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								failing.failed(e);
-							}
-						});
+						failing.failed(e);
 					}
 					return;
 				}
 
 				if (connecting != null) {
-					executor.execute(new Runnable() {
-						@Override
-						public void run() {
-							connecting.connected(UdpSocket.this);
-						}
-					});
+					connecting.connected(UdpSocket.this);
 				}
 			}
 		});

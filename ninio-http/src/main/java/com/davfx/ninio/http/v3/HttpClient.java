@@ -18,7 +18,6 @@ import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.Shared;
 import com.davfx.ninio.core.v3.SslSocketBuilder;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.http.HttpHeaderKey;
@@ -47,7 +46,7 @@ public final class HttpClient implements Disconnectable {
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = Shared.EXECUTOR;
+			private Executor executor = null;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
 			private TcpSocket.Builder secureConnectorFactory = new SslSocketBuilder(TcpSocket.builder());
 			private boolean pipelining = false;
@@ -78,6 +77,9 @@ public final class HttpClient implements Disconnectable {
 
 			@Override
 			public HttpClient create(Queue queue) {
+				if (executor == null) {
+					throw new NullPointerException("executor");
+				}
 				return new HttpClient(queue, executor, connectorFactory, secureConnectorFactory, pipelining);
 			}
 		};
@@ -183,6 +185,34 @@ public final class HttpClient implements Disconnectable {
 						final HttpReceiver rr = redirect.receiver();
 						final Failing ff = redirect.failing();
 						
+						final InnerReceiver innerReceiver = new InnerReceiver() {
+							private HttpReceiver.ContentReceiver contentReceiver;
+							@Override
+							public void received(ByteBuffer buffer) {
+								contentReceiver.received(HttpClient.this, buffer);
+							}
+							@Override
+							public void received(HttpResponse response) {
+								contentReceiver = rr.received(HttpClient.this, response);
+							}
+							@Override
+							public void ended() {
+								contentReceiver.ended(HttpClient.this);
+								contentReceiver = null;
+								if (!pipelining) {
+									if (connector != null) {
+										if (keepAlive) {
+											connector.reusable = true;
+										} else {
+											connector.connector.close();
+											reusableConnectors.remove(id);
+										}
+										connector = null;
+									}
+								}
+							}
+						};
+						
 						connector.closing = new Closing() {
 							@Override
 							public void closed() {
@@ -192,7 +222,7 @@ public final class HttpClient implements Disconnectable {
 										reusableConnectors.remove(id);
 				
 										try {
-											parseClosed(rr);
+											parseClosed(innerReceiver);
 										} catch (IOException ioe) {
 											ff.failed(ioe);
 										}
@@ -210,31 +240,7 @@ public final class HttpClient implements Disconnectable {
 									@Override
 									public void run() {
 										try {
-											parse(buffer, new HttpReceiver() {
-												@Override
-												public void received(HttpClient c, ByteBuffer buffer) {
-													rr.received(HttpClient.this, buffer);
-												}
-												@Override
-												public void received(HttpClient c, HttpResponse response) {
-													rr.received(HttpClient.this, response);
-												}
-												@Override
-												public void ended(HttpClient c) {
-													rr.ended(HttpClient.this);
-													if (!pipelining) {
-														if (connector != null) {
-															if (keepAlive) {
-																connector.reusable = true;
-															} else {
-																connector.connector.close();
-																reusableConnectors.remove(id);
-															}
-															connector = null;
-														}
-													}
-												}
-											});
+											parse(buffer, innerReceiver);
 										} catch (IOException ioe) {
 											LOGGER.error("Connection error", ioe);
 											connector.connector.close();
@@ -257,7 +263,7 @@ public final class HttpClient implements Disconnectable {
 							@Override
 							public void run() {
 								if (id >= 0L) {
-									throw new IllegalStateException("Could be created twice");
+									throw new IllegalStateException("Could not be created twice");
 								}
 								
 								for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
@@ -277,7 +283,7 @@ public final class HttpClient implements Disconnectable {
 								id = nextReusableConnectorId;
 								nextReusableConnectorId++;
 								
-								connector = new ReusableConnector(request.secure ? secureConnectorFactory.with(executor).to(request.address) : connectorFactory.with(executor).to(request.address), queue, request.secure);
+								connector = new ReusableConnector(request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure);
 								reusableConnectors.put(id, connector);
 		
 								prepare(request);
@@ -391,7 +397,7 @@ public final class HttpClient implements Disconnectable {
 						responseReason = responseLine.substring(j + 1);
 					}
 				
-					private void parse(ByteBuffer buffer, final HttpReceiver receiver) throws IOException {
+					private void parse(ByteBuffer buffer, final InnerReceiver receiver) throws IOException {
 						while (!responseLineRead) {
 							String line = lineReader.handle(buffer);
 							if (line == null) {
@@ -448,7 +454,7 @@ public final class HttpClient implements Disconnectable {
 								}
 								LOGGER.trace("Keep alive = {}", keepAlive);
 								
-								receiver.received(HttpClient.this, new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
+								receiver.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
 								
 								countRead = 0;
 							} else {
@@ -472,7 +478,7 @@ public final class HttpClient implements Disconnectable {
 									chunkFooterRead = true;
 									chunkCountRead = 0;
 									if (chunkLength == 0) {
-										receiver.ended(HttpClient.this);
+										receiver.ended();
 									} else {
 										chunkHeaderRead = false;
 									}
@@ -520,7 +526,7 @@ public final class HttpClient implements Disconnectable {
 									if (buffer.hasRemaining()) {
 										throw new IOException("Connection reset, too much data");
 									}
-									receiver.ended(HttpClient.this);
+									receiver.ended();
 								}
 							} else {
 								handleContent(buffer, -1, -1, receiver);
@@ -529,7 +535,7 @@ public final class HttpClient implements Disconnectable {
 						}
 					}
 					
-				    private void handleContent(ByteBuffer buffer, long toRead, long totalRemainingToRead, final HttpReceiver receiver) throws IOException {
+				    private void handleContent(ByteBuffer buffer, long toRead, long totalRemainingToRead, final InnerReceiver receiver) throws IOException {
 				    	ByteBuffer deflated = buffer.duplicate(); // We must duplicated this buffer because it can be used later by the user, but must be continued in the handle loop
 				    	if (toRead >= 0) {
 							if (deflated.remaining() > toRead) {
@@ -544,27 +550,27 @@ public final class HttpClient implements Disconnectable {
 						LOGGER.trace("Content received (read = {})", countRead);
 						
 						if (gzipReader == null) {
-							receiver.received(HttpClient.this, deflated);
+							receiver.received(deflated);
 							return;
 						}
 						
 						gzipReader.handle(deflated, totalRemainingToRead, new ByteBufferHandler() {
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
-								receiver.received(HttpClient.this, buffer);
+								receiver.received(buffer);
 							}
 						});
 				    }
 				    
-					private void parseClosed(HttpReceiver receiver) throws IOException {
+					private void parseClosed(InnerReceiver receiver) throws IOException {
 						if (chunked) {
 							if (!chunkFooterRead) {
 								throw new IOException("Connection reset by peer in chunked stream");
 							}
-							receiver.ended(HttpClient.this);
+							receiver.ended();
 						} else {
 							if (contentLength < 0L) {
-								receiver.ended(HttpClient.this);
+								receiver.ended();
 								return;
 							}
 			
@@ -578,5 +584,11 @@ public final class HttpClient implements Disconnectable {
 				};
 			}
 		};
+	}
+	
+	private static interface InnerReceiver {
+		void received(HttpResponse response);
+		void received(ByteBuffer buffer);
+		void ended();
 	}
 }
