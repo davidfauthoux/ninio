@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.concurrent.Executor;
 
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
@@ -16,8 +17,10 @@ import com.davfx.ninio.core.Address;
 final class SslManager implements Connector, Connecting, Closing, Failing, Receiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SslManager.class);
 
-	private final ByteBufferAllocator byteBufferAllocator;
 	private final Trust trust;
+	private final boolean clientMode;
+	private final Executor executor;
+	private final ByteBufferAllocator byteBufferAllocator;
 	
 	public Connector connector = null;
 	public Connecting connecting = null;
@@ -29,18 +32,29 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 	private Deque<ByteBuffer> received = new LinkedList<ByteBuffer>();
 
 	private SSLEngine engine = null;
-
-	public SslManager(Trust trust, ByteBufferAllocator byteBufferAllocator) {
+	
+	public SslManager(Trust trust, boolean clientMode, Executor executor, ByteBufferAllocator byteBufferAllocator) {
+		if (executor == null) {
+			throw new NullPointerException("executor");
+		}
+		if (trust == null) {
+			throw new NullPointerException("trust");
+		}
 		this.trust = trust;
+		this.clientMode = clientMode;
+		this.executor = executor;
 		this.byteBufferAllocator = byteBufferAllocator;
 	}
 	
-	private boolean continueSend() {
+	private boolean continueSend(boolean force) {
 		if (sent == null) {
 			return false;
 		}
 		if (sent.isEmpty()) {
-			return false;
+			if (!force) {
+				return false;
+			}
+			sent.addFirst(ByteBuffer.allocate(0));
 		}
 		
 		ByteBuffer b = sent.getFirst();
@@ -61,7 +75,9 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 		} catch (IOException e) {
 			LOGGER.error("SSL error", e);
 			doClose(true);
-			failing.failed(e);
+			if (failing != null) {
+				failing.failed(e);
+			}
 			return false;
 		}
 		
@@ -115,13 +131,17 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 		} catch (IOException e) {
 			LOGGER.error("SSL error", e);
 			doClose(true);
-			failing.failed(e);
+			if (failing != null) {
+				failing.failed(e);
+			}
 			return false;
 		}
 		
 		unwrapBuffer.flip();
 		if (unwrapBuffer.hasRemaining()) {
-			receiver.received(this, null, unwrapBuffer);
+			if (receiver != null) {
+				receiver.received(this, null, unwrapBuffer);
+			}
 		}
 		return !underflow;
 	}
@@ -138,7 +158,7 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 		}
 
 		if (engine == null) {
-			engine = trust.createEngine(true);
+			engine = trust.createEngine(clientMode);
 			try {
 				engine.beginHandshake();
 			} catch (IOException e) {
@@ -146,7 +166,9 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 				doClose(true);
 				failing.failed(e);
 			}
-			connecting.connected(this);
+			if (connecting != null) {
+				connecting.connected(this);
+			}
 		}
 		
 		if (engine == null) {
@@ -165,19 +187,19 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 			    }
 			    break;
 			case NEED_WRAP:
-				if (!continueSend()) {
+				if (!continueSend(!clientMode)) {
 					return;
 				}
 				break;
 			case NEED_UNWRAP:
-				if (!continueReceive(true)) {
+				if (!continueReceive(clientMode)) {
 					return;
 				}
 				break;
 			case FINISHED:
 				break;
 			case NOT_HANDSHAKING:
-				if (!continueSend() && !continueReceive(false)) {
+				if (!continueSend(false) && !continueReceive(false)) {
 					return;
 				}
 				break;
@@ -205,55 +227,90 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 	//
 	
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer buffer) {
-		if (received == null) {
-			return;
-		}
-		received.addLast(buffer);
-		doContinue();
+	public void received(Connector connector, Address address, final ByteBuffer buffer) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				if (received == null) {
+					return;
+				}
+				received.addLast(buffer);
+				doContinue();
+			}
+		});
 	}
 	@Override
 	public void closed() {
-		doClose(false);
-		
-		if (sent == null) {
-			return;
-		}
-		if (received == null) {
-			return;
-		}
-		closing.closed();
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				doClose(false);
+				
+				if (sent == null) {
+					return;
+				}
+				if (received == null) {
+					return;
+				}
+				if (closing != null) {
+					closing.closed();
+				}
+			}
+		});
 	}
 	@Override
-	public void failed(IOException e) {
-		doClose(false);
-		
-		if (sent == null) {
-			return;
-		}
-		if (received == null) {
-			return;
-		}
-		failing.failed(e);
+	public void failed(final IOException e) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				doClose(false);
+				
+				if (sent == null) {
+					return;
+				}
+				if (received == null) {
+					return;
+				}
+				if (failing != null) {
+					failing.failed(e);
+				}
+			}
+		});
 	}
 	@Override
 	public void connected(Connector connector) {
-		doContinue();
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				doContinue();
+			}
+		});
 	}
 
 	//
 	
 	@Override
 	public void close() {
-		doClose(true);
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				doClose(true);
+			}
+		});
 	}
 	@Override
-	public Connector send(Address address, ByteBuffer buffer) {
-		if (sent == null) {
-			return this;
-		}
-		sent.addLast(buffer);
-		doContinue();
+	public Connector send(Address address, final ByteBuffer buffer) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				if (sent == null) {
+					return;
+				}
+				sent.addLast(buffer);
+				doContinue();
+				return;
+			}
+		});
 		return this;
 	}
 }

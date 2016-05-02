@@ -31,6 +31,7 @@ public class SslTest {
 				final int port = 8080;
 		
 				final Wait wait = new Wait();
+
 				final Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(null, port))
 					.failing(new Failing() {
 						@Override
@@ -46,7 +47,7 @@ public class SslTest {
 							wait.run();
 						}
 					})
-					.listening(new SslSocketServerBuilder(new Listening() {
+					.listening(new SslSocketServerBuilder().with(executor).trust(trust).listening(new Listening() {
 						@Override
 						public void connecting(Connector connector, SocketBuilder builder) {
 							builder
@@ -80,11 +81,11 @@ public class SslTest {
 								}
 							});
 						}
-					}).trust(trust)));
+					}).build()));
 				try {
 					wait.waitFor();
-	
-					final Connector client = ninio.create(new SslSocketBuilder(TcpSocket.builder()).to(new Address(Address.LOCALHOST, port))
+
+					final Connector client = ninio.create(new SslSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(new Address(Address.LOCALHOST, port))
 						.failing(new Failing() {
 							@Override
 							public void failed(IOException e) {
@@ -103,7 +104,7 @@ public class SslTest {
 							@Override
 							public void received(Connector c, Address address, ByteBuffer buffer) {
 								String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-								LOGGER.warn("Received {} -->: {}", address, s);
+								LOGGER.debug("Received {} -->: {}", address, s);
 								lock.set(s);
 							}
 						})

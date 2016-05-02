@@ -1,24 +1,28 @@
 package com.davfx.ninio.core.v3;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.Executor;
 
-import com.davfx.ninio.core.v3.TcpSocket.Builder;
-
-public final class SslSocketServerBuilder implements Listening {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SslSocketServerBuilder.class);
-
+public final class SslSocketServerBuilder {
 	private Trust trust = new Trust();
+	private Executor executor = null;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 
-	private final Listening wrappee;
+	private Listening listening = new Listening() {
+		@Override
+		public void connecting(Connector connector, SocketBuilder builder) {
+			connector.close();
+		}
+	};
 
-	public SslSocketServerBuilder(Listening wrappee) {
-		this.wrappee = wrappee;
+	public SslSocketServerBuilder() {
 	}
 	
 	public SslSocketServerBuilder trust(Trust trust) {
 		this.trust = trust;
+		return this;
+	}
+	public SslSocketServerBuilder with(Executor executor) {
+		this.executor = executor;
 		return this;
 	}
 	public SslSocketServerBuilder with(ByteBufferAllocator byteBufferAllocator) {
@@ -26,23 +30,34 @@ public final class SslSocketServerBuilder implements Listening {
 		return this;
 	}
 	
-	@Override
-	public void connecting(Connector connector, SocketBuilder builder) {
-		final SslManager sslManager = new SslManager(trust, byteBufferAllocator);
-		sslManager.connector = connector;
-
-		InnerSocketBuilder innerSocketBuilder = new InnerSocketBuilder();
-		wrappee.connecting(sslManager, innerSocketBuilder);
+	public SslSocketServerBuilder listening(Listening listening) {
+		this.listening = listening;
+		return this;
+	}
+	
+	public Listening build() {
+		final SslManager sslManager = new SslManager(trust, false, executor, byteBufferAllocator);
+		final Listening thisListening = listening;
+		return new Listening() {
+			@Override
+			public void connecting(Connector connector, SocketBuilder builder) {
+				sslManager.connector = connector;
 		
-		sslManager.connecting = innerSocketBuilder.connecting;
-		sslManager.closing = innerSocketBuilder.closing;
-		sslManager.failing = innerSocketBuilder.failing;
-		sslManager.receiver = innerSocketBuilder.receiver;
+				InnerSocketBuilder innerSocketBuilder = new InnerSocketBuilder();
+				
+				thisListening.connecting(sslManager, innerSocketBuilder);
 		
-		builder.closing(sslManager);
-		builder.connecting(sslManager);
-		builder.failing(sslManager);
-		builder.receiving(sslManager);
+				sslManager.connecting = innerSocketBuilder.connecting;
+				sslManager.closing = innerSocketBuilder.closing;
+				sslManager.failing = innerSocketBuilder.failing;
+				sslManager.receiver = innerSocketBuilder.receiver;
+				
+				builder.closing(sslManager);
+				builder.connecting(sslManager);
+				builder.failing(sslManager);
+				builder.receiving(sslManager);
+			}
+		};
 	}
 	
 	private static final class InnerSocketBuilder implements SocketBuilder {

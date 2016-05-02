@@ -1,14 +1,12 @@
 package com.davfx.ninio.core.v3;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.Executor;
 
 import com.davfx.ninio.core.Address;
 
 public final class SslSocketBuilder implements TcpSocket.Builder {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SslSocketBuilder.class);
-
 	private Trust trust = new Trust();
+	private Executor executor = null;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 
 	private Address connectAddress = null;
@@ -24,8 +22,13 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 		this.wrappee = wrappee;
 	}
 	
-	public TcpSocket.Builder trust(Trust trust) {
+	public SslSocketBuilder trust(Trust trust) {
 		this.trust = trust;
+		return this;
+	}
+	
+	public SslSocketBuilder with(Executor executor) {
+		this.executor = executor;
 		return this;
 	}
 	
@@ -65,10 +68,9 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 		return this;
 	}
 	
-	//TODO executor
 	@Override
 	public Connector create(Queue queue) {
-		SslManager sslManager = new SslManager(trust, byteBufferAllocator);
+		SslManager sslManager = new SslManager(trust, true, executor, byteBufferAllocator);
 		sslManager.connecting = connecting;
 		sslManager.closing = closing;
 		sslManager.failing = failing;
