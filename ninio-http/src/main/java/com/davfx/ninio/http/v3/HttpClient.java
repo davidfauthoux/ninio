@@ -28,7 +28,7 @@ import com.google.common.collect.Multimap;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class HttpClient implements Disconnectable {
+public final class HttpClient implements Disconnectable, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 	
 	private static final Config CONFIG = ConfigFactory.load(HttpClient.class.getClassLoader());

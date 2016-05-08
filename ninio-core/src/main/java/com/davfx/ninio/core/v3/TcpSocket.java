@@ -23,14 +23,9 @@ public final class TcpSocket implements Connector {
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
 
-	public static interface Builder extends NinioBuilder<Connector> {
+	public static interface Builder extends NinioSocketBuilder<Builder> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder to(Address connectAddress);
-
-		Builder failing(Failing failing);
-		Builder closing(Closing closing);
-		Builder connecting(Connecting connecting);
-		Builder receiving(Receiver receiver);
 	}
 
 	public static Builder builder() {

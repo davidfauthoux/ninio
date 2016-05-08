@@ -9,7 +9,7 @@ public final class SslSocketServerBuilder {
 
 	private Listening listening = new Listening() {
 		@Override
-		public void connecting(Connector connector, SocketBuilder builder) {
+		public void connecting(Connector connector, SocketBuilder<?> builder) {
 			connector.close();
 		}
 	};
@@ -40,7 +40,7 @@ public final class SslSocketServerBuilder {
 		final Listening thisListening = listening;
 		return new Listening() {
 			@Override
-			public void connecting(Connector connector, SocketBuilder builder) {
+			public void connecting(Connector connector, SocketBuilder<?> builder) {
 				sslManager.connector = connector;
 		
 				InnerSocketBuilder innerSocketBuilder = new InnerSocketBuilder();
@@ -60,7 +60,7 @@ public final class SslSocketServerBuilder {
 		};
 	}
 	
-	private static final class InnerSocketBuilder implements SocketBuilder {
+	private static final class InnerSocketBuilder implements SocketBuilder<Void> {
 		public Receiver receiver = null;
 		public Failing failing = null;
 		public Connecting connecting = null;
@@ -68,24 +68,24 @@ public final class SslSocketServerBuilder {
 		public InnerSocketBuilder() {
 		}
 		@Override
-		public SocketBuilder receiving(Receiver receiver) {
+		public Void receiving(Receiver receiver) {
 			this.receiver = receiver;
-			return this;
+			return null;
 		}
 		@Override
-		public SocketBuilder failing(Failing failing) {
+		public Void failing(Failing failing) {
 			this.failing = failing;
-			return this;
+			return null;
 		}
 		@Override
-		public SocketBuilder connecting(Connecting connecting) {
+		public Void connecting(Connecting connecting) {
 			this.connecting = connecting;
-			return this;
+			return null;
 		}
 		@Override
-		public SocketBuilder closing(Closing closing) {
+		public Void closing(Closing closing) {
 			this.closing = closing;
-			return this;
+			return null;
 		}
 	}
 

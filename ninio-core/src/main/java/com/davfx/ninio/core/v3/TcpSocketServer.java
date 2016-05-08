@@ -672,7 +672,7 @@ public final class TcpSocketServer implements Disconnectable {
 	}
 	*/
 	
-	private static final class InnerSocketBuilder implements SocketBuilder {
+	private static final class InnerSocketBuilder implements SocketBuilder<Void> {
 		public Receiver receiver = null;
 		public Failing failing = null;
 		public Connecting connecting = null;
@@ -680,24 +680,24 @@ public final class TcpSocketServer implements Disconnectable {
 		public InnerSocketBuilder() {
 		}
 		@Override
-		public SocketBuilder receiving(Receiver receiver) {
+		public Void receiving(Receiver receiver) {
 			this.receiver = receiver;
-			return this;
+			return null;
 		}
 		@Override
-		public SocketBuilder failing(Failing failing) {
+		public Void failing(Failing failing) {
 			this.failing = failing;
-			return this;
+			return null;
 		}
 		@Override
-		public SocketBuilder connecting(Connecting connecting) {
+		public Void connecting(Connecting connecting) {
 			this.connecting = connecting;
-			return this;
+			return null;
 		}
 		@Override
-		public SocketBuilder closing(Closing closing) {
+		public Void closing(Closing closing) {
 			this.closing = closing;
-			return this;
+			return null;
 		}
 	}
 }

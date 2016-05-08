@@ -49,30 +49,29 @@ public class SslTest {
 					})
 					.listening(new SslSocketServerBuilder().with(executor).trust(trust).listening(new Listening() {
 						@Override
-						public void connecting(Connector connector, SocketBuilder builder) {
-							builder
-							.failing(new Failing() {
+						public void connecting(Connector connector, SocketBuilder<?> builder) {
+							builder.failing(new Failing() {
 								@Override
 								public void failed(IOException e) {
 									LOGGER.warn("Socket failed <--", e);
 									lock.fail(e);
 								}
-							})
-							.connecting(new Connecting() {
+							});
+							builder.connecting(new Connecting() {
 								@Override
 								public void connected(Connector connector) {
 									LOGGER.debug("Socket connected <--");
 									wait.run();
 								}
-							})
-							.closing(new Closing() {
+							});
+							builder.closing(new Closing() {
 								@Override
 								public void closed() {
 									LOGGER.debug("Socket closed <--");
 									lock.fail(new IOException("Closed"));
 								}
-							})
-							.receiving(new Receiver() {
+							});
+							builder.receiving(new Receiver() {
 								@Override
 								public void received(Connector connector, Address address, ByteBuffer buffer) {
 									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
