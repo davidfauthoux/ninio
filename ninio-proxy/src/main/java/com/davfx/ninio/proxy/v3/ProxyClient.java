@@ -5,27 +5,59 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.ByteBufferAllocator;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.Disconnectable;
+import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
-public final class ProxyClient implements Disconnectable {
-	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyClient.class);
+public final class ProxyClient implements ProxyConnectorProvider {
+	public static NinioBuilder<ProxyConnectorProvider> defaultClient(final Address address) {
+		return new NinioBuilder<ProxyConnectorProvider>() {
+			@Override
+			public ProxyConnectorProvider create(Queue queue) {
+				final ExecutorService executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, true));
+				final ProxyClient client = ProxyClient.builder().with(executor).with(TcpSocket.builder().to(address)).create(queue);
+				return new ProxyConnectorProvider() {
+					@Override
+					public void close() {
+						client.close();
+						ExecutorUtils.shutdown(executor);
+					}
+					
+					@Override
+					public WithHeaderSocketBuilder factory() {
+						return client.factory();
+					}
+					@Override
+					public TcpSocket.Builder tcp() {
+						return client.tcp();
+					}
+					@Override
+					public UdpSocket.Builder udp() {
+						return client.udp();
+					}
+					@Override
+					public TcpSocket.Builder ssl() {
+						return client.ssl();
+					}
+				};
+			}
+		};
+	}
 	
 	public static interface Builder extends NinioBuilder<ProxyClient> {
 		Builder with(Executor executor);
@@ -103,6 +135,63 @@ public final class ProxyClient implements Disconnectable {
 		});
 	}
 
+	@Override
+	public WithHeaderSocketBuilder factory() {
+		return new WithHeaderSocketBuilder() {
+			private String header;
+			private Address address;
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
+			@Override
+			public WithHeaderSocketBuilder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public WithHeaderSocketBuilder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public WithHeaderSocketBuilder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public WithHeaderSocketBuilder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public WithHeaderSocketBuilder header(String header) {
+				this.header = header;
+				return this;
+			}
+			
+			@Override
+			public WithHeaderSocketBuilder with(Address address) {
+				this.address = address;
+				return this;
+			}
+
+			@Override
+			public Connector create(Queue ignoredQueue) {
+				if (header == null) {
+					throw new NullPointerException("header");
+				}
+				return createConnector(header, address, failing, receiver, closing, connecting);
+			}
+		};
+	}
+
+	@Override
 	public TcpSocket.Builder tcp() {
 		return new TcpSocket.Builder() {
 			private Address connectAddress = null;
@@ -154,6 +243,59 @@ public final class ProxyClient implements Disconnectable {
 		};
 	}
 	
+	@Override
+	public TcpSocket.Builder ssl() {
+		return new TcpSocket.Builder() {
+			private Address connectAddress = null;
+			
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
+			@Override
+			public TcpSocket.Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public TcpSocket.Builder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public TcpSocket.Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public TcpSocket.Builder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+
+			@Override
+			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
+				return this;
+			}
+
+			@Override
+			public TcpSocket.Builder to(Address connectAddress) {
+				this.connectAddress = connectAddress;
+				return this;
+			}
+			
+			@Override
+			public Connector create(Queue ignoredQueue) {
+				return createConnector(ProxyCommons.Types.SSL, connectAddress, failing, receiver, closing, connecting);
+			}
+		};
+	}
+	
+	@Override
 	public UdpSocket.Builder udp() {
 		return new UdpSocket.Builder() {
 			private Address bindAddress = null;
@@ -364,7 +506,7 @@ public final class ProxyClient implements Disconnectable {
 													final ByteBuffer b = receivedBuffer.duplicate();
 													b.limit(b.position() + len);
 													if (receivedInnerConnection.receiver != null) {
-														receivedInnerConnection.receiver.received(connector, new Address(readHost, readPort), b);
+														receivedInnerConnection.receiver.received(connector, null, b);
 													}
 												}
 												receivedBuffer.position(receivedBuffer.position() + len);
@@ -394,8 +536,6 @@ public final class ProxyClient implements Disconnectable {
 
 							byte[] headerAsBytes = header.getBytes(Charsets.UTF_8);
 	
-							LOGGER.debug("---- PROXY CLIENT connect --- {}", innerConnection.connectionId);
-							
 							if (connectAddress == null) {
 								ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
 								b.put((byte) ProxyCommons.Commands.CONNECT_WITHOUT_ADDRESS);
@@ -419,8 +559,6 @@ public final class ProxyClient implements Disconnectable {
 							}
 						}
 
-						LOGGER.debug("---- PROXY CLIENT send --- {}", innerConnection.connectionId);
-						
 						if (sendAddress == null) {
 							ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
 							b.put((byte) ProxyCommons.Commands.SEND_WITHOUT_ADDRESS);

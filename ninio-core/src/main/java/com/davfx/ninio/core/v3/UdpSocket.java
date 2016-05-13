@@ -211,12 +211,7 @@ public final class UdpSocket implements Connector {
 						
 						if (bindAddress != null) {
 							try {
-								InetSocketAddress a;
-								if (bindAddress.getHost() == null) {
-									a = new InetSocketAddress(bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-								} else {
-									a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-								}
+								InetSocketAddress a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 								if (a.isUnresolved()) {
 									throw new IOException("Unresolved address: " + bindAddress.getHost() + ":" + bindAddress.getPort());
 								}
@@ -267,6 +262,7 @@ public final class UdpSocket implements Connector {
 				currentSelectionKey = null;
 			}
 		});
+		queue.waitFor();
 	}
 	
 	@Override

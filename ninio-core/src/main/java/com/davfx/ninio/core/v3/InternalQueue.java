@@ -98,6 +98,28 @@ final class InternalQueue implements Queue, AutoCloseable {
 	}
 	
 	@Override
+	public void waitFor() {
+		final boolean[] w = new boolean[] { false };
+		execute(new Runnable() {
+			@Override
+			public void run() {
+				synchronized (w) {
+					w[0] = true;
+					w.notifyAll();
+				}
+			}
+		});
+		synchronized (w) {
+			while (!w[0]) {
+				try {
+					w.wait();
+				} catch (InterruptedException ie) {
+				}
+			}
+		}
+	}
+	
+	@Override
 	public void close() {
 		try {
 			selector.close();

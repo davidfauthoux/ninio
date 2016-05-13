@@ -19,10 +19,8 @@ import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.ListenConnecting;
 import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.NinioSocketBuilder;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.SocketBuilder;
-import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.util.Lock;
 import com.davfx.util.Wait;
@@ -42,33 +40,13 @@ public class SocketTest {
 
 				final int proxyPort = 8081;
 
-				final Disconnectable proxyServer = ninio.create(TcpSocketServer.builder().bind(new Address(null, proxyPort))
-					.failing(new Failing() {
-						@Override
-						public void failed(IOException e) {
-							LOGGER.warn("PROXY Failed <--", e);
-							lock.fail(e);
-						}
-					})
-					.connecting(new ListenConnecting() {
-						@Override
-						public void connected(Disconnectable connector) {
-							LOGGER.debug("PROXY Server connected <--");
-						}
-					})
-					.listening(ninio.create(ProxyServer.builder().with(executor).listening(new ProxyListening() {
-						@Override
-						public NinioSocketBuilder<?> create(Address address, String header) {
-							LOGGER.debug("PROXY creating TCP");
-							return TcpSocket.builder().to(address);
-						}
-					}))));
+				final Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), null));
 				try {
 					
 					final int port = 8080;
 			
 					final Wait wait = new Wait();
-					final Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(null, port))
+					final Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
 						.failing(new Failing() {
 							@Override
 							public void failed(IOException e) {
@@ -120,37 +98,7 @@ public class SocketTest {
 					try {
 						wait.waitFor();
 		
-						final ProxyClient proxyClient = ninio.create(ProxyClient.builder().with(executor).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, proxyPort))
-							.failing(new Failing() {
-								@Override
-								public void failed(IOException e) {
-									LOGGER.warn("PROXY CLIENT Failed <--", e);
-									lock.fail(e);
-								}
-							})
-							.closing(new Closing() {
-								@Override
-								public void closed() {
-									LOGGER.debug("PROXY CLIENT Closed <--");
-									lock.fail(new IOException("Closed"));
-								}
-							})
-							.receiving(new Receiver() {
-								@Override
-								public void received(Connector c, Address address, ByteBuffer buffer) {
-									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-									LOGGER.warn("PROXY CLIENT Received {} -->: {}", address, s);
-									lock.set(s);
-								}
-							})
-							.connecting(new Connecting() {
-								@Override
-								public void connected(Connector connector) {
-									LOGGER.debug("PROXY CLIENT Client socket connected <--");
-								}
-							})
-							)
-						);
+						final ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)));
 						try {
 							final Connector client = ninio.create(proxyClient.tcp().to(new Address(Address.LOCALHOST, port))
 								.failing(new Failing() {

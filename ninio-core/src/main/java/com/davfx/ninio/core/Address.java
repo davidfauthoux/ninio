@@ -1,5 +1,7 @@
 package com.davfx.ninio.core;
 
+import java.util.Objects;
+
 public final class Address {
 	public static final String LOCALHOST = "127.0.0.1";
 	public static final String ANY = "0.0.0.0";
@@ -9,10 +11,14 @@ public final class Address {
 	private final String host;
 	private final int port;
 
+	@Deprecated
 	public Address(int port) {
 		this(null, port);
 	}
 	public Address(String host, int port) {
+		if (host == null) {
+			//TODO throw new NullPointerException("host");
+		}
 		this.host = host;
 		this.port = port;
 	}
@@ -26,18 +32,22 @@ public final class Address {
 
 	@Override
 	public String toString() {
+		/*
 		if (host == null) {
 			return SEPARATOR + "" + port;
 		}
+		*/
 		return host + SEPARATOR + "" + port;
 	}
 	
 	public static Address of(String hostPort) {
 		int i = hostPort.indexOf(SEPARATOR);
 		String h = hostPort.substring(0, i);
+		/*
 		if (h.isEmpty()) {
 			h = null;
 		}
+		*/
 		int p = Integer.parseInt(hostPort.substring(i + 1));
 		return new Address(h, p);
 	}
@@ -74,21 +84,6 @@ public final class Address {
 			return false;
 		}
 		Address a = (Address) o;
-		if (a.host == null) {
-			if (host != null) {
-				return false;
-			}
-		} else {
-			if (host == null) {
-				return false;
-			}
-			if (!a.host.equals(host)) {
-				return false;
-			}
-		}
-		if (a.port != port) {
-			return false;
-		}
-		return true;
+		return Objects.equals(a.host, host) && (a.port == port);
 	}
 }

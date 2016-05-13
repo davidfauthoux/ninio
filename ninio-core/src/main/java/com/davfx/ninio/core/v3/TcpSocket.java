@@ -272,6 +272,7 @@ public final class TcpSocket implements Connector {
 				currentSelectionKey = null;
 			}
 		});
+		queue.waitFor();
 	}
 	
 	@Override

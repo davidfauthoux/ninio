@@ -7,4 +7,6 @@ import java.nio.channels.SelectionKey;
 public interface Queue {
 	void execute(Runnable command);
 	SelectionKey register(SelectableChannel channel) throws ClosedChannelException;
+	
+	void waitFor();
 }

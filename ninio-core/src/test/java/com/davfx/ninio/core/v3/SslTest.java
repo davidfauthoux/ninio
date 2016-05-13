@@ -32,7 +32,7 @@ public class SslTest {
 		
 				final Wait wait = new Wait();
 
-				final Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(null, port))
+				final Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
 					.failing(new Failing() {
 						@Override
 						public void failed(IOException e) {

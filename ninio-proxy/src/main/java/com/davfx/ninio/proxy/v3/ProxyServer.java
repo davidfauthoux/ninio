@@ -5,11 +5,15 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
+import com.davfx.ninio.core.v3.Disconnectable;
+import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.NinioBuilder;
@@ -17,11 +21,54 @@ import com.davfx.ninio.core.v3.NinioSocketBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.SocketBuilder;
+import com.davfx.ninio.core.v3.SslSocketBuilder;
+import com.davfx.ninio.core.v3.TcpSocket;
+import com.davfx.ninio.core.v3.TcpSocketServer;
+import com.davfx.ninio.core.v3.Trust;
+import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
 public final class ProxyServer implements Listening {
 
+	public static NinioBuilder<Disconnectable> defaultServer(final Address address, final ProxyListening listening) {
+		return new NinioBuilder<Disconnectable>() {
+			public Disconnectable create(Queue queue) {
+				final Trust trust = new Trust();
+				final ExecutorService executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, true));
+				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
+					@Override
+					public NinioSocketBuilder<?> create(Address address, String header) {
+						if (header.equals(ProxyCommons.Types.TCP)) {
+							return TcpSocket.builder().to(address);
+						}
+						if (header.equals(ProxyCommons.Types.UDP)) {
+							return UdpSocket.builder();
+						}
+						if (header.equals(ProxyCommons.Types.SSL)) {
+							return new SslSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
+						}
+						if (header.equals(ProxyCommons.Types.PING)) {
+							return TcpSocket.builder().to(address); //TODO
+						}
+						if (listening == null) {
+							return null;
+						}
+						return listening.create(address, header);
+					}
+				}).create(queue)).create(queue);
+				return new Disconnectable() {
+					@Override
+					public void close() {
+						server.close();
+						ExecutorUtils.shutdown(executor);
+					}
+				};
+			}
+		};
+	}
+	
 	public static interface Builder extends NinioBuilder<ProxyServer> {
 		Builder with(Executor executor);
 		Builder listening(ProxyListening listening);
@@ -310,13 +357,12 @@ public final class ProxyServer implements Listening {
 						}
 						final ByteBuffer b = receivedBuffer.duplicate();
 						b.limit(b.position() + len);
-						final Address a = new Address(readHost, readPort);
 						proxyExecutor.execute(new Runnable() {
 							@Override
 							public void run() {
 								Connector receivedInnerConnection = connections.get(connectionId);
 								if (receivedInnerConnection != null) {
-									receivedInnerConnection.send(a, b);
+									receivedInnerConnection.send(null, b);
 								}
 							}
 						});

@@ -29,7 +29,7 @@ public class DatagramTest {
 				final int port = 8080;
 		
 				final Wait wait = new Wait();
-				final Connector server = ninio.create(UdpSocket.builder().bind(new Address(null, port))
+				final Connector server = ninio.create(UdpSocket.builder().bind(new Address(Address.ANY, port))
 					.failing(new Failing() {
 						@Override
 						public void failed(IOException e) {
