@@ -8,7 +8,7 @@ public final class Address {
 	
 	public static final char SEPARATOR = '^';
 	
-	private final String host;
+	private final String host;//TODO public and remove getters
 	private final int port;
 
 	@Deprecated

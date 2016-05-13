@@ -26,6 +26,7 @@ import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.ninio.core.v3.Trust;
 import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.ninio.ping.v3.PingSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
@@ -50,7 +51,7 @@ public final class ProxyServer implements Listening {
 							return new SslSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
 						}
 						if (header.equals(ProxyCommons.Types.PING)) {
-							return TcpSocket.builder().to(address); //TODO
+							return PingSocket.builder();
 						}
 						if (listening == null) {
 							return null;

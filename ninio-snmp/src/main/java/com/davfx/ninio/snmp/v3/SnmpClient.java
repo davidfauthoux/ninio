@@ -454,7 +454,7 @@ public final class SnmpClient implements Disconnectable {
 		private void fail(IOException e) {
 			shouldRepeatWhat = 0;
 			requestOid = null;
-			failing.failed(new IOException("Timeout"));
+			failing.failed(e);
 			receiver = null;
 			failing = null;
 		}

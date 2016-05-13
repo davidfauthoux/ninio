@@ -20,6 +20,7 @@ import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.ninio.ping.v3.PingSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
@@ -49,6 +50,10 @@ public final class ProxyClient implements ProxyConnectorProvider {
 					@Override
 					public UdpSocket.Builder udp() {
 						return client.udp();
+					}
+					@Override
+					public PingSocket.Builder ping() {
+						return client.ping();
 					}
 					@Override
 					public TcpSocket.Builder ssl() {
@@ -343,6 +348,45 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			@Override
 			public Connector create(Queue queue) {
 				return createConnector(ProxyCommons.Types.UDP, bindAddress, failing, receiver, closing, connecting);
+			}
+		};
+	}
+	
+	@Override
+	public PingSocket.Builder ping() {
+		return new PingSocket.Builder() {
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
+			@Override
+			public PingSocket.Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public PingSocket.Builder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public PingSocket.Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public PingSocket.Builder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public Connector create(Queue queue) {
+				return createConnector(ProxyCommons.Types.PING, null, failing, receiver, closing, connecting);
 			}
 		};
 	}

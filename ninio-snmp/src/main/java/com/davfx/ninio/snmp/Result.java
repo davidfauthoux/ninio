@@ -1,8 +1,8 @@
 package com.davfx.ninio.snmp;
 
 public final class Result {
-	private final Oid oid;
-	private final String value;
+	private final Oid oid;//TODO public and remove getters
+	private final String value;//TODO public and remove getters
 	// private final OidValue value;
 
 	public Result(Oid oid, String value) {
