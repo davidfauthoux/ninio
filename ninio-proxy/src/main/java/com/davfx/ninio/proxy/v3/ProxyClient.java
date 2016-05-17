@@ -1,6 +1,8 @@
 package com.davfx.ninio.proxy.v3;
 
 import java.io.IOException;
+import java.net.ProtocolFamily;
+import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,15 +19,16 @@ import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
+import com.davfx.ninio.core.v3.RawSocket;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
-import com.davfx.ninio.ping.v3.PingSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
 public final class ProxyClient implements ProxyConnectorProvider {
+	
 	public static NinioBuilder<ProxyConnectorProvider> defaultClient(final Address address) {
 		return new NinioBuilder<ProxyConnectorProvider>() {
 			@Override
@@ -52,8 +55,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 						return client.udp();
 					}
 					@Override
-					public PingSocket.Builder ping() {
-						return client.ping();
+					public RawSocket.Builder raw() {
+						return client.raw();
 					}
 					@Override
 					public TcpSocket.Builder ssl() {
@@ -236,6 +239,11 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 
 			@Override
+			public TcpSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
+			
+			@Override
 			public TcpSocket.Builder to(Address connectAddress) {
 				this.connectAddress = connectAddress;
 				return this;
@@ -288,6 +296,11 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 
 			@Override
+			public TcpSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
+			
+			@Override
 			public TcpSocket.Builder to(Address connectAddress) {
 				this.connectAddress = connectAddress;
 				return this;
@@ -303,8 +316,6 @@ public final class ProxyClient implements ProxyConnectorProvider {
 	@Override
 	public UdpSocket.Builder udp() {
 		return new UdpSocket.Builder() {
-			private Address bindAddress = null;
-			
 			private Connecting connecting = null;
 			private Closing closing = null;
 			private Failing failing = null;
@@ -341,52 +352,70 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public UdpSocket.Builder bind(Address bindAddress) {
-				this.bindAddress = bindAddress;
 				return this;
 			}
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.UDP, bindAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.UDP, null, failing, receiver, closing, connecting);
 			}
 		};
 	}
 	
 	@Override
-	public PingSocket.Builder ping() {
-		return new PingSocket.Builder() {
+	public RawSocket.Builder raw() {
+		return new RawSocket.Builder() {
+			private ProtocolFamily family = StandardProtocolFamily.INET;
+			private int protocol = 0;
+
 			private Connecting connecting = null;
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
 			
 			@Override
-			public PingSocket.Builder closing(Closing closing) {
+			public RawSocket.Builder family(ProtocolFamily family) {
+				this.family = family;
+				return this;
+			}
+			@Override
+			public RawSocket.Builder protocol(int protocol) {
+				this.protocol = protocol;
+				return this;
+			}
+			
+			@Override
+			public RawSocket.Builder closing(Closing closing) {
 				this.closing = closing;
 				return this;
 			}
 		
 			@Override
-			public PingSocket.Builder connecting(Connecting connecting) {
+			public RawSocket.Builder connecting(Connecting connecting) {
 				this.connecting = connecting;
 				return this;
 			}
 			
 			@Override
-			public PingSocket.Builder failing(Failing failing) {
+			public RawSocket.Builder failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
 			@Override
-			public PingSocket.Builder receiving(Receiver receiver) {
+			public RawSocket.Builder receiving(Receiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			
 			@Override
+			public RawSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
+			
+			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.PING, null, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.RAW + String.valueOf((family == StandardProtocolFamily.INET) ? '4' : '6') + String.valueOf(protocol), null, failing, receiver, closing, connecting);
 			}
 		};
 	}
@@ -614,7 +643,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 						} else {
 							byte[] hostAsBytes = sendAddress.getHost().getBytes(Charsets.UTF_8);
 							ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
-							b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
+							b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 							b.putInt(innerConnection.connectionId);
 							b.putInt(hostAsBytes.length);
 							b.put(hostAsBytes);

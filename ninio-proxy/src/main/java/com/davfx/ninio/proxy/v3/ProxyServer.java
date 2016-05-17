@@ -1,12 +1,17 @@
 package com.davfx.ninio.proxy.v3;
 
 import java.io.IOException;
+import java.net.ProtocolFamily;
+import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Closing;
@@ -19,6 +24,7 @@ import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.NinioSocketBuilder;
 import com.davfx.ninio.core.v3.Queue;
+import com.davfx.ninio.core.v3.RawSocket;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.SocketBuilder;
 import com.davfx.ninio.core.v3.SslSocketBuilder;
@@ -26,12 +32,13 @@ import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.ninio.core.v3.Trust;
 import com.davfx.ninio.core.v3.UdpSocket;
-import com.davfx.ninio.ping.v3.PingSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
 public final class ProxyServer implements Listening {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyServer.class);
 
 	public static NinioBuilder<Disconnectable> defaultServer(final Address address, final ProxyListening listening) {
 		return new NinioBuilder<Disconnectable>() {
@@ -41,17 +48,19 @@ public final class ProxyServer implements Listening {
 				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
 					public NinioSocketBuilder<?> create(Address address, String header) {
-						if (header.equals(ProxyCommons.Types.TCP)) {
+						if (header.startsWith(ProxyCommons.Types.TCP)) {
 							return TcpSocket.builder().to(address);
 						}
-						if (header.equals(ProxyCommons.Types.UDP)) {
+						if (header.startsWith(ProxyCommons.Types.UDP)) {
 							return UdpSocket.builder();
 						}
-						if (header.equals(ProxyCommons.Types.SSL)) {
+						if (header.startsWith(ProxyCommons.Types.SSL)) {
 							return new SslSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
 						}
-						if (header.equals(ProxyCommons.Types.PING)) {
-							return PingSocket.builder();
+						if (header.startsWith(ProxyCommons.Types.RAW)) {
+							ProtocolFamily family = (header.charAt(ProxyCommons.Types.RAW.length()) == '4') ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
+							int protocol = Integer.parseInt(header.substring(ProxyCommons.Types.RAW.length() + 1));
+							return RawSocket.builder().family(family).protocol(protocol);
 						}
 						if (listening == null) {
 							return null;
@@ -284,7 +293,7 @@ public final class ProxyServer implements Listening {
 							} else {
 								byte[] hostAsBytes = receivedAddress.getHost().getBytes(Charsets.UTF_8);
 								ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
-								b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
+								b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 								b.putInt(connectionId);
 								b.putInt(hostAsBytes.length);
 								b.put(hostAsBytes);
@@ -417,12 +426,16 @@ public final class ProxyServer implements Listening {
 							@Override
 							public void run() {
 								NinioSocketBuilder<?> externalBuilder = listening.create(a, header);
-								externalBuilder.closing(closing);
-								externalBuilder.failing(failing);
-								externalBuilder.receiving(receiver);
-								externalBuilder.connecting(connecting);
-								Connector externalConnector = externalBuilder.create(queue);
-								connections.put(connectionId, externalConnector);
+								if (externalBuilder == null) {
+									LOGGER.error("Unknown header (CONNECT_WITH_ADDRESS): {}", header);
+								} else {
+									externalBuilder.closing(closing);
+									externalBuilder.failing(failing);
+									externalBuilder.receiving(receiver);
+									externalBuilder.connecting(connecting);
+									Connector externalConnector = externalBuilder.create(queue);
+									connections.put(connectionId, externalConnector);
+								}
 							}
 						});
 						
@@ -451,12 +464,16 @@ public final class ProxyServer implements Listening {
 							@Override
 							public void run() {
 								NinioSocketBuilder<?> externalBuilder = listening.create(null, header);
-								externalBuilder.closing(closing);
-								externalBuilder.failing(failing);
-								externalBuilder.receiving(receiver);
-								externalBuilder.connecting(connecting);
-								Connector externalConnector = externalBuilder.create(queue);
-								connections.put(connectionId, externalConnector);
+								if (externalBuilder == null) {
+									LOGGER.error("Unknown header (CONNECT_WITHOUT_ADDRESS): {}", header);
+								} else {
+									externalBuilder.closing(closing);
+									externalBuilder.failing(failing);
+									externalBuilder.receiving(receiver);
+									externalBuilder.connecting(connecting);
+									Connector externalConnector = externalBuilder.create(queue);
+									connections.put(connectionId, externalConnector);
+								}
 							}
 						});
 	

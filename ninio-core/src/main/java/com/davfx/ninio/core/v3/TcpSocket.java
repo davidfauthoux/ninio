@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.UdpSocket.Builder;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
@@ -25,6 +26,7 @@ public final class TcpSocket implements Connector {
 
 	public static interface Builder extends NinioSocketBuilder<Builder> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
+		Builder bind(Address bindAddress);
 		Builder to(Address connectAddress);
 	}
 
@@ -32,6 +34,7 @@ public final class TcpSocket implements Connector {
 		return new Builder() {
 			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 			
+			private Address bindAddress = null;
 			private Address connectAddress = null;
 			
 			private Connecting connecting = null;
@@ -70,6 +73,12 @@ public final class TcpSocket implements Connector {
 			}
 
 			@Override
+			public Builder bind(Address bindAddress) {
+				this.bindAddress = bindAddress;
+				return this;
+			}
+			
+			@Override
 			public Builder to(Address connectAddress) {
 				this.connectAddress = connectAddress;
 				return this;
@@ -77,7 +86,7 @@ public final class TcpSocket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new TcpSocket(queue, byteBufferAllocator, connectAddress, connecting, closing, failing, receiver);
+				return new TcpSocket(queue, byteBufferAllocator, bindAddress, connectAddress, connecting, closing, failing, receiver);
 			}
 		};
 	}
@@ -91,7 +100,7 @@ public final class TcpSocket implements Connector {
 	private final Deque<ByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	private TcpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private TcpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -216,6 +225,19 @@ public final class TcpSocket implements Connector {
 							}
 						});
 						
+						if (bindAddress != null) {
+							try {
+								InetSocketAddress a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+								if (a.isUnresolved()) {
+									throw new IOException("Unresolved address: " + bindAddress.getHost() + ":" + bindAddress.getPort());
+								}
+								channel.socket().bind(a);
+							} catch (IOException e) {
+								disconnect(channel, inboundKey, null);
+								throw new IOException("Could not bind to: " + bindAddress, e);
+							}
+						}
+
 						try {
 							InetSocketAddress a = new InetSocketAddress(connectAddress.getHost(), connectAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 							if (a.isUnresolved()) {

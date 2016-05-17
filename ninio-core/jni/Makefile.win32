@@ -1,0 +1,27 @@
+JAVA_INCDIR      = $(JDK_HOME)\include
+JAVA_INCDIR_PLAF = $(JAVA_INCDIR)\win32
+
+CC        = cl
+CFLAGS    = -TC
+CPPFLAGS  = -I$(JAVA_INCDIR) -I$(JAVA_INCDIR_PLAF)
+WINSOCK   = ws2_32
+LDFLAGS   = $(WINSOCK).lib
+
+SRC = NativeRawSocket.c
+OBJ = $(SRC:.c=.obj)
+
+LIBNAME          = NativeRawSocket
+LIBEXTENSION     = dll
+LIB              = $(LIBNAME).$(LIBEXTENSION)
+CLEAN_EXTENSIONS = *.obj *.$(LIBEXTENSION) *.lib *.exp
+
+all: $(LIB)
+
+.c.obj:
+	$(CC) -nologo $(CFLAGS) $(CPPFLAGS) -c $< -o $@
+
+$(LIB): $(OBJ)
+	$(CC) -nologo -MD -LD -o $@ $** $(LDFLAGS)
+
+clean:
+	del $(CLEAN_EXTENSIONS)

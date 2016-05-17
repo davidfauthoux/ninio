@@ -3,12 +3,15 @@ package com.davfx.ninio.core.v3;
 import java.util.concurrent.Executor;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.TcpSocket.Builder;
 
 public final class SslSocketBuilder implements TcpSocket.Builder {
 	private Trust trust = new Trust();
 	private Executor executor = null;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 
+	private Address bindAddress = null;
+	
 	private Address connectAddress = null;
 	
 	private Connecting connecting = null;
@@ -61,6 +64,12 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 		this.byteBufferAllocator = byteBufferAllocator;
 		return this;
 	}
+	
+	@Override
+	public Builder bind(Address bindAddress) {
+		this.bindAddress = bindAddress;
+		return this;
+	}
 
 	@Override
 	public TcpSocket.Builder to(Address connectAddress) {
@@ -82,6 +91,7 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 			.receiving(sslManager)
 			.closing(sslManager)
 			.failing(sslManager)
+			.bind(bindAddress)
 			.to(connectAddress)
 			.create(queue);
 
