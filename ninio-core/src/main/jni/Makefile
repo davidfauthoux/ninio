@@ -17,7 +17,7 @@ ifeq ($(DARWIN),Darwin)
   JAVA_INCDIR  = $(JAVA_HOME)/include
   JAVA_INCDIR_PLAF = $(dir $(wildcard $(JAVA_INCDIR)/*/jni_md.h))
   CPPFLAGS += -I$(JAVA_INCDIR) -I$(JAVA_INCDIR_PLAF)
-  LIBEXTENSION = jnilib
+  LIBEXTENSION = dylib
   LDFLAGS += -dynamiclib -single_module -framework JavaVM
   SHARED =
 else

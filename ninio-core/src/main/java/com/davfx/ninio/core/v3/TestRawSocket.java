@@ -978,7 +978,13 @@ public class TestRawSocket {
 			recvPacket.setICMPDataByteLength(56);
 
 
-			socket = RawSocket.builder().receiving(new Receiver() {
+			socket = RawSocket.builder().failing(new Failing() {
+				@Override
+				public void failed(IOException e) {
+					System.out.println("FAIL");
+					e.printStackTrace();
+				}
+			}).receiving(new Receiver() {
 				@Override
 				public void received(Connector connector, Address address, ByteBuffer buffer) {
 					listener.received(connector, address, buffer);
@@ -997,7 +1003,7 @@ public class TestRawSocket {
 		}
 
 		public Pinger4(int id) throws IOException {
-			this(id, NativeRawSocket.PF_INET, NativeRawSocket.getProtocolByName("icmp"));
+			this(id, NativeRawSocket.PF_INET, 1);
 
 			srcAddress = new byte[4];
 			requestType = ICMPPacket.TYPE_ECHO_REQUEST;

@@ -3,7 +3,6 @@ package com.davfx.ninio.core.v3;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.ProtocolFamily;
-import java.net.SocketException;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -85,102 +84,96 @@ public final class RawSocket implements Connector {
 		};
 	}
 	
-	private final NativeRawSocket socket = new NativeRawSocket();
+	private final NativeRawSocket socket;
 	private final ExecutorService loop = Executors.newSingleThreadExecutor(new ClassThreadFactory(RawSocket.class));
 
 	private RawSocket(final ProtocolFamily family, int protocol, Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+		NativeRawSocket s;
 		try {
-			socket.open((family == StandardProtocolFamily.INET) ? NativeRawSocket.PF_INET : NativeRawSocket.PF_INET6, protocol);
+			s = new NativeRawSocket((family == StandardProtocolFamily.INET) ? NativeRawSocket.PF_INET : NativeRawSocket.PF_INET6, protocol);
 		} catch (Exception e) {
 			if (failing != null) {
 				failing.failed(new IOException("Error", e));
 			}
-			return;
+			s = null;
 		}
 		
-		if (bindAddress != null) {
-			try {
-				InetAddress a = InetAddress.getByName(bindAddress.getHost()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-				socket.bind(a);
-			} catch (Exception e) {
-				try {
-					socket.close();
-				} catch (Exception ee) {
-				}
-				if (failing != null) {
-					failing.failed( new IOException("Could not bind to: " + bindAddress, e));
-				}
-			}
-		}
-		
-		loop.execute(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					socket.setSendTimeout(0);
-					socket.setReceiveTimeout(0);
-				} catch (java.net.SocketException se) {
-					socket.setUseSelectTimeout(true);
-					try {
-						socket.setSendTimeout(0);
-					} catch (SocketException e) {
-						LOGGER.error("Error", e);
-					}
-					try {
-						socket.setReceiveTimeout(0);
-					} catch (SocketException e) {
-						LOGGER.error("Error", e);
-					}
-				}
+		socket = s;
 
-				if (connecting != null) {
-					connecting.connected(RawSocket.this);
-				}
-				
-				while (true) {
-					byte[] recvData = new byte[84];
-					byte[] srcAddress = new byte[(family == StandardProtocolFamily.INET) ? 4 : 16];
+		if (socket != null) {
+		
+			if (bindAddress != null) {
+				try {
+					InetAddress a = InetAddress.getByName(bindAddress.getHost()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+					socket.bind(a);
+				} catch (Exception e) {
 					try {
-						int r = socket.read(recvData, srcAddress);
-						String host = InetAddress.getByAddress(srcAddress).getHostAddress();
-						LOGGER.debug("Received raw packet: {} bytes from: {}", r, host);
-						if (receiver != null) {
-							ByteBuffer b = ByteBuffer.wrap(recvData, 0, r);
-							if (family == StandardProtocolFamily.INET) {
-								int headerLength = (b.get() & 0x0F) * 4;
-								b.position(headerLength);
-							}
-							receiver.received(RawSocket.this, new Address(host, 0), b);
-						}
-					} catch (Exception e) {
-						LOGGER.trace("Error, probably closed", e);
-						break;
+						socket.close();
+					} catch (Exception ee) {
+					}
+					if (failing != null) {
+						failing.failed( new IOException("Could not bind to: " + bindAddress, e));
 					}
 				}
-				
-				if (closing != null) {
-					closing.closed();
-				}
 			}
-		});
+			
+			loop.execute(new Runnable() {
+				@Override
+				public void run() {
+					if (connecting != null) {
+						connecting.connected(RawSocket.this);
+					}
+					
+					while (true) {
+						byte[] recvData = new byte[84];
+						byte[] srcAddress = new byte[(family == StandardProtocolFamily.INET) ? 4 : 16];
+						try {
+							int r = socket.read(recvData, 0, recvData.length, srcAddress);
+							String host = InetAddress.getByAddress(srcAddress).getHostAddress();
+							LOGGER.debug("Received raw packet: {} bytes from: {}", r, host);
+							if (receiver != null) {
+								ByteBuffer b = ByteBuffer.wrap(recvData, 0, r);
+								if (family == StandardProtocolFamily.INET) {
+									int headerLength = (b.get() & 0x0F) * 4;
+									b.position(headerLength);
+								}
+								receiver.received(RawSocket.this, new Address(host, 0), b);
+							}
+						} catch (Exception e) {
+							LOGGER.trace("Error, probably closed", e);
+							break;
+						}
+					}
+					
+					if (closing != null) {
+						closing.closed();
+					}
+				}
+			});
+			
+		}
 	}
 	
 	@Override
 	public Connector send(Address address, ByteBuffer buffer) {
-		try {
-			socket.write(InetAddress.getByName(address.getHost()), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-		} catch (Exception e) {
-			LOGGER.error("Error", e);
+		if (socket != null) {
+			try {
+				socket.write(InetAddress.getByName(address.getHost()), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+			} catch (Exception e) {
+				LOGGER.error("Error", e);
+			}
 		}
 		return this;
 	}
 	
 	@Override
 	public void close() {
-		try {
-			socket.close();
-		} catch (IOException e) {
-			LOGGER.trace("Error", e);
+		if (socket != null) {
+			try {
+				socket.close();
+			} catch (IOException e) {
+				LOGGER.trace("Error", e);
+			}
 		}
 		loop.shutdown();
 	}
