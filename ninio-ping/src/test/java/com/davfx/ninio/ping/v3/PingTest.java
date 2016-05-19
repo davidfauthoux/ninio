@@ -23,8 +23,8 @@ public class PingTest {
 				}
 			}));
 			try {
-				snmpClient.ping("8.8.8.8");
-				//snmpClient.ping("::1");
+				//snmpClient.ping("8.8.8.8");
+				snmpClient.ping("::1");
 				System.out.println(lock.waitFor());
 				//Assertions.assertThat(lock.waitFor().toString()).isEqualTo("127.0.0.1");
 			} finally {

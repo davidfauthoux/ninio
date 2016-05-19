@@ -164,7 +164,7 @@ public final class ProxyServer implements Listening {
 	}
 
 	@Override
-	public void connecting(final Connector proxyConnector, SocketBuilder<?> builder) {
+	public void connecting(Address from, final Connector proxyConnector, SocketBuilder<?> builder) {
 		final Map<Integer, Connector> connections = new HashMap<>();
 
 		builder.closing(new Closing() {

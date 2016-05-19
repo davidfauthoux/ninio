@@ -2,6 +2,8 @@ package com.davfx.ninio.core.v3;
 
 import java.util.concurrent.Executor;
 
+import com.davfx.ninio.core.Address;
+
 public final class SslSocketServerBuilder {
 	private Trust trust = new Trust();
 	private Executor executor = null;
@@ -9,7 +11,7 @@ public final class SslSocketServerBuilder {
 
 	private Listening listening = new Listening() {
 		@Override
-		public void connecting(Connector connector, SocketBuilder<?> builder) {
+		public void connecting(Address from, Connector connector, SocketBuilder<?> builder) {
 			connector.close();
 		}
 	};
@@ -40,12 +42,12 @@ public final class SslSocketServerBuilder {
 		final Listening thisListening = listening;
 		return new Listening() {
 			@Override
-			public void connecting(Connector connector, SocketBuilder<?> builder) {
+			public void connecting(Address from, Connector connector, SocketBuilder<?> builder) {
 				sslManager.connector = connector;
 		
 				InnerSocketBuilder innerSocketBuilder = new InnerSocketBuilder();
 				
-				thisListening.connecting(sslManager, innerSocketBuilder);
+				thisListening.connecting(from, sslManager, innerSocketBuilder);
 		
 				sslManager.connecting = innerSocketBuilder.connecting;
 				sslManager.closing = innerSocketBuilder.closing;

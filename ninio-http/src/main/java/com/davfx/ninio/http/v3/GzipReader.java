@@ -28,10 +28,8 @@ final class GzipReader {
 	private final Inflater inflater = new Inflater(true);
     private final CRC32 crc = new CRC32();
     private final ByteBuffer header = ByteBuffer.allocate(10);
-    private final ByteBuffer footer = ByteBuffer.allocate(8);
     private final ByteBuffer extraCountBuffer = ByteBuffer.allocate(2);
     private boolean headerRead = false;
-    private boolean footerRead = false;
     private boolean extraCountRead = false;
     private int extraCount;
     private int extraSkipped = 0;
@@ -39,12 +37,32 @@ final class GzipReader {
     private boolean commentSkipped = false;
     private int headerCrcSkipped = 2;
 
+    private final ByteBuffer previewFooter = ByteBuffer.allocate(8);
+    
 	public GzipReader() {
 	}
 	
-    public void handle(ByteBuffer deflated, long totalRemainingToRead, ByteBufferHandler handler) throws IOException {
-		int remaining = deflated.remaining();
+	public void handle(ByteBuffer deflated, ByteBufferHandler handler) throws IOException {
+		if ((previewFooter.position() + deflated.remaining()) > previewFooter.capacity()) {
+			previewFooter.flip();
+			read(previewFooter, handler);
+			previewFooter.rewind();
+		}
 		
+		if (deflated.remaining() < (previewFooter.capacity() - previewFooter.position())) {
+			previewFooter.put(deflated);
+			return;
+		}
+		
+		ByteBuffer deflatedKeepingFooter = deflated.duplicate();
+		deflatedKeepingFooter.limit(deflatedKeepingFooter.limit() - previewFooter.position());
+		read(deflatedKeepingFooter, handler);
+		ByteBuffer footer = deflated.duplicate();
+		footer.position(footer.limit() - previewFooter.position());
+		previewFooter.put(footer);
+	}
+	
+    private void read(ByteBuffer deflated, ByteBufferHandler handler) throws IOException {
 		if (!headerRead) {
 			while (header.hasRemaining()) {
 				if (!deflated.hasRemaining()) {
@@ -122,20 +140,9 @@ final class GzipReader {
 			headerCrcSkipped++;
 		}
 
-		int r = deflated.remaining();
-		if (totalRemainingToRead >= 0) {
-			totalRemainingToRead -= remaining - deflated.remaining();
-			if (deflated.remaining() > (totalRemainingToRead - 8)) {
-				r = (int) (totalRemainingToRead - 8);
-			}
-		}
-		
-		if (r > 0) {
-			inflater.setInput(deflated.array(), deflated.position(), r);
-			deflated.position(deflated.position() + r);
-			if (totalRemainingToRead >= 0) {
-				totalRemainingToRead -= r;
-			}
+		if (deflated.hasRemaining()) {
+			inflater.setInput(deflated.array(), deflated.position(), deflated.remaining());
+			deflated.position(deflated.position() + deflated.remaining());
 			
 			while (true) { //!inflater.needsInput() && !inflater.finished()) {
 				ByteBuffer inflated = ByteBuffer.allocate(BUFFER_SIZE);
@@ -153,27 +160,19 @@ final class GzipReader {
 				handler.handle(null, inflated);
 			}
 		}
-		
-		if (totalRemainingToRead >= 0) {
-			if (totalRemainingToRead <= 8) {
-				if (!footerRead) {
-					while (footer.hasRemaining()) {
-						if (!deflated.hasRemaining()) {
-							return;
-						}
-						footer.put(deflated.get());
-					}
-					footer.flip();
-					footer.order(ByteOrder.LITTLE_ENDIAN);
-					if ((footer.getInt() & 0xFFFFFFFFL) != crc.getValue()) {
-						throw new IOException("Bad CRC");
-					}
-					if ((footer.getInt() & 0xFFFFFFFFL) != inflater.getBytesWritten()) {
-						throw new IOException("Bad length");
-					}
-					footerRead = true;
-				}
-			}
+    }
+    
+    public void close(ByteBufferHandler handler) throws IOException {
+    	if (previewFooter.position() < previewFooter.capacity()) {
+			throw new IOException("Footer too short");
+    	}
+    	previewFooter.flip();
+		previewFooter.order(ByteOrder.LITTLE_ENDIAN);
+		if ((previewFooter.getInt() & 0xFFFFFFFFL) != crc.getValue()) {
+			throw new IOException("Bad CRC");
+		}
+		if ((previewFooter.getInt() & 0xFFFFFFFFL) != inflater.getBytesWritten()) {
+			throw new IOException("Bad length");
 		}
 	}
 }

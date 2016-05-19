@@ -1,5 +1,7 @@
 package com.davfx.ninio.core.v3;
 
+import com.davfx.ninio.core.Address;
+
 public interface Listening {
-	void connecting(Connector connector, SocketBuilder<?> builder);
+	void connecting(Address from, Connector connector, SocketBuilder<?> builder);
 }

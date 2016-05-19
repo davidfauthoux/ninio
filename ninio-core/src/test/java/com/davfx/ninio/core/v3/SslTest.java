@@ -49,7 +49,7 @@ public class SslTest {
 					})
 					.listening(new SslSocketServerBuilder().with(executor).trust(trust).listening(new Listening() {
 						@Override
-						public void connecting(Connector connector, SocketBuilder<?> builder) {
+						public void connecting(Address from, Connector connector, SocketBuilder<?> builder) {
 							builder.failing(new Failing() {
 								@Override
 								public void failed(IOException e) {

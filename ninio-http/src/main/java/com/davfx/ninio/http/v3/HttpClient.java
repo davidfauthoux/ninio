@@ -20,6 +20,8 @@ import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.SslSocketBuilder;
 import com.davfx.ninio.core.v3.TcpSocket;
+import com.davfx.ninio.http.HttpHeaderKey;
+import com.davfx.ninio.http.HttpHeaderValue;
 import com.davfx.ninio.http.HttpResponse;
 import com.google.common.base.Charsets;
 import com.google.common.collect.HashMultimap;
@@ -35,7 +37,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("ninio.http.redirect.max");
 
 	public static interface Builder extends NinioBuilder<HttpClient> {
-		Builder pipelining(boolean pipelining);
+		Builder pipelining();
 		Builder with(Executor executor);
 		Builder with(TcpSocket.Builder connectorFactory);
 		Builder withSecure(TcpSocket.Builder secureConnectorFactory);
@@ -49,8 +51,8 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 			private boolean pipelining = false;
 			
 			@Override
-			public Builder pipelining(boolean pipelining) {
-				this.pipelining = pipelining;
+			public Builder pipelining() {
+				pipelining = true;
 				return this;
 			}
 			
@@ -210,9 +212,9 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							public void ended() {
 								contentReceiver.ended();
 								contentReceiver = null;
-								if (!pipelining) {
-									if (connector != null) {
-										if (keepAlive) {
+								if (connector != null) {
+									if (!pipelining) {
+										if (responseKeepAlive) {
 											connector.reusable = true;
 										} else {
 											connector.connector.close();
@@ -280,6 +282,44 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					
 					@Override
 					public Send create(final HttpRequest request) {
+						// HTTP 1.1 assumed
+						
+						long headerContentLength = -1L;
+						for (String contentLengthValue : request.headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
+							try {
+								headerContentLength = Long.parseLong(contentLengthValue);
+							} catch (NumberFormatException e) {
+								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+							}
+						}
+						final long requestContentLength = headerContentLength;
+						
+						GzipWriter headerGzip = null;
+						for (String contentEncodingValue : request.headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
+							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+								headerGzip = new GzipWriter();
+							}
+						}
+						final GzipWriter requestGzip = headerGzip;
+						
+						boolean headerChunked = (requestContentLength < 0L);
+						for (String transferEncodingValue : request.headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+							headerChunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
+						}
+						final boolean requestChunked = headerChunked;
+		
+						/* Ignored
+						boolean headerKeepAlive = true;
+						for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
+							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+								headerKeepAlive = false;
+							} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+								headerKeepAlive = true;
+							}
+						}
+						final boolean requestKeepAlive = headerKeepAlive;
+						*/
+						
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -312,18 +352,44 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							}
 						});
 		
-						//TODO Content-Encoding gzip??
 						return new Send() {
+							private final ByteBuffer emptyLineByteBuffer = LineReader.toBuffer("");
+							private final ByteBuffer zeroByteBuffer = LineReader.toBuffer(Integer.toHexString(0));
+
 							@Override
 							public Send post(final ByteBuffer buffer) {
-								if (!request.headers.containsKey(HttpHeaderKey.CONTENT_LENGTH)) {
-									LOGGER.error("Header required: {}", HttpHeaderKey.CONTENT_LENGTH);
+								if (!buffer.hasRemaining()) {
+									return this;
 								}
+
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
 										if (connector != null) {
-											connector.connector.send(null, buffer);
+											if (requestGzip != null) {
+												requestGzip.handle(buffer, new ByteBufferHandler() {
+													@Override
+													public void handle(Address address, ByteBuffer buffer) {
+														if (buffer.hasRemaining()) {
+															if (requestChunked) {
+																connector.connector.send(null, LineReader.toBuffer(Integer.toHexString(buffer.remaining())));
+															}
+															connector.connector.send(null, buffer);
+															if (requestChunked) {
+																connector.connector.send(null, emptyLineByteBuffer);
+															}
+														}
+													}
+												});
+											} else {
+												if (requestChunked) {
+													connector.connector.send(null, LineReader.toBuffer(Integer.toHexString(buffer.remaining())));
+												}
+												connector.connector.send(null, buffer);
+												if (requestChunked) {
+													connector.connector.send(null, emptyLineByteBuffer);
+												}
+											}
 										}
 									}
 								});
@@ -335,8 +401,35 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
-										if (pipelining) {
-											if (connector != null) {
+										if (connector != null) {
+											if (requestGzip != null) {
+												requestGzip.close(new ByteBufferHandler() {
+													@Override
+													public void handle(Address address, ByteBuffer buffer) {
+														if (buffer.hasRemaining()) {
+															if (requestChunked) {
+																connector.connector.send(null, LineReader.toBuffer(Integer.toHexString(buffer.remaining())));
+															}
+															connector.connector.send(null, buffer);
+															if (requestChunked) {
+																connector.connector.send(null, emptyLineByteBuffer);
+															}
+														}
+
+														if (requestChunked) {
+															connector.connector.send(null, zeroByteBuffer);
+															connector.connector.send(null, emptyLineByteBuffer);
+														}
+													}
+												});
+											} else {
+												if (requestChunked) {
+													connector.connector.send(null, zeroByteBuffer);
+													connector.connector.send(null, emptyLineByteBuffer);
+												}
+											}
+											
+											if (pipelining) {
 												connector.reusable = true;
 												connector = null;
 											}
@@ -367,15 +460,15 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					private boolean responseLineRead = false;
 					private boolean headersRead = false;
 		
-					private boolean keepAlive = false;
+					private boolean responseKeepAlive = false;
 		
 					private int responseCode;
 					private String responseReason;
 					private boolean http11;
 					private final Multimap<String, String> headers = HashMultimap.create();
-					private boolean chunked;
-					private long contentLength;
-					private GzipReader gzipReader;
+					private boolean responseChunked;
+					private long responseContentLength;
+					private GzipReader responseGzip;
 		
 					private boolean chunkHeaderRead = false;
 					private int chunkLength;
@@ -438,42 +531,36 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								LOGGER.trace("Header line empty");
 								headersRead = true;
 								
-								contentLength = -1L;
-								
+								responseContentLength = -1L;
 								for (String contentLengthValue : headers.get(HttpHeaderKey.CONTENT_LENGTH)) {
 									try {
-										contentLength = Long.parseLong(contentLengthValue);
-										break;
+										responseContentLength = Long.parseLong(contentLengthValue);
 									} catch (NumberFormatException e) {
-										throw new IOException("Invalid Content-Length: " + contentLengthValue);
+										LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
 									}
 								}
 								
-								gzipReader = null;
-								
+								responseGzip = null;
 								for (String contentEncodingValue : headers.get(HttpHeaderKey.CONTENT_ENCODING)) {
 									if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-										gzipReader = new GzipReader();
+										responseGzip = new GzipReader();
 									}
-									break;
 								}
 								
-								chunked = false;
-								
+								responseChunked = (responseContentLength < 0L);
 								for (String transferEncodingValue : headers.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-									chunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
-									break;
+									responseChunked = transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED);
 								}
 				
-								keepAlive = http11;
+								responseKeepAlive = http11;
 								for (String connectionValue : headers.get(HttpHeaderKey.CONNECTION)) {
-									keepAlive = false;
-									if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-										keepAlive = true;
+									if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+										responseKeepAlive = false;
+									} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+										responseKeepAlive = true;
 									}
-									break;
 								}
-								LOGGER.trace("Keep alive = {}", keepAlive);
+								LOGGER.trace("Keep alive = {}", responseKeepAlive);
 								
 								receiver.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(headers)));
 								
@@ -484,7 +571,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							}
 						}
 					
-						if (chunked) {
+						if (responseChunked) {
 							
 							while (true) {
 							
@@ -507,9 +594,8 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 										if (!buffer.hasRemaining()) {
 											return;
 										}
-										long totalToRead = contentLength - countRead;
 										long toRead = chunkLength - chunkCountRead;
-										handleContent(buffer, toRead, totalToRead, receiver);
+										handleContent(buffer, toRead, receiver);
 									}
 										
 									if (chunkCountRead == chunkLength) {
@@ -538,25 +624,25 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 				
 						} else {
 						
-							if (contentLength >= 0) {
-								if (countRead < contentLength) {
-									long toRead = contentLength - countRead;
-									handleContent(buffer, toRead, toRead, receiver);
+							if (responseContentLength >= 0) {
+								if (countRead < responseContentLength) {
+									long toRead = responseContentLength - countRead;
+									handleContent(buffer, toRead, receiver);
 								}
-								if (countRead == contentLength) {
+								if (countRead == responseContentLength) {
 									if (buffer.hasRemaining()) { //TODO pipeling
 										throw new IOException("Connection reset, too much data");
 									}
 									receiver.ended();
 								}
 							} else {
-								handleContent(buffer, -1, -1, receiver);
+								handleContent(buffer, -1, receiver);
 							}
 				
 						}
 					}
 					
-				    private void handleContent(ByteBuffer buffer, long toRead, long totalRemainingToRead, final InnerReceiver receiver) throws IOException {
+				    private void handleContent(ByteBuffer buffer, long toRead, final InnerReceiver receiver) throws IOException {
 				    	ByteBuffer deflated = buffer.duplicate(); // We must duplicated this buffer because it can be used later by the user, but must be continued in the handle loop
 				    	if (toRead >= 0) {
 							if (deflated.remaining() > toRead) {
@@ -570,12 +656,12 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 				
 						LOGGER.trace("Content received (read = {})", countRead);
 						
-						if (gzipReader == null) {
+						if (responseGzip == null) {
 							receiver.received(deflated);
 							return;
 						}
 						
-						gzipReader.handle(deflated, totalRemainingToRead, new ByteBufferHandler() {
+						responseGzip.handle(deflated, new ByteBufferHandler() {
 							@Override
 							public void handle(Address address, ByteBuffer buffer) {
 								receiver.received(buffer);
@@ -584,22 +670,20 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 				    }
 				    
 					private void parseClosed(InnerReceiver receiver) throws IOException {
-						if (chunked) {
+						if (responseChunked) {
 							if (chunkHeaderRead) {
 								throw new IOException("Connection reset by peer in chunked stream");
 							}
 							receiver.ended();
 						} else {
-							if (contentLength < 0L) {
+							if (responseContentLength < 0L) {
 								receiver.ended();
 								return;
 							}
 			
-							if (countRead < contentLength) {
-								throw new IOException("Connection reset by peer, expecting more data (read = " + countRead + ", contentLength = " + contentLength + ")");
+							if (countRead < responseContentLength) {
+								throw new IOException("Connection reset by peer, expecting more data (read = " + countRead + ", contentLength = " + responseContentLength + ")");
 							}
-		
-							// receiver.ended(); // Already sent
 						}
 					}
 				};

@@ -131,7 +131,8 @@ public final class TcpSocketServer implements Disconnectable {
 								try {
 									LOGGER.debug("-> Accepting client on: {}", bindAddress);
 									final SocketChannel outboundChannel = ssc.accept();
-									
+									final Address clientAddress = new Address(outboundChannel.socket().getInetAddress().getHostAddress(), outboundChannel.socket().getPort());
+
 									outboundChannels.add(outboundChannel);
 									LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
 									
@@ -216,7 +217,7 @@ public final class TcpSocketServer implements Disconnectable {
 									};
 									
 									InnerSocketBuilder builder = new InnerSocketBuilder();
-									listening.connecting(innerConnector, builder);
+									listening.connecting(clientAddress, innerConnector, builder);
 
 									final Connecting connecting = builder.connecting;
 									final Closing closing = builder.closing;

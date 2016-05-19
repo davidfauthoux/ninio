@@ -63,7 +63,7 @@ public class SocketTest {
 						})
 						.listening(new Listening() {
 							@Override
-							public void connecting(Connector connector, SocketBuilder<?> builder) {
+							public void connecting(Address from, Connector connector, SocketBuilder<?> builder) {
 								builder.failing(new Failing() {
 									@Override
 									public void failed(IOException e) {
