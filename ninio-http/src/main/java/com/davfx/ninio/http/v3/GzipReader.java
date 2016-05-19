@@ -8,11 +8,11 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-import com.davfx.ninio.core.ByteBufferHandler;
+import com.davfx.ninio.core.v3.Failing;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-final class GzipReader {
+final class GzipReader implements HttpContentReceiver, Failing {
 
 	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
@@ -38,14 +38,24 @@ final class GzipReader {
     private int headerCrcSkipped = 2;
 
     private final ByteBuffer previewFooter = ByteBuffer.allocate(8);
-    
-	public GzipReader() {
+
+	private final HttpContentReceiver wrappee;
+	private final Failing failing;
+	
+	private boolean ended = false;
+
+	public GzipReader(Failing failing, HttpContentReceiver wrappee) {
+		this.failing = failing;
+		this.wrappee = wrappee;
 	}
 	
-	public void handle(ByteBuffer deflated, ByteBufferHandler handler) throws IOException {
+	@Override
+	public void received(ByteBuffer deflated) {
 		if ((previewFooter.position() + deflated.remaining()) > previewFooter.capacity()) {
 			previewFooter.flip();
-			read(previewFooter, handler);
+			if (!read(previewFooter)) {
+				return;
+			}
 			previewFooter.rewind();
 		}
 		
@@ -56,27 +66,33 @@ final class GzipReader {
 		
 		ByteBuffer deflatedKeepingFooter = deflated.duplicate();
 		deflatedKeepingFooter.limit(deflatedKeepingFooter.limit() - previewFooter.position());
-		read(deflatedKeepingFooter, handler);
+		if (!read(deflatedKeepingFooter)) {
+			return;
+		}
 		ByteBuffer footer = deflated.duplicate();
 		footer.position(footer.limit() - previewFooter.position());
 		previewFooter.put(footer);
 	}
 	
-    private void read(ByteBuffer deflated, ByteBufferHandler handler) throws IOException {
+    private boolean read(ByteBuffer deflated) {
 		if (!headerRead) {
 			while (header.hasRemaining()) {
 				if (!deflated.hasRemaining()) {
-					return;
+					return true;
 				}
 				header.put(deflated.get());
 			}
 			header.flip();
 			header.order(ByteOrder.LITTLE_ENDIAN);
 			if ((header.getShort() & 0xFFFF) != GZIP_MAGIC) {
-				throw new IOException("Invalid Gzip magic number");
+				ended = true;
+				failing.failed(new IOException("Invalid Gzip magic number"));
+				return false;
 			}
 			if ((header.get() & 0xFF) != Deflater.DEFLATED) {
-				throw new IOException("Invalid Gzip method");
+				ended = true;
+				failing.failed(new IOException("Invalid Gzip method"));
+				return false;
 			}
 			int flags = header.get() & 0xFF;
 			if ((flags & FEXTRA) == 0) {
@@ -101,7 +117,7 @@ final class GzipReader {
 		if (!extraCountRead) {
 			while (extraCountBuffer.hasRemaining()) {
 				if (!deflated.hasRemaining()) {
-					return;
+					return true;
 				}
 				extraCountBuffer.put(deflated.get());
 			}
@@ -111,14 +127,14 @@ final class GzipReader {
 		}
 		while (extraSkipped < extraCount) {
 			if (!deflated.hasRemaining()) {
-				return;
+				return true;
 			}
 			deflated.get();
 			extraSkipped++;
 		}
 		while (!nameSkipped) {
 			if (!deflated.hasRemaining()) {
-				return;
+				return true;
 			}
 			if (deflated.get() == 0) {
 				nameSkipped = true;
@@ -126,7 +142,7 @@ final class GzipReader {
 		}
 		while (!commentSkipped) {
 			if (!deflated.hasRemaining()) {
-				return;
+				return true;
 			}
 			if (deflated.get() == 0) {
 				commentSkipped = true;
@@ -134,7 +150,7 @@ final class GzipReader {
 		}
 		while (headerCrcSkipped < 2) {
 			if (!deflated.hasRemaining()) {
-				return;
+				return true;
 			}
 			deflated.get();
 			headerCrcSkipped++;
@@ -154,25 +170,49 @@ final class GzipReader {
 					crc.update(inflated.array(), inflated.position(), c);
 					inflated.position(inflated.position() + c);
 				} catch (DataFormatException e) {
-					throw new IOException("Could not inflate", e);
+					ended = true;
+					failing.failed(new IOException("Could not inflate", e));
+					return false;
 				}
 				inflated.flip();
-				handler.handle(null, inflated);
+				wrappee.received(inflated);
 			}
 		}
+		return true;
     }
     
-    public void close(ByteBufferHandler handler) throws IOException {
+    @Override
+    public void ended() {
+		if (ended) {
+			throw new IllegalStateException();
+		}
     	if (previewFooter.position() < previewFooter.capacity()) {
-			throw new IOException("Footer too short");
+    		ended = true;
+    		failing.failed(new IOException("Footer too short"));
+    		return;
     	}
     	previewFooter.flip();
 		previewFooter.order(ByteOrder.LITTLE_ENDIAN);
 		if ((previewFooter.getInt() & 0xFFFFFFFFL) != crc.getValue()) {
-			throw new IOException("Bad CRC");
+			ended = true;
+			failing.failed(new IOException("Bad CRC"));
+    		return;
 		}
 		if ((previewFooter.getInt() & 0xFFFFFFFFL) != inflater.getBytesWritten()) {
-			throw new IOException("Bad length");
+			ended = true;
+			failing.failed(new IOException("Bad length"));
+    		return;
 		}
+		ended = true;
+		wrappee.ended();
 	}
+    
+    @Override
+    public void failed(IOException e) {
+		if (ended) {
+			throw new IllegalStateException();
+		}
+		ended = true;
+		failing.failed(e);
+    }
 }

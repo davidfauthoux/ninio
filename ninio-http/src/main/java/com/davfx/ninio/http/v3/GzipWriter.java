@@ -5,11 +5,10 @@ import java.nio.ByteOrder;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
-import com.davfx.ninio.core.ByteBufferHandler;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-final class GzipWriter {
+final class GzipWriter implements HttpContentSender {
 	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
 
@@ -19,7 +18,12 @@ final class GzipWriter {
 	private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
 	private final CRC32 crc = new CRC32();
 
-	public GzipWriter() {
+	private final HttpContentSender wrappee;
+	
+	private boolean finished = false;
+	
+	public GzipWriter(HttpContentSender wrappee) {
+		this.wrappee = wrappee;
 	}
 
 	private ByteBuffer buildGzipFooter() {
@@ -45,22 +49,33 @@ final class GzipWriter {
 		return b;
 	}
 
-	public void handle(ByteBuffer buffer, ByteBufferHandler handler) {
+	@Override
+	public HttpContentSender send(ByteBuffer buffer) {
+		if (finished) {
+			throw new IllegalStateException();
+		}
 		deflater.setInput(buffer.array(), buffer.position(), buffer.remaining());
 		crc.update(buffer.array(), buffer.position(), buffer.remaining());
 		buffer.position(buffer.limit());
-		write(handler);
+		write();
+		return this;
 	}
 
-	public void close(ByteBufferHandler handler) {
+	@Override
+	public void finish() {
+		if (finished) {
+			throw new IllegalStateException();
+		}
+		finished = true;
 		deflater.finish();
-		write(handler);
-		handler.handle(null, buildGzipFooter());
+		write();
+		wrappee.send(buildGzipFooter());
+		wrappee.finish();
 	}
 
-	private void write(ByteBufferHandler handler) {
+	private void write() {
 		if (!gzipHeaderWritten) {
-			handler.handle(null, buildGzipHeaders());
+			wrappee.send(buildGzipHeaders());
 			gzipHeaderWritten = true;
 		}
 		while (true) {
@@ -72,7 +87,13 @@ final class GzipWriter {
 			}
 			deflated.position(deflated.position() + c);
 			deflated.flip();
-			handler.handle(null, deflated);
+			wrappee.send(deflated);
 		}
+	}
+	
+	@Override
+	public void cancel() {
+		finished = true;
+		wrappee.cancel();
 	}
 }

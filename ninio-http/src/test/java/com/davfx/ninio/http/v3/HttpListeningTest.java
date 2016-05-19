@@ -1,6 +1,5 @@
 package com.davfx.ninio.http.v3;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.Executors;
 
@@ -9,19 +8,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.TcpSocketServer;
-import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.HttpServer;
-import com.davfx.ninio.http.HttpServerHandler;
-import com.davfx.ninio.http.HttpServerHandlerFactory;
-import com.davfx.ninio.http.InMemoryBuffers;
-import com.davfx.ninio.http.v3.HttpListeningHandler.ConnectionHandler.ResponseHandler.ContentSender;
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableMultimap;
 
 public class HttpListeningTest {
 	
@@ -35,14 +25,14 @@ public class HttpListeningTest {
 				public ConnectionHandler create() {
 					return new ConnectionHandler() {
 						@Override
-						public RequestHandler handle(HttpRequest request, final ResponseHandler responseHandler) {
-							return new RequestHandler() {
+						public HttpContentReceiver handle(HttpRequest request, final ResponseHandler responseHandler) {
+							return new HttpContentReceiver() {
 								@Override
 								public void received(ByteBuffer buffer) {
 								}
 								@Override
 								public void ended() {
-									ContentSender sender = responseHandler.send(new HttpResponse());
+									HttpContentSender sender = responseHandler.send(new HttpResponse());
 									sender.send(ByteBuffer.wrap("Hello".getBytes(Charsets.UTF_8))).finish();
 								}
 							};

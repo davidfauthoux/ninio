@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.http.HttpResponse;
 
 final class RedirectHttpReceiver implements HttpReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedirectHttpReceiver.class);
@@ -35,7 +34,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	}
 
 	@Override
-	public HttpReceiver.ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+	public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 		if (levelOfRedirect < maxRedirections) {
 			String location = null;
 			for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
@@ -92,7 +91,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 					.receiving(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, receiver, failing))
 					.build().create(newRequest).finish();
 				
-				return new HttpReceiver.ContentReceiver() {
+				return new HttpContentReceiver() {
 					@Override
 					public void received(ByteBuffer buffer) {
 					}
