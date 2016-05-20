@@ -102,24 +102,38 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		private ClosingFailingReceiver receiver = null;
 		private final Deque<ClosingFailingReceiver> nextReceivers = new LinkedList<>();
 		
-		public ReusableConnector(TcpSocket.Builder factory, Queue queue, boolean secure) {
+		public ReusableConnector(final Executor executor, TcpSocket.Builder factory, Queue queue, boolean secure) {
 			this.secure = secure;
 			
 			factory.receiving(new Receiver() {
 				@Override
-				public void received(Connector connector, Address address, ByteBuffer buffer) {
-					if (receiver != null) {
-						receiver.received(connector, null, buffer);
-					}
+				public void received(final Connector connector, Address address, final ByteBuffer buffer) {
+					executor.execute(new Runnable() {
+						@Override
+						public void run() {
+							while (buffer.hasRemaining()) {
+								if (receiver == null) {
+									return;
+								}
+								receiver.received(connector, null, buffer);
+							}
+						}
+					});
 				}
 			});
 			
 			factory.closing(new Closing() {
 				@Override
 				public void closed() {
-					if (receiver != null) {
-						receiver.closed();
-					}
+					executor.execute(new Runnable() {
+						@Override
+						public void run() {
+							if (receiver == null) {
+								return;
+							}
+							receiver.closed();
+						}
+					});
 				}
 			});
 
@@ -143,8 +157,10 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		
 		public void pop() {
 			if (!nextReceivers.isEmpty()) {
+				LOGGER.debug("To next receiver");
 				receiver = nextReceivers.removeFirst();
 			} else {
+				LOGGER.debug("Nothing to pop");
 				receiver = null;
 			}
 		}
@@ -338,26 +354,17 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							
 							@Override
 							public void closed() {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										if (reusableConnector == null) {
-											return;
-										}
-										
-										if (responseReceiver != null) {
-											responseReceiver.ended();
-										}
-				
-										if (responseKeepAlive) {
-											reusableConnector.pop();
-										} else {
-											abruptlyClose(new IOException("Connection not kept alive"));
-										}
+								if (reusableConnector == null) {
+									return;
+								}
+								
+								if (responseReceiver != null) {
+									responseReceiver.ended();
+								}
 		
-										reusableConnector = null;
-									}
-								});
+								abruptlyClose(new IOException("Connection not kept alive"));
+
+								reusableConnector = null;
 							}
 							
 							@Override
@@ -367,83 +374,101 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							
 							@Override
 							public void received(Connector c, final Address address, final ByteBuffer buffer) {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										if (reusableConnector == null) {
-											return;
-										}
-										
-										while (!responseLineRead) {
-											String line = lineReader.handle(buffer);
-											if (line == null) {
-												return;
-											}
-											LOGGER.trace("Response line: {}", line);
-											if (!parseResponseLine(line)) {
-												return;
-											}
-											responseLineRead = true;
-											responseHeadersRead = false;
-										}
-										
-										while (!responseHeadersRead) {
-											String line = lineReader.handle(buffer);
-											if (line == null) {
-												return;
-											}
-											if (line.isEmpty()) {
-												LOGGER.trace("Header line empty");
-												responseHeadersRead = true;
-												
-												responseReceiver = redirectingReceiver.received(disconnectable, new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(responseHeaders)));
-
-												for (String contentLengthValue : responseHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
-													try {
-														long responseContentLength = Long.parseLong(contentLengthValue);
-														responseReceiver = new ContentLengthReader(responseContentLength, abruptlyClosingFailing, responseReceiver);
-													} catch (NumberFormatException e) {
-														LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
-													}
-													break;
-												}
-												
-												for (String contentEncodingValue : responseHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-													if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-														responseReceiver = new GzipReader(abruptlyClosingFailing, responseReceiver);
-													}
-													break;
-												}
-												
-												for (String transferEncodingValue : responseHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-													if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-														responseReceiver = new ChunkedReader(abruptlyClosingFailing, responseReceiver);
-													}
-													break;
-												}
+								if (reusableConnector == null) {
+									return;
+								}
 								
-												responseKeepAlive = (responseVersion != HttpVersion.HTTP10);
-												for (String connectionValue : responseHeaders.get(HttpHeaderKey.CONNECTION)) {
-													if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-														responseKeepAlive = false;
-													} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-														responseKeepAlive = true;
-													}
-												}
-												LOGGER.trace("Keep alive = {}", responseKeepAlive);
-											} else {
-												LOGGER.trace("Header line: {}", line);
-												if (!addHeader(line)) {
+								while (!responseLineRead) {
+									String line = lineReader.handle(buffer);
+									if (line == null) {
+										return;
+									}
+									LOGGER.trace("Response line: {}", line);
+									if (!parseResponseLine(line)) {
+										return;
+									}
+									responseLineRead = true;
+									responseHeadersRead = false;
+								}
+								
+								while (!responseHeadersRead) {
+									String line = lineReader.handle(buffer);
+									if (line == null) {
+										return;
+									}
+									if (line.isEmpty()) {
+										LOGGER.trace("Header line empty");
+										responseHeadersRead = true;
+										
+										final HttpContentReceiver receiver = redirectingReceiver.received(disconnectable, new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(responseHeaders)));
+										
+										responseReceiver = new HttpContentReceiver() {
+											@Override
+											public void received(ByteBuffer buffer) {
+												if (reusableConnector == null) {
 													return;
 												}
+												
+												receiver.received(buffer);
 											}
+											@Override
+											public void ended() {
+												if (reusableConnector == null) {
+													return;
+												}
+												
+												receiver.ended();
+												
+												reusableConnector.pop();
+												reusableConnector = null;
+
+											}
+										};
+
+										for (String contentLengthValue : responseHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
+											try {
+												long responseContentLength = Long.parseLong(contentLengthValue);
+												responseReceiver = new ContentLengthReader(responseContentLength, abruptlyClosingFailing, responseReceiver);
+											} catch (NumberFormatException e) {
+												LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+											}
+											break;
 										}
 										
-										if (responseReceiver != null) {
-											responseReceiver.received(buffer);
+										for (String contentEncodingValue : responseHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+											if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+												responseReceiver = new GzipReader(abruptlyClosingFailing, responseReceiver);
+											}
+											break;
+										}
+										
+										for (String transferEncodingValue : responseHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+											if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+												responseReceiver = new ChunkedReader(abruptlyClosingFailing, responseReceiver);
+											}
+											break;
+										}
+						
+										responseKeepAlive = (responseVersion != HttpVersion.HTTP10);
+										for (String connectionValue : responseHeaders.get(HttpHeaderKey.CONNECTION)) {
+											if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+												responseKeepAlive = false;
+											} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+												responseKeepAlive = true;
+											}
+										}
+										LOGGER.trace("Keep alive = {}", responseKeepAlive);
+									} else {
+										LOGGER.trace("Header line: {}", line);
+										if (!addHeader(line)) {
+											return;
 										}
 									}
-								});
+								}
+								
+								if (responseReceiver != null) {
+									responseReceiver.received(buffer);
+								}
 							}
 						});
 						
@@ -457,7 +482,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							reusableConnector.connector.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
 						}
 						
-						reusableConnector.connector.send(null, emptyLineByteBuffer);
+						reusableConnector.connector.send(null, emptyLineByteBuffer.duplicate());
 					}
 					
 					@Override
@@ -586,7 +611,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 										if ((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null)) && (reusedConnector.secure == request.secure)) {
 											id = reusedId;
 			
-											LOGGER.trace("Recycling connection {}", id);
+											LOGGER.trace("Recycling connection (id = {})", id);
 											
 											reusableConnector = reusedConnector;
 	
@@ -599,8 +624,10 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		
 								id = nextReusableConnectorId;
 								nextReusableConnectorId++;
-								
-								reusableConnector = new ReusableConnector(request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure);
+
+								LOGGER.trace("Creating a new connection (id = {})", id);
+
+								reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure);
 								reusableConnectors.put(id, reusableConnector);
 
 								reusableConnector.reusable = false;

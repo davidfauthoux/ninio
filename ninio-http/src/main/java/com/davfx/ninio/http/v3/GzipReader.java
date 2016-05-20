@@ -10,17 +10,12 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.davfx.ninio.core.v3.Failing;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 final class GzipReader implements HttpContentReceiver, Failing {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(GzipReader.class);
-	
 	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
 
@@ -107,7 +102,6 @@ final class GzipReader implements HttpContentReceiver, Failing {
 	}
 	
     private boolean read(ByteBuffer deflated) {
-		LOGGER.debug("-----> READ {}", deflated);
 		if (!headerRead) {
 			while (header.hasRemaining()) {
 				if (!deflated.hasRemaining()) {
@@ -208,7 +202,6 @@ final class GzipReader implements HttpContentReceiver, Failing {
 					return false;
 				}
 				inflated.flip();
-				System.err.println("-------> " + inflated.remaining() + " " + new String(inflated.array(), inflated.arrayOffset() + inflated.position(), inflated.remaining()));
 				wrappee.received(inflated);
 			}
 		}
