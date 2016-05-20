@@ -487,119 +487,113 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					
 					@Override
 					public HttpContentSender create(final HttpRequest request) {
-						requestVersion = HttpVersion.HTTP11;
+						return new HttpContentSender() {
+							private HttpContentSender sender = null;
 
-						HttpContentSender sender = new HttpContentSender() {
-							@Override
-							public HttpContentSender send(final ByteBuffer buffer) {
-								executor.execute(new Runnable() {
+							private void sendRequest() {
+								if (sender != null) {
+									return;
+								}
+								
+								sender = new HttpContentSender() {
 									@Override
-									public void run() {
+									public HttpContentSender send(ByteBuffer buffer) {
 										if (reusableConnector == null) {
-											return;
+											return this;
 										}
 										
 										reusableConnector.connector.send(null, buffer);
+										return this;
 									}
-								});
-								return this;
-							}
-							
-							@Override
-							public void finish() {
-								executor.execute(new Runnable() {
+									
 									@Override
-									public void run() {
+									public void finish() {
 										if (reusableConnector == null) {
 											return;
 										}
 											
 										reusableConnector.reusable = true;
 									}
-								});
-							}
-		
-							@Override
-							public void cancel() {
-								executor.execute(new Runnable() {
+				
 									@Override
-									public void run() {
+									public void cancel() {
+										if (reusableConnector == null) {
+											return;
+										}
+											
 										abruptlyClose(new IOException("Canceled"));
 									}
-								});
-							}
-						};
-						
-						completedHeaders = ArrayListMultimap.create(request.headers);
-						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
-							String portSuffix;
-							if ((request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_SECURE_PORT))
-							|| (!request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_PORT))) {
-								portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.getPort());
-							} else {
-								portSuffix = "";
-							}
-							completedHeaders.put(HttpHeaderKey.HOST, request.address.getHost() + portSuffix);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
-							completedHeaders.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
-							completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
-							completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
-							completedHeaders.put(HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.USER_AGENT)) {
-							completedHeaders.put(HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT)) {
-							completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
-						}
-						
-						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-								LOGGER.debug("Request is chunked");
-								sender = new ChunkedWriter(sender);
-							}
-							break;
-						}
-		
-						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-								LOGGER.debug("Request is gzip");
-								sender = new GzipWriter(sender);
-							}
-							break;
-						}
-						
-						for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
-							try {
-								long headerContentLength = Long.parseLong(contentLengthValue);
-								LOGGER.debug("Request content length: {}", headerContentLength);
-								sender = new ContentLengthWriter(headerContentLength, sender);
-							} catch (NumberFormatException e) {
-								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
-							}
-							break;
-						}
-						
-						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-						for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
-							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-								headerKeepAlive = false;
-							} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-								headerKeepAlive = true;
-							}
-						}
-						final boolean requestKeepAlive = headerKeepAlive;
-						
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
+								};
+								
+								requestVersion = HttpVersion.HTTP11;
+								
+								completedHeaders = ArrayListMultimap.create(request.headers);
+								if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
+									String portSuffix;
+									if ((request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_SECURE_PORT))
+									|| (!request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_PORT))) {
+										portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.getPort());
+									} else {
+										portSuffix = "";
+									}
+									completedHeaders.put(HttpHeaderKey.HOST, request.address.getHost() + portSuffix);
+								}
+								if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
+									completedHeaders.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
+								}
+								if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
+									completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
+								}
+								if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+									completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
+								}
+								if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
+									completedHeaders.put(HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
+								}
+								if (!completedHeaders.containsKey(HttpHeaderKey.USER_AGENT)) {
+									completedHeaders.put(HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
+								}
+								if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT)) {
+									completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
+								}
+								
+								for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+									if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+										LOGGER.debug("Request is chunked");
+										sender = new ChunkedWriter(sender);
+									}
+									break;
+								}
+				
+								for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+									if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+										LOGGER.debug("Request is gzip");
+										sender = new GzipWriter(sender);
+									}
+									break;
+								}
+								
+								for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
+									try {
+										long headerContentLength = Long.parseLong(contentLengthValue);
+										LOGGER.debug("Request content length: {}", headerContentLength);
+										sender = new ContentLengthWriter(headerContentLength, sender);
+									} catch (NumberFormatException e) {
+										LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+									}
+									break;
+								}
+								
+								boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
+								for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
+									if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+										headerKeepAlive = false;
+									} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+										headerKeepAlive = true;
+									}
+								}
+								final boolean requestKeepAlive = headerKeepAlive;
+								
 								if (id >= 0L) {
 									throw new IllegalStateException("Could not be created twice");
 								}
@@ -633,9 +627,43 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								reusableConnector.reusable = false;
 								prepare(request);
 							}
-						});
+							
+							@Override
+							public HttpContentSender send(final ByteBuffer buffer) {
+								executor.execute(new Runnable() {
+									@Override
+									public void run() {
+										sendRequest();
+										sender.send(buffer);
+									}
+								});
+								return this;
+							}
+							
+							@Override
+							public void finish() {
+								executor.execute(new Runnable() {
+									@Override
+									public void run() {
+										sendRequest();
+										sender.finish();
+									}
+								});
+							}
 		
-						return sender;
+							@Override
+							public void cancel() {
+								executor.execute(new Runnable() {
+									@Override
+									public void run() {
+										if (sender == null) {
+											return;
+										}
+										sender.cancel();
+									}
+								});
+							}
+						};
 					}
 				};
 			}
