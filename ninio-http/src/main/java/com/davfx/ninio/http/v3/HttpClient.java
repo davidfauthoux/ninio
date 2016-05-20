@@ -225,6 +225,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 				return new HttpReceiverRequest() {
 					private long id = -1L;
 					private ReusableConnector reusableConnector = null;
+					private HttpVersion requestVersion;
 					private Multimap<String, String> completedHeaders;
 					
 					private void abruptlyClose(IOException ioe) {
@@ -311,7 +312,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 									return false;
 								}
 								String version = responseLine.substring(0, i);
-								if (version.startsWith(HttpSpecification.HTTP_VERSION_PREFIX)) {
+								if (!version.startsWith(HttpSpecification.HTTP_VERSION_PREFIX)) {
 									abruptlyClosingFailing.failed(new IOException("Unsupported version: " + version));
 									return false;
 								}
@@ -344,7 +345,9 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 											return;
 										}
 										
-										responseReceiver.ended();
+										if (responseReceiver != null) {
+											responseReceiver.ended();
+										}
 				
 										if (responseKeepAlive) {
 											reusableConnector.pop();
@@ -446,7 +449,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						
 						LOGGER.trace("Sending request: {}", request);
 						
-						reusableConnector.connector.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpVersion.HTTP11.toString()));
+						reusableConnector.connector.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()));
 
 						for (Map.Entry<String, String> h : completedHeaders.entries()) {
 							String k = h.getKey();
@@ -459,6 +462,8 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					
 					@Override
 					public HttpContentSender create(final HttpRequest request) {
+						requestVersion = HttpVersion.HTTP11;
+
 						HttpContentSender sender = new HttpContentSender() {
 							@Override
 							public HttpContentSender send(final ByteBuffer buffer) {
@@ -500,8 +505,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							}
 						};
 						
-						// HTTP 1.1 assumed
-						
 						completedHeaders = ArrayListMultimap.create(request.headers);
 						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
 							String portSuffix;
@@ -532,9 +535,26 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
 						}
 						
+						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+								LOGGER.debug("Request is chunked");
+								sender = new ChunkedWriter(sender);
+							}
+							break;
+						}
+		
+						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+								LOGGER.debug("Request is gzip");
+								sender = new GzipWriter(sender);
+							}
+							break;
+						}
+						
 						for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
 							try {
 								long headerContentLength = Long.parseLong(contentLengthValue);
+								LOGGER.debug("Request content length: {}", headerContentLength);
 								sender = new ContentLengthWriter(headerContentLength, sender);
 							} catch (NumberFormatException e) {
 								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
@@ -542,22 +562,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							break;
 						}
 						
-						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-								sender = new GzipWriter(sender);
-							}
-							break;
-						}
-						
-						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-								sender = new ChunkedWriter(sender);
-							}
-							break;
-						}
-		
-						/* Ignored
-						boolean headerKeepAlive = true;
+						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
 						for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
 							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
 								headerKeepAlive = false;
@@ -565,9 +570,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								headerKeepAlive = true;
 							}
 						}
-						*/
-						
-						// Headers are sent as is
+						final boolean requestKeepAlive = headerKeepAlive;
 						
 						executor.execute(new Runnable() {
 							@Override
@@ -576,19 +579,21 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 									throw new IllegalStateException("Could not be created twice");
 								}
 								
-								for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
-									long reusedId = e.getKey();
-									ReusableConnector reusedConnector = e.getValue();
-									if ((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null)) && (reusedConnector.secure == request.secure)) {
-										id = reusedId;
-		
-										LOGGER.trace("Recycling connection {}", id);
-										
-										reusableConnector = reusedConnector;
-
-										reusableConnector.reusable = false;
-										prepare(request);
-										return;
+								if (requestKeepAlive) {
+									for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
+										long reusedId = e.getKey();
+										ReusableConnector reusedConnector = e.getValue();
+										if ((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null)) && (reusedConnector.secure == request.secure)) {
+											id = reusedId;
+			
+											LOGGER.trace("Recycling connection {}", id);
+											
+											reusableConnector = reusedConnector;
+	
+											reusableConnector.reusable = false;
+											prepare(request);
+											return;
+										}
 									}
 								}
 		

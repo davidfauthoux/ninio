@@ -16,8 +16,9 @@ public final class HttpResponse {
 	public HttpResponse(int status, String reason) {
 		this(status, reason, ImmutableMultimap.<String, String>of());
 	}
-	public HttpResponse() {
-		this(HttpStatus.OK, HttpMessage.OK);
+	
+	public static HttpResponse ok() {
+		return new HttpResponse(HttpStatus.OK, HttpMessage.OK);
 	}
 	
 	@Override

@@ -3,10 +3,15 @@ package com.davfx.ninio.http.v3;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.Deque;
+import java.util.LinkedList;
 import java.util.zip.CRC32;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.v3.Failing;
 import com.typesafe.config.Config;
@@ -14,6 +19,8 @@ import com.typesafe.config.ConfigFactory;
 
 final class GzipReader implements HttpContentReceiver, Failing {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(GzipReader.class);
+	
 	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
 
@@ -37,7 +44,10 @@ final class GzipReader implements HttpContentReceiver, Failing {
     private boolean commentSkipped = false;
     private int headerCrcSkipped = 2;
 
-    private final ByteBuffer previewFooter = ByteBuffer.allocate(8);
+    private static final int FOOTER_LENGTH = 8;
+    
+    private final Deque<ByteBuffer> previewFooter = new LinkedList<>();
+    private int currentPreviewFooterLength = 0;
 
 	private final HttpContentReceiver wrappee;
 	private final Failing failing;
@@ -51,30 +61,53 @@ final class GzipReader implements HttpContentReceiver, Failing {
 	
 	@Override
 	public void received(ByteBuffer deflated) {
-		if ((previewFooter.position() + deflated.remaining()) > previewFooter.capacity()) {
-			previewFooter.flip();
-			if (!read(previewFooter)) {
+		if (ended) {
+			throw new IllegalStateException();
+		}
+
+		if (deflated.remaining() >= FOOTER_LENGTH) {
+			for (ByteBuffer b : previewFooter) {
+				if (!read(b)) {
+					return;
+				}
+			}
+			previewFooter.clear();
+			currentPreviewFooterLength = 0;
+			
+			ByteBuffer deflatedKeepingFooter = deflated.duplicate();
+			deflatedKeepingFooter.limit(deflatedKeepingFooter.limit() - FOOTER_LENGTH);
+			deflated.position(deflated.position() + deflatedKeepingFooter.remaining());
+			if (!read(deflatedKeepingFooter)) {
 				return;
 			}
-			previewFooter.rewind();
-		}
-		
-		if (deflated.remaining() < (previewFooter.capacity() - previewFooter.position())) {
-			previewFooter.put(deflated);
+
+			currentPreviewFooterLength += deflated.remaining();
+			previewFooter.addLast(deflated);
 			return;
+		} else {
+			currentPreviewFooterLength += deflated.remaining();
+			previewFooter.addLast(deflated);
+
+			int toFlush = FOOTER_LENGTH - currentPreviewFooterLength;
+			while (toFlush > 0) {
+				ByteBuffer b = previewFooter.getFirst();
+
+				ByteBuffer d = b.duplicate();
+				d.limit(Math.min(d.limit(), toFlush));
+				b.position(b.position() + d.remaining());
+				toFlush -= d.remaining();
+				if (!read(d)) {
+					return;
+				}
+				if (!b.hasRemaining()) {
+					previewFooter.removeFirst();
+				}
+			}
 		}
-		
-		ByteBuffer deflatedKeepingFooter = deflated.duplicate();
-		deflatedKeepingFooter.limit(deflatedKeepingFooter.limit() - previewFooter.position());
-		if (!read(deflatedKeepingFooter)) {
-			return;
-		}
-		ByteBuffer footer = deflated.duplicate();
-		footer.position(footer.limit() - previewFooter.position());
-		previewFooter.put(footer);
 	}
 	
     private boolean read(ByteBuffer deflated) {
+		LOGGER.debug("-----> READ {}", deflated);
 		if (!headerRead) {
 			while (header.hasRemaining()) {
 				if (!deflated.hasRemaining()) {
@@ -175,6 +208,7 @@ final class GzipReader implements HttpContentReceiver, Failing {
 					return false;
 				}
 				inflated.flip();
+				System.err.println("-------> " + inflated.remaining() + " " + new String(inflated.array(), inflated.arrayOffset() + inflated.position(), inflated.remaining()));
 				wrappee.received(inflated);
 			}
 		}
@@ -186,19 +220,24 @@ final class GzipReader implements HttpContentReceiver, Failing {
 		if (ended) {
 			throw new IllegalStateException();
 		}
-    	if (previewFooter.position() < previewFooter.capacity()) {
+    	if (currentPreviewFooterLength < FOOTER_LENGTH) {
     		ended = true;
-    		failing.failed(new IOException("Footer too short"));
+    		failing.failed(new IOException("Footer too short, missing " + (FOOTER_LENGTH - currentPreviewFooterLength) + " bytes"));
     		return;
     	}
-    	previewFooter.flip();
-		previewFooter.order(ByteOrder.LITTLE_ENDIAN);
-		if ((previewFooter.getInt() & 0xFFFFFFFFL) != crc.getValue()) {
+    	
+    	ByteBuffer b = ByteBuffer.allocate(FOOTER_LENGTH);
+    	for (ByteBuffer d : previewFooter) {
+    		b.put(d);
+    	}
+    	b.flip();
+		b.order(ByteOrder.LITTLE_ENDIAN);
+		if ((b.getInt() & 0xFFFFFFFFL) != crc.getValue()) {
 			ended = true;
 			failing.failed(new IOException("Bad CRC"));
     		return;
 		}
-		if ((previewFooter.getInt() & 0xFFFFFFFFL) != inflater.getBytesWritten()) {
+		if ((b.getInt() & 0xFFFFFFFFL) != inflater.getBytesWritten()) {
 			ended = true;
 			failing.failed(new IOException("Bad length"));
     		return;

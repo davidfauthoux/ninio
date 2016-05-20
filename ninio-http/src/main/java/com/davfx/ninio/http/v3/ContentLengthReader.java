@@ -26,9 +26,6 @@ final class ContentLengthReader implements HttpContentReceiver, Failing {
 		if (ended) {
 			throw new IllegalStateException();
 		}
-		if (!buffer.hasRemaining()) {
-			return;
-		}
 		
 		if ((countRead + buffer.remaining()) > contentLength) {
 			ByteBuffer b = buffer.duplicate();
@@ -37,7 +34,9 @@ final class ContentLengthReader implements HttpContentReceiver, Failing {
 		}
 		
 		countRead += buffer.remaining();
-		wrappee.received(buffer);
+		if (buffer.hasRemaining()) {
+			wrappee.received(buffer);
+		}
 		if (countRead == contentLength) {
 			ended = true;
 			wrappee.ended();
