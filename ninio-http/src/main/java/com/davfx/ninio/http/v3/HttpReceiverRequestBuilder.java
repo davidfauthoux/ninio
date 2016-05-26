@@ -6,5 +6,5 @@ public interface HttpReceiverRequestBuilder {
 	HttpReceiverRequestBuilder failing(Failing failing);
 	HttpReceiverRequestBuilder receiving(HttpReceiver receiver);
 	HttpReceiverRequestBuilder maxRedirections(int maxRedirections);
-	HttpReceiverRequest build();
+	HttpContentSender build(HttpRequest request);
 }

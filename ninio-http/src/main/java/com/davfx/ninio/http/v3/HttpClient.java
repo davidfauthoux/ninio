@@ -19,7 +19,7 @@ import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.SslSocketBuilder;
+import com.davfx.ninio.core.v3.SecureSocketBuilder;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.google.common.collect.ArrayListMultimap;
@@ -49,7 +49,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		return new Builder() {
 			private Executor executor = null;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
-			private TcpSocket.Builder secureConnectorFactory = new SslSocketBuilder(TcpSocket.builder());
+			private TcpSocket.Builder secureConnectorFactory = new SecureSocketBuilder(TcpSocket.builder());
 			private boolean pipelining = false;
 			
 			@Override
@@ -233,12 +233,14 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 			}
 			
 			@Override
-			public HttpReceiverRequest build() {
+			public HttpContentSender build(final HttpRequest request) {
 				final HttpReceiver r = receiver;
 				final Failing f = failing;
 				final int thisMaxRedirections = maxRedirections;
 				
-				return new HttpReceiverRequest() {
+				return new HttpContentSender() {
+					private HttpContentSender sender = null;
+
 					private long id = -1L;
 					private ReusableConnector reusableConnector = null;
 					private HttpVersion requestVersion;
@@ -361,7 +363,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								if (responseReceiver != null) {
 									responseReceiver.ended();
 								}
-		
+
 								abruptlyClose(new IOException("Connection not kept alive"));
 
 								reusableConnector = null;
@@ -485,185 +487,178 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						reusableConnector.connector.send(null, emptyLineByteBuffer.duplicate());
 					}
 					
-					@Override
-					public HttpContentSender create(final HttpRequest request) {
-						return new HttpContentSender() {
-							private HttpContentSender sender = null;
-
-							private void sendRequest() {
-								if (sender != null) {
-									return;
-								}
-								
-								sender = new HttpContentSender() {
-									@Override
-									public HttpContentSender send(ByteBuffer buffer) {
-										if (reusableConnector == null) {
-											return this;
-										}
-										
-										reusableConnector.connector.send(null, buffer);
-										return this;
-									}
-									
-									@Override
-									public void finish() {
-										if (reusableConnector == null) {
-											return;
-										}
-											
-										reusableConnector.reusable = true;
-									}
-				
-									@Override
-									public void cancel() {
-										if (reusableConnector == null) {
-											return;
-										}
-											
-										abruptlyClose(new IOException("Canceled"));
-									}
-								};
-								
-								requestVersion = HttpVersion.HTTP11;
-								
-								completedHeaders = ArrayListMultimap.create(request.headers);
-								if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
-									String portSuffix;
-									if ((request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_SECURE_PORT))
-									|| (!request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_PORT))) {
-										portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.getPort());
-									} else {
-										portSuffix = "";
-									}
-									completedHeaders.put(HttpHeaderKey.HOST, request.address.getHost() + portSuffix);
-								}
-								if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
-									completedHeaders.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
-								}
-								if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
-									completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
-								}
-								if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
-									completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
-								}
-								if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
-									completedHeaders.put(HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
-								}
-								if (!completedHeaders.containsKey(HttpHeaderKey.USER_AGENT)) {
-									completedHeaders.put(HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
-								}
-								if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT)) {
-									completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
-								}
-								
-								for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-									if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-										LOGGER.debug("Request is chunked");
-										sender = new ChunkedWriter(sender);
-									}
-									break;
-								}
-				
-								for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-									if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-										LOGGER.debug("Request is gzip");
-										sender = new GzipWriter(sender);
-									}
-									break;
-								}
-								
-								for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
-									try {
-										long headerContentLength = Long.parseLong(contentLengthValue);
-										LOGGER.debug("Request content length: {}", headerContentLength);
-										sender = new ContentLengthWriter(headerContentLength, sender);
-									} catch (NumberFormatException e) {
-										LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
-									}
-									break;
-								}
-								
-								boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-								for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
-									if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-										headerKeepAlive = false;
-									} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-										headerKeepAlive = true;
-									}
-								}
-								final boolean requestKeepAlive = headerKeepAlive;
-								
-								if (id >= 0L) {
-									throw new IllegalStateException("Could not be created twice");
-								}
-								
-								if (requestKeepAlive) {
-									for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
-										long reusedId = e.getKey();
-										ReusableConnector reusedConnector = e.getValue();
-										if ((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null)) && (reusedConnector.secure == request.secure)) {
-											id = reusedId;
-			
-											LOGGER.trace("Recycling connection (id = {})", id);
-											
-											reusableConnector = reusedConnector;
-	
-											reusableConnector.reusable = false;
-											prepare(request);
-											return;
-										}
-									}
-								}
-		
-								id = nextReusableConnectorId;
-								nextReusableConnectorId++;
-
-								LOGGER.trace("Creating a new connection (id = {})", id);
-
-								reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure);
-								reusableConnectors.put(id, reusableConnector);
-
-								reusableConnector.reusable = false;
-								prepare(request);
-							}
-							
+					private void sendRequest() {
+						if (sender != null) {
+							return;
+						}
+						
+						sender = new HttpContentSender() {
 							@Override
-							public HttpContentSender send(final ByteBuffer buffer) {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										sendRequest();
-										sender.send(buffer);
-									}
-								});
+							public HttpContentSender send(ByteBuffer buffer) {
+								if (reusableConnector == null) {
+									return this;
+								}
+								
+								reusableConnector.connector.send(null, buffer);
 								return this;
 							}
 							
 							@Override
 							public void finish() {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										sendRequest();
-										sender.finish();
-									}
-								});
+								if (reusableConnector == null) {
+									return;
+								}
+									
+								reusableConnector.reusable = true;
 							}
 		
 							@Override
 							public void cancel() {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										if (sender == null) {
-											return;
-										}
-										sender.cancel();
-									}
-								});
+								if (reusableConnector == null) {
+									return;
+								}
+									
+								abruptlyClose(new IOException("Canceled"));
 							}
 						};
+						
+						requestVersion = HttpVersion.HTTP11;
+						
+						completedHeaders = ArrayListMultimap.create(request.headers);
+						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
+							String portSuffix;
+							if ((request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_SECURE_PORT))
+							|| (!request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_PORT))) {
+								portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.getPort());
+							} else {
+								portSuffix = "";
+							}
+							completedHeaders.put(HttpHeaderKey.HOST, request.address.getHost() + portSuffix);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
+							completedHeaders.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
+							completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+							completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
+							completedHeaders.put(HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.USER_AGENT)) {
+							completedHeaders.put(HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT)) {
+							completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
+						}
+						
+						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+								LOGGER.debug("Request is chunked");
+								sender = new ChunkedWriter(sender);
+							}
+							break;
+						}
+		
+						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+								LOGGER.debug("Request is gzip");
+								sender = new GzipWriter(sender);
+							}
+							break;
+						}
+						
+						for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
+							try {
+								long headerContentLength = Long.parseLong(contentLengthValue);
+								LOGGER.debug("Request content length: {}", headerContentLength);
+								sender = new ContentLengthWriter(headerContentLength, sender);
+							} catch (NumberFormatException e) {
+								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+							}
+							break;
+						}
+						
+						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
+						for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
+							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+								headerKeepAlive = false;
+							} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+								headerKeepAlive = true;
+							}
+						}
+						final boolean requestKeepAlive = headerKeepAlive;
+						
+						if (id >= 0L) {
+							throw new IllegalStateException("Could not be created twice");
+						}
+						
+						if (requestKeepAlive) {
+							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
+								long reusedId = e.getKey();
+								ReusableConnector reusedConnector = e.getValue();
+								if ((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null)) && (reusedConnector.secure == request.secure)) {
+									id = reusedId;
+	
+									LOGGER.trace("Recycling connection (id = {})", id);
+									
+									reusableConnector = reusedConnector;
+
+									reusableConnector.reusable = false;
+									prepare(request);
+									return;
+								}
+							}
+						}
+
+						id = nextReusableConnectorId;
+						nextReusableConnectorId++;
+
+						LOGGER.trace("Creating a new connection (id = {})", id);
+
+						reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure);
+						reusableConnectors.put(id, reusableConnector);
+
+						reusableConnector.reusable = false;
+						prepare(request);
+					}
+					
+					@Override
+					public HttpContentSender send(final ByteBuffer buffer) {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								sendRequest();
+								sender.send(buffer);
+							}
+						});
+						return this;
+					}
+					
+					@Override
+					public void finish() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								sendRequest();
+								sender.finish();
+							}
+						});
+					}
+
+					@Override
+					public void cancel() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (sender == null) {
+									return;
+								}
+								sender.cancel();
+							}
+						});
 					}
 				};
 			}

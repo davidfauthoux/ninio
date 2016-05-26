@@ -5,7 +5,7 @@ import java.util.concurrent.Executor;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.TcpSocket.Builder;
 
-public final class SslSocketBuilder implements TcpSocket.Builder {
+public final class SecureSocketBuilder implements TcpSocket.Builder {
 	private Trust trust = new Trust();
 	private Executor executor = null;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
@@ -21,16 +21,16 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 	
 	private final TcpSocket.Builder wrappee;
 
-	public SslSocketBuilder(TcpSocket.Builder wrappee) {
+	public SecureSocketBuilder(TcpSocket.Builder wrappee) {
 		this.wrappee = wrappee;
 	}
 	
-	public SslSocketBuilder trust(Trust trust) {
+	public SecureSocketBuilder trust(Trust trust) {
 		this.trust = trust;
 		return this;
 	}
 	
-	public SslSocketBuilder with(Executor executor) {
+	public SecureSocketBuilder with(Executor executor) {
 		this.executor = executor;
 		return this;
 	}
@@ -79,7 +79,7 @@ public final class SslSocketBuilder implements TcpSocket.Builder {
 	
 	@Override
 	public Connector create(Queue queue) {
-		SslManager sslManager = new SslManager(trust, true, executor, byteBufferAllocator);
+		SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
 		sslManager.connecting = connecting;
 		sslManager.closing = closing;
 		sslManager.failing = failing;

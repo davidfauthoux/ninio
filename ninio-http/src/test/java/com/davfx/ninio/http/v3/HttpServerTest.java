@@ -13,7 +13,6 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
@@ -69,7 +68,7 @@ public class HttpServerTest {
 							String post = b.toString();
 							LOGGER.debug("Post received: {}", post);
 							LOGGER.debug("Ready to write");
-							write.write(new HttpResponse());
+							write.write(HttpResponse.ok());
 							write.handle(null, ByteBuffer.wrap(("hello:" + request.path + ":" + post).getBytes(Charsets.UTF_8)));
 							write.close();
 						}
@@ -93,9 +92,9 @@ public class HttpServerTest {
 						})
 						.receiving(new HttpReceiver() {
 							@Override
-							public ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+							public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 								LOGGER.debug("RESPONSE {}", response);
-								return new ContentReceiver() {
+								return new HttpContentReceiver() {
 									@Override
 									public void received(ByteBuffer buffer) {
 										LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
@@ -121,9 +120,9 @@ public class HttpServerTest {
 						})
 						.receiving(new HttpReceiver() {
 							@Override
-							public ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+							public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 								LOGGER.debug("RESPONSE {}", response);
-								return new ContentReceiver() {
+								return new HttpContentReceiver() {
 									@Override
 									public void received(ByteBuffer buffer) {
 										LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
@@ -136,7 +135,7 @@ public class HttpServerTest {
 							}
 						})
 						.build()
-						.create(HttpRequest.of("http://127.0.0.1:8080/test?a=b", HttpMethod.POST, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, "4"))).post(ByteBuffer.wrap("post".getBytes(Charsets.UTF_8))).finish();
+						.create(HttpRequest.of("http://127.0.0.1:8080/test?a=b", HttpMethod.POST, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, "4"))).send(ByteBuffer.wrap("post".getBytes(Charsets.UTF_8))).finish();
 					}
 					{
 						client.request()
@@ -148,9 +147,9 @@ public class HttpServerTest {
 						})
 						.receiving(new HttpReceiver() {
 							@Override
-							public ContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+							public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 								LOGGER.debug("RESPONSE {}", response);
-								return new ContentReceiver() {
+								return new HttpContentReceiver() {
 									@Override
 									public void received(ByteBuffer buffer) {
 										LOGGER.debug("Received {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
@@ -163,7 +162,7 @@ public class HttpServerTest {
 							}
 						})
 						.build()
-						.create(HttpRequest.of("http://127.0.0.1:8080/test?a=b", HttpMethod.POST, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, "4"))).post(ByteBuffer.wrap("post".getBytes(Charsets.UTF_8))).finish();
+						.create(HttpRequest.of("http://127.0.0.1:8080/test?a=b", HttpMethod.POST, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, "4"))).send(ByteBuffer.wrap("post".getBytes(Charsets.UTF_8))).finish();
 					}
 					Thread.sleep(10000);
 				}

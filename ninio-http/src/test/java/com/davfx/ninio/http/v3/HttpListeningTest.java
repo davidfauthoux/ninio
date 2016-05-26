@@ -32,7 +32,7 @@ public class HttpListeningTest {
 								}
 								@Override
 								public void ended() {
-									HttpContentSender sender = responseHandler.send(new HttpResponse());
+									HttpContentSender sender = responseHandler.send(HttpResponse.ok());
 									sender.send(ByteBuffer.wrap("Hello".getBytes(Charsets.UTF_8))).finish();
 								}
 							};

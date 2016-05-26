@@ -14,8 +14,8 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 
-final class SslManager implements Connector, Connecting, Closing, Failing, Receiver {
-	private static final Logger LOGGER = LoggerFactory.getLogger(SslManager.class);
+final class SecureSocketManager implements Connector, Connecting, Closing, Failing, Receiver {
+	private static final Logger LOGGER = LoggerFactory.getLogger(SecureSocketManager.class);
 
 	private final Trust trust;
 	private final boolean clientMode;
@@ -33,7 +33,7 @@ final class SslManager implements Connector, Connecting, Closing, Failing, Recei
 
 	private SSLEngine engine = null;
 	
-	public SslManager(Trust trust, boolean clientMode, Executor executor, ByteBufferAllocator byteBufferAllocator) {
+	public SecureSocketManager(Trust trust, boolean clientMode, Executor executor, ByteBufferAllocator byteBufferAllocator) {
 		if (executor == null) {
 			throw new NullPointerException("executor");
 		}

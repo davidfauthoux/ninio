@@ -25,6 +25,9 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	}
 	
 	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver receiver, Failing failing) {
+		if (receiver == null) {
+			throw new NullPointerException();
+		}
 		this.client = client;
 		this.maxRedirections = maxRedirections;
 		this.levelOfRedirect = levelOfRedirect;
@@ -89,7 +92,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 				client.request()
 					.failing(failing)
 					.receiving(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, receiver, failing))
-					.build().create(newRequest).finish();
+					.build(newRequest).finish();
 				
 				return new HttpContentReceiver() {
 					@Override

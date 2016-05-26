@@ -47,7 +47,7 @@ public class SslTest {
 							wait.run();
 						}
 					})
-					.listening(new SslSocketServerBuilder().with(executor).trust(trust).listening(new Listening() {
+					.listening(new SecureSocketServerBuilder().with(executor).trust(trust).listening(new Listening() {
 						@Override
 						public void connecting(Address from, Connector connector, SocketBuilder<?> builder) {
 							builder.failing(new Failing() {
@@ -84,7 +84,7 @@ public class SslTest {
 				try {
 					wait.waitFor();
 
-					final Connector client = ninio.create(new SslSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(new Address(Address.LOCALHOST, port))
+					final Connector client = ninio.create(new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(new Address(Address.LOCALHOST, port))
 						.failing(new Failing() {
 							@Override
 							public void failed(IOException e) {

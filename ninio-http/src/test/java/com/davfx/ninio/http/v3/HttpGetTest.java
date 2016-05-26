@@ -14,6 +14,7 @@ import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.TcpSocketServer;
+import com.davfx.ninio.core.v3.util.Timeout;
 import com.davfx.ninio.http.InMemoryBuffers;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
@@ -22,9 +23,9 @@ public class HttpGetTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpGetTest.class);
 	
-	private static Lock<Object, IOException> request(HttpClient client, String url) throws IOException {
+	private static Lock<Object, IOException> request(HttpClient client, Timeout timeout, String url) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		client.request()
+		TimeoutRequest.wrap(timeout, 1d, client.request())
 			.failing(new Failing() {
 				@Override
 				public void failed(IOException e) {
@@ -49,13 +50,12 @@ public class HttpGetTest {
 					};
 				}
 			})
-			.build()
-			.create(HttpRequest.of(url)).finish();
+			.build(HttpRequest.of(url)).finish();
 		return lock;
 	}
 	
-	private static void request(HttpClient client, String url, String expected) throws IOException {
-		Assertions.assertThat(request(client, url).waitFor()).isEqualTo(expected);
+	private static void request(HttpClient client, Timeout timeout, String url, String expected) throws IOException {
+		Assertions.assertThat(request(client, timeout, url).waitFor()).isEqualTo(expected);
 	}
 	
 	private static Disconnectable server(Ninio ninio, int port) {
@@ -89,12 +89,12 @@ public class HttpGetTest {
 	@Test
 	public void testGet() throws Exception {
 		int port = 8080;
-		try (Ninio ninio = Ninio.create()) {
+		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
 				try (HttpClient client = ninio.create(HttpClient.builder().with(Executors.newSingleThreadExecutor()))) {
-					request(client, "http://" + Address.LOCALHOST + ":" + port + "/test1", "/test1");
-					request(client, "http://" + Address.LOCALHOST + ":" + port + "/test2", "/test2");
+					request(client, timeout, "http://" + Address.LOCALHOST + ":" + port + "/test1", "/test1");
+					request(client, timeout, "http://" + Address.LOCALHOST + ":" + port + "/test2", "/test2");
 				}
 			} finally {
 				tcp.close();
@@ -105,12 +105,12 @@ public class HttpGetTest {
 	@Test
 	public void testParallelGet() throws Exception {
 		int port = 8080;
-		try (Ninio ninio = Ninio.create()) {
+		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
 				try (HttpClient client = ninio.create(HttpClient.builder().with(Executors.newSingleThreadExecutor()))) {
-					Lock<Object, IOException> lock1 = request(client, "http://" + Address.LOCALHOST + ":" + port + "/test1");
-					Lock<Object, IOException> lock2 = request(client, "http://" + Address.LOCALHOST + ":" + port + "/test2");
+					Lock<Object, IOException> lock1 = request(client, timeout, "http://" + Address.LOCALHOST + ":" + port + "/test1");
+					Lock<Object, IOException> lock2 = request(client, timeout, "http://" + Address.LOCALHOST + ":" + port + "/test2");
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("/test1");
 					Assertions.assertThat(lock2.waitFor()).isEqualTo("/test2");
 				}
@@ -124,12 +124,12 @@ public class HttpGetTest {
 	@Test
 	public void testPipeliningGet() throws Exception {
 		int port = 8080;
-		try (Ninio ninio = Ninio.create()) {
+		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
 				try (HttpClient client = ninio.create(HttpClient.builder().pipelining().with(Executors.newSingleThreadExecutor()))) {
-					Lock<Object, IOException> lock1 = request(client, "http://" + Address.LOCALHOST + ":" + port + "/test1");
-					Lock<Object, IOException> lock2 = request(client, "http://" + Address.LOCALHOST + ":" + port + "/test2");
+					Lock<Object, IOException> lock1 = request(client, timeout, "http://" + Address.LOCALHOST + ":" + port + "/test1");
+					Lock<Object, IOException> lock2 = request(client, timeout, "http://" + Address.LOCALHOST + ":" + port + "/test2");
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("/test1");
 					Assertions.assertThat(lock2.waitFor()).isEqualTo("/test2");
 				}

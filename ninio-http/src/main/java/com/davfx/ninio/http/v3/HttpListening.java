@@ -12,11 +12,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Closing;
+import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.SocketBuilder;
 import com.davfx.ninio.http.HttpHeaderKey;
 import com.davfx.ninio.http.HttpHeaderValue;
 import com.google.common.base.Splitter;
@@ -93,17 +94,32 @@ public final class HttpListening implements Listening {
 	}
 
 	@Override
-	public void connecting(final Address from, final Connector connectingConnector, SocketBuilder<?> builder) {
+	public Connection connecting(final Address from, final Connector connectingConnector) {
 		LOGGER.debug("Connecting from {}", from);
 		
 		if (listeningHandler == null) {
 			connectingConnector.close();
-			return;
+			return new Listening.Connection() {
+				@Override
+				public Receiver receiver() {
+					return null;
+				}
+				@Override
+				public Failing failing() {
+					return null;
+				}
+				@Override
+				public Connecting connecting() {
+					return null;
+				}
+				@Override
+				public Closing closing() {
+					return null;
+				}
+			};
 		}
 		
 		final HttpListeningHandler.ConnectionHandler connectionHandler = listeningHandler.create();
-		
-		builder.closing(connectionHandler);
 		
 		final Failing failing = new Failing() {
 			@Override
@@ -113,384 +129,409 @@ public final class HttpListening implements Listening {
 			}
 		};
 		
-		builder.receiving(new Receiver() {
-			
-			private final LineReader lineReader = new LineReader();
-			private boolean requestLineRead = false;
-			private boolean requestHeadersRead;
-			private HttpMethod requestMethod;
-			private String requestPath;
-			private HttpVersion requestVersion;
-			private boolean requestKeepAlive;
-			private boolean requestAcceptGzip;
-			private final Multimap<String, String> requestHeaders = HashMultimap.create();
-			
-			private HttpContentReceiver handler;
-
-			private boolean addHeader(String headerLine) {
-				int i = headerLine.indexOf(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR);
-				if (i < 0) {
-					failing.failed(new IOException("Invalid header: " + headerLine));
-					return false;
-				}
-				String key = headerLine.substring(0, i);
-				String sanitizedKey = headerSanitization.get(key.toLowerCase());
-				if (sanitizedKey != null) {
-					key = sanitizedKey;
-				}
-				String value = headerLine.substring(i + 1).trim();
-				requestHeaders.put(key, value);
-				return true;
+		return new Listening.Connection() {
+			@Override
+			public Connecting connecting() {
+				return null;
 			}
-			
-			private boolean setRequestLine(String requestLine) {
-				int i = requestLine.indexOf(HttpSpecification.START_LINE_SEPARATOR);
-				if (i < 0) {
-					failing.failed(new IOException("Invalid request: " + requestLine));
-					return false;
-				}
-				int j = requestLine.indexOf(HttpSpecification.START_LINE_SEPARATOR, i + 1);
-				if (j < 0) {
-					failing.failed(new IOException("Invalid request: " + requestLine));
-					return false;
-				}
-				requestMethod = null;
-				String m = requestLine.substring(0, i);
-				for (HttpMethod method : HttpMethod.values()) {
-					if (method.toString().equals(m)) {
-						requestMethod = method;
-						break;
-					}
-				}
-				if (requestMethod == null) {
-					failing.failed(new IOException("Invalid request: " + requestLine));
-					return false;
-				}
-				requestPath = requestLine.substring(i + 1, j);
-				
-				/*
-				// Tolerance
-				if (requestPath.isEmpty()) {
-					requestPath = String.valueOf(HttpSpecification.PATH_SEPARATOR);
-				} else if (requestPath.charAt(0) != HttpSpecification.PATH_SEPARATOR) {
-					requestPath = HttpSpecification.PATH_SEPARATOR + requestPath;
-				}
-				*/
-				
-				String version = requestLine.substring(j + 1);
-				if (!version.startsWith(HttpSpecification.HTTP_VERSION_PREFIX)) {
-					failing.failed(new IOException("Unsupported version: " + version));
-					return false;
-				}
-				version = version.substring(HttpSpecification.HTTP_VERSION_PREFIX.length());
-				if (version.equals(HttpVersion.HTTP10.toString())) {
-					requestVersion = HttpVersion.HTTP10;
-				} else if (version.equals(HttpVersion.HTTP11.toString())) {
-					requestVersion = HttpVersion.HTTP11;
-				} else {
-					failing.failed(new IOException("Unsupported version: " + version));
-					return false;
-				}
-				return true;
-			}
-			
-			private final Deque<ByteBuffer> hold = new LinkedList<>();
-			private boolean holding = false;
 			
 			@Override
-			public void received(final Connector connector, Address address, final ByteBuffer buffer) {
-				executor.execute(new Runnable() {
+			public Failing failing() {
+				return new Failing() {
 					@Override
-					public void run() {
-						hold.addLast(buffer);
-						continueReceived(connector);
+					public void failed(IOException e) {
+						connectionHandler.closed();
 					}
-				});
+				};
 			}
-			
-			private void continueReceived(Connector connector) {
-				while (true) {
-					if (holding) {
-						return;
-					}
-					if (hold.isEmpty()) {
-						return;
-					}
-					ByteBuffer buffer = hold.removeFirst();
-					handleReceived(connector, buffer);
-				}
+
+			@Override
+			public Closing closing() {
+				return connectionHandler;
 			}
+
+			@Override
+			public Receiver receiver() {
+				return new Receiver() {
 			
-			private void handleReceived(final Connector connector, ByteBuffer buffer) {
-				while (buffer.hasRemaining()) {
-					if (holding) {
-						LOGGER.debug("Holding packet: {} bytes", buffer.remaining());
-						hold.addLast(buffer);
-						return;
+					private final LineReader lineReader = new LineReader();
+					private boolean requestLineRead = false;
+					private boolean requestHeadersRead;
+					private HttpMethod requestMethod;
+					private String requestPath;
+					private HttpVersion requestVersion;
+					private boolean requestKeepAlive;
+					private boolean requestAcceptGzip;
+					private final Multimap<String, String> requestHeaders = HashMultimap.create();
+					
+					private HttpContentReceiver handler;
+		
+					private boolean addHeader(String headerLine) {
+						int i = headerLine.indexOf(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR);
+						if (i < 0) {
+							failing.failed(new IOException("Invalid header: " + headerLine));
+							return false;
+						}
+						String key = headerLine.substring(0, i);
+						String sanitizedKey = headerSanitization.get(key.toLowerCase());
+						if (sanitizedKey != null) {
+							key = sanitizedKey;
+						}
+						String value = headerLine.substring(i + 1).trim();
+						requestHeaders.put(key, value);
+						return true;
 					}
 					
-					while (!requestLineRead) {
-						String line = lineReader.handle(buffer);
-						if (line == null) {
-							return;
+					private boolean setRequestLine(String requestLine) {
+						int i = requestLine.indexOf(HttpSpecification.START_LINE_SEPARATOR);
+						if (i < 0) {
+							failing.failed(new IOException("Invalid request: " + requestLine));
+							return false;
 						}
-						LOGGER.debug("Request line: {}", line);
-						if (!setRequestLine(line)) {
-							return;
+						int j = requestLine.indexOf(HttpSpecification.START_LINE_SEPARATOR, i + 1);
+						if (j < 0) {
+							failing.failed(new IOException("Invalid request: " + requestLine));
+							return false;
 						}
-						requestLineRead = true;
-						requestHeadersRead = false;
+						requestMethod = null;
+						String m = requestLine.substring(0, i);
+						for (HttpMethod method : HttpMethod.values()) {
+							if (method.toString().equals(m)) {
+								requestMethod = method;
+								break;
+							}
+						}
+						if (requestMethod == null) {
+							failing.failed(new IOException("Invalid request: " + requestLine));
+							return false;
+						}
+						requestPath = requestLine.substring(i + 1, j);
+						
+						/*
+						// Tolerance
+						if (requestPath.isEmpty()) {
+							requestPath = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+						} else if (requestPath.charAt(0) != HttpSpecification.PATH_SEPARATOR) {
+							requestPath = HttpSpecification.PATH_SEPARATOR + requestPath;
+						}
+						*/
+						
+						String version = requestLine.substring(j + 1);
+						if (!version.startsWith(HttpSpecification.HTTP_VERSION_PREFIX)) {
+							failing.failed(new IOException("Unsupported version: " + version));
+							return false;
+						}
+						version = version.substring(HttpSpecification.HTTP_VERSION_PREFIX.length());
+						if (version.equals(HttpVersion.HTTP10.toString())) {
+							requestVersion = HttpVersion.HTTP10;
+						} else if (version.equals(HttpVersion.HTTP11.toString())) {
+							requestVersion = HttpVersion.HTTP11;
+						} else {
+							failing.failed(new IOException("Unsupported version: " + version));
+							return false;
+						}
+						return true;
 					}
-			
-					while (!requestHeadersRead) {
-						String line = lineReader.handle(buffer);
-						if (line == null) {
-							return;
+					
+					private final Deque<ByteBuffer> hold = new LinkedList<>();
+					private boolean holding = false;
+					
+					@Override
+					public void received(final Connector connector, Address address, final ByteBuffer buffer) {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								hold.addLast(buffer);
+								continueReceived(connector);
+							}
+						});
+					}
+					
+					private void continueReceived(Connector connector) {
+						while (true) {
+							if (holding) {
+								return;
+							}
+							if (hold.isEmpty()) {
+								return;
+							}
+							ByteBuffer buffer = hold.removeFirst();
+							handleReceived(connector, buffer);
 						}
-						LOGGER.debug("Header line: {}", line);
-						if (line.isEmpty()) {
-							requestHeadersRead = true;
-
-							final HttpContentReceiver h = connectionHandler.handle(new HttpRequest(from, secure, requestMethod, requestPath, ImmutableMultimap.copyOf(requestHeaders)), new HttpListeningHandler.ConnectionHandler.ResponseHandler() {
-								private boolean responseKeepAlive;
-								private HttpContentSender sender = null;
-								
-								@Override
-								public HttpContentSender send(final HttpResponse response) {
-									executor.execute(new Runnable() {
+					}
+					
+					private void handleReceived(final Connector connector, ByteBuffer buffer) {
+						while (buffer.hasRemaining()) {
+							if (holding) {
+								LOGGER.debug("Holding packet: {} bytes", buffer.remaining());
+								hold.addLast(buffer);
+								return;
+							}
+							
+							while (!requestLineRead) {
+								String line = lineReader.handle(buffer);
+								if (line == null) {
+									return;
+								}
+								LOGGER.debug("Request line: {}", line);
+								if (!setRequestLine(line)) {
+									return;
+								}
+								requestLineRead = true;
+								requestHeadersRead = false;
+							}
+					
+							while (!requestHeadersRead) {
+								String line = lineReader.handle(buffer);
+								if (line == null) {
+									return;
+								}
+								LOGGER.debug("Header line: {}", line);
+								if (line.isEmpty()) {
+									requestHeadersRead = true;
+		
+									final HttpContentReceiver h = connectionHandler.handle(new HttpRequest(from, secure, requestMethod, requestPath, ImmutableMultimap.copyOf(requestHeaders)), new HttpListeningHandler.ConnectionHandler.ResponseHandler() {
+										private boolean responseKeepAlive;
+										private HttpContentSender sender = null;
+										
 										@Override
-										public void run() {
-											LOGGER.debug("Sending response: {}", response);
-
-											if (sender != null) {
-												LOGGER.error("Could not send a response multiple times");
-												return;
-											}
-											
-											sender = new HttpContentSender() {
+										public HttpContentSender send(final HttpResponse response) {
+											executor.execute(new Runnable() {
 												@Override
-												public HttpContentSender send(ByteBuffer buffer) {
-													connector.send(null, buffer);
+												public void run() {
+													LOGGER.debug("Sending response: {}", response);
+		
+													if (sender != null) {
+														LOGGER.error("Could not send a response multiple times");
+														return;
+													}
+													
+													sender = new HttpContentSender() {
+														@Override
+														public HttpContentSender send(ByteBuffer buffer) {
+															connector.send(null, buffer);
+															return this;
+														}
+														
+														@Override
+														public void finish() {
+															LOGGER.debug("Response finished");
+															requestLineRead = false;
+															holding = false;
+															sender = null;
+															handler = null;
+															
+															if (responseKeepAlive) {
+																continueReceived(connector);
+															} else {
+																LOGGER.debug("Actually closed");
+																connector.close();
+															}
+														}
+														
+														@Override
+														public void cancel() {
+															connector.close();
+														}
+													};
+													
+													Multimap<String, String> completedHeaders = ArrayListMultimap.create(response.headers);
+													if (requestAcceptGzip && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
+														completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
+													}
+													if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
+														completedHeaders.put(HttpHeaderKey.CONNECTION, requestKeepAlive ? HttpHeaderValue.KEEP_ALIVE :  HttpHeaderValue.CLOSE);
+													}
+		
+													responseKeepAlive = (requestVersion != HttpVersion.HTTP10);
+													for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
+														if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+															responseKeepAlive = false;
+														} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+															responseKeepAlive = true;
+														}
+													}
+													
+													if (responseKeepAlive && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+														completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
+													}
+		
+													for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+														if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+															LOGGER.debug("Response is chunked");
+															sender = new ChunkedWriter(sender);
+														}
+														break;
+													}
+									
+													for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+														if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+															LOGGER.debug("Response is gzip");
+															sender = new GzipWriter(sender);
+														}
+														break;
+													}
+													
+													for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
+														try {
+															long responseContentLength = Long.parseLong(contentLengthValue);
+															LOGGER.debug("Response content length: {}", responseContentLength);
+															sender = new ContentLengthWriter(responseContentLength, sender);
+														} catch (NumberFormatException e) {
+															LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+														}
+														break;
+													}
+													
+													connector.send(null, LineReader.toBuffer(HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString() + HttpSpecification.START_LINE_SEPARATOR + response.status + HttpSpecification.START_LINE_SEPARATOR + response.reason));
+		
+													LOGGER.debug("Response headers sent: {}", completedHeaders);
+													for (Map.Entry<String, String> h : completedHeaders.entries()) {
+														String k = h.getKey();
+														String v = h.getValue();
+														connector.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
+													}
+													connector.send(null, emptyLineByteBuffer.duplicate());
+												}
+											});
+		
+											return new HttpContentSender() {
+												@Override
+												public void cancel() {
+													executor.execute(new Runnable() {
+														@Override
+														public void run() {
+															if (sender == null) {
+																return;
+															}
+															
+															sender.cancel();
+														}
+													});
+												}
+												
+												@Override
+												public HttpContentSender send(final ByteBuffer buffer) {
+													executor.execute(new Runnable() {
+														@Override
+														public void run() {
+															if (sender == null) {
+																return;
+															}
+															
+															sender.send(buffer);
+														}
+													});
 													return this;
 												}
 												
 												@Override
 												public void finish() {
-													LOGGER.debug("Response finished");
-													requestLineRead = false;
-													holding = false;
-													sender = null;
-													handler = null;
-													
-													if (responseKeepAlive) {
-														continueReceived(connector);
-													} else {
-														LOGGER.debug("Actually closed");
-														connector.close();
-													}
-												}
-												
-												@Override
-												public void cancel() {
-													connector.close();
+													executor.execute(new Runnable() {
+														@Override
+														public void run() {
+															if (sender == null) {
+																return;
+															}
+															
+															sender.finish();
+														}
+													});
 												}
 											};
-											
-											Multimap<String, String> completedHeaders = ArrayListMultimap.create(response.headers);
-											if (requestAcceptGzip && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
-												completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
-											}
-											if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
-												completedHeaders.put(HttpHeaderKey.CONNECTION, requestKeepAlive ? HttpHeaderValue.KEEP_ALIVE :  HttpHeaderValue.CLOSE);
-											}
-
-											responseKeepAlive = (requestVersion != HttpVersion.HTTP10);
-											for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
-												if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-													responseKeepAlive = false;
-												} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-													responseKeepAlive = true;
-												}
-											}
-											
-											if (responseKeepAlive && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
-												completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
-											}
-
-											for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-												if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-													LOGGER.debug("Response is chunked");
-													sender = new ChunkedWriter(sender);
-												}
-												break;
-											}
-							
-											for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-												if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-													LOGGER.debug("Response is gzip");
-													sender = new GzipWriter(sender);
-												}
-												break;
-											}
-											
-											for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
-												try {
-													long responseContentLength = Long.parseLong(contentLengthValue);
-													LOGGER.debug("Response content length: {}", responseContentLength);
-													sender = new ContentLengthWriter(responseContentLength, sender);
-												} catch (NumberFormatException e) {
-													LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
-												}
-												break;
-											}
-											
-											connector.send(null, LineReader.toBuffer(HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString() + HttpSpecification.START_LINE_SEPARATOR + response.status + HttpSpecification.START_LINE_SEPARATOR + response.reason));
-
-											LOGGER.debug("Response headers sent: {}", completedHeaders);
-											for (Map.Entry<String, String> h : completedHeaders.entries()) {
-												String k = h.getKey();
-												String v = h.getValue();
-												connector.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
-											}
-											connector.send(null, emptyLineByteBuffer.duplicate());
 										}
 									});
-
-									return new HttpContentSender() {
+									
+									handler = new HttpContentReceiver() {
 										@Override
-										public void cancel() {
-											executor.execute(new Runnable() {
-												@Override
-												public void run() {
-													if (sender == null) {
-														return;
-													}
-													
-													sender.cancel();
-												}
-											});
+										public void received(ByteBuffer buffer) {
+											h.received(buffer);
 										}
-										
 										@Override
-										public HttpContentSender send(final ByteBuffer buffer) {
-											executor.execute(new Runnable() {
-												@Override
-												public void run() {
-													if (sender == null) {
-														return;
-													}
-													
-													sender.send(buffer);
-												}
-											});
-											return this;
-										}
-										
-										@Override
-										public void finish() {
-											executor.execute(new Runnable() {
-												@Override
-												public void run() {
-													if (sender == null) {
-														return;
-													}
-													
-													sender.finish();
-												}
-											});
+										public void ended() {
+											h.ended();
+											holding = true;
 										}
 									};
-								}
-							});
-							
-							handler = new HttpContentReceiver() {
-								@Override
-								public void received(ByteBuffer buffer) {
-									h.received(buffer);
-								}
-								@Override
-								public void ended() {
-									h.ended();
-									holding = true;
-								}
-							};
-							
-							final Failing f = new Failing() {
-								@Override
-								public void failed(IOException e) {
-									failing.failed(e);
-									holding = true;
-								}
-							};
-							
-							if (!requestHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !requestHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
-								requestHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
-							}
-
-							for (String contentLengthValue : requestHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
-								try {
-									long headerContentLength = Long.parseLong(contentLengthValue);
-									LOGGER.debug("Request content length: {}", headerContentLength);
-									handler = new ContentLengthReader(headerContentLength, f, handler);
-								} catch (NumberFormatException e) {
-									LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
-								}
-								break;
-							}
-							
-							for (String contentEncodingValue : requestHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-								if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-									LOGGER.debug("Request is gzip");
-									handler = new GzipReader(f, handler);
-								}
-								break;
-							}
-							
-							for (String transferEncodingValue : requestHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-								if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-									LOGGER.debug("Request is chunked");
-									handler = new ChunkedReader(f, handler);
-								}
-							}
-			
-							boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-							for (String connectionValue : requestHeaders.get(HttpHeaderKey.CONNECTION)) {
-								if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-									headerKeepAlive = false;
-								} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-									headerKeepAlive = true;
-								}
-							}
-							requestKeepAlive = headerKeepAlive;
-							LOGGER.debug("Request keep alive: {}", requestKeepAlive);
-							
-							boolean headerAcceptGzip = false;
-							for (String accept : requestHeaders.get(HttpHeaderKey.ACCEPT_ENCODING)) {
-								for (String a : Splitter.on(',').splitToList(accept)) {
-									if (a.trim().equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-										headerAcceptGzip = accept.contains(HttpHeaderValue.GZIP);
+									
+									final Failing f = new Failing() {
+										@Override
+										public void failed(IOException e) {
+											failing.failed(e);
+											holding = true;
+										}
+									};
+									
+									if (!requestHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !requestHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+										requestHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
+									}
+		
+									for (String contentLengthValue : requestHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
+										try {
+											long headerContentLength = Long.parseLong(contentLengthValue);
+											LOGGER.debug("Request content length: {}", headerContentLength);
+											handler = new ContentLengthReader(headerContentLength, f, handler);
+										} catch (NumberFormatException e) {
+											LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+										}
 										break;
 									}
-								}
-								if (headerAcceptGzip) {
-									break;
+									
+									for (String contentEncodingValue : requestHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+										if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+											LOGGER.debug("Request is gzip");
+											handler = new GzipReader(f, handler);
+										}
+										break;
+									}
+									
+									for (String transferEncodingValue : requestHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+										if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+											LOGGER.debug("Request is chunked");
+											handler = new ChunkedReader(f, handler);
+										}
+									}
+					
+									boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
+									for (String connectionValue : requestHeaders.get(HttpHeaderKey.CONNECTION)) {
+										if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+											headerKeepAlive = false;
+										} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+											headerKeepAlive = true;
+										}
+									}
+									requestKeepAlive = headerKeepAlive;
+									LOGGER.debug("Request keep alive: {}", requestKeepAlive);
+									
+									boolean headerAcceptGzip = false;
+									for (String accept : requestHeaders.get(HttpHeaderKey.ACCEPT_ENCODING)) {
+										for (String a : Splitter.on(',').splitToList(accept)) {
+											if (a.trim().equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+												headerAcceptGzip = accept.contains(HttpHeaderValue.GZIP);
+												break;
+											}
+										}
+										if (headerAcceptGzip) {
+											break;
+										}
+									}
+									requestAcceptGzip = headerAcceptGzip;
+									LOGGER.debug("Request accept gzip: {}", requestAcceptGzip);
+		
+								} else {
+									if (!addHeader(line)) {
+										return;
+									}
 								}
 							}
-							requestAcceptGzip = headerAcceptGzip;
-							LOGGER.debug("Request accept gzip: {}", requestAcceptGzip);
-
-						} else {
-							if (!addHeader(line)) {
-								return;
+		
+							if (handler != null) {
+								handler.received(buffer);
 							}
 						}
 					}
-
-					if (handler != null) {
-						handler.received(buffer);
-					}
-				}
+				};
 			}
-		});
+		};
 	}
 }
