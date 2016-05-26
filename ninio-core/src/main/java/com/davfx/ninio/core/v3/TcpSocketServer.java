@@ -189,7 +189,7 @@ public final class TcpSocketServer implements Disconnectable {
 														LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
 														return;
 													}
-													
+
 													context.toWriteQueue.add(buffer);
 													context.toWriteLength += buffer.remaining();
 													LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), context.toWriteLength);

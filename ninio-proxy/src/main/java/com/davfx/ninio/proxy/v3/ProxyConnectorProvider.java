@@ -4,11 +4,13 @@ import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.RawSocket;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.ninio.http.v3.WebsocketSocket;
 
 public interface ProxyConnectorProvider extends Disconnectable {
 	TcpSocket.Builder tcp();
 	UdpSocket.Builder udp();
 	TcpSocket.Builder ssl();
 	RawSocket.Builder raw();
+	WebsocketSocket.Builder websocket();
 	WithHeaderSocketBuilder factory();
 }

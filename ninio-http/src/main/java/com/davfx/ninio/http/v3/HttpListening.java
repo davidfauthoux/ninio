@@ -336,23 +336,28 @@ public final class HttpListening implements Listening {
 													};
 													
 													Multimap<String, String> completedHeaders = ArrayListMultimap.create(response.headers);
-													if (requestAcceptGzip && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING)) {
-														completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
-													}
-													if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
-														completedHeaders.put(HttpHeaderKey.CONNECTION, requestKeepAlive ? HttpHeaderValue.KEEP_ALIVE :  HttpHeaderValue.CLOSE);
-													}
 		
 													responseKeepAlive = (requestVersion != HttpVersion.HTTP10);
+													boolean automaticallySetGzipChunked = responseKeepAlive;
 													for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
 														if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
 															responseKeepAlive = false;
 														} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
 															responseKeepAlive = true;
+														} else {
+															automaticallySetGzipChunked = false;
 														}
 													}
-													
-													if (responseKeepAlive && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+
+													if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
+														responseKeepAlive = requestKeepAlive;
+														completedHeaders.put(HttpHeaderKey.CONNECTION, responseKeepAlive ? HttpHeaderValue.KEEP_ALIVE :  HttpHeaderValue.CLOSE);
+													}
+
+													if (automaticallySetGzipChunked && requestAcceptGzip && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING) && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH)) { // Content-Length MUST refer to the compressed data length, which the user is not aware of, thus we CANNOT compress if the user specifies a Content-Length
+														completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
+													}
+													if (automaticallySetGzipChunked && responseKeepAlive && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
 														completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
 													}
 		
@@ -364,14 +369,6 @@ public final class HttpListening implements Listening {
 														break;
 													}
 									
-													for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-														if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-															LOGGER.debug("Response is gzip");
-															sender = new GzipWriter(sender);
-														}
-														break;
-													}
-													
 													for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
 														try {
 															long responseContentLength = Long.parseLong(contentLengthValue);
@@ -379,6 +376,14 @@ public final class HttpListening implements Listening {
 															sender = new ContentLengthWriter(responseContentLength, sender);
 														} catch (NumberFormatException e) {
 															LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+														}
+														break;
+													}
+													
+													for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+														if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+															LOGGER.debug("Response is gzip");
+															sender = new GzipWriter(sender);
 														}
 														break;
 													}
@@ -445,11 +450,15 @@ public final class HttpListening implements Listening {
 									handler = new HttpContentReceiver() {
 										@Override
 										public void received(ByteBuffer buffer) {
-											h.received(buffer);
+											if (h != null) {
+												h.received(buffer);
+											}
 										}
 										@Override
 										public void ended() {
-											h.ended();
+											if (h != null) {
+												h.ended();
+											}
 											holding = true;
 										}
 									};
@@ -462,10 +471,32 @@ public final class HttpListening implements Listening {
 										}
 									};
 									
-									if (!requestHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !requestHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+									boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
+									boolean automaticallySetContentLength = headerKeepAlive;
+									for (String connectionValue : requestHeaders.get(HttpHeaderKey.CONNECTION)) {
+										if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+											headerKeepAlive = false;
+										} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+											headerKeepAlive = true;
+										} else {
+											automaticallySetContentLength = false;
+										}
+									}
+									requestKeepAlive = headerKeepAlive;
+									LOGGER.debug("Request keep alive: {}", requestKeepAlive);
+									
+									if (automaticallySetContentLength && !requestHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !requestHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
 										requestHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
 									}
 		
+									for (String contentEncodingValue : requestHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+										if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+											LOGGER.debug("Request is gzip");
+											handler = new GzipReader(f, handler);
+										}
+										break;
+									}
+									
 									for (String contentLengthValue : requestHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
 										try {
 											long headerContentLength = Long.parseLong(contentLengthValue);
@@ -477,14 +508,6 @@ public final class HttpListening implements Listening {
 										break;
 									}
 									
-									for (String contentEncodingValue : requestHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-										if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-											LOGGER.debug("Request is gzip");
-											handler = new GzipReader(f, handler);
-										}
-										break;
-									}
-									
 									for (String transferEncodingValue : requestHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
 										if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
 											LOGGER.debug("Request is chunked");
@@ -492,17 +515,6 @@ public final class HttpListening implements Listening {
 										}
 									}
 					
-									boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-									for (String connectionValue : requestHeaders.get(HttpHeaderKey.CONNECTION)) {
-										if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-											headerKeepAlive = false;
-										} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-											headerKeepAlive = true;
-										}
-									}
-									requestKeepAlive = headerKeepAlive;
-									LOGGER.debug("Request keep alive: {}", requestKeepAlive);
-									
 									boolean headerAcceptGzip = false;
 									for (String accept : requestHeaders.get(HttpHeaderKey.ACCEPT_ENCODING)) {
 										for (String a : Splitter.on(',').splitToList(accept)) {

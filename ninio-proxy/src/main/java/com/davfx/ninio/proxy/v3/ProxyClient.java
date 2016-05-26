@@ -23,6 +23,9 @@ import com.davfx.ninio.core.v3.RawSocket;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.ninio.http.v3.HttpClient;
+import com.davfx.ninio.http.v3.HttpSpecification;
+import com.davfx.ninio.http.v3.WebsocketSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
@@ -61,6 +64,10 @@ public final class ProxyClient implements ProxyConnectorProvider {
 					@Override
 					public TcpSocket.Builder ssl() {
 						return client.ssl();
+					}
+					@Override
+					public WebsocketSocket.Builder websocket() {
+						return client.websocket();
 					}
 				};
 			}
@@ -416,6 +423,66 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			@Override
 			public Connector create(Queue queue) {
 				return createConnector(ProxyCommons.Types.RAW + String.valueOf((family == StandardProtocolFamily.INET) ? '4' : '6') + String.valueOf(protocol), null, failing, receiver, closing, connecting);
+			}
+		};
+	}
+	
+	@Override
+	public WebsocketSocket.Builder websocket() {
+		return new WebsocketSocket.Builder() {
+			private Address connectAddress = null;
+			
+			private String path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
+			@Override
+			public WebsocketSocket.Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public WebsocketSocket.Builder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public WebsocketSocket.Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public WebsocketSocket.Builder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public WebsocketSocket.Builder to(Address connectAddress) {
+				this.connectAddress = connectAddress;
+				return this;
+			}
+			
+			@Override
+			public WebsocketSocket.Builder with(HttpClient httpClient) {
+				return this;
+			}
+			
+			@Override
+			public WebsocketSocket.Builder route(String path) {
+				this.path = path;
+				return this;
+			}
+			
+			@Override
+			public Connector create(Queue queue) {
+				return createConnector(ProxyCommons.Types.WEBSOCKET + path, connectAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}

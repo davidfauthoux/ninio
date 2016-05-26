@@ -31,6 +31,8 @@ import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.ninio.core.v3.Trust;
 import com.davfx.ninio.core.v3.UdpSocket;
+import com.davfx.ninio.http.v3.HttpClient;
+import com.davfx.ninio.http.v3.WebsocketSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
@@ -44,6 +46,7 @@ public final class ProxyServer implements Listening {
 			public Disconnectable create(Queue queue) {
 				final Trust trust = new Trust();
 				final ExecutorService executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, true));
+				final HttpClient httpClient = HttpClient.builder().with(executor).create(queue);
 				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
 					public NinioSocketBuilder<?> create(Address address, String header) {
@@ -61,6 +64,9 @@ public final class ProxyServer implements Listening {
 							int protocol = Integer.parseInt(header.substring(ProxyCommons.Types.RAW.length() + 1));
 							return RawSocket.builder().family(family).protocol(protocol);
 						}
+						if (header.startsWith(ProxyCommons.Types.WEBSOCKET)) {
+							return WebsocketSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.WEBSOCKET.length()));
+						}
 						if (listening == null) {
 							return null;
 						}
@@ -71,6 +77,7 @@ public final class ProxyServer implements Listening {
 					@Override
 					public void close() {
 						server.close();
+						httpClient.close();
 						ExecutorUtils.shutdown(executor);
 					}
 				};

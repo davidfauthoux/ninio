@@ -1,24 +1,16 @@
 package com.davfx.ninio.http.v3;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Failable;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.SocketBuilder;
-import com.davfx.ninio.core.v3.TcpSocketServer.InnerSocketBuilder;
-import com.davfx.ninio.http.HttpServerHandler;
-import com.davfx.ninio.http.v3.HttpListeningHandler.ConnectionHandler.ResponseHandler;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.hash.Hashing;
@@ -27,20 +19,9 @@ import com.google.common.io.BaseEncoding;
 public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketHttpContentReceiver.class);
 
-	private final HttpRequest request;
-	private final ResponseHandler responseHandler;
-	
-	private final Closing closing;
-	private final Failing failing;
 	private final HttpContentReceiver receiver;
 
-	private final SocketBuilder<?> wrappee;
-	private final boolean textResponses;
-	
-	public WebsocketHttpContentReceiver(HttpRequest request, ResponseHandler responseHandler, final boolean textResponses, Listening listening) {
-		this.wrappee = wrappee;
-		this.textResponses = textResponses;
-
+	public WebsocketHttpContentReceiver(HttpRequest request, HttpListeningHandler.ConnectionHandler.ResponseHandler responseHandler, final boolean textResponses, Listening listening) {
 		String wsKey = null;
 		for (String v : request.headers.get("Sec-WebSocket-Key")) {
 			wsKey = v;
@@ -48,6 +29,8 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		}
 		if (wsKey == null) {
 			LOGGER.error("Missing Sec-WebSocket-Key header");
+			responseHandler.send(HttpResponse.badRequest());
+			receiver = null;
 			return;
 		}
 		
@@ -59,6 +42,8 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 
 		if (!"13".equals(wsVersion)) {
 			LOGGER.error("Current implementation does not handle this version: " + wsVersion);
+			responseHandler.send(HttpResponse.badRequest());
+			receiver = null;
 			return;
 		}
 
@@ -72,129 +57,66 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		final HttpContentSender sender = responseHandler.send(response);
 
 		Connector innerConnector = new Connector() {
+			//%% private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
+			
 			@Override
 			public void close() {
-				sender.send(WebsocketFrameReader.headerOf(true, 0x08, null));
+				sender.send(headerOf(0x08, 0L));
 			}
+			
 			@Override
 			public Connector send(Address address, ByteBuffer buffer) {
-				sender.send(WebsocketFrameReader.headerOf(true, textResponses ? 0x01 : 0x02, buffer));
-				sender.send(buffer);//TODO join in ONE bb!!!!
+				/*%%
+				deflater.reset();
+				deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+				deflater.finish();
+				List<ByteBuffer> buffers = new LinkedList<>();
+				long len = 0L;
+				while (true) {
+					byte[] b = new byte[1024];
+					int l = deflater.deflate(b, 0, b.length);
+					if (l == 0) {
+						break;
+					}
+					buffers.add(ByteBuffer.wrap(b, 0, l));
+					len += l;
+				}
+				
+				sender.send(headerOf(textResponses ? 0x01 : 0x02, len));
+				for (ByteBuffer bb : buffers) {
+					sender.send(bb);
+				}
+				*/
+				
+				sender.send(headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()));
+				sender.send(buffer);
 				return this;
 			}
 		};
 		
-		InnerSocketBuilder builder = new InnerSocketBuilder();
-		listening.connecting(request.address, innerConnector, builder);
+		Listening.Connection connection = listening.connecting(request.address, innerConnector);
 
-		Connecting connecting = builder.connecting;
-		failing = builder.failing;
-		receiver = new WebsocketFrameReader(builder.receiver, builder.closing, sender);
+		Connecting connecting = connection.connecting();
+		receiver = new WebsocketFrameReader(request.address, innerConnector, connection.receiver(), connection.closing(), sender);
 
 		connecting.connected(innerConnector);
 	}
 
-	private static final int PING_MAX_BUFFER_SIZE = 1024;
-
 	@Override
 	public void received(ByteBuffer buffer) {
-		receiver.received(buffer);
+		if (receiver != null) {
+			receiver.received(buffer);
+		}
 	}
 	
 	@Override
 	public void ended() {
-		receiver.ended();
-	}
-	
-	@Override
-	public void handle(Address address, ByteBuffer buffer) {
-		websocketFrameReader.handle(address, buffer);
-	}
-
-	@Override
-	public void handle(HttpRequest request) {
-		this.request = request;
-		websocketFrameReader = new WebsocketFrameReader(new WebsocketFrameReader.Handler() {
-			private ByteBuffer pingBuffer = null;
-			@Override
-			public void failed(IOException e) {
-				write.failed(e);
-			}
-			@Override
-			public void handle(int opcode, long frameLength, ByteBuffer partialBuffer) {
-				if (opcode == 0x09) {
-					if (pingBuffer == null) {
-						if (frameLength > PING_MAX_BUFFER_SIZE) {
-							write.failed(new IOException("Ping frame is too big: " + frameLength));
-							return;
-						}
-						pingBuffer = ByteBuffer.allocate((int) frameLength);
-					}
-					
-					pingBuffer.put(partialBuffer);
-					
-					if (pingBuffer.position() == frameLength) {
-						pingBuffer.flip();
-						write.handle(null, WebsocketFrameReader.headerOf(true, 0x0A, pingBuffer));
-						write.handle(null, pingBuffer);
-						pingBuffer = null;
-					}
-					
-					return;
-				}
-				
-				if ((opcode == 0x01) || (opcode == 0x02)) {
-					wrappee.handle(null, partialBuffer);
-					return;
-				}
-
-				if (opcode == 0x08) {
-					LOGGER.debug("Connection closed");
-					write.close();
-					wrappee.close();
-					return;
-				}
-				
-				write.failed(new IOException("Current implementation does not handle this opcode: " + opcode));
-			}
-		});
-	}
-	
-
-	private static final class InnerSocketBuilder implements SocketBuilder<Void> {
-		public Receiver receiver = null;
-		public Failing failing = null;
-		public Connecting connecting = null;
-		public Closing closing = null;
-		public InnerSocketBuilder() {
-		}
-		@Override
-		public Void receiving(Receiver receiver) {
-			this.receiver = receiver;
-			return null;
-		}
-		@Override
-		public Void failing(Failing failing) {
-			this.failing = failing;
-			return null;
-		}
-		@Override
-		public Void connecting(Connecting connecting) {
-			this.connecting = connecting;
-			return null;
-		}
-		@Override
-		public Void closing(Closing closing) {
-			this.closing = closing;
-			return null;
+		if (receiver != null) {
+			receiver.ended();
 		}
 	}
 	
 	private static final class WebsocketFrameReader implements HttpContentReceiver {
-		
-		public static interface Handler extends Failable {
-			void handle(int opcode, long frameLength, ByteBuffer partialBuffer);
-		}
 		
 		private boolean opcodeRead = false;
 		private int currentOpcode;
@@ -209,20 +131,31 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		private ByteBuffer currentMaskBuffer;
 		private int currentPosInMask;
 		
+		private long toPing = 0L;
+
+		private final Address address;
+		private final Connector connector;
 		private final Receiver receiver;
 		private final Closing closing;
-
-		public WebsocketFrameReader(Receiver receiver, Closing closing, HttpContentSender pingBackSender) {
+		private final HttpContentSender sender;
+		
+		public WebsocketFrameReader(Address address, Connector connector, Receiver receiver, Closing closing, HttpContentSender sender) {
+			this.address = address;
+			this.connector = connector;
 			this.receiver = receiver;
+			this.closing = closing;
+			this.sender = sender;
 		}
 		
 		@Override
-		public void handle(Address address, ByteBuffer buffer) {
+		public void received(ByteBuffer buffer) {
 			while (buffer.hasRemaining()) {
 				if (!opcodeRead && buffer.hasRemaining()) {
 					int v = buffer.get() & 0xFF;
 					if ((v & 0x80) != 0x80) {
-						handler.failed(new IOException("Current implementation handles only FIN packets"));
+						LOGGER.error("Current implementation handles only FIN packets");
+						sender.cancel();
+						closing.closed();
 						return;
 					}
 					currentOpcode = v & 0x0F;
@@ -284,26 +217,26 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 				}
 				
 				if (opcodeRead && lenRead && !mustReadExtendedLen16 && !mustReadExtendedLen64 && !mustReadMask && buffer.hasRemaining() && (currentRead < currentLen)) {
-					ByteBuffer bb;
+					ByteBuffer partialBuffer;
 					int len = (int) Math.min(buffer.remaining(), currentLen - currentRead);
 					if (currentMask == null) {
-						bb = buffer.duplicate();
-						bb.limit(bb.position() + len);
+						partialBuffer = buffer.duplicate();
+						partialBuffer.limit(partialBuffer.position() + len);
 						buffer.position(buffer.position() + len);
 						currentRead += len;
 					} else {
-						bb = ByteBuffer.allocate(len);
+						partialBuffer = ByteBuffer.allocate(len);
 						while (buffer.hasRemaining() && (currentRead < currentLen)) {
 							int v = buffer.get() & 0xFF;
 							v ^= currentMask[currentPosInMask];
-							bb.put((byte) v);
+							partialBuffer.put((byte) v);
 							currentRead++;
 							currentPosInMask = (currentPosInMask + 1) % 4;
 						}
-						bb.flip();
+						partialBuffer.flip();
 					}
-					int o = currentOpcode;
-					long l = currentLen;
+					int opcode = currentOpcode;
+					long frameLength = currentLen;
 
 					if (currentRead == currentLen) {
 						opcodeRead = false;
@@ -317,41 +250,62 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 						currentRead = 0L;
 					}
 					
-					handler.handle(o, l, bb);
+					if (opcode == 0x09) {
+						if (toPing == 0L) {
+							toPing = frameLength;
+							sender.send(headerOf(0x0A, frameLength));
+						}
+
+						toPing -= partialBuffer.remaining();
+						sender.send(partialBuffer);
+						return;
+					}
+					
+					if ((opcode == 0x01) || (opcode == 0x02)) {
+						receiver.received(connector, address, partialBuffer);
+						return;
+					}
+
+					if (opcode == 0x08) {
+						LOGGER.debug("Connection closed by peer");
+						sender.cancel();
+						closing.closed();
+						return;
+					}
 				}
 			}
 		}
-
-		public static ByteBuffer headerOf(boolean fin, int opcode, ByteBuffer buffer) { // No mask
-			int extendedPayloadLengthLen;
-			if ((buffer == null) || (buffer.remaining() <= 125)) {
-				extendedPayloadLengthLen = 0;
-			} else if (buffer.remaining() <= 65535) {
-				extendedPayloadLengthLen = 2;
-			} else {
-				extendedPayloadLengthLen = 8;
-			}
-			ByteBuffer res = ByteBuffer.allocate(2 + extendedPayloadLengthLen + ((buffer == null) ? 0 : buffer.remaining()));
-			byte first = (byte) opcode;
-			if (fin) {
-				first |= 0x80;
-			}
-			res.put(first);
-			if (buffer == null) {
-				res.put((byte) 0);
-			} else if (buffer.remaining() <= 125) {
-				res.put((byte) buffer.remaining());
-			} else if (buffer.remaining() <= 65535) {
-				res.put((byte) 126);
-				res.putShort((short) buffer.remaining());
-			} else {
-				res.put((byte) 127);
-				res.putLong(buffer.remaining());
-			}
-			res.flip();
-			return res;
+		
+		@Override
+		public void ended() {
+			LOGGER.debug("Connection closed");
+			sender.cancel();
 		}
-
 	}
 
+	public static ByteBuffer headerOf(int opcode, long len) { // No mask
+		int extendedPayloadLengthLen;
+		if (len <= 125) {
+			extendedPayloadLengthLen = 0;
+		} else if (len <= 65535) {
+			extendedPayloadLengthLen = 2;
+		} else {
+			extendedPayloadLengthLen = 8;
+		}
+		ByteBuffer res = ByteBuffer.allocate(2 + extendedPayloadLengthLen);
+		byte first = (byte) opcode;
+		first |= 0x80; // Not an ACK
+		res.put(first);
+		if (len <= 125) {
+			res.put((byte) len);
+		} else if (len <= 65535) {
+			res.put((byte) 126);
+			res.putShort((short) len);
+		} else {
+			res.put((byte) 127);
+			res.putLong(len);
+		}
+		res.flip();
+		return res;
+	}
 }
