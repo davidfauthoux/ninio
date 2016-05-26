@@ -22,7 +22,8 @@ public class TimeoutTest {
 				}
 			};
 			
-			Timeout.Manager m = timeout.set(1d, new Failing() {
+			Timeout.Manager m = timeout.set(1d);
+			m.run(new Failing() {
 				@Override
 				public void failed(IOException e) {
 					synchronized (failed) {

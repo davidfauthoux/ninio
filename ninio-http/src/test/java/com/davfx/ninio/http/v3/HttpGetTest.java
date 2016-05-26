@@ -25,7 +25,7 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> request(HttpClient client, Timeout timeout, String url) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		TimeoutRequest.wrap(timeout, 1d, client.request())
+		HttpTimeout.wrap(timeout, 1d, client.request())
 			.failing(new Failing() {
 				@Override
 				public void failed(IOException e) {

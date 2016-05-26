@@ -37,7 +37,7 @@ import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
-public final class SnmpClient implements Disconnectable {
+public final class SnmpClient implements Disconnectable, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
 	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
@@ -252,43 +252,52 @@ public final class SnmpClient implements Disconnectable {
 		}
 	}
 	
-	public SnmpReceiverRequestBuilder request() {
-		return new SnmpReceiverRequestBuilder() {
+	public SnmpRequestBuilder request() {
+		return new SnmpRequestBuilder() {
 			private SnmpReceiver receiver = null;
 			private Failing failing = null;
 			
 			@Override
-			public SnmpReceiverRequestBuilder receiving(SnmpReceiver receiver) {
+			public SnmpRequestBuilder receiving(SnmpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			@Override
-			public SnmpReceiverRequestBuilder failing(Failing failing) {
+			public SnmpRequestBuilder failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			
+			private Instance instance;
+			
 			@Override
-			public SnmpReceiverRequest build() {
+			public SnmpRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
 				final SnmpReceiver r = receiver;
 				final Failing f = failing;
-				return new SnmpReceiverRequest() {
+				executor.execute(new Runnable() {
 					@Override
-					public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+					public void run() {
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
+						if (authRemoteSpecification != null) {
+							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+							if (authRemoteEnginePendingRequestManager == null) {
+								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+							}
+							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connector);
+						}
+						
+						instance = new Instance(connector, instanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
+					}
+				});
+				
+				return new SnmpRequest() {
+					@Override
+					public void cancel() {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
-								AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
-								if (authRemoteSpecification != null) {
-									authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
-									if (authRemoteEnginePendingRequestManager == null) {
-										authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-										authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
-									}
-									authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connector);
-								}
-								
-								new Instance(connector, instanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
+								instance.cancel();
 							}
 						});
 					}
@@ -347,6 +356,11 @@ public final class SnmpClient implements Disconnectable {
 			
 			LOGGER.trace("New instance ID = {}", instanceId);
 			instance.instanceId = instanceId;
+		}
+		
+		public void unmap(Instance instance) {
+			instances.remove(instance.instanceId);
+			instance.instanceId = RequestIdProvider.IGNORE_ID;
 		}
 		
 		public void close() {
@@ -412,6 +426,14 @@ public final class SnmpClient implements Disconnectable {
 		}
 		
 		public void close() {
+			shouldRepeatWhat = 0;
+			requestOid = null;
+			receiver = null;
+			failing = null;
+		}
+		
+		public void cancel() {
+			instanceMapper.unmap(this);
 			shouldRepeatWhat = 0;
 			requestOid = null;
 			receiver = null;

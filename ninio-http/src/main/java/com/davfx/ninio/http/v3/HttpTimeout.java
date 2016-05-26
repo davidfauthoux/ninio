@@ -7,29 +7,29 @@ import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.util.Timeout;
 
-public final class TimeoutRequest {
-	private TimeoutRequest() {
+public final class HttpTimeout {
+	private HttpTimeout() {
 	}
 	
-	public static HttpReceiverRequestBuilder wrap(final Timeout t, final double timeout, final HttpReceiverRequestBuilder wrappee) {
-		return new HttpReceiverRequestBuilder() {
+	public static HttpRequestBuilder wrap(final Timeout t, final double timeout, final HttpRequestBuilder wrappee) {
+		return new HttpRequestBuilder() {
 			private HttpReceiver receiver = null;
 			private Failing failing = null;
 			
 			@Override
-			public HttpReceiverRequestBuilder receiving(HttpReceiver receiver) {
+			public HttpRequestBuilder receiving(HttpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			
 			@Override
-			public HttpReceiverRequestBuilder maxRedirections(int maxRedirections) {
+			public HttpRequestBuilder maxRedirections(int maxRedirections) {
 				wrappee.maxRedirections(maxRedirections);
 				return this;
 			}
 			
 			@Override
-			public HttpReceiverRequestBuilder failing(Failing failing) {
+			public HttpRequestBuilder failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
@@ -54,6 +54,21 @@ public final class TimeoutRequest {
 				wrappee.receiving(new HttpReceiver() {
 					@Override
 					public HttpContentReceiver received(final Disconnectable disconnectable, HttpResponse response) {
+						m.reset();
+						
+						if (r == null) {
+							return new HttpContentReceiver() {
+								@Override
+								public void received(ByteBuffer buffer) {
+									m.reset();
+								}
+								@Override
+								public void ended() {
+									m.cancel();
+								}
+							};
+						}
+						
 						final HttpContentReceiver rr = r.received(new Disconnectable() {
 							@Override
 							public void close() {
@@ -61,8 +76,6 @@ public final class TimeoutRequest {
 								disconnectable.close();
 							}
 						}, response);
-						
-						m.reset();
 						
 						return new HttpContentReceiver() {
 							@Override

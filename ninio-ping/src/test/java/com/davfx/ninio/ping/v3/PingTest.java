@@ -1,34 +1,42 @@
 package com.davfx.ninio.ping.v3;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
 
-import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
+import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
+import com.davfx.ninio.core.v3.util.Timeout;
 import com.davfx.util.Lock;
 
 public class PingTest {
+	
 	public static void main(String[] args) throws Exception {
 		new PingTest().test();
 	}
+	
 	@Test
 	public void test() throws Exception {
-		try (Ninio ninio = Ninio.create()) {
-			final Lock<String, IOException> lock = new Lock<>();
-			PingClient snmpClient = ninio.create(PingClient.builder().receiving(new PingReceiver() {
-				@Override
-				public void received(String host, double time) {
-					lock.set(host + ":" + time);
-				}
-			}));
-			try {
-				//snmpClient.ping("8.8.8.8");
-				snmpClient.ping("::1");
+		String pingHost = "8.8.8.99";
+		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
+			final Lock<Double, IOException> lock = new Lock<>();
+			
+			try (PingClient client = ninio.create(PingClient.builder().with(Executors.newSingleThreadExecutor()))) {
+				PingTimeout.wrap(timeout, 1d, client.request(), new Failing() {
+					@Override
+					public void failed(IOException e) {
+						lock.fail(e);
+					}
+				}).receiving(new PingReceiver() {
+					@Override
+					public void received(double time) {
+						lock.set(time);
+					}
+				}).ping(pingHost);
+				// ::1
 				System.out.println(lock.waitFor());
-				//Assertions.assertThat(lock.waitFor().toString()).isEqualTo("127.0.0.1");
-			} finally {
-				snmpClient.close();
+				//Assertions.assertThat(lock.waitFor())
 			}
 		}
 	}

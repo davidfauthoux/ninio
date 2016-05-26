@@ -210,24 +210,24 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		});
 	}
 
-	public HttpReceiverRequestBuilder request() {
-		return new HttpReceiverRequestBuilder() {
+	public HttpRequestBuilder request() {
+		return new HttpRequestBuilder() {
 			private HttpReceiver receiver = null;
 			private Failing failing = null;
 			private int maxRedirections = DEFAULT_MAX_REDIRECTIONS;
 
 			@Override
-			public HttpReceiverRequestBuilder receiving(HttpReceiver receiver) {
+			public HttpRequestBuilder receiving(HttpReceiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
 			@Override
-			public HttpReceiverRequestBuilder failing(Failing failing) {
+			public HttpRequestBuilder failing(Failing failing) {
 				this.failing = failing;
 				return this;
 			}
 			@Override
-			public HttpReceiverRequestBuilder maxRedirections(int maxRedirections) {
+			public HttpRequestBuilder maxRedirections(int maxRedirections) {
 				this.maxRedirections = maxRedirections;
 				return this;
 			}
