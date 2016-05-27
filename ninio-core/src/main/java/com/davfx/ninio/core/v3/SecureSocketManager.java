@@ -33,6 +33,8 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 
 	private SSLEngine engine = null;
 	
+	public Address connectAddress = null;
+	
 	public SecureSocketManager(Trust trust, boolean clientMode, Executor executor, ByteBufferAllocator byteBufferAllocator) {
 		if (executor == null) {
 			throw new NullPointerException("executor");
@@ -167,7 +169,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				failing.failed(e);
 			}
 			if (connecting != null) {
-				connecting.connected(this);
+				connecting.connected(connectAddress, this);
 			}
 		}
 		
@@ -278,7 +280,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		});
 	}
 	@Override
-	public void connected(Connector connector) {
+	public void connected(Address to, Connector connector) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {

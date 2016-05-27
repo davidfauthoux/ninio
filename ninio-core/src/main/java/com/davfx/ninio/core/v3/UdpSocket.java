@@ -233,7 +233,7 @@ public final class UdpSocket implements Connector {
 				}
 
 				if (connecting != null) {
-					connecting.connected(UdpSocket.this);
+					connecting.connected(null, UdpSocket.this);
 				}
 			}
 		});

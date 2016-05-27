@@ -107,7 +107,9 @@ public final class WebsocketSocket implements Connector {
 			.build()
 		);
 
-		connecting.connected(this);
+		if (connecting != null) {
+			connecting.connected(connectAddress, this);
+		}
 		
 		sender = httpClient.request()
 			.failing(failing)
@@ -131,7 +133,9 @@ public final class WebsocketSocket implements Connector {
 				public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
 					// We should check everything here (status code, header Sec-WebSocket-Accept, ...)
 					if (response.status != 101) {
-						failing.failed(new IOException("Could not connect to " + connectAddress + " [" + response.status + " " + response.reason + "]"));
+						if (failing != null) {
+							failing.failed(new IOException("Could not connect to " + connectAddress + " [" + response.status + " " + response.reason + "]"));
+						}
 						return null;
 					}
 					
@@ -144,7 +148,9 @@ public final class WebsocketSocket implements Connector {
 									if ((v & 0x80) != 0x80) {
 										LOGGER.error("Current implementation handles only FIN packets");
 										sender.cancel();
-										closing.closed();
+										if (closing != null) {
+											closing.closed();
+										}
 										return;
 									}
 									currentOpcode = v & 0x0F;
@@ -247,19 +253,17 @@ public final class WebsocketSocket implements Connector {
 
 										toPing -= partialBuffer.remaining();
 										sender.send(partialBuffer);
-										return;
-									}
-									
-									if ((opcode == 0x01) || (opcode == 0x02)) {
-										receiver.received(WebsocketSocket.this, connectAddress, partialBuffer);
-										return;
-									}
-
-									if (opcode == 0x08) {
+									} else if ((opcode == 0x01) || (opcode == 0x02)) {
+										if (receiver != null) {
+											receiver.received(WebsocketSocket.this, null, partialBuffer);
+										}
+									} else if (opcode == 0x08) {
 										LOGGER.debug("Connection closed by peer");
 										sender.cancel();
-										closing.closed();
-										return;
+										if (closing != null) {
+											closing.closed();
+										}
+										break;
 									}
 								}
 							}
@@ -269,7 +273,9 @@ public final class WebsocketSocket implements Connector {
 						public void ended() {
 							LOGGER.debug("Connection abruptly closed by peer");
 							sender.cancel();
-							closing.closed();
+							if (closing != null) {
+								closing.closed();
+							}
 						}
 					};
 				}
@@ -283,7 +289,7 @@ public final class WebsocketSocket implements Connector {
 	}
 	
 	@Override
-	public Connector send(final Address address, final ByteBuffer buffer) {
+	public Connector send(Address address, ByteBuffer buffer) {
 		sender.send(headerOf(0x02, buffer.remaining()));
 		sender.send(buffer);
 		return this;

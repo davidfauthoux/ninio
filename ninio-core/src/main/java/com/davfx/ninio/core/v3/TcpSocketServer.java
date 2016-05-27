@@ -345,7 +345,7 @@ public final class TcpSocketServer implements Disconnectable {
 											}
 
 											if (connecting != null) {
-												connecting.connected(innerConnector);
+												connecting.connected(clientAddress, innerConnector);
 											}
 										}
 									});

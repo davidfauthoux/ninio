@@ -16,16 +16,10 @@ import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.ListenConnecting;
-import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.NinioSocketBuilder;
-import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
-import com.davfx.ninio.core.v3.SocketBuilder;
-import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.util.Lock;
-import com.davfx.util.Wait;
 import com.google.common.base.Charsets;
 
 public class EchoSocketTest {
@@ -46,44 +40,7 @@ public class EchoSocketTest {
 					@Override
 					public NinioSocketBuilder<?> create(Address address, String header) {
 						if (header.equals("_")) {
-							return new NinioSocketBuilder<Void>() {
-								private Receiver receiver;
-								
-								@Override
-								public Void closing(Closing closing) {
-									return null;
-								}
-								@Override
-								public Void connecting(Connecting connecting) {
-									return null;
-								}
-								@Override
-								public Void failing(Failing failing) {
-									return null;
-								}
-								
-								@Override
-								public Void receiving(Receiver receiver) {
-									this.receiver = receiver;
-									return null;
-								}
-								
-								@Override
-								public Connector create(Queue queue) {
-									return new Connector() {
-										@Override
-										public void close() {
-										}
-										@Override
-										public Connector send(Address address, ByteBuffer buffer) {
-											String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-											LOGGER.debug("Received {} <--: {}", address, s);
-											receiver.received(this, address, ByteBuffer.wrap("response".getBytes(Charsets.UTF_8)));
-											return this;
-										}
-									};
-								}
-							};
+							return new EchoNinioSocketBuilder();
 						} else {
 							return null;
 						}
@@ -128,7 +85,7 @@ public class EchoSocketTest {
 						try {
 							client.send(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)));
 		
-							Assertions.assertThat(lock.waitFor()).isEqualTo("response");
+							Assertions.assertThat(lock.waitFor()).isEqualTo("ECHO test");
 						} finally {
 							client.close();
 						}

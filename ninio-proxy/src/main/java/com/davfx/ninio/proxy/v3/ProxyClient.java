@@ -24,6 +24,7 @@ import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
 import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.http.v3.HttpClient;
+import com.davfx.ninio.http.v3.HttpSocket;
 import com.davfx.ninio.http.v3.HttpSpecification;
 import com.davfx.ninio.http.v3.WebsocketSocket;
 import com.davfx.util.ClassThreadFactory;
@@ -68,6 +69,10 @@ public final class ProxyClient implements ProxyConnectorProvider {
 					@Override
 					public WebsocketSocket.Builder websocket() {
 						return client.websocket();
+					}
+					@Override
+					public HttpSocket.Builder http() {
+						return client.http();
 					}
 				};
 			}
@@ -487,6 +492,66 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		};
 	}
 	
+	@Override
+	public HttpSocket.Builder http() {
+		return new HttpSocket.Builder() {
+			private Address connectAddress = null;
+			
+			private String path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
+			@Override
+			public HttpSocket.Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public HttpSocket.Builder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public HttpSocket.Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public HttpSocket.Builder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public HttpSocket.Builder to(Address connectAddress) {
+				this.connectAddress = connectAddress;
+				return this;
+			}
+			
+			@Override
+			public HttpSocket.Builder with(HttpClient httpClient) {
+				return this;
+			}
+			
+			@Override
+			public HttpSocket.Builder route(String path) {
+				this.path = path;
+				return this;
+			}
+			
+			@Override
+			public Connector create(Queue queue) {
+				return createConnector(ProxyCommons.Types.HTTP + path, connectAddress, failing, receiver, closing, connecting);
+			}
+		};
+	}
+	
 	private Connector createConnector(final String header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
 		final InnerConnection innerConnection = new InnerConnection(failing, receiver, closing, connecting);
 		final Connector createdConnector = new Connector() {
@@ -581,94 +646,97 @@ public final class ProxyClient implements ProxyConnectorProvider {
 										
 										@Override
 										public void received(Connector receivedConnector, Address receivedAddress, ByteBuffer receivedBuffer) {
-											command = readByte(command, receivedBuffer);
-											if (command < 0) {
-												return;
-											}
-
-											readConnectionId = readInt(readConnectionId, receivedBuffer);
-											if (readConnectionId < 0) {
-												return;
-											}
-
-											switch (command) {
-											case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
-												readHostLength = readInt(readHostLength, receivedBuffer);
-												if (readHostLength < 0) {
+											while (true) {
+												command = readByte(command, receivedBuffer);
+												if (command < 0) {
 													return;
 												}
-												readHost = readString(readHost, receivedBuffer, readHostLength);
-												if (readHost == null) {
+	
+												readConnectionId = readInt(readConnectionId, receivedBuffer);
+												if (readConnectionId < 0) {
 													return;
 												}
-												readPort = readInt(readPort, receivedBuffer);
-												if (readPort < 0) {
-													return;
-												}
-												readLength = readInt(readLength, receivedBuffer);
-												if (readLength < 0) {
-													return;
-												}
-												int len = readLength;
-												if (receivedBuffer.remaining() < len) {
-													len = receivedBuffer.remaining();
-												}
-												InnerConnection receivedInnerConnection = connections.get(readConnectionId);
-												if (receivedInnerConnection != null) {
-													final ByteBuffer b = receivedBuffer.duplicate();
-													b.limit(b.position() + len);
-													if (receivedInnerConnection.receiver != null) {
-														receivedInnerConnection.receiver.received(connector, new Address(readHost, readPort), b);
+	
+												switch (command) {
+												case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
+													readHostLength = readInt(readHostLength, receivedBuffer);
+													if (readHostLength < 0) {
+														return;
 													}
+													readHost = readString(readHost, receivedBuffer, readHostLength);
+													if (readHost == null) {
+														return;
+													}
+													readPort = readInt(readPort, receivedBuffer);
+													if (readPort < 0) {
+														return;
+													}
+													readLength = readInt(readLength, receivedBuffer);
+													if (readLength < 0) {
+														return;
+													}
+													int len = readLength;
+													if (receivedBuffer.remaining() < len) {
+														len = receivedBuffer.remaining();
+													}
+													InnerConnection receivedInnerConnection = connections.get(readConnectionId);
+													if (receivedInnerConnection != null) {
+														ByteBuffer b = receivedBuffer.duplicate();
+														b.limit(b.position() + len);
+														if (receivedInnerConnection.receiver != null) {
+															receivedInnerConnection.receiver.received(connector, new Address(readHost, readPort), b);
+														}
+													}
+													receivedBuffer.position(receivedBuffer.position() + len);
+													readLength -= len;
+													if (readLength == 0) {
+														readConnectionId = -1;
+														command = -1;
+														readHostLength = -1;
+														readHost = null;
+														readPort = -1;
+														readLength = -1;
+													}
+													break;
 												}
-												receivedBuffer.position(receivedBuffer.position() + len);
-												if (!receivedBuffer.hasRemaining()) {
+												case ProxyCommons.Commands.SEND_WITHOUT_ADDRESS: {
+													readLength = readInt(readLength, receivedBuffer);
+													if (readLength < 0) {
+														return;
+													}
+													int len = readLength;
+													if (receivedBuffer.remaining() < len) {
+														len = receivedBuffer.remaining();
+													}
+													InnerConnection receivedInnerConnection = connections.get(readConnectionId);
+													if (receivedInnerConnection != null) {
+														ByteBuffer b = receivedBuffer.duplicate();
+														b.limit(b.position() + len);
+														if (receivedInnerConnection.receiver != null) {
+															receivedInnerConnection.receiver.received(connector, null, b);
+														}
+													}
+													receivedBuffer.position(receivedBuffer.position() + len);
+													readLength -= len;
+													if (readLength == 0) {
+														readConnectionId = -1;
+														command = -1;
+														readLength = -1;
+													}
+													break;
+												}
+												case ProxyCommons.Commands.CLOSE: {
+													InnerConnection receivedInnerConnection = connections.remove(readConnectionId);
 													readConnectionId = -1;
 													command = -1;
-													readHostLength = -1;
-													readHost = null;
-													readPort = -1;
-													readLength = -1;
-												}
-												break;
-											}
-											case ProxyCommons.Commands.SEND_WITHOUT_ADDRESS: {
-												readLength = readInt(readLength, receivedBuffer);
-												if (readLength < 0) {
-													return;
-												}
-												int len = readLength;
-												if (receivedBuffer.remaining() < len) {
-													len = receivedBuffer.remaining();
-												}
-												InnerConnection receivedInnerConnection = connections.get(readConnectionId);
-												if (receivedInnerConnection != null) {
-													final ByteBuffer b = receivedBuffer.duplicate();
-													b.limit(b.position() + len);
-													if (receivedInnerConnection.receiver != null) {
-														receivedInnerConnection.receiver.received(connector, null, b);
+													if (receivedInnerConnection != null) {
+														if (receivedInnerConnection.closing != null) {
+															receivedInnerConnection.closing.closed();
+														}
 													}
+													break;
 												}
-												receivedBuffer.position(receivedBuffer.position() + len);
-												if (!receivedBuffer.hasRemaining()) {
-													readConnectionId = -1;
-													command = -1;
-													readLength = -1;
 												}
-												break;
-											}
-											case ProxyCommons.Commands.CLOSE: {
-												connections.remove(readConnectionId);
-												readConnectionId = -1;
-												command = -1;
-												InnerConnection receivedInnerConnection = connections.get(readConnectionId);
-												if (receivedInnerConnection != null) {
-													if (receivedInnerConnection.closing != null) {
-														receivedInnerConnection.closing.closed();
-													}
-												}
-												break;
-											}
 											}
 										}
 									})
@@ -755,7 +823,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 				
 				connections.put(innerConnection.connectionId, innerConnection);
 				if (innerConnection.connecting != null) {
-					innerConnection.connecting.connected(createdConnector);
+					innerConnection.connecting.connected(connectAddress, createdConnector);
 				}
 			}
 		});

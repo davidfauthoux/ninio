@@ -5,4 +5,5 @@ public interface HttpHeaderValue {
 	String CLOSE = "close";
 	String KEEP_ALIVE = "keep-alive";
 	String CHUNKED = "chunked";
+	String IDENTITY = "identity";
 }

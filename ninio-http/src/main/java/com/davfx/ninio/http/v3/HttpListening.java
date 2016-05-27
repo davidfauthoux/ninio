@@ -540,6 +540,7 @@ public final class HttpListening implements Listening {
 							if (handler != null) {
 								handler.received(buffer);
 							}
+							break;
 						}
 					}
 				};

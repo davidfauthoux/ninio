@@ -5,8 +5,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Disconnectable;
@@ -16,8 +14,6 @@ import com.davfx.ninio.ping.v3.PingReceiver;
 import com.davfx.util.Lock;
 
 public class PingTest {
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(PingTest.class);
 
 	public static void main(String[] args) throws Exception {
 		new PingTest().testSocket();
@@ -38,19 +34,17 @@ public class PingTest {
 					
 					final ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)));
 					try {
-						PingClient snmpClient = ninio.create(PingClient.builder().with(proxyClient.raw()).receiving(new PingReceiver() {
-							@Override
-							public void received(String host, double time) {
-								lock.set(host + ":" + time);
-							}
-						}));
-						try {
-							snmpClient.ping("8.8.8.8");
-							//snmpClient.ping("::1");
+						final String pingHost = "8.8.8.8";
+						try (PingClient pingClient = ninio.create(PingClient.builder().with(proxyClient.raw()))) {
+							pingClient.request().receiving(new PingReceiver() {
+								@Override
+								public void received(double time) {
+									lock.set(pingHost + ":" + time);
+								}
+							}).ping(pingHost);
+							//.ping("::1");
 							System.out.println(lock.waitFor());
 							//Assertions.assertThat(lock.waitFor().toString()).isEqualTo("127.0.0.1");
-						} finally {
-							snmpClient.close();
 						}
 					} finally {
 						proxyClient.close();

@@ -80,6 +80,7 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	@Override
 	public Connector create(Queue queue) {
 		SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
+		sslManager.connectAddress = connectAddress;
 		sslManager.connecting = connecting;
 		sslManager.closing = closing;
 		sslManager.failing = failing;

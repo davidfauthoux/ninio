@@ -61,6 +61,7 @@ public final class SecureSocketServerBuilder {
 		return new Listening() {
 			@Override
 			public Listening.Connection connecting(Address from, Connector connector) {
+				sslManager.connectAddress = from;
 				sslManager.connector = connector;
 		
 				Listening.Connection connection = thisListening.connecting(from, sslManager);

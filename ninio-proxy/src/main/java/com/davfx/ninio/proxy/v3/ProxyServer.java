@@ -32,6 +32,7 @@ import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.ninio.core.v3.Trust;
 import com.davfx.ninio.core.v3.UdpSocket;
 import com.davfx.ninio.http.v3.HttpClient;
+import com.davfx.ninio.http.v3.HttpSocket;
 import com.davfx.ninio.http.v3.WebsocketSocket;
 import com.davfx.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
@@ -66,6 +67,9 @@ public final class ProxyServer implements Listening {
 						}
 						if (header.startsWith(ProxyCommons.Types.WEBSOCKET)) {
 							return WebsocketSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.WEBSOCKET.length()));
+						}
+						if (header.startsWith(ProxyCommons.Types.HTTP)) {
+							return HttpSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.HTTP.length()));
 						}
 						if (listening == null) {
 							return null;
@@ -305,7 +309,7 @@ public final class ProxyServer implements Listening {
 							};
 							final Connecting connecting = new Connecting() {
 								@Override
-								public void connected(Connector connector) {
+								public void connected(Address to, Connector connector) {
 								}
 							};
 							
@@ -344,7 +348,8 @@ public final class ProxyServer implements Listening {
 									}
 								});
 								receivedBuffer.position(receivedBuffer.position() + len);
-								if (!receivedBuffer.hasRemaining()) {
+								readLength -= len;
+								if (readLength == 0) {
 									readConnectionId = -1;
 									command = -1;
 									readHostLength = -1;
@@ -375,7 +380,8 @@ public final class ProxyServer implements Listening {
 									}
 								});
 								receivedBuffer.position(receivedBuffer.position() + len);
-								if (!receivedBuffer.hasRemaining()) {
+								readLength -= len;
+								if (readLength == 0) {
 									readConnectionId = -1;
 									command = -1;
 									readLength = -1;
@@ -500,7 +506,6 @@ public final class ProxyServer implements Listening {
 			
 			@Override
 			public Connecting connecting() {
-				// TODO Auto-generated method stub
 				return null;
 			}
 			

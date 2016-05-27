@@ -21,6 +21,7 @@ interface ProxyCommons {
 		public static final String UDP = CONFIG.getString("ninio.proxy.udp");
 		public static final String RAW = CONFIG.getString("ninio.proxy.raw");
 		public static final String WEBSOCKET = CONFIG.getString("ninio.proxy.websocket");
+		public static final String HTTP = CONFIG.getString("ninio.proxy.http");
 		
 		private Types() {
 		}

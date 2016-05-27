@@ -208,7 +208,7 @@ public final class TcpSocket implements Connector {
 									}
 		
 									if (connecting != null) {
-										connecting.connected(TcpSocket.this);
+										connecting.connected(connectAddress, TcpSocket.this);
 									}
 									
 								} catch (final IOException e) {

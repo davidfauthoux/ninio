@@ -97,9 +97,9 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		Listening.Connection connection = listening.connecting(request.address, innerConnector);
 
 		Connecting connecting = connection.connecting();
-		receiver = new WebsocketFrameReader(request.address, innerConnector, connection.receiver(), connection.closing(), sender);
+		receiver = new WebsocketFrameReader(innerConnector, connection.receiver(), connection.closing(), sender);
 
-		connecting.connected(innerConnector);
+		connecting.connected(request.address, innerConnector);
 	}
 
 	@Override
@@ -133,14 +133,12 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		
 		private long toPing = 0L;
 
-		private final Address address;
 		private final Connector connector;
 		private final Receiver receiver;
 		private final Closing closing;
 		private final HttpContentSender sender;
 		
-		public WebsocketFrameReader(Address address, Connector connector, Receiver receiver, Closing closing, HttpContentSender sender) {
-			this.address = address;
+		public WebsocketFrameReader(Connector connector, Receiver receiver, Closing closing, HttpContentSender sender) {
 			this.connector = connector;
 			this.receiver = receiver;
 			this.closing = closing;
@@ -258,19 +256,17 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 
 						toPing -= partialBuffer.remaining();
 						sender.send(partialBuffer);
-						return;
-					}
-					
-					if ((opcode == 0x01) || (opcode == 0x02)) {
-						receiver.received(connector, address, partialBuffer);
-						return;
-					}
-
-					if (opcode == 0x08) {
+					} else if ((opcode == 0x01) || (opcode == 0x02)) {
+						if (receiver != null) {
+							receiver.received(connector, null, partialBuffer);
+						}
+					} else if (opcode == 0x08) {
 						LOGGER.debug("Connection closed by peer");
 						sender.cancel();
-						closing.closed();
-						return;
+						if (closing != null) {
+							closing.closed();
+						}
+						break;
 					}
 				}
 			}

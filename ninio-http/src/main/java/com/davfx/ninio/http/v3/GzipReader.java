@@ -184,17 +184,17 @@ final class GzipReader implements HttpContentReceiver, Failing {
 		}
 
 		if (deflated.hasRemaining()) {
-			inflater.setInput(deflated.array(), deflated.position(), deflated.remaining());
+			inflater.setInput(deflated.array(), deflated.arrayOffset() + deflated.position(), deflated.remaining());
 			deflated.position(deflated.position() + deflated.remaining());
 			
 			while (true) { //!inflater.needsInput() && !inflater.finished()) {
 				ByteBuffer inflated = ByteBuffer.allocate(BUFFER_SIZE);
 				try {
-					int c = inflater.inflate(inflated.array(), inflated.position(), inflated.remaining());
+					int c = inflater.inflate(inflated.array(), inflated.arrayOffset() + inflated.position(), inflated.remaining());
 					if (c == 0) {
 						break;
 					}
-					crc.update(inflated.array(), inflated.position(), c);
+					crc.update(inflated.array(), inflated.arrayOffset() + inflated.position(), c);
 					inflated.position(inflated.position() + c);
 				} catch (DataFormatException e) {
 					ended = true;
@@ -205,6 +205,7 @@ final class GzipReader implements HttpContentReceiver, Failing {
 				wrappee.received(inflated);
 			}
 		}
+		
 		return true;
     }
     

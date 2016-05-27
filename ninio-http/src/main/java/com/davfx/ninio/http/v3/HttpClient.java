@@ -111,12 +111,10 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					executor.execute(new Runnable() {
 						@Override
 						public void run() {
-							while (buffer.hasRemaining()) {
-								if (receiver == null) {
-									return;
-								}
-								receiver.received(connector, null, buffer);
+							if (receiver == null) {
+								return;
 							}
+							receiver.received(connector, null, buffer);
 						}
 					});
 				}
@@ -499,7 +497,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								if (reusableConnector == null) {
 									return this;
 								}
-								
 								reusableConnector.connector.send(null, buffer);
 								return this;
 							}

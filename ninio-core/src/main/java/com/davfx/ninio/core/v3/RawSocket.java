@@ -121,7 +121,7 @@ public final class RawSocket implements Connector {
 				@Override
 				public void run() {
 					if (connecting != null) {
-						connecting.connected(RawSocket.this);
+						connecting.connected(null, RawSocket.this);
 					}
 					
 					while (true) {
