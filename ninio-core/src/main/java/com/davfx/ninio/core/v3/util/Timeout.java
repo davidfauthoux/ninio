@@ -12,7 +12,9 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.util.ClassThreadFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
@@ -24,7 +26,7 @@ public final class Timeout implements AutoCloseable {
 	private static final Config CONFIG = ConfigFactory.load(Timeout.class.getClassLoader());
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "ninio.timeout.precision");
 
-	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
+	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(Timeout.class));
 	
 	private static final double now() {
 		return System.currentTimeMillis() / 1000d;
@@ -59,7 +61,23 @@ public final class Timeout implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		executor.shutdown();
+		ScheduledFuture<?> f = future;
+		if (f != null) {
+			f.cancel(false);
+		}
+		
+		LOGGER.trace("Closed");
+		
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				if (future != null) {
+					future.cancel(false);
+					future = null;
+				}
+			}
+		});
+		ExecutorUtils.shutdown(executor);
 	}
 	
 	private void reschedule(double at) {

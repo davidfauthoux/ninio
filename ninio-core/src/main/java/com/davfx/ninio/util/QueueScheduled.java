@@ -4,11 +4,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.core.Closeable;
 import com.davfx.ninio.core.Queue;
 import com.davfx.util.ClassThreadFactory;
 
 public final class QueueScheduled {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(QueueScheduled.class);
+	
 	private static final ScheduledExecutorService REPEAT_EXECUTOR = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(QueueScheduled.class, true));
 	
 	private QueueScheduled() {
@@ -37,7 +43,11 @@ public final class QueueScheduled {
 						if (closeable.closed) {
 							return;
 						}
-						task.run();
+						try {
+							task.run();
+						} catch (Throwable t) {
+							LOGGER.error("Error in scheduled task", t);
+						}
 					}
 				});
 			}

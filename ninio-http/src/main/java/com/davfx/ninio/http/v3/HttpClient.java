@@ -155,10 +155,10 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		
 		public void pop() {
 			if (!nextReceivers.isEmpty()) {
-				LOGGER.debug("To next receiver");
+				LOGGER.trace("To next receiver");
 				receiver = nextReceivers.removeFirst();
 			} else {
-				LOGGER.debug("Nothing to pop");
+				LOGGER.trace("Nothing to pop");
 				receiver = null;
 			}
 		}
@@ -477,7 +477,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							}
 						});
 						
-						LOGGER.trace("Sending request: {}", request);
+						LOGGER.trace("Sending request: {} (complete headers = {})", request, completedHeaders);
 						
 						reusableConnector.connector.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()));
 
@@ -535,7 +535,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						}
 						
 						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-						boolean automaticallySetGzipChunked = headerKeepAlive;
+						boolean automaticallySetGzipChunked = headerKeepAlive && (request.method == HttpMethod.POST);
 						for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
 							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
 								headerKeepAlive = false;
@@ -570,7 +570,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 
 						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
 							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-								LOGGER.debug("Request is chunked");
+								LOGGER.trace("Request is chunked");
 								sender = new ChunkedWriter(sender);
 							}
 							break;
@@ -579,7 +579,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
 							try {
 								long headerContentLength = Long.parseLong(contentLengthValue);
-								LOGGER.debug("Request content length: {}", headerContentLength);
+								LOGGER.trace("Request content length: {}", headerContentLength);
 								sender = new ContentLengthWriter(headerContentLength, sender);
 							} catch (NumberFormatException e) {
 								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
@@ -589,7 +589,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						
 						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
 							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-								LOGGER.debug("Request is gzip");
+								LOGGER.trace("Request is gzip");
 								sender = new GzipWriter(sender);
 							}
 							break;
