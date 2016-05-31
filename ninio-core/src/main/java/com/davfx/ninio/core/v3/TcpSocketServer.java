@@ -76,6 +76,9 @@ public final class TcpSocketServer implements Disconnectable {
 
 			@Override
 			public Disconnectable create(Queue queue) {
+				if (bindAddress == null) {
+					throw new NullPointerException("bindAddress");
+				}
 				return new TcpSocketServer(queue, byteBufferAllocator, bindAddress, connecting, listening, failing);
 			}
 		};
