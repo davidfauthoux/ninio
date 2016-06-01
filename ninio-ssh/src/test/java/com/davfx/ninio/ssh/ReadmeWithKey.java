@@ -34,7 +34,7 @@ public final class ReadmeWithKey {
 		Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
 
 		new Ssh()
-			.withLogin("<your-login>")
+			.withLogin("davidfauthoux")
 			.withKey(trust, "test-alias", "test-password")
 		.to(new Address("127.0.0.1", Ssh.DEFAULT_PORT)).client().connect(new ReadyConnection() {
 			

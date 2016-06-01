@@ -22,7 +22,6 @@ import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.NinioBuilder;
-import com.davfx.ninio.core.v3.NinioSocketBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.RawSocket;
 import com.davfx.ninio.core.v3.Receiver;
@@ -50,26 +49,182 @@ public final class ProxyServer implements Listening {
 				final HttpClient httpClient = HttpClient.builder().with(executor).create(queue);
 				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
-					public NinioSocketBuilder<?> create(Address address, String header) {
+					public ProxyListening.Builder create(Address address, String header) {
 						if (header.startsWith(ProxyCommons.Types.TCP)) {
-							return TcpSocket.builder().to(address);
+							final TcpSocket.Builder b = TcpSocket.builder().to(address);
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
 						if (header.startsWith(ProxyCommons.Types.UDP)) {
-							return UdpSocket.builder();
+							final UdpSocket.Builder b = UdpSocket.builder();
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
 						if (header.startsWith(ProxyCommons.Types.SSL)) {
-							return new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
+							final TcpSocket.Builder b = new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
 						if (header.startsWith(ProxyCommons.Types.RAW)) {
 							ProtocolFamily family = (header.charAt(ProxyCommons.Types.RAW.length()) == '4') ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
 							int protocol = Integer.parseInt(header.substring(ProxyCommons.Types.RAW.length() + 1));
-							return RawSocket.builder().family(family).protocol(protocol);
+							final RawSocket.Builder b = RawSocket.builder().family(family).protocol(protocol);
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
 						if (header.startsWith(ProxyCommons.Types.WEBSOCKET)) {
-							return WebsocketSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.WEBSOCKET.length()));
+							final WebsocketSocket.Builder b = WebsocketSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.WEBSOCKET.length()));
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
 						if (header.startsWith(ProxyCommons.Types.HTTP)) {
-							return HttpSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.HTTP.length()));
+							final HttpSocket.Builder b = HttpSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.HTTP.length()));
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
 						if (listening == null) {
 							return null;
@@ -99,23 +254,23 @@ public final class ProxyServer implements Listening {
 			private Executor executor = null;
 			private ProxyListening listening = new ProxyListening() {
 				@Override
-				public NinioSocketBuilder<?> create(Address address, String header) {
-					return new NinioSocketBuilder<Void>() {
+				public Builder create(Address address, String header) {
+					return new Builder() {
 						@Override
-						public Void closing(Closing closing) {
+						public Builder closing(Closing closing) {
 							return null;
 						}
 						@Override
-						public Void failing(Failing failing) {
+						public Builder failing(Failing failing) {
 							failing.failed(new IOException());
 							return null;
 						}
 						@Override
-						public Void receiving(Receiver receiver) {
+						public Builder receiving(Receiver receiver) {
 							return null;
 						}
 						@Override
-						public Void connecting(Connecting connecting) {
+						public Builder connecting(Connecting connecting) {
 							return null;
 						}
 						@Override
@@ -429,7 +584,7 @@ public final class ProxyServer implements Listening {
 								proxyExecutor.execute(new Runnable() {
 									@Override
 									public void run() {
-										NinioSocketBuilder<?> externalBuilder = listening.create(a, header);
+										ProxyListening.Builder externalBuilder = listening.create(a, header);
 										if (externalBuilder == null) {
 											LOGGER.error("Unknown header (CONNECT_WITH_ADDRESS): {}", header);
 										} else {
@@ -467,7 +622,7 @@ public final class ProxyServer implements Listening {
 								proxyExecutor.execute(new Runnable() {
 									@Override
 									public void run() {
-										NinioSocketBuilder<?> externalBuilder = listening.create(null, header);
+										ProxyListening.Builder externalBuilder = listening.create(null, header);
 										if (externalBuilder == null) {
 											LOGGER.error("Unknown header (CONNECT_WITHOUT_ADDRESS): {}", header);
 										} else {

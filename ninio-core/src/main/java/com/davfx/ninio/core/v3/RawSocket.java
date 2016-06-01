@@ -18,10 +18,14 @@ public final class RawSocket implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RawSocket.class);
 
-	public static interface Builder extends NinioSocketBuilder<Builder> {
+	public static interface Builder extends NinioBuilder<Connector> {
 		Builder family(ProtocolFamily family);
 		Builder protocol(int protocol);
 		Builder bind(Address bindAddress);
+		Builder failing(Failing failing);
+		Builder closing(Closing closing);
+		Builder connecting(Connecting connecting);
+		Builder receiving(Receiver receiver);
 	}
 
 	public static Builder builder() {

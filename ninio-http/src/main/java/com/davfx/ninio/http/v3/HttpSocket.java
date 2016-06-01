@@ -12,7 +12,7 @@ import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.NinioSocketBuilder;
+import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.google.common.collect.ImmutableMultimap;
@@ -21,10 +21,14 @@ public final class HttpSocket implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpSocket.class);
 
-	public static interface Builder extends NinioSocketBuilder<Builder> {
+	public static interface Builder extends NinioBuilder<Connector> {
 		Builder to(Address connectAddress);
 		Builder with(HttpClient httpClient);
 		Builder route(String path);
+		Builder failing(Failing failing);
+		Builder closing(Closing closing);
+		Builder connecting(Connecting connecting);
+		Builder receiving(Receiver receiver);
 	}
 
 	public static Builder builder() {

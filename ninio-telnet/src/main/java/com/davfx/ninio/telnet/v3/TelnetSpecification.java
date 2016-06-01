@@ -12,4 +12,5 @@ public final class TelnetSpecification {
 	private static final Config CONFIG = ConfigFactory.load(TelnetSpecification.class.getClassLoader());
 	public static final Charset CHARSET = Charset.forName(CONFIG.getString("ninio.telnet.charset"));
 	public static final String EOL = "\r\n";
+	public static final int DEFAULT_PORT = 23;
 }
