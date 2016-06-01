@@ -19,12 +19,13 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Trust;
+import com.davfx.ninio.core.v3.ByteBufferAllocator;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
+import com.davfx.ninio.core.v3.DefaultByteBufferAllocator;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
@@ -82,7 +83,7 @@ public final class SshClient {
 
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
 
-	public static interface Builder extends NinioBuilder<Connector> {
+	public static interface Builder extends TcpSocket.Builder {
 		Builder with(TcpSocket.Builder builder);
 		Builder failing(Failing failing);
 		Builder closing(Closing closing);
@@ -90,6 +91,8 @@ public final class SshClient {
 		Builder receiving(Receiver receiver);
 		Builder with(Executor executor);
 		Builder to(Address connectAddress);
+		Builder with(ByteBufferAllocator byteBufferAllocator);
+		Builder bind(Address bindAddress);
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);
 	}
@@ -167,17 +170,31 @@ public final class SshClient {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Connecting connecting = null;
-			private TcpSocket.Builder builder = null;
+			private TcpSocket.Builder builder = TcpSocket.builder();
 			
 			private String login = null;
 			private String password = null;
 			private SshPublicKey publicKey = null;
 			private String exec = null;
 			
+			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
+			private Address bindAddress = null;
 			private Address connectAddress = null;
 			
 			private Executor executor = null;
 
+			@Override
+			public Builder bind(Address bindAddress) {
+				this.bindAddress = bindAddress;
+				return this;
+			}
+			
+			@Override
+			public Builder with(ByteBufferAllocator byteBufferAllocator) {
+				this.byteBufferAllocator = byteBufferAllocator;
+				return this;
+			}
+			
 			@Override
 			public Builder login(String login, SshPublicKey publicKey) {
 				this.login = login;
@@ -237,9 +254,6 @@ public final class SshClient {
 			
 			@Override
 			public Connector create(Queue queue) {
-				if (builder == null) {
-					throw new NullPointerException("builder");
-				}
 				if (login == null) {
 					throw new NullPointerException("login");
 				}
@@ -716,6 +730,8 @@ public final class SshClient {
 						.closing(readingSshHeaderCloseableByteBufferHandler)
 						.receiving(readingSshHeaderCloseableByteBufferHandler)
 						.to(connectAddress)
+						.bind(bindAddress)
+						.with(byteBufferAllocator)
 						.create(queue);
 				
 				exchangeHolder.cipheringCloseableByteBufferHandler = new CipheringConnector(rawConnector);

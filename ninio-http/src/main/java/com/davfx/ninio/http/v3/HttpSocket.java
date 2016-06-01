@@ -7,21 +7,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.ByteBufferAllocator;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
+import com.davfx.ninio.core.v3.TcpSocket;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class HttpSocket implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpSocket.class);
 
-	public static interface Builder extends NinioBuilder<Connector> {
+	public static interface Builder extends TcpSocket.Builder {
 		Builder to(Address connectAddress);
 		Builder with(HttpClient httpClient);
 		Builder route(String path);
@@ -42,6 +43,15 @@ public final class HttpSocket implements Connector {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			
+			@Override
+			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
+				return this;
+			}
+			@Override
+			public TcpSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
 			
 			@Override
 			public Builder closing(Closing closing) {

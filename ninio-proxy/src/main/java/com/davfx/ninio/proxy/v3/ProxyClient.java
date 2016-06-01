@@ -486,6 +486,16 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
+			public TcpSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
+			
+			@Override
+			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
+				return this;
+			}
+			
+			@Override
 			public Connector create(Queue queue) {
 				return createConnector(ProxyCommons.Types.WEBSOCKET + path, connectAddress, failing, receiver, closing, connecting);
 			}
@@ -542,6 +552,16 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			@Override
 			public HttpSocket.Builder route(String path) {
 				this.path = path;
+				return this;
+			}
+			
+			@Override
+			public TcpSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
+			
+			@Override
+			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 				return this;
 			}
 			

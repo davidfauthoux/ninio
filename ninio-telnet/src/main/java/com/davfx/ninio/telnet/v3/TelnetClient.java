@@ -3,9 +3,13 @@ package com.davfx.ninio.telnet.v3;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.ByteBufferAllocator;
+import com.davfx.ninio.core.v3.Closing;
+import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
+import com.davfx.ninio.core.v3.DefaultByteBufferAllocator;
+import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
@@ -24,7 +28,7 @@ public final class TelnetClient {
 						connector.send(null, ByteBuffer.wrap(("davidfauthoux" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
 						break;
 					case 3:
-						connector.send(null, ByteBuffer.wrap(("password" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
+						connector.send(null, ByteBuffer.wrap(("mypassword" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
 						break;
 					case 5:
 						connector.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
@@ -41,22 +45,71 @@ public final class TelnetClient {
 		}
 	}
 	
-	public static interface Builder extends NinioBuilder<Connector> {
+	public static interface Builder extends TcpSocket.Builder {
 		Builder with(TcpSocket.Builder builder);
+		Builder failing(Failing failing);
+		Builder closing(Closing closing);
+		Builder connecting(Connecting connecting);
 		Builder receiving(Receiver receiver);
+		Builder to(Address connectAddress);
+		Builder with(ByteBufferAllocator byteBufferAllocator);
+		Builder bind(Address bindAddress);
 	}
 
 	public static Builder builder() {
 		return new Builder() {
 			private Receiver receiver = null;
-			private TcpSocket.Builder builder = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Connecting connecting = null;
+			private TcpSocket.Builder builder = TcpSocket.builder();
+			
+			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
+			private Address bindAddress = null;
+			private Address connectAddress = null;
+			
+			@Override
+			public Builder bind(Address bindAddress) {
+				this.bindAddress = bindAddress;
+				return this;
+			}
+			
+			@Override
+			public Builder with(ByteBufferAllocator byteBufferAllocator) {
+				this.byteBufferAllocator = byteBufferAllocator;
+				return this;
+			}
+			
+			@Override
+			public Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public Builder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
 			
 			@Override
 			public Builder receiving(Receiver receiver) {
 				this.receiver = receiver;
 				return this;
 			}
-			
+
+			@Override
+			public Builder to(Address connectAddress) {
+				this.connectAddress = connectAddress;
+				return this;
+			}
+
 			@Override
 			public Builder with(TcpSocket.Builder builder) {
 				this.builder = builder;
@@ -65,18 +118,23 @@ public final class TelnetClient {
 			
 			@Override
 			public Connector create(Queue queue) {
-				if (builder == null) {
-					throw new NullPointerException("builder");
-				}
-				
 				final Receiver r = receiver;
 				final TelnetReader telnetReader = new TelnetReader();
-				return builder.receiving(new Receiver() {
-					@Override
-					public void received(Connector connector, Address address, ByteBuffer buffer) {
-						telnetReader.handle(buffer, r, connector);
-					}
-				}).create(queue);
+
+				return builder
+						.failing(failing)
+						.connecting(connecting)
+						.closing(closing)
+						.receiving(new Receiver() {
+							@Override
+							public void received(Connector connector, Address address, ByteBuffer buffer) {
+								telnetReader.handle(buffer, r, connector);
+							}
+						})
+						.to(connectAddress)
+						.bind(bindAddress)
+						.with(byteBufferAllocator)
+						.create(queue);
 			}
 		};
 	}
