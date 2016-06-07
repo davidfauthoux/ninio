@@ -235,6 +235,7 @@ public final class HttpListening implements Listening {
 					
 					private final Deque<ByteBuffer> hold = new LinkedList<>();
 					private boolean holding = false;
+					private boolean closed = false;
 					
 					@Override
 					public void received(final Connector connector, Address address, final ByteBuffer buffer) {
@@ -262,6 +263,11 @@ public final class HttpListening implements Listening {
 					
 					private void handleReceived(final Connector connector, ByteBuffer buffer) {
 						while (buffer.hasRemaining()) {
+							if (closed) {
+								LOGGER.error("Could not receive more");
+								connector.close();
+								return;
+							}
 							if (holding) {
 								LOGGER.debug("Holding packet: {} bytes", buffer.remaining());
 								hold.addLast(buffer);
@@ -325,7 +331,8 @@ public final class HttpListening implements Listening {
 																continueReceived(connector);
 															} else {
 																LOGGER.debug("Actually closed");
-																connector.close();
+																closed = true;
+																// Will be closed by client // connector.close();
 															}
 														}
 														
@@ -357,7 +364,7 @@ public final class HttpListening implements Listening {
 													if (automaticallySetGzipChunked && requestAcceptGzip && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING) && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH)) { // Content-Length MUST refer to the compressed data length, which the user is not aware of, thus we CANNOT compress if the user specifies a Content-Length
 														completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
 													}
-													if (automaticallySetGzipChunked && responseKeepAlive && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+													if (automaticallySetGzipChunked && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
 														completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
 													}
 		

@@ -102,7 +102,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		private ClosingFailingReceiver receiver = null;
 		private final Deque<ClosingFailingReceiver> nextReceivers = new LinkedList<>();
 		
-		public ReusableConnector(final Executor executor, TcpSocket.Builder factory, Queue queue, boolean secure) {
+		public ReusableConnector(final Executor executor, TcpSocket.Builder factory, Queue queue, boolean secure, final Runnable onClose) {
 			this.secure = secure;
 			
 			factory.receiving(new Receiver() {
@@ -111,10 +111,9 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					executor.execute(new Runnable() {
 						@Override
 						public void run() {
-							if (receiver == null) {
-								return;
+							if (receiver != null) {
+								receiver.received(connector, null, buffer);
 							}
-							receiver.received(connector, null, buffer);
 						}
 					});
 				}
@@ -126,10 +125,11 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					executor.execute(new Runnable() {
 						@Override
 						public void run() {
-							if (receiver == null) {
-								return;
+							if (receiver != null) {
+								receiver.closed();
 							}
-							receiver.closed();
+
+							onClose.run();
 						}
 					});
 				}
@@ -201,6 +201,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 			@Override
 			public void run() {
 				for (ReusableConnector connector : reusableConnectors.values()) {
+					LOGGER.trace("Closing underlying connection");
 					connector.connector.close();
 				}
 				reusableConnectors.clear();
@@ -245,6 +246,8 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					private Multimap<String, String> completedHeaders;
 					
 					private void abruptlyClose(IOException ioe) {
+						LOGGER.trace("Abruptly closed ({})", ioe.getMessage());
+						
 						if (reusableConnector == null) {
 							return;
 						}
@@ -252,7 +255,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						reusableConnector.failNext(ioe);
 						reusableConnector.connector.close();
 						reusableConnectors.remove(id);
-						reusableConnector = null;
+						//%%%%%%%% reusableConnector = null;
 					}
 					
 					private void prepare(HttpRequest request) {
@@ -363,8 +366,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								}
 
 								abruptlyClose(new IOException("Connection not kept alive"));
-
-								reusableConnector = null;
 							}
 							
 							@Override
@@ -420,12 +421,15 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 												}
 												
 												if (receiver != null) {
+													LOGGER.trace("Correctly ended");
 													receiver.ended();
 												}
 												
-												reusableConnector.pop();
-												reusableConnector = null;
+												if (!responseKeepAlive) {
+													abruptlyClose(new IOException("Connection closed because not kept alive"));
+												}
 
+												reusableConnector.pop();
 											}
 										};
 
@@ -622,7 +626,13 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 
 						LOGGER.trace("Creating a new connection (id = {})", id);
 
-						reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure);
+						reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure, new Runnable() {
+							@Override
+							public void run() {
+								LOGGER.trace("Connection removed (id = {})", id);
+								abruptlyClose(new IOException("Connection closed by peer"));
+							}
+						});
 						reusableConnectors.put(id, reusableConnector);
 
 						reusableConnector.reusable = false;

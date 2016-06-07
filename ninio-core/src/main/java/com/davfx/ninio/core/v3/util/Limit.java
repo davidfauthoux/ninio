@@ -106,6 +106,10 @@ public final class Limit implements AutoCloseable {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
+						if (task.canceled) {
+							return;
+						}
+						
 						task.canceled = true;
 
 						if (task.running) {
