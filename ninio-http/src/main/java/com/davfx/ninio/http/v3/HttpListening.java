@@ -269,7 +269,7 @@ public final class HttpListening implements Listening {
 								return;
 							}
 							if (holding) {
-								LOGGER.debug("Holding packet: {} bytes", buffer.remaining());
+								LOGGER.trace("Holding packet: {} bytes", buffer.remaining());
 								hold.addLast(buffer);
 								return;
 							}
@@ -547,7 +547,6 @@ public final class HttpListening implements Listening {
 							if (handler != null) {
 								handler.received(buffer);
 							}
-							break;
 						}
 					}
 				};
