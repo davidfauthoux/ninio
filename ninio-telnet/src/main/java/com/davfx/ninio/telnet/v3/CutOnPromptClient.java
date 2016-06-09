@@ -183,7 +183,7 @@ public final class CutOnPromptClient {
 				innerHolder.cuttingReceiver = new CuttingReceiver(limit, new Receiver() {
 					private InMemoryBuffers buffers = null;
 					@Override
-					public void received(Connector connector, Address address, final ByteBuffer buffer) {
+					public void received(Address address, final ByteBuffer buffer) {
 						e.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -205,7 +205,7 @@ public final class CutOnPromptClient {
 
 				innerHolder.connector = builder.connecting(new Connecting() {
 					@Override
-					public void connected(Address to, final Connector connector) {
+					public void connected() {
 						if (h != null) {
 							h.connected(write);
 						}

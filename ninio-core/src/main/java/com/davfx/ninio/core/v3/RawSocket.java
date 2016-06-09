@@ -124,7 +124,7 @@ public final class RawSocket implements Connector {
 				@Override
 				public void run() {
 					if (connecting != null) {
-						connecting.connected(null, RawSocket.this);
+						connecting.connected();
 					}
 					
 					while (true) {
@@ -140,7 +140,7 @@ public final class RawSocket implements Connector {
 									int headerLength = (b.get() & 0x0F) * 4;
 									b.position(headerLength);
 								}
-								receiver.received(RawSocket.this, new Address(host, 0), b);
+								receiver.received(new Address(host, 0), b);
 							}
 						} catch (Exception e) {
 							LOGGER.trace("Error, probably closed", e);

@@ -67,7 +67,7 @@ public final class SnmpServer implements Disconnectable {
 	private SnmpServer(Queue queue, final Address bindAddress, UdpSocket.Builder connectorFactory, final SnmpServerHandler handler) {
 		connector = connectorFactory.receiving(new Receiver() {
 			@Override
-			public void received(Connector connector, Address address, ByteBuffer buffer) {
+			public void received(Address address, ByteBuffer buffer) {
 				int requestId;
 				String community;
 				final int bulkLength;

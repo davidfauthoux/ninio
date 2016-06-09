@@ -120,7 +120,7 @@ final class TelnetReader {
 		if (r.length() > 0) {
 			String s = r.toString();
 			// LOGGER.debug("Core received: /{}/", s);
-			wrappee.received(back, null, ByteBuffer.wrap(s.getBytes(TelnetSpecification.CHARSET)));
+			wrappee.received(null, ByteBuffer.wrap(s.getBytes(TelnetSpecification.CHARSET)));
 		}
 	}
 }

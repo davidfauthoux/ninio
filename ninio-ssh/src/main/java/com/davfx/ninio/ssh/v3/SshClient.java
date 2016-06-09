@@ -6,13 +6,11 @@ import java.nio.ByteBuffer;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,19 +22,15 @@ import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.DefaultByteBufferAllocator;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
-import com.davfx.ninio.core.v3.Trust;
-import com.davfx.ninio.telnet.v3.TelnetSpecification;
-import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
 
 public final class SshClient {
-	
-	//TODO move to test
+	/*%%
+	//TO DO move to test
 	public static void main(String[] args) throws Exception {
 		Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
 		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));
@@ -45,7 +39,7 @@ public final class SshClient {
 			Connector c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(Executors.newSingleThreadExecutor()).to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)).receiving(new Receiver() {
 				private int n = 0;
 				@Override
-				public void received(Connector connector, Address address, ByteBuffer buffer) {
+				public void received(Address address, ByteBuffer buffer) {
 					System.out.println(n + " ---> "+ new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), Charsets.UTF_8));
 					switch (n) {
 					case 0:
@@ -66,7 +60,7 @@ public final class SshClient {
 				}
 			}).connecting(new Connecting() {
 				@Override
-				public void connected(Address to, Connector connector) {
+				public void connected() {
 					System.out.println("CONNECTED");
 				}
 			}).with(TcpSocket.builder()));
@@ -76,7 +70,7 @@ public final class SshClient {
 				c.close();
 			}
 		}
-	}
+	}*/
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshClient.class);
 
@@ -109,7 +103,6 @@ public final class SshClient {
 		public ZlibCompressingConnector compressingCloseableByteBufferHandler;
 
 		public Connector rawConnector;
-		public Connector clientConnector;
 		
 		public ExchangeHolder() {
 			clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
@@ -276,15 +269,13 @@ public final class SshClient {
 				final Failing clientFailing = failing;
 				final Connecting clientConnecting = connecting;
 				
-				final Address clientConnectAddress = connectAddress;
-				
 				final Executor e = executor;
 				
 				final Receiver rawReceiver = new Receiver() {
 					@Override
-					public void received(Connector connector, Address address, ByteBuffer buffer) {
+					public void received(Address address, ByteBuffer buffer) {
 						if (r != null) {
-							r.received(connector, address, buffer);
+							r.received(address, buffer);
 						}
 					}
 				};
@@ -313,7 +304,7 @@ public final class SshClient {
 					private long lengthToRead = 0L;
 					
 					@Override
-					public void received(Connector receivingConnector, final Address address, final ByteBuffer buffer) {
+					public void received(final Address address, final ByteBuffer buffer) {
 						e.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -321,13 +312,13 @@ public final class SshClient {
 									int l = buffer.remaining();
 									if (lengthToRead >= l) {
 										lengthToRead -= l;
-										rawReceiver.received(exchangeHolder.clientConnector, address, buffer);
+										rawReceiver.received(address, buffer);
 										return;
 									}
 									ByteBuffer b = buffer.duplicate();
 									b.limit(b.position() + ((int) lengthToRead));
 									lengthToRead = 0L;
-									rawReceiver.received(exchangeHolder.clientConnector, address, b);
+									rawReceiver.received(address, b);
 									buffer.position(buffer.position() + l);
 								}
 								
@@ -616,7 +607,7 @@ public final class SshClient {
 												b.writeString(finalExec);
 												exchangeHolder.rawConnector.send(null, b.finish());
 											} else {
-												clientConnecting.connected(clientConnectAddress, exchangeHolder.clientConnector);
+												clientConnecting.connected();
 											}
 										}
 									} else if (command == SSH_MSG_CHANNEL_SUCCESS) {
@@ -629,7 +620,7 @@ public final class SshClient {
 											b.writeByte(1); // With reply
 											exchangeHolder.rawConnector.send(null, b.finish());
 										} else {
-											clientConnecting.connected(clientConnectAddress, exchangeHolder.clientConnector);
+											clientConnecting.connected();
 										}
 									} else if (command == SSH_MSG_CHANNEL_WINDOW_ADJUST) {
 										// Ignored
@@ -641,10 +632,10 @@ public final class SshClient {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
-											rawReceiver.received(exchangeHolder.clientConnector, null, b);
+											rawReceiver.received(null, b);
 										} else {
 											lengthToRead -= buffer.remaining();
-											rawReceiver.received(exchangeHolder.clientConnector, null, buffer);
+											rawReceiver.received(null, buffer);
 										}
 									} else if (command == SSH_MSG_CHANNEL_EXTENDED_DATA) {
 										packet.readInt(); // Channel ID
@@ -656,10 +647,10 @@ public final class SshClient {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
-											rawReceiver.received(exchangeHolder.clientConnector, null, b);
+											rawReceiver.received(null, b);
 										} else {
 											lengthToRead -= buffer.remaining();
-											rawReceiver.received(exchangeHolder.clientConnector, null, buffer);
+											rawReceiver.received(null, buffer);
 										}
 									} else if (command == SSH_MSG_CHANNEL_REQUEST) {
 										packet.readInt();
@@ -737,7 +728,10 @@ public final class SshClient {
 				SshPacketConnector sshPacketOuputHandler = new SshPacketConnector(exchangeHolder.cipheringCloseableByteBufferHandler);
 				exchangeHolder.compressingCloseableByteBufferHandler = new ZlibCompressingConnector(sshPacketOuputHandler);
 				exchangeHolder.rawConnector = exchangeHolder.compressingCloseableByteBufferHandler;
-				exchangeHolder.clientConnector = new Connector() {
+				
+				rawConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)));
+
+				return new Connector() {
 					@Override
 					public void close() {
 						exchangeHolder.rawConnector.close();
@@ -752,11 +746,6 @@ public final class SshClient {
 						return this;
 					}
 				};
-
-				
-				rawConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)));
-
-				return exchangeHolder.clientConnector;
 			}
 		};
 	}

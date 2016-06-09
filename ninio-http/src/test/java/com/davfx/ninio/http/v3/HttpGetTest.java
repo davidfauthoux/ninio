@@ -10,15 +10,15 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.InMemoryBuffers;
 import com.davfx.ninio.core.v3.Limit;
 import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.TcpSocketServer;
 import com.davfx.ninio.core.v3.Timeout;
-import com.davfx.ninio.http.InMemoryBuffers;
 import com.davfx.util.ClassThreadFactory;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
@@ -80,7 +80,7 @@ public class HttpGetTest {
 							@Override
 							public void ended() {
 								byte[] b = request.path.getBytes(Charsets.UTF_8);
-								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(b.length))));
+								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK));//, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(b.length))));
 								sender.send(ByteBuffer.wrap(b)).finish();
 							}
 						};

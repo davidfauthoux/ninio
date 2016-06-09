@@ -577,8 +577,6 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		final Connector createdConnector = new Connector() {
 			@Override
 			public Connector send(final Address sendAddress, final ByteBuffer sendBuffer) {
-				final Connector connector = this;
-				
 				proxyExecutor.execute(new Runnable() {
 					private void closedRegisteredConnections(IOException ioe) {
 						for (InnerConnection c : connections.values()) {
@@ -665,7 +663,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 										}
 										
 										@Override
-										public void received(Connector receivedConnector, Address receivedAddress, ByteBuffer receivedBuffer) {
+										public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
 											while (true) {
 												command = readByte(command, receivedBuffer);
 												if (command < 0) {
@@ -704,7 +702,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 														ByteBuffer b = receivedBuffer.duplicate();
 														b.limit(b.position() + len);
 														if (receivedInnerConnection.receiver != null) {
-															receivedInnerConnection.receiver.received(connector, new Address(readHost, readPort), b);
+															receivedInnerConnection.receiver.received(new Address(readHost, readPort), b);
 														}
 													}
 													receivedBuffer.position(receivedBuffer.position() + len);
@@ -733,7 +731,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 														ByteBuffer b = receivedBuffer.duplicate();
 														b.limit(b.position() + len);
 														if (receivedInnerConnection.receiver != null) {
-															receivedInnerConnection.receiver.received(connector, null, b);
+															receivedInnerConnection.receiver.received(null, b);
 														}
 													}
 													receivedBuffer.position(receivedBuffer.position() + len);
@@ -843,7 +841,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 				
 				connections.put(innerConnection.connectionId, innerConnection);
 				if (innerConnection.connecting != null) {
-					innerConnection.connecting.connected(connectAddress, createdConnector);
+					innerConnection.connecting.connected();
 				}
 			}
 		});

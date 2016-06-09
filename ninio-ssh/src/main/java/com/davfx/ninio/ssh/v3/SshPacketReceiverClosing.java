@@ -4,7 +4,6 @@ import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
-import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;
 import com.google.common.primitives.Ints;
 
@@ -24,7 +23,7 @@ final class SshPacketReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer b) {
+	public void received(Address address, ByteBuffer b) {
 		while (b.hasRemaining()) {
 			if (state == 0) {
 				ByteBufferUtils.transfer(b, lengthBuffer);
@@ -61,7 +60,7 @@ final class SshPacketReceiverClosing implements Receiver, Closing {
 
 					ByteBuffer bb = buffer;
 					buffer = null;
-					wrappee.received(connector, address, bb);
+					wrappee.received(address, bb);
 				}
 			}
 		}

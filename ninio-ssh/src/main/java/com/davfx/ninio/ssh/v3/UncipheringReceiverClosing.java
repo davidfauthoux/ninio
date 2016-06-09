@@ -15,7 +15,6 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
-import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;
 import com.google.common.primitives.Ints;
 
@@ -94,7 +93,7 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer b) {
+	public void received(Address address, ByteBuffer b) {
 		if ((cipher == null) || (mac == null)) {
 			int p = b.position();
 			while (b.hasRemaining()) {
@@ -114,7 +113,7 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 				}
 			}
 			b.position(p);
-			wrappee.received(connector, address, b);
+			wrappee.received( address, b);
 			return;
 		}
 
@@ -196,11 +195,11 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 
 					if (!valid) {
 						LOGGER.error("Invalid MAC");
-						connector.close();
-						closing.closed();
+						//%%% connector.close();
+						//%%% closing.closed();
 					} else {
-						wrappee.received(connector, address, fbb);
-						wrappee.received(connector, address, rbb);
+						wrappee.received(address, fbb);
+						wrappee.received(address, rbb);
 					}
 				}
 			}

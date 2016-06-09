@@ -92,11 +92,11 @@ public final class HttpListening implements Listening {
 	}
 
 	@Override
-	public Connection connecting(final Address from, final Connector connectingConnector) {
+	public Connection connecting(final Address from, final Connector connector) {
 		LOGGER.debug("Connecting from {}", from);
 		
 		if (listeningHandler == null) {
-			connectingConnector.close();
+			connector.close();
 			return new Listening.Connection() {
 				@Override
 				public Receiver receiver() {
@@ -123,7 +123,7 @@ public final class HttpListening implements Listening {
 			@Override
 			public void failed(IOException e) {
 				LOGGER.error("Error", e);
-				connectingConnector.close();
+				connector.close();
 			}
 		};
 		
@@ -236,17 +236,17 @@ public final class HttpListening implements Listening {
 					private boolean closed = false;
 					
 					@Override
-					public void received(final Connector connector, Address address, final ByteBuffer buffer) {
+					public void received(Address address, final ByteBuffer buffer) {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								hold.addLast(buffer);
-								continueReceived(connector);
+								continueReceived();
 							}
 						});
 					}
 					
-					private void continueReceived(Connector connector) {
+					private void continueReceived() {
 						while (true) {
 							if (holding) {
 								return;
@@ -255,11 +255,11 @@ public final class HttpListening implements Listening {
 								return;
 							}
 							ByteBuffer buffer = hold.removeFirst();
-							handleReceived(connector, buffer);
+							handleReceived(buffer);
 						}
 					}
 					
-					private void handleReceived(final Connector connector, ByteBuffer buffer) {
+					private void handleReceived(ByteBuffer buffer) {
 						while (buffer.hasRemaining()) {
 							if (closed) {
 								LOGGER.error("Could not receive more");
@@ -326,7 +326,7 @@ public final class HttpListening implements Listening {
 															handler = null;
 															
 															if (responseKeepAlive) {
-																continueReceived(connector);
+																continueReceived();
 															} else {
 																LOGGER.debug("Actually closed");
 																closed = true;

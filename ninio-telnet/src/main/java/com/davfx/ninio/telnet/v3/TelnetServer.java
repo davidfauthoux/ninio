@@ -21,13 +21,13 @@ public final class TelnetServer {
 		try (Ninio ninio = Ninio.create()) {
 			Disconnectable ss = ninio.create(TelnetServer.builder().listening(new Listening() {
 				@Override
-				public Connection connecting(Address from, Connector connector) {
+				public Connection connecting(Address from, final Connector connector) {
 					return new Listening.Connection() {
 						@Override
 						public Receiver receiver() {
 							return new Receiver() {
 								@Override
-								public void received(Connector connector, Address address, ByteBuffer buffer) {
+								public void received(Address address, ByteBuffer buffer) {
 									connector.send(null, buffer);
 								}
 							};
@@ -87,7 +87,7 @@ public final class TelnetServer {
 				final TelnetReader telnetReader = new TelnetReader();
 				return builder.listening((l == null) ? null : new Listening() {
 					@Override
-					public Connection connecting(Address from, Connector connector) {
+					public Connection connecting(Address from, final Connector connector) {
 						Connection c = l.connecting(from, connector);
 						final Receiver connectionReceiver = c.receiver();
 						final Closing connectionClosing = c.closing();
@@ -98,7 +98,7 @@ public final class TelnetServer {
 							public Receiver receiver() {
 								return new Receiver() {
 									@Override
-									public void received(Connector connector, Address address, ByteBuffer buffer) {
+									public void received(Address address, ByteBuffer buffer) {
 										telnetReader.handle(buffer, connectionReceiver, connector);
 									}
 								};

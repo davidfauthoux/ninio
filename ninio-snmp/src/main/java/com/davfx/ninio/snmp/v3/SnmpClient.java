@@ -84,7 +84,7 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 
 		connector = connectorFactory.receiving(new Receiver() {
 			@Override
-			public void received(final Connector connector, final Address address, final ByteBuffer buffer) {
+			public void received(final Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {

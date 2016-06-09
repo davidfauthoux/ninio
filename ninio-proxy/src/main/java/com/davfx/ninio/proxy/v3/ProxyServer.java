@@ -399,7 +399,7 @@ public final class ProxyServer implements Listening {
 					}
 					
 					@Override
-					public void received(Connector receivedConnector, Address receivedAddress, ByteBuffer receivedBuffer) {
+					public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
 						while (true) {
 							command = readByte(command, receivedBuffer);
 							if (command < 0) {
@@ -438,7 +438,7 @@ public final class ProxyServer implements Listening {
 							};
 							final Receiver receiver = new Receiver() {
 								@Override
-								public void received(Connector connector, Address receivedAddress, ByteBuffer receivedBuffer) {
+								public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
 									if (receivedAddress == null) {
 										ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
 										b.put((byte) ProxyCommons.Commands.SEND_WITHOUT_ADDRESS);
@@ -464,7 +464,7 @@ public final class ProxyServer implements Listening {
 							};
 							final Connecting connecting = new Connecting() {
 								@Override
-								public void connected(Address to, Connector connector) {
+								public void connected() {
 								}
 							};
 							

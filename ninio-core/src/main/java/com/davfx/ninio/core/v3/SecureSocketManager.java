@@ -140,7 +140,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		unwrapBuffer.flip();
 		if (unwrapBuffer.hasRemaining()) {
 			if (receiver != null) {
-				receiver.received(this, null, unwrapBuffer);
+				receiver.received(null, unwrapBuffer);
 			}
 		}
 		return !underflow;
@@ -167,7 +167,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				failing.failed(e);
 			}
 			if (connecting != null) {
-				connecting.connected(connectAddress, this);
+				connecting.connected();
 			}
 		}
 		
@@ -227,7 +227,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 	//
 	
 	@Override
-	public void received(Connector connector, Address address, final ByteBuffer buffer) {
+	public void received(Address address, final ByteBuffer buffer) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -278,7 +278,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		});
 	}
 	@Override
-	public void connected(Address to, Connector connector) {
+	public void connected() {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {

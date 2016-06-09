@@ -97,9 +97,9 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		Listening.Connection connection = listening.connecting(request.address, innerConnector);
 
 		Connecting connecting = connection.connecting();
-		receiver = new WebsocketFrameReader(innerConnector, connection.receiver(), connection.closing(), sender);
+		receiver = new WebsocketFrameReader(connection.receiver(), connection.closing(), sender);
 
-		connecting.connected(request.address, innerConnector);
+		connecting.connected();
 	}
 
 	@Override
@@ -133,13 +133,11 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		
 		private long toPing = 0L;
 
-		private final Connector connector;
 		private final Receiver receiver;
 		private final Closing closing;
 		private final HttpContentSender sender;
 		
-		public WebsocketFrameReader(Connector connector, Receiver receiver, Closing closing, HttpContentSender sender) {
-			this.connector = connector;
+		public WebsocketFrameReader(Receiver receiver, Closing closing, HttpContentSender sender) {
 			this.receiver = receiver;
 			this.closing = closing;
 			this.sender = sender;
@@ -258,7 +256,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 						sender.send(partialBuffer);
 					} else if ((opcode == 0x01) || (opcode == 0x02)) {
 						if (receiver != null) {
-							receiver.received(connector, null, partialBuffer);
+							receiver.received(null, partialBuffer);
 						}
 					} else if (opcode == 0x08) {
 						LOGGER.debug("Connection closed by peer");

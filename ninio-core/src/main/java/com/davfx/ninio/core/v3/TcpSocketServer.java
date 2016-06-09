@@ -285,7 +285,7 @@ public final class TcpSocketServer implements Disconnectable {
 																
 																readBuffer.flip();
 																if (receiver != null) {
-																	receiver.received(innerConnector, null, readBuffer);
+																	receiver.received(null, readBuffer);
 																}
 															} else if (key.isWritable()) {
 																while (true) {
@@ -347,7 +347,7 @@ public final class TcpSocketServer implements Disconnectable {
 											}
 
 											if (connecting != null) {
-												connecting.connected(clientAddress, innerConnector);
+												connecting.connected();
 											}
 										}
 									});

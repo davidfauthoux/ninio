@@ -4,14 +4,19 @@ import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
-import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(ZlibUncompressingReceiverClosing.class);
+	
 	private static final Config CONFIG = ConfigUtils.load(ZlibUncompressingReceiverClosing.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.ssh.zlib.buffer").intValue();
 
@@ -30,9 +35,9 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer deflated) {
+	public void received(Address address, ByteBuffer deflated) {
 		if (!activated) {
-			wrappee.received(connector, address, deflated);
+			wrappee.received(address, deflated);
 			return;
 		}
 
@@ -51,10 +56,11 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 					}
 					inflated.position(inflated.position() + c);
 				} catch (DataFormatException e) {
-					throw new RuntimeException("Could not inflate", e);
+					LOGGER.error("Could not inflate", e);
+					return;
 				}
 				inflated.flip();
-				wrappee.received(connector, address, inflated);
+				wrappee.received(address, inflated);
 			}
 		}
 	}

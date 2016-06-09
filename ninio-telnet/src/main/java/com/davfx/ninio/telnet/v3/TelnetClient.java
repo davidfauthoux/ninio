@@ -9,19 +9,18 @@ import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.DefaultByteBufferAllocator;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
-import com.google.common.base.Charsets;
 
 public final class TelnetClient {
+	/*%%
 	public static void main(String[] args) throws Exception {
 		try (Ninio ninio = Ninio.create()) {
 			Connector c = ninio.create(TelnetClient.builder().receiving(new Receiver() {
 				private int n = 0;
 				@Override
-				public void received(Connector connector, Address address, ByteBuffer buffer) {
+				public void received(Address address, ByteBuffer buffer) {
 					System.out.println(n + " ---> "+ new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), Charsets.UTF_8));
 					switch (n) {
 					case 1:
@@ -44,6 +43,7 @@ public final class TelnetClient {
 			}
 		}
 	}
+	*/
 	
 	public static interface Builder extends TcpSocket.Builder {
 		Builder with(TcpSocket.Builder builder);
@@ -121,22 +121,28 @@ public final class TelnetClient {
 				final Receiver r = receiver;
 				final TelnetReader telnetReader = new TelnetReader();
 
-				return builder
+				final InnerHolder innerHolder = new InnerHolder();
+				innerHolder.connector = builder
 						.failing(failing)
 						.connecting(connecting)
 						.closing(closing)
 						.receiving(new Receiver() {
 							@Override
-							public void received(Connector connector, Address address, ByteBuffer buffer) {
-								telnetReader.handle(buffer, r, connector);
+							public void received(Address address, ByteBuffer buffer) {
+								telnetReader.handle(buffer, r, innerHolder.connector);
 							}
 						})
 						.to(connectAddress)
 						.bind(bindAddress)
 						.with(byteBufferAllocator)
 						.create(queue);
+				return innerHolder.connector;
 			}
 		};
+	}
+	
+	private static final class InnerHolder {
+		public Connector connector;
 	}
 	
 	private TelnetClient() {

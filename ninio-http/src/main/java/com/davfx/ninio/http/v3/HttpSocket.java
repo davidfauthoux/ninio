@@ -116,7 +116,7 @@ public final class HttpSocket implements Connector {
 		);
 
 		if (connecting != null) {
-			connecting.connected(connectAddress, this);
+			connecting.connected();
 		}
 		
 		sender = httpClient.request()
@@ -135,7 +135,7 @@ public final class HttpSocket implements Connector {
 						@Override
 						public void received(ByteBuffer buffer) {
 							if (receiver != null) {
-								receiver.received(HttpSocket.this, null, buffer);
+								receiver.received(null, buffer);
 							}
 						}
 						

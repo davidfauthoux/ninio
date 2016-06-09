@@ -64,7 +64,7 @@ public final class PingClient implements Disconnectable, AutoCloseable {
 		this.executor = executor;
 		connector = connectorFactory.receiving(new Receiver() {
 			@Override
-			public void received(Connector connector, Address address, final ByteBuffer buffer) {
+			public void received(Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {

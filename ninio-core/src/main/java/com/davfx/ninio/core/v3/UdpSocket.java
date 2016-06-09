@@ -146,7 +146,7 @@ public final class UdpSocket implements Connector {
 									readBuffer.flip();
 									if (receiver != null) {
 										Address a = new Address(from.getHostString(), from.getPort());
-										receiver.received(UdpSocket.this, a, readBuffer);
+										receiver.received(a, readBuffer);
 									}
 								} else if (key.isWritable()) {
 									while (true) {
@@ -236,7 +236,7 @@ public final class UdpSocket implements Connector {
 				}
 
 				if (connecting != null) {
-					connecting.connected(null, UdpSocket.this);
+					connecting.connected();
 				}
 			}
 		});

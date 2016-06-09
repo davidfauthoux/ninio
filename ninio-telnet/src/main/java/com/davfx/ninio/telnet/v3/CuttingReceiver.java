@@ -6,7 +6,6 @@ import java.util.LinkedList;
 import java.util.List;
 
 import com.davfx.ninio.core.v3.Address;
-import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;
 
 final class CuttingReceiver implements Receiver {
@@ -95,7 +94,7 @@ final class CuttingReceiver implements Receiver {
 	*/
 	
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer buffer) {
+	public void received(Address address, ByteBuffer buffer) {
 		//%% LOGGER.debug("Received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
 		while (true) {
 			if (currentPrompt == null) {
@@ -130,7 +129,7 @@ final class CuttingReceiver implements Receiver {
 				count += buffer.remaining();
 				if ((limit > 0) && (count >= limit)) {
 					for (ByteBuffer b : buffers) {
-						wrappee.received(connector, address, b);
+						wrappee.received(address, b);
 					}
 		
 					buffers.clear();
@@ -146,9 +145,9 @@ final class CuttingReceiver implements Receiver {
 			buffers.add(startBuffer);
 
 			for (ByteBuffer b : buffers) {
-				wrappee.received(connector, address, b);
+				wrappee.received(address, b);
 			}
-			wrappee.received(connector, address, null);
+			wrappee.received(address, null);
 
 			buffers.clear();
 			count = 0;
