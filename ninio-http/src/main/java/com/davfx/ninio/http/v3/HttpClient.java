@@ -243,6 +243,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 				final int thisMaxRedirections = maxRedirections;
 				
 				return new HttpContentSender() {
+					private boolean emptyBody = true;
 					private HttpContentSender sender = null;
 
 					private long id = -1L;
@@ -531,6 +532,9 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						requestVersion = HttpVersion.HTTP11;
 						
 						completedHeaders = ArrayListMultimap.create(request.headers);
+						if (emptyBody && ((request.method  == HttpMethod.POST) || (request.method  == HttpMethod.PUT))) {
+							completedHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
+						}
 						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
 							String portSuffix;
 							if ((request.secure && (request.address.port != HttpSpecification.DEFAULT_SECURE_PORT))
@@ -651,6 +655,8 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
+								emptyBody = false;
+								
 								if (sender == null) {
 									sendRequest();
 								}
