@@ -1,4 +1,4 @@
-package com.davfx.ninio.core.v3.util;
+package com.davfx.ninio.core.v3;
 
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.v3.ExecutorUtils;
 import com.davfx.util.ClassThreadFactory;
 
 public final class Limit implements AutoCloseable {

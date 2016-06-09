@@ -1,4 +1,4 @@
-package com.davfx.ninio.core.v3.util;
+package com.davfx.ninio.core.v3;
 
 import java.io.IOException;
 
@@ -6,6 +6,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.Timeout;
 
 public class TimeoutTest {
 	

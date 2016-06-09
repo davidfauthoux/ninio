@@ -14,7 +14,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.util.Timeout;
+import com.davfx.ninio.core.v3.Timeout;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
 import com.davfx.util.Lock;

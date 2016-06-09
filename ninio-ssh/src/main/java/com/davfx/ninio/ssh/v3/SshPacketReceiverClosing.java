@@ -2,7 +2,7 @@ package com.davfx.ninio.ssh.v3;
 
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;

@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.util.Limit;
+import com.davfx.ninio.core.v3.Limit;
 
 public final class HttpLimit {
 	private HttpLimit() {

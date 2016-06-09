@@ -12,8 +12,6 @@ import javax.net.ssl.SSLEngineResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
-
 final class SecureSocketManager implements Connector, Connecting, Closing, Failing, Receiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SecureSocketManager.class);
 

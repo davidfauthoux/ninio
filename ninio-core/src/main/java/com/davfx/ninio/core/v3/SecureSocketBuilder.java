@@ -2,8 +2,7 @@ package com.davfx.ninio.core.v3;
 
 import java.util.concurrent.Executor;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.v3.TcpSocket.Builder;
+import com.davfx.ninio.core.v3.TcpSocket;
 
 public final class SecureSocketBuilder implements TcpSocket.Builder {
 	private Trust trust = new Trust();
@@ -66,7 +65,7 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	}
 	
 	@Override
-	public Builder bind(Address bindAddress) {
+	public TcpSocket.Builder bind(Address bindAddress) {
 		this.bindAddress = bindAddress;
 		return this;
 	}

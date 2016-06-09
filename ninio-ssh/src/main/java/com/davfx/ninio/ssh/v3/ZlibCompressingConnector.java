@@ -3,13 +3,13 @@ package com.davfx.ninio.ssh.v3;
 import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Connector;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 final class ZlibCompressingConnector implements Connector {
-	private static final Config CONFIG = ConfigFactory.load(ZlibCompressingConnector.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(ZlibCompressingConnector.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.ssh.zlib.buffer").intValue();
 
 	private final Connector wrappee;

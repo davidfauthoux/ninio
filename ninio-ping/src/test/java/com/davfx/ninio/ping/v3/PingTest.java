@@ -7,7 +7,7 @@ import org.junit.Test;
 
 import com.davfx.ninio.core.v3.Failing;
 import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.util.Timeout;
+import com.davfx.ninio.core.v3.Timeout;
 import com.davfx.util.Lock;
 
 public class PingTest {

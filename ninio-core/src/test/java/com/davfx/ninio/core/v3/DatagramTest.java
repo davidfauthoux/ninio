@@ -54,7 +54,7 @@ public class DatagramTest {
 					})
 					.connecting(new Connecting() {
 						@Override
-						public void connected(Connector connector) {
+						public void connected(Address to, Connector connector) {
 							LOGGER.debug("Connected <--");
 							wait.run();
 						}

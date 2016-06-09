@@ -1,4 +1,4 @@
-package com.davfx.ninio.telnet.v3.util;
+package com.davfx.ninio.telnet.v3;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -9,19 +9,18 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
+import com.davfx.ninio.core.v3.InMemoryBuffers;
 import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
-import com.davfx.ninio.telnet.v3.TelnetClient;
-import com.davfx.ninio.telnet.v3.TelnetSpecification;
 import com.google.common.base.Charsets;
 
 public final class CutOnPromptClient {

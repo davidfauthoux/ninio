@@ -3,7 +3,7 @@ package com.davfx.ninio.ssh.v3;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Connector;
 
 final class SshPacketConnector implements Connector {

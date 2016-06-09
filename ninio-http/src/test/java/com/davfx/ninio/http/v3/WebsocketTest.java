@@ -19,7 +19,7 @@ import com.davfx.ninio.core.v3.Listening;
 import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocketServer;
-import com.davfx.ninio.core.v3.util.Timeout;
+import com.davfx.ninio.core.v3.Timeout;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.io.Files;

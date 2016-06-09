@@ -14,7 +14,7 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.Failing;
@@ -22,25 +22,15 @@ import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.UdpSocket;
-import com.davfx.ninio.snmp.AuthRemoteEngine;
-import com.davfx.ninio.snmp.AuthRemoteSpecification;
-import com.davfx.ninio.snmp.BerConstants;
-import com.davfx.ninio.snmp.Oid;
-import com.davfx.ninio.snmp.Result;
-import com.davfx.ninio.snmp.Version2cPacketBuilder;
-import com.davfx.ninio.snmp.Version2cPacketParser;
-import com.davfx.ninio.snmp.Version3PacketBuilder;
-import com.davfx.ninio.snmp.Version3PacketParser;
 import com.davfx.util.ConfigUtils;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class SnmpClient implements Disconnectable, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
-	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(SnmpClient.class);
 
 	public static final int DEFAULT_PORT = 161;
 
@@ -102,7 +92,7 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 						int instanceId;
 						int errorStatus;
 						int errorIndex;
-						Iterable<Result> results;
+						Iterable<SnmpResult> results;
 						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
 						boolean ready;
 						if (authRemoteEnginePendingRequestManager != null) {
@@ -370,7 +360,7 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 			instances.clear();
 		}
 
-		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
+		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<SnmpResult> results) {
 			if (instanceId == Integer.MAX_VALUE) {
 				LOGGER.trace("Calling all instances (request ID = {})", Integer.MAX_VALUE);
 				List<Instance> l = new LinkedList<>(instances.values());
@@ -481,7 +471,7 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 			failing = null;
 		}
 		
-		private void handle(int errorStatus, int errorIndex, Iterable<Result> results) {
+		private void handle(int errorStatus, int errorIndex, Iterable<SnmpResult> results) {
 			if (requestOid == null) {
 				return;
 			}
@@ -506,9 +496,9 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 			}
 
 			if (shouldRepeatWhat == BerConstants.GET) {
-				Result found = null;
-				for (Result r : results) {
-					if (requestOid.equals(r.getOid())) {
+				SnmpResult found = null;
+				for (SnmpResult r : results) {
+					if (requestOid.equals(r.oid)) {
 						LOGGER.trace("Scalar found: {}", r);
 						found = r;
 					}
@@ -527,15 +517,15 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 				}
 			} else {
 				Oid lastOid = null;
-				for (Result r : results) {
+				for (SnmpResult r : results) {
 					LOGGER.trace("Received in bulk: {}", r);
 				}
-				for (Result r : results) {
-					if (r.getValue() == null) {
+				for (SnmpResult r : results) {
+					if (r.value == null) {
 						continue;
 					}
-					if (!initialRequestOid.isPrefixOf(r.getOid())) {
-						LOGGER.trace("{} not prefixed by {}", r.getOid(), initialRequestOid);
+					if (!initialRequestOid.isPrefixOf(r.oid)) {
+						LOGGER.trace("{} not prefixed by {}", r.oid, initialRequestOid);
 						lastOid = null;
 						break;
 					}
@@ -547,7 +537,7 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 					}
 					countResults++;
 					receiver.received(r);
-					lastOid = r.getOid();
+					lastOid = r.oid;
 				}
 				if (lastOid != null) {
 					LOGGER.trace("Continuing from: {}", lastOid);

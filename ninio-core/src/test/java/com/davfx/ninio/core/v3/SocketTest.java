@@ -56,7 +56,7 @@ public class SocketTest {
 							});
 							builder.connecting(new Connecting() {
 								@Override
-								public void connected(Connector connector) {
+								public void connected(Address to, Connector connector) {
 									LOGGER.debug("Socket connected <--");
 									wait.run();
 								}

@@ -8,23 +8,13 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
 import com.davfx.ninio.core.v3.NinioBuilder;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.UdpSocket;
-import com.davfx.ninio.snmp.BerConstants;
-import com.davfx.ninio.snmp.BerPacket;
-import com.davfx.ninio.snmp.BerPacketUtils;
-import com.davfx.ninio.snmp.BerReader;
-import com.davfx.ninio.snmp.BytesBerPacket;
-import com.davfx.ninio.snmp.IntegerBerPacket;
-import com.davfx.ninio.snmp.Oid;
-import com.davfx.ninio.snmp.OidBerPacket;
-import com.davfx.ninio.snmp.SequenceBerPacket;
-import com.davfx.util.Pair;
 
 // Syntax: snmp[bulk]walk -v2c -c<anything> -On <ip>:6161 <oid>
 // snmpbulkwalk -v2c -cpublic -On 127.0.0.1:6161 1.1.2
@@ -116,17 +106,17 @@ public final class SnmpServer implements Disconnectable {
 				LOGGER.trace("Request with community: {} and oid: {}", community, oid);
 				
 				if (request == BerConstants.GET) {
-					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
+					final List<SnmpResult> next = new LinkedList<>();
 
 					if (handler != null) {
 						handler.from(oid, new SnmpServerHandler.Callback() {
 							@Override
-							public boolean handle(Oid handleOid, String value) {
+							public boolean handle(SnmpResult result) {
 								// if (!oid.isPrefix(handleOid)) {
 								// return false;
 								// }
-								if (handleOid.equals(oid)) {
-									next.add(new Pair<>(handleOid, ber(value)));
+								if (result.oid.equals(oid)) {
+									next.add(result);
 									return false;
 								}
 								return true;
@@ -146,18 +136,18 @@ public final class SnmpServer implements Disconnectable {
 				}
 				
 				if (request == BerConstants.GETNEXT) {
-					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
+					final List<SnmpResult> next = new LinkedList<>();
 
 					if (handler != null) {
 						handler.from(oid, new SnmpServerHandler.Callback() {
 							@Override
-							public boolean handle(Oid handleOid, String value) {
-								if (handleOid.equals(oid)) {
+							public boolean handle(SnmpResult result) {
+								if (result.oid.equals(oid)) {
 									// Skipped
 									return true;
 								} else {
 									if (next.isEmpty()) {
-										next.add(new Pair<>(handleOid, ber(value)));
+										next.add(result);
 									}
 									return false;
 								}
@@ -177,19 +167,19 @@ public final class SnmpServer implements Disconnectable {
 				}
 				
 				if (request == BerConstants.GETBULK) {
-					final List<Pair<Oid, BerPacket>> next = new LinkedList<>();
+					final List<SnmpResult> next = new LinkedList<>();
 
 					if (handler != null) {
 						handler.from(oid, new SnmpServerHandler.Callback() {
 							@Override
-							public boolean handle(Oid handleOid, String value) {
+							public boolean handle(SnmpResult result) {
 								// if (!oid.isPrefix(handleOid)) {
 								// return false;
 								// }
-								if (handleOid.equals(oid)) {
+								if (result.oid.equals(oid)) {
 									// Skipped
 								} else {
-									next.add(new Pair<>(handleOid, ber(value)));
+									next.add(result);
 								}
 								return next.size() < bulkLength;
 							}
@@ -213,13 +203,13 @@ public final class SnmpServer implements Disconnectable {
 	private static BerPacket ber(String s) {
 		return new BytesBerPacket(BerPacketUtils.bytes(s));
 	}
-	private static ByteBuffer build(int requestId, String community, int errorStatus, int errorIndex, Iterable<Pair<Oid, BerPacket>> oidValues) {
+	private static ByteBuffer build(int requestId, String community, int errorStatus, int errorIndex, Iterable<SnmpResult> oidValues) {
 		SequenceBerPacket oidSequence = new SequenceBerPacket(BerConstants.SEQUENCE);
 		if (oidValues != null) {
-			for (Pair<Oid, BerPacket> ov : oidValues) {
+			for (SnmpResult ov : oidValues) {
 				oidSequence.add(new SequenceBerPacket(BerConstants.SEQUENCE)
-					.add(new OidBerPacket(ov.first))
-					.add(ov.second));
+					.add(new OidBerPacket(ov.oid))
+					.add(ber(ov.value)));
 			}
 		}
 

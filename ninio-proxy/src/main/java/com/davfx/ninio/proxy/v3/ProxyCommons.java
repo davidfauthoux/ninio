@@ -1,7 +1,7 @@
 package com.davfx.ninio.proxy.v3;
 
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 interface ProxyCommons {
 	interface Commands {
@@ -14,7 +14,7 @@ interface ProxyCommons {
 	
 	final class Types {
 		
-		private static final Config CONFIG = ConfigFactory.load(ProxyCommons.class.getClassLoader());
+		private static final Config CONFIG = ConfigUtils.load(ProxyCommons.class);
 		
 		public static final String TCP = CONFIG.getString("ninio.proxy.tcp");
 		public static final String SSL = CONFIG.getString("ninio.proxy.ssl");

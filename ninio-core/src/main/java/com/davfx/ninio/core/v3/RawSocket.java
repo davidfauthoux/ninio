@@ -11,7 +11,6 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
 import com.davfx.util.ClassThreadFactory;
 
 public final class RawSocket implements Connector {
@@ -108,7 +107,7 @@ public final class RawSocket implements Connector {
 		
 			if (bindAddress != null) {
 				try {
-					InetAddress a = InetAddress.getByName(bindAddress.getHost()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+					InetAddress a = InetAddress.getByName(bindAddress.host); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 					socket.bind(a);
 				} catch (Exception e) {
 					try {
@@ -162,7 +161,7 @@ public final class RawSocket implements Connector {
 	public Connector send(Address address, ByteBuffer buffer) {
 		if (socket != null) {
 			try {
-				socket.write(InetAddress.getByName(address.getHost()), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+				socket.write(InetAddress.getByName(address.host), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 			} catch (Exception e) {
 				LOGGER.error("Error", e);
 			}

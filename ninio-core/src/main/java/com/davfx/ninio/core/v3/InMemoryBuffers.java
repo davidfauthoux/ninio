@@ -1,4 +1,4 @@
-package com.davfx.ninio.telnet.v3.util;
+package com.davfx.ninio.core.v3;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -8,7 +8,7 @@ import java.util.LinkedList;
 
 import com.google.common.base.Charsets;
 
-final class InMemoryBuffers implements Iterable<ByteBuffer> {
+public final class InMemoryBuffers implements Iterable<ByteBuffer> {
 	private final Deque<ByteBuffer> buffers = new LinkedList<>();
 	
 	public InMemoryBuffers() {

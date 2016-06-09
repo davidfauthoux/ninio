@@ -14,14 +14,13 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class TcpSocketServer implements Disconnectable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocketServer.class);
 
-	private static final Config CONFIG = ConfigFactory.load(TcpSocketServer.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(TcpSocketServer.class);
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.socket.timeout");
 
@@ -360,9 +359,9 @@ public final class TcpSocketServer implements Disconnectable {
 						});
 
 						try {
-							InetSocketAddress a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+							InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 							if (a.isUnresolved()) {
-								throw new IOException("Unresolved address: " + bindAddress.getHost() + ":" + bindAddress.getPort());
+								throw new IOException("Unresolved address: " + bindAddress);
 							}
 							LOGGER.debug("-> Bound on: {}", a);
 							serverChannel.socket().bind(a);

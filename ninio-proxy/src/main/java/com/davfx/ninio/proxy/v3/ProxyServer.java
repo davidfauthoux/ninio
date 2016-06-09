@@ -13,7 +13,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;
@@ -448,13 +448,13 @@ public final class ProxyServer implements Listening {
 										b.flip();
 										proxyConnector.send(null, b);
 									} else {
-										byte[] hostAsBytes = receivedAddress.getHost().getBytes(Charsets.UTF_8);
+										byte[] hostAsBytes = receivedAddress.host.getBytes(Charsets.UTF_8);
 										ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
 										b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 										b.putInt(connectionId);
 										b.putInt(hostAsBytes.length);
 										b.put(hostAsBytes);
-										b.putInt(receivedAddress.getPort());
+										b.putInt(receivedAddress.port);
 										b.putInt(receivedBuffer.remaining());
 										b.put(receivedBuffer);
 										b.flip();

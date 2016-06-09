@@ -2,12 +2,9 @@ package com.davfx.ninio.snmp.v3;
 
 import java.io.IOException;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.util.Timeout;
-import com.davfx.ninio.snmp.AuthRemoteSpecification;
-import com.davfx.ninio.snmp.Oid;
-import com.davfx.ninio.snmp.Result;
+import com.davfx.ninio.core.v3.Timeout;
 
 public final class SnmpTimeout {
 	private SnmpTimeout() {
@@ -50,7 +47,7 @@ public final class SnmpTimeout {
 				
 				wrappee.receiving(new SnmpReceiver() {
 					@Override
-					public void received(Result result) {
+					public void received(SnmpResult result) {
 						m.reset();
 						if (r != null) {
 							r.received(result);

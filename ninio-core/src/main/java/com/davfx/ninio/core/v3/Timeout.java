@@ -1,4 +1,4 @@
-package com.davfx.ninio.core.v3.util;
+package com.davfx.ninio.core.v3;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -12,18 +12,15 @@ import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.v3.ExecutorUtils;
-import com.davfx.ninio.core.v3.Failing;
 import com.davfx.util.ClassThreadFactory;
 import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class Timeout implements AutoCloseable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Timeout.class);
 	
-	private static final Config CONFIG = ConfigFactory.load(Timeout.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(Timeout.class);
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "ninio.timeout.precision");
 
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(Timeout.class));

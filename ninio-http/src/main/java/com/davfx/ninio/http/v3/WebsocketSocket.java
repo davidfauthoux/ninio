@@ -7,7 +7,7 @@ import java.security.SecureRandom;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.ByteBufferAllocator;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;

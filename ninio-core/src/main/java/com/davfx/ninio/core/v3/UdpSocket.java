@@ -11,15 +11,14 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class UdpSocket implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
-	private static final Config CONFIG = ConfigFactory.load(UdpSocket.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(UdpSocket.class);
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("ninio.datagram.write.buffer").longValue();
 
 	public static interface Builder extends NinioBuilder<Connector> {
@@ -169,9 +168,9 @@ public final class UdpSocket implements Connector {
 										} else {
 											InetSocketAddress a;
 											try {
-												a = new InetSocketAddress(b.address.getHost(), b.address.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test unresolved
+												a = new InetSocketAddress(b.address.host, b.address.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test unresolved
 												if (a.isUnresolved()) {
-													throw new IOException("Unresolved address: " + b.address.getHost() + ":" + b.address.getPort());
+													throw new IOException("Unresolved address: " + b.address);
 												}
 											} catch (IOException e) {
 												LOGGER.warn("Invalid address: {}", b.address);
@@ -215,9 +214,9 @@ public final class UdpSocket implements Connector {
 						
 						if (bindAddress != null) {
 							try {
-								InetSocketAddress a = new InetSocketAddress(bindAddress.getHost(), bindAddress.getPort()); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+								InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 								if (a.isUnresolved()) {
-									throw new IOException("Unresolved address: " + bindAddress.getHost() + ":" + bindAddress.getPort());
+									throw new IOException("Unresolved address: " + bindAddress);
 								}
 								channel.socket().bind(a);
 							} catch (IOException e) {

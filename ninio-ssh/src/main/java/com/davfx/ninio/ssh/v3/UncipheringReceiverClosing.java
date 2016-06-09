@@ -13,7 +13,7 @@ import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;

@@ -1,11 +1,11 @@
-package com.davfx.ninio.telnet.v3.util;
+package com.davfx.ninio.telnet.v3;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;
 

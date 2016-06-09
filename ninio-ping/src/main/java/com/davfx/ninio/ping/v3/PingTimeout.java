@@ -1,7 +1,7 @@
 package com.davfx.ninio.ping.v3;
 
 import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.util.Timeout;
+import com.davfx.ninio.core.v3.Timeout;
 
 public final class PingTimeout {
 	private PingTimeout() {

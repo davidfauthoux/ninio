@@ -1,6 +1,6 @@
 package com.davfx.ninio.proxy.v3;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
 import com.davfx.ninio.core.v3.Connector;

@@ -17,8 +17,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Trust;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.ByteBufferAllocator;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
@@ -29,8 +28,7 @@ import com.davfx.ninio.core.v3.Ninio;
 import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.TcpSocket;
-import com.davfx.ninio.ssh.RsaSshPublicKey;
-import com.davfx.ninio.ssh.SshPublicKey;
+import com.davfx.ninio.core.v3.Trust;
 import com.davfx.ninio.telnet.v3.TelnetSpecification;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
@@ -38,6 +36,7 @@ import com.google.common.primitives.Ints;
 
 public final class SshClient {
 	
+	//TODO move to test
 	public static void main(String[] args) throws Exception {
 		Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
 		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));

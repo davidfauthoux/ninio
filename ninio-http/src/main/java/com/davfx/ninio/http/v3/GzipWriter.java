@@ -5,12 +5,12 @@ import java.nio.ByteOrder;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 final class GzipWriter implements HttpContentSender {
 	
-	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(GzipReader.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
 
 	private static final int OS_TYPE_UNKNOWN = 0xFF;

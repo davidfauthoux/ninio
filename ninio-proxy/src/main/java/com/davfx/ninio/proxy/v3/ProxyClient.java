@@ -10,7 +10,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.ByteBufferAllocator;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connecting;
@@ -773,13 +773,13 @@ public final class ProxyClient implements ProxyConnectorProvider {
 								b.flip();
 								proxyConnector.send(null, b);
 							} else {
-								byte[] hostAsBytes = connectAddress.getHost().getBytes(Charsets.UTF_8);
+								byte[] hostAsBytes = connectAddress.host.getBytes(Charsets.UTF_8);
 								ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
 								b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
 								b.putInt(innerConnection.connectionId);
 								b.putInt(hostAsBytes.length);
 								b.put(hostAsBytes);
-								b.putInt(connectAddress.getPort());
+								b.putInt(connectAddress.port);
 								b.putInt(headerAsBytes.length);
 								b.put(headerAsBytes);
 								b.flip();
@@ -796,13 +796,13 @@ public final class ProxyClient implements ProxyConnectorProvider {
 							b.flip();
 							proxyConnector.send(null, b);
 						} else {
-							byte[] hostAsBytes = sendAddress.getHost().getBytes(Charsets.UTF_8);
+							byte[] hostAsBytes = sendAddress.host.getBytes(Charsets.UTF_8);
 							ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
 							b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 							b.putInt(innerConnection.connectionId);
 							b.putInt(hostAsBytes.length);
 							b.put(hostAsBytes);
-							b.putInt(sendAddress.getPort());
+							b.putInt(sendAddress.port);
 							b.putInt(sendBuffer.remaining());
 							b.put(sendBuffer);
 							b.flip();

@@ -1,7 +1,6 @@
 package com.davfx.ninio.http.v3;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.http.HttpSpecification;
+import com.davfx.ninio.core.v3.Address;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class HttpRequest {

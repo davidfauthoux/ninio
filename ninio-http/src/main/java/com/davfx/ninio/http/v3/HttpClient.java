@@ -11,7 +11,7 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Disconnectable;
@@ -21,18 +21,17 @@ import com.davfx.ninio.core.v3.Queue;
 import com.davfx.ninio.core.v3.Receiver;
 import com.davfx.ninio.core.v3.SecureSocketBuilder;
 import com.davfx.ninio.core.v3.TcpSocket;
-import com.davfx.ninio.http.HttpHeaderKey;
+import com.davfx.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class HttpClient implements Disconnectable, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 	
-	private static final Config CONFIG = ConfigFactory.load(HttpClient.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(HttpClient.class);
 	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("ninio.http.redirect.max");
 
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
@@ -534,13 +533,13 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						completedHeaders = ArrayListMultimap.create(request.headers);
 						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
 							String portSuffix;
-							if ((request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_SECURE_PORT))
-							|| (!request.secure && (request.address.getPort() != HttpSpecification.DEFAULT_PORT))) {
-								portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.getPort());
+							if ((request.secure && (request.address.port != HttpSpecification.DEFAULT_SECURE_PORT))
+							|| (!request.secure && (request.address.port != HttpSpecification.DEFAULT_PORT))) {
+								portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.port);
 							} else {
 								portSuffix = "";
 							}
-							completedHeaders.put(HttpHeaderKey.HOST, request.address.getHost() + portSuffix);
+							completedHeaders.put(HttpHeaderKey.HOST, request.address.host + portSuffix);
 						}
 						
 						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);

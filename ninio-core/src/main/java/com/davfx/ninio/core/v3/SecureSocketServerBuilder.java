@@ -2,8 +2,6 @@ package com.davfx.ninio.core.v3;
 
 import java.util.concurrent.Executor;
 
-import com.davfx.ninio.core.Address;
-
 public final class SecureSocketServerBuilder {
 	private Trust trust = new Trust();
 	private Executor executor = null;

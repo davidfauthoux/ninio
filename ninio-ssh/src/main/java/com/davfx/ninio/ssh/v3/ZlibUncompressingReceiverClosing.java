@@ -4,15 +4,15 @@ import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
 
-import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Closing;
 import com.davfx.ninio.core.v3.Connector;
 import com.davfx.ninio.core.v3.Receiver;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
-	private static final Config CONFIG = ConfigFactory.load(ZlibUncompressingReceiverClosing.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(ZlibUncompressingReceiverClosing.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.ssh.zlib.buffer").intValue();
 
 	private final Inflater inflater = new Inflater();
