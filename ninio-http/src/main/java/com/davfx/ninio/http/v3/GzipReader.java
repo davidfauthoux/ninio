@@ -54,6 +54,7 @@ final class GzipReader implements HttpContentReceiver, Failing {
 		this.wrappee = wrappee;
 	}
 	
+	// MUST sync-ly consume buffer
 	@Override
 	public void received(ByteBuffer deflated) {
 		if (ended) {
@@ -77,11 +78,13 @@ final class GzipReader implements HttpContentReceiver, Failing {
 			}
 
 			currentPreviewFooterLength += deflated.remaining();
-			previewFooter.addLast(deflated);
+			previewFooter.addLast(deflated.duplicate());
+			deflated.position(deflated.position() + deflated.remaining());
 			return;
 		} else {
 			currentPreviewFooterLength += deflated.remaining();
-			previewFooter.addLast(deflated);
+			previewFooter.addLast(deflated.duplicate());
+			deflated.position(deflated.position() + deflated.remaining());
 
 			int toFlush = FOOTER_LENGTH - currentPreviewFooterLength;
 			while (toFlush > 0) {

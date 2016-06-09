@@ -22,6 +22,7 @@ final class ChunkedReader implements HttpContentReceiver, Failing {
 		this.wrappee = wrappee;
 	}
 	
+	// MUST sync-ly consume buffer
 	@Override
 	public void received(ByteBuffer buffer) {
 		if (ended) {

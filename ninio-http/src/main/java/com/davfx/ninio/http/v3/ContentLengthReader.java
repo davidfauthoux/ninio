@@ -21,6 +21,7 @@ final class ContentLengthReader implements HttpContentReceiver, Failing {
 		this.contentLength = contentLength;
 	}
 	
+	// MUST sync-ly consume buffer
 	@Override
 	public void received(ByteBuffer buffer) {
 		if (ended) {
@@ -29,7 +30,9 @@ final class ContentLengthReader implements HttpContentReceiver, Failing {
 		
 		if ((countRead + buffer.remaining()) > contentLength) {
 			ByteBuffer b = buffer.duplicate();
-			b.limit((int) (b.position() + (contentLength - countRead)));
+			int l = (int) (contentLength - countRead);
+			b.limit(b.position() + l);
+			buffer.position(buffer.position() + l);
 			buffer = b;
 		}
 		

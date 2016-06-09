@@ -141,11 +141,14 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 			connector = factory.create(queue);
 		}
 		
-		public void failNext(IOException ioe) {
+		public void fail(IOException ioe) {
 			IOException e = new IOException("Error in pipeline", ioe);
 			for (ClosingFailingReceiver r : nextReceivers) {
 				r.failed(e);
 			}
+			nextReceivers.clear();
+			receiver = null;
+			connector.close();
 		}
 		
 		public void push(ClosingFailingReceiver receiver) {
@@ -255,8 +258,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							return;
 						}
 						
-						reusableConnector.failNext(ioe);
-						reusableConnector.connector.close();
+						reusableConnector.fail(ioe);
 						reusableConnectors.remove(id);
 						//%%%%%%%% reusableConnector = null;
 					}
@@ -377,7 +379,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							}
 							
 							@Override
-							public void received(Connector c, final Address address, final ByteBuffer buffer) {
+							public void received(Connector c, Address address, ByteBuffer buffer) {
 								if (reusableConnector == null) {
 									return;
 								}
@@ -414,8 +416,9 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 												}
 												
 												if (receiver != null) {
-													receiver.received(buffer);
+													receiver.received(buffer.duplicate());
 												}
+												buffer.position(buffer.position() + buffer.remaining());
 											}
 											@Override
 											public void ended() {

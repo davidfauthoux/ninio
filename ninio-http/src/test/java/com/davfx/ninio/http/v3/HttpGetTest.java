@@ -79,8 +79,9 @@ public class HttpGetTest {
 							}
 							@Override
 							public void ended() {
-								HttpContentSender sender = responseHandler.send(HttpResponse.ok());
-								sender.send(ByteBuffer.wrap(request.path.getBytes(Charsets.UTF_8))).finish();
+								byte[] b = request.path.getBytes(Charsets.UTF_8);
+								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(b.length))));
+								sender.send(ByteBuffer.wrap(b)).finish();
 							}
 						};
 					}
