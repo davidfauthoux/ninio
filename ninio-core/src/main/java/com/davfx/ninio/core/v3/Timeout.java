@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.util.ClassThreadFactory;
 import com.davfx.util.ConfigUtils;
+import com.davfx.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class Timeout implements AutoCloseable {
@@ -24,10 +25,6 @@ public final class Timeout implements AutoCloseable {
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "ninio.timeout.precision");
 
 	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(Timeout.class));
-	
-	private static final double now() {
-		return System.currentTimeMillis() / 1000d;
-	}
 	
 	private static final class Task {
 		public long id = -1L;
@@ -42,7 +39,7 @@ public final class Timeout implements AutoCloseable {
 		}
 		
 		public void reset() {
-			double now = now();
+			double now = DateUtils.now();
 			time = now + timeout;
 			LOGGER.trace("[now = {}] Reset in {} -> at {} ms", (long) (now * 1000L), timeout, (long) (time * 1000d));
 		}
@@ -88,7 +85,7 @@ public final class Timeout implements AutoCloseable {
 			future = null;
 		}
 		
-		double now = now();
+		double now = DateUtils.now();
 
 		if (Double.isNaN(scheduledAt)) {
 			LOGGER.trace("[now = {}] Unscheduled", (long) (now * 1000L));
@@ -107,7 +104,7 @@ public final class Timeout implements AutoCloseable {
 				future = null;
 				scheduledAt = Double.NaN;
 				
-				double now = now();
+				double now = DateUtils.now();
 
 				LOGGER.trace("[now = {}] Executing", (long) (now * 1000L));
 

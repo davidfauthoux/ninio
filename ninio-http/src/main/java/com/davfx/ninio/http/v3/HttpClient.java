@@ -94,6 +94,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 
 	private static final class ReusableConnector {
 		public final Connector connector;
+		public final Address address;
 		public final boolean secure;
 
 		public boolean reusable = true;
@@ -101,7 +102,8 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		private ClosingFailingReceiver receiver = null;
 		private final Deque<ClosingFailingReceiver> nextReceivers = new LinkedList<>();
 		
-		public ReusableConnector(final Executor executor, TcpSocket.Builder factory, Queue queue, boolean secure, final Runnable onClose) {
+		public ReusableConnector(final Executor executor, TcpSocket.Builder factory, Queue queue, Address address, boolean secure, final Runnable onClose) {
+			this.address = address;
 			this.secure = secure;
 			
 			factory.receiving(new Receiver() {
@@ -616,7 +618,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
 								long reusedId = e.getKey();
 								ReusableConnector reusedConnector = e.getValue();
-								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && (reusedConnector.secure == request.secure)) {
+								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address) && (reusedConnector.secure == request.secure)) {
 									id = reusedId;
 	
 									LOGGER.trace("Recycling connection (id = {})", id);
@@ -637,7 +639,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 
 						LOGGER.trace("Creating a new connection (id = {})", id);
 
-						reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.secure, new Runnable() {
+						reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.address, request.secure, new Runnable() {
 							@Override
 							public void run() {
 								LOGGER.trace("Connection removed (id = {})", id);
