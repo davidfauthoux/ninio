@@ -1,6 +1,14 @@
 package com.davfx.ninio.http.v3;
 
+import java.util.Deque;
+import java.util.LinkedList;
+import java.util.List;
+
 import com.davfx.ninio.core.v3.Address;
+import com.davfx.ninio.http.HttpSpecification;
+import com.google.common.base.Optional;
+import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class HttpRequest {
@@ -74,4 +82,69 @@ public final class HttpRequest {
 		}
 	}
 	
+	public static ImmutableList<String> path(String path) {
+		int i = path.indexOf(HttpSpecification.PARAMETERS_START);
+		if (i < 0) {
+			i = path.indexOf(HttpSpecification.HASH_SEPARATOR);
+		} else {
+			int j = path.indexOf(HttpSpecification.HASH_SEPARATOR);
+			if ((j >= 0) && (j < i)) {
+				i = j;
+			}
+		}
+		
+		if (i < 0) {
+			i = path.length();
+		}
+		
+		String p = path.substring(0, i);
+		if (p.charAt(0) != HttpSpecification.PATH_SEPARATOR) {
+			throw new IllegalArgumentException("Path must start with '" + HttpSpecification.PATH_SEPARATOR + "': " + p);
+		}
+		String s = p.substring(1);
+		Deque<String> l = new LinkedList<>();
+		for (String k : Splitter.on(HttpSpecification.PATH_SEPARATOR).splitToList(s)) {
+			if (k.isEmpty()) {
+				continue;
+			}
+			if (k.equals(".")) {
+				continue;
+			}
+			if (k.equals("..")) {
+				if (!l.isEmpty()) {
+					l.removeLast();
+				}
+				continue;
+			}
+			l.add(k);
+		}
+		return ImmutableList.copyOf(l);
+	}
+
+	public static ImmutableMultimap<String, Optional<String>> parameters(String path) {
+		int i = path.indexOf(HttpSpecification.PARAMETERS_START);
+		if (i < 0) {
+			return ImmutableMultimap.of();
+		} else {
+			int j = path.indexOf(HttpSpecification.HASH_SEPARATOR);
+			String s;
+			if (j < 0) {
+				s = path.substring(i + 1);
+			} else {
+				s = path.substring(i + 1, j);
+			}
+			ImmutableMultimap.Builder<String, Optional<String>> m = ImmutableMultimap.builder();
+			for (String kv : Splitter.on(HttpSpecification.PARAMETERS_SEPARATOR).splitToList(s)) {
+				List<String> l = Splitter.on(HttpSpecification.PARAMETER_KEY_VALUE_SEPARATOR).splitToList(kv);
+				if (!l.isEmpty()) {
+					if (l.size() == 1) {
+						m.put(UrlUtils.decode(l.get(0)), Optional.<String>absent());
+					} else {
+						m.put(UrlUtils.decode(l.get(0)), Optional.of(UrlUtils.decode(l.get(1))));
+					}
+				}
+			}
+			return m.build();
+		}
+	}
 }
