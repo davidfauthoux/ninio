@@ -8,8 +8,6 @@ import java.util.concurrent.Executors;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.v3.Address;
 import com.davfx.ninio.core.v3.Disconnectable;
@@ -20,6 +18,8 @@ import com.davfx.ninio.http.v3.service.Annotated;
 import com.davfx.ninio.http.v3.service.HttpController;
 import com.davfx.ninio.http.v3.service.HttpService;
 import com.davfx.ninio.http.v3.service.annotations.Assets;
+import com.davfx.ninio.http.v3.service.annotations.Header;
+import com.davfx.ninio.http.v3.service.annotations.Headers;
 import com.davfx.ninio.http.v3.service.annotations.Path;
 import com.davfx.ninio.http.v3.service.annotations.QueryParameter;
 import com.davfx.ninio.http.v3.service.annotations.Route;
@@ -57,9 +57,11 @@ public class HttpServiceTest {
 		return tcp;
 	}
 
+	//@Headers({@Header(key = "User-Agent", pattern = "Java/1.7.0_11")})
 	@Path("/get")
 	@Assets(path = "", index = "index2.html")
 	public static final class TestGetWithQueryParameterController implements HttpController {
+		//@Headers({@Header(key = "Host", pattern = "127\\.0\\.0\\.1\\:8080")})
 		@Route(method = HttpMethod.GET, path = "/hello")
 		public Http echo(@QueryParameter("message") String message) {
 			return Http.ok().content("GET hello:" + message);
@@ -85,7 +87,7 @@ public class HttpServiceTest {
 				System.out.println(c.getHeaderFields());
 				c.disconnect();
 				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
-				Thread.sleep(1000);
+				Thread.sleep(100000);
 			} finally {
 				server.close();
 			}

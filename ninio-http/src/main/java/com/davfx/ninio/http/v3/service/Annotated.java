@@ -26,6 +26,7 @@ import com.davfx.ninio.http.v3.service.annotations.BodyParameter;
 import com.davfx.ninio.http.v3.service.annotations.DefaultValue;
 import com.davfx.ninio.http.v3.service.annotations.Header;
 import com.davfx.ninio.http.v3.service.annotations.HeaderParameter;
+import com.davfx.ninio.http.v3.service.annotations.Headers;
 import com.davfx.ninio.http.v3.service.annotations.Intercept;
 import com.davfx.ninio.http.v3.service.annotations.Path;
 import com.davfx.ninio.http.v3.service.annotations.PathParameter;
@@ -54,6 +55,51 @@ public final class Annotated {
 		Builder intercept(HttpController controller);
 		Builder register(Class<? extends HttpController> clazz);
 		Builder register(HttpController controller);
+	}
+	
+	private static final class StringPattern {
+		public final String string;
+		public final Pattern pattern;
+		public StringPattern(String string, Pattern pattern) {
+			this.string = string;
+			this.pattern = pattern;
+		}
+	}
+	
+	private static List<StringPattern> buildStringPatternList(List<Header> headers) {
+		List<StringPattern> l = new LinkedList<>();
+		for (Header h : headers) {
+			l.add(new StringPattern(h.key(), Pattern.compile(h.pattern())));
+		}
+		return l;
+	}
+	private static List<StringPattern> buildStringPatternList(Class<?> clazz) {
+		List<Header> l = new LinkedList<>();
+		Header h = clazz.getAnnotation(Header.class);
+		if (h != null) {
+			l.add(h);
+		}
+		Headers hh = clazz.getAnnotation(Headers.class);
+		if (hh != null) {
+			for (Header m : hh.value()) {
+				l.add(m);
+			}
+		}
+		return buildStringPatternList(l);
+	}
+	private static List<StringPattern> buildStringPatternList(Method method) {
+		List<Header> l = new LinkedList<>();
+		Header h = method.getAnnotation(Header.class);
+		if (h != null) {
+			l.add(h);
+		}
+		Headers hh = method.getAnnotation(Headers.class);
+		if (hh != null) {
+			for (Header m : hh.value()) {
+				l.add(m);
+			}
+		}
+		return buildStringPatternList(l);
 	}
 
 	public static Builder builder(final HttpService.Builder wrappee) {
@@ -199,9 +245,7 @@ public final class Annotated {
 				}
 				
 				for (final HttpController controller : registerControllers) {
-					Header controllerHeader = controller.getClass().getAnnotation(Header.class);
-					final String controllerHeaderKey = (controllerHeader == null) ? null : controllerHeader.key();
-					final Pattern controllerHeaderPattern = (controllerHeader == null) ? null : Pattern.compile(controllerHeader.pattern());
+					final List<StringPattern> controllerHeaders = buildStringPatternList(controller.getClass());
 					
 					Path controllerPath = controller.getClass().getAnnotation(Path.class);
 					String controllerPathSuffix = (controllerPath == null) ? null : controllerPath.value();
@@ -229,6 +273,10 @@ public final class Annotated {
 						fallback = new HttpServiceHandler() {
 							@Override
 							public Http handle(HttpServiceRequest request, HttpPost post) throws Exception {
+								if (!filterHeader(request.headers, controllerHeaders)) {
+									return null;
+								}
+								
 								LOGGER.debug("Checking assets for: {} (path = {})", request.path, controllerRoutePathComponents);
 								if (!filterPath(request.path, controllerRoutePathComponents)) {
 									return null;
@@ -258,6 +306,8 @@ public final class Annotated {
 						
 			            Route route = method.getAnnotation(Route.class);
 						if (route != null) {
+							final List<StringPattern> routeHeaders = buildStringPatternList(method);
+							
 							final HttpMethod routeMethod = route.method();
 							
 							String pathSuffix = route.path().isEmpty() ? null : route.path();
@@ -354,7 +404,11 @@ public final class Annotated {
 							wrappee.register(new HttpServiceHandler() {
 								@Override
 								public HttpController.Http handle(HttpServiceRequest request, HttpPost post) throws Exception {
-									if (!filterHeader(request.headers, controllerHeaderKey, controllerHeaderPattern)) {
+									if (!filterHeader(request.headers, controllerHeaders)) {
+										return fallback.handle(request, post);
+									}
+									
+									if (!filterHeader(request.headers, routeHeaders)) {
 										return fallback.handle(request, post);
 									}
 									
@@ -777,11 +831,11 @@ public final class Annotated {
 		return handlers;
 	}
 
-	private static boolean filterHeader(ImmutableMultimap<String, String> requestHeaders, String controllerHeaderKey, Pattern controllerHeaderPattern) {
-		if ((controllerHeaderKey != null) && (controllerHeaderPattern != null)) {
+	private static boolean filterHeader(ImmutableMultimap<String, String> requestHeaders, Iterable<StringPattern> headers) {
+		for (StringPattern h : headers) {
 			boolean found = false;
-			for (String v : requestHeaders.get(controllerHeaderKey)) {
-				if (controllerHeaderPattern.matcher(v).matches()) {
+			for (String v : requestHeaders.get(h.string)) {
+				if (h.pattern.matcher(v).matches()) {
 					found = true;
 					break;
 				}

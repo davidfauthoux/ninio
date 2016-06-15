@@ -7,7 +7,6 @@ import java.lang.annotation.Target;
 
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Header {
-	String key();
-	String pattern();
+public @interface Headers {
+	Header[] value();
 }
