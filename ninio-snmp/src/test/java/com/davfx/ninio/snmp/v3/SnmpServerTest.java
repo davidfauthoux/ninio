@@ -11,12 +11,17 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.Timeout;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.Timeout;
+import com.davfx.ninio.snmp.FromMapSnmpServerHandler;
 import com.davfx.ninio.snmp.Oid;
 import com.davfx.ninio.snmp.Result;
+import com.davfx.ninio.snmp.SnmpClient;
+import com.davfx.ninio.snmp.SnmpReceiver;
+import com.davfx.ninio.snmp.SnmpServer;
+import com.davfx.ninio.snmp.SnmpTimeout;
 import com.davfx.util.Lock;
 
 public class SnmpServerTest {

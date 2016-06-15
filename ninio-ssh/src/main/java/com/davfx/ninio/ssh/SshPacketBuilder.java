@@ -2,14 +2,17 @@ package com.davfx.ninio.ssh;
 
 import java.nio.ByteBuffer;
 
-import com.google.common.base.Charsets;
+import com.davfx.ninio.util.ConfigUtils;
+import com.typesafe.config.Config;
 
 public final class SshPacketBuilder {
-	private static final int MAX_PACKET_SIZE = 64 * 1024;
-	private ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE); // Transferable
+	private static final Config CONFIG = ConfigUtils.load(SshPacketBuilder.class);
+	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("buffer.max").intValue();
+
+	private ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
 
 	public SshPacketBuilder() {
-		buffer.position(SshPacketOuputHandler.PLEASE_AVOID_COPY_OFFSET);
+		buffer.position(SshSpecification.OPTIMIZATION_SPACE);
 	}
 
 	public SshPacketBuilder writeInt(long i) {
@@ -56,13 +59,13 @@ public final class SshPacketBuilder {
 	}
 
 	public SshPacketBuilder writeString(String s) {
-		writeBlob(s.getBytes(Charsets.UTF_8));
+		writeBlob(s.getBytes(SshSpecification.CHARSET));
 		return this;
 	}
 
 	public ByteBuffer finish() {
 		buffer.flip();
-		buffer.position(SshPacketOuputHandler.PLEASE_AVOID_COPY_OFFSET);
+		buffer.position(SshSpecification.OPTIMIZATION_SPACE);
 
 		ByteBuffer b = buffer;
 		buffer = null;

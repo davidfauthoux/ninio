@@ -10,13 +10,21 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.TcpSocketServer;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpContentReceiver;
+import com.davfx.ninio.http.HttpContentSender;
+import com.davfx.ninio.http.HttpListening;
+import com.davfx.ninio.http.HttpListeningHandler;
+import com.davfx.ninio.http.HttpReceiver;
+import com.davfx.ninio.http.HttpRequest;
+import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.InMemoryBuffers;
-import com.davfx.ninio.http.v3.HttpListeningHandler.ConnectionHandler;
-import com.davfx.ninio.http.v3.HttpListeningHandler.ConnectionHandler.ResponseHandler;
+import com.davfx.ninio.http.HttpListeningHandler.ConnectionHandler;
+import com.davfx.ninio.http.HttpListeningHandler.ConnectionHandler.ResponseHandler;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
 

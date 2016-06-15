@@ -108,7 +108,7 @@ public final class BerWriter {
 		buffer.put((byte) BerConstants.OID);
 		willWriteLength();
 
-		int[] raw = oid.getRaw();
+		int[] raw = oid.raw;
 
 		if (raw.length < 2) {
 			throw new IllegalArgumentException();

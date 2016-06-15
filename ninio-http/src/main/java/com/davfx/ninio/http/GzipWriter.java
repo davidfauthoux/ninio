@@ -5,23 +5,26 @@ import java.nio.ByteOrder;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
-import com.davfx.ninio.core.ByteBufferHandler;
+import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
-final class GzipWriter {
-	private static final Config CONFIG = ConfigFactory.load(GzipReader.class.getClassLoader());
-	private static final int BUFFER_SIZE = CONFIG.getBytes("ninio.http.gzip.buffer").intValue();
+final class GzipWriter implements HttpContentSender {
+	
+	private static final Config CONFIG = ConfigUtils.load(GzipReader.class);
+	private static final int BUFFER_SIZE = CONFIG.getBytes("gzip.buffer").intValue();
 
 	private static final int OS_TYPE_UNKNOWN = 0xFF;
 
-	private final ByteBufferHandler handler;
 	private boolean gzipHeaderWritten = false;
 	private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
 	private final CRC32 crc = new CRC32();
 
-	public GzipWriter(ByteBufferHandler handler) {
-		this.handler = handler;
+	private final HttpContentSender wrappee;
+	
+	private boolean finished = false;
+	
+	public GzipWriter(HttpContentSender wrappee) {
+		this.wrappee = wrappee;
 	}
 
 	private ByteBuffer buildGzipFooter() {
@@ -47,34 +50,50 @@ final class GzipWriter {
 		return b;
 	}
 
-	public void handle(ByteBuffer buffer) {
-		deflater.setInput(buffer.array(), buffer.position(), buffer.remaining());
-		crc.update(buffer.array(), buffer.position(), buffer.remaining());
+	@Override
+	public HttpContentSender send(ByteBuffer buffer) {
+		if (finished) {
+			throw new IllegalStateException();
+		}
+		deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+		crc.update(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 		buffer.position(buffer.limit());
 		write();
+		return this;
 	}
 
-	public void close() {
+	@Override
+	public void finish() {
+		if (finished) {
+			throw new IllegalStateException();
+		}
+		finished = true;
 		deflater.finish();
 		write();
-		handler.handle(null, buildGzipFooter());
+		wrappee.send(buildGzipFooter());
+		wrappee.finish();
 	}
 
 	private void write() {
 		if (!gzipHeaderWritten) {
-			handler.handle(null, buildGzipHeaders());
+			wrappee.send(buildGzipHeaders());
 			gzipHeaderWritten = true;
 		}
-		while (true) {
+		while (true) { // !deflater.needsInput()) {
 			ByteBuffer deflated = ByteBuffer.allocate(BUFFER_SIZE);
-			int c = deflater.deflate(deflated.array(), deflated.position(),
-					deflated.remaining());
+			int c = deflater.deflate(deflated.array(), deflated.arrayOffset() + deflated.position(), deflated.remaining()); //, Deflater.SYNC_FLUSH); //TODO No SYNC_FLUSH when HttpSocket not used
 			if (c <= 0) {
 				break;
 			}
 			deflated.position(deflated.position() + c);
 			deflated.flip();
-			handler.handle(null, deflated);
+			wrappee.send(deflated);
 		}
+	}
+	
+	@Override
+	public void cancel() {
+		finished = true;
+		wrappee.cancel();
 	}
 }

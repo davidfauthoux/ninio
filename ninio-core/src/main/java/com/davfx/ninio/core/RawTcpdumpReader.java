@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.io.LittleEndianDataInputStream;
 
-public final class RawTcpdumpReader implements TcpdumpReader {
+final class RawTcpdumpReader implements TcpdumpReader {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RawTcpdumpReader.class);
 	
 	private static final int MAX_SIZE = 100 * 1024;

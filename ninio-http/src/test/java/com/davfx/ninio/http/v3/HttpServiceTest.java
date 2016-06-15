@@ -9,20 +9,22 @@ import java.util.concurrent.Executors;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
-import com.davfx.ninio.core.v3.Address;
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.ListenConnecting;
-import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.TcpSocketServer;
-import com.davfx.ninio.http.v3.service.Annotated;
-import com.davfx.ninio.http.v3.service.HttpController;
-import com.davfx.ninio.http.v3.service.HttpService;
-import com.davfx.ninio.http.v3.service.annotations.Assets;
-import com.davfx.ninio.http.v3.service.annotations.Header;
-import com.davfx.ninio.http.v3.service.annotations.Headers;
-import com.davfx.ninio.http.v3.service.annotations.Path;
-import com.davfx.ninio.http.v3.service.annotations.QueryParameter;
-import com.davfx.ninio.http.v3.service.annotations.Route;
+import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.ListenConnecting;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.http.HttpListening;
+import com.davfx.ninio.http.HttpMethod;
+import com.davfx.ninio.http.service.Annotated;
+import com.davfx.ninio.http.service.HttpController;
+import com.davfx.ninio.http.service.HttpService;
+import com.davfx.ninio.http.service.annotations.Assets;
+import com.davfx.ninio.http.service.annotations.Header;
+import com.davfx.ninio.http.service.annotations.Headers;
+import com.davfx.ninio.http.service.annotations.Path;
+import com.davfx.ninio.http.service.annotations.QueryParameter;
+import com.davfx.ninio.http.service.annotations.Route;
 import com.google.common.base.Charsets;
 
 public class HttpServiceTest {

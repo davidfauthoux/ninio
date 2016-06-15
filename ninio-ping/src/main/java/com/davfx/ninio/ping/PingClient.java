@@ -1,202 +1,181 @@
 package com.davfx.ninio.ping;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Ready;
-import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.core.ReadyFactory;
-import com.google.common.base.Charsets;
-import com.google.common.primitives.Ints;
-import com.google.common.primitives.Longs;
+import com.davfx.ninio.core.RawSocket;
+import com.davfx.ninio.core.Receiver;
 
-public final class PingClient implements Closeable {
+public final class PingClient implements Disconnectable, AutoCloseable {
+	
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingClient.class);
-
-	private final Queue queue;
-	private final ReadyFactory readyFactory;
-
-	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final InstanceMapper instanceMapper;
-
-	public PingClient(Queue queue, ReadyFactory readyFactory) {
-		this.queue = queue;
-		this.readyFactory = readyFactory;
-		instanceMapper = new InstanceMapper(requestIdProvider);
+	
+	private static final int ICMP_PROTOCOL = 1;
+	private static final long ID_LIMIT = 1L << 32;
+	
+	public static interface Builder extends NinioBuilder<PingClient> {
+		Builder with(Executor executor);
+		Builder with(RawSocket.Builder connectorFactory);
 	}
-
-	@Override
-	public void close() {
-		queue.post(new Runnable() {
+	
+	public static Builder builder() {
+		return new Builder() {
+			private Executor executor = null;
+			private RawSocket.Builder connectorFactory = RawSocket.builder();
+			
 			@Override
-			public void run() {
-				instanceMapper.closeAll();
+			public Builder with(Executor executor) {
+				this.executor = executor;
+				return this;
 			}
-		});
-	}
-	
-	private static final class RequestIdProvider {
-		private long nextRequestId = 0L;
-
-		public RequestIdProvider() {
-		}
-		
-		public long get() {
-			long id = nextRequestId;
-			nextRequestId++;
-			return id;
-		}
-	}
-	
-	public void connect(final PingClientHandler clientHandler) {
-		queue.post(new Runnable() {
+			
 			@Override
-			public void run() {
-				Ready ready = readyFactory.create();
-				
-				ready.connect(null, new ReadyConnection() {
+			public Builder with(RawSocket.Builder connectorFactory) {
+				this.connectorFactory = connectorFactory;
+				return this;
+			}
 
+			@Override
+			public PingClient create(Queue queue) {
+				if (executor == null) {
+					throw new NullPointerException("executor");
+				}
+				return new PingClient(queue, executor, connectorFactory);
+			}
+		};
+	}
+	
+	private final Executor executor;
+	private final Connector connector;
+	private final Map<Long, PingReceiver> receivers = new HashMap<>();
+	private long nextId = 0L;
+
+	public PingClient(Queue queue, final Executor executor, RawSocket.Builder connectorFactory) {
+		this.executor = executor;
+		connector = connectorFactory.receiving(new Receiver() {
+			@Override
+			public void received(Address address, final ByteBuffer buffer) {
+				executor.execute(new Runnable() {
 					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						long id = buffer.getLong();
-						double time = buffer.getDouble();
-						instanceMapper.handle(id, time);
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						clientHandler.failed(e);
-					}
-					
-					@Override
-					public void connected(final FailableCloseableByteBufferHandler write) {
-						final PingWriter w = new PingWriter(write);
+					public void run() {
+						long now = System.nanoTime();
+						long time;
+						long id;
+						try {
+							buffer.get(); // type
+							buffer.get(); // code
+							buffer.getShort(); // checksum
+							short identifier = buffer.getShort(); // identifier
+							short sequence = buffer.getShort(); // sequence
+							time = buffer.getLong();
+							id = ((identifier & 0xFFFF) << 16) | (sequence & 0xFFFF);
+						} catch (Exception e) {
+							LOGGER.error("Invalid packet", e);
+							return;
+						}
+
+						double delta = (now - time) / 1_000_000_000d;
 						
-						clientHandler.launched(new PingClientHandler.Callback() {
-							@Override
-							public void close() {
-								queue.post(new Runnable() {
-									@Override
-									public void run() {
-										write.close();
-									}
-								});
-							}
-							@Override
-							public void ping(final String host, final PingCallback callback) {
-								queue.post(new Runnable() {
-									@Override
-									public void run() {
-										Instance i = new Instance(callback, w);
-										instanceMapper.map(i);
-										w.ping(i.instanceId, host);
-									}
-								});
-							}
-						});
-					}
-					
-					@Override
-					public void close() {
-						clientHandler.close();
+						PingReceiver r = receivers.remove(id);
+						if (r == null) {
+							return;
+						}
+						r.received(delta);
 					}
 				});
 			}
-		});
+		}).protocol(ICMP_PROTOCOL).create(queue);
 	}
 	
-	private static final class InstanceMapper {
-		private final Map<Long, Instance> instances = new HashMap<>();
-		private RequestIdProvider requestIdProvider;
-		
-		public InstanceMapper(RequestIdProvider requestIdProvider) {
-			this.requestIdProvider = requestIdProvider;
-		}
-		
-		public void map(Instance instance) {
-			long instanceId = requestIdProvider.get();
-
-			if (instances.containsKey(instanceId)) {
-				LOGGER.warn("The maximum number of simultaneous request has been reached");
-				return;
-			}
-			
-			instances.put(instanceId, instance);
-			
-			instance.instanceId = instanceId;
-		}
-
-		public void closeAll() {
-			for (Instance i : instances.values()) {
-				i.closeAll();
-			}
-			instances.clear();
-		}
-	
-		public void handle(long instanceId, double time) {
-			Instance i = instances.remove(instanceId);
-			if (i == null) {
-				return;
-			}
-			i.handle(time);
-		}
+	@Override
+	public void close() {
+		connector.close();
 	}
-	
-	private static final class PingWriter {
-		private final CloseableByteBufferHandler write;
-		public PingWriter(CloseableByteBufferHandler write) {
-			this.write = write;
-		}
-		public void close() {
-			write.close();
-		}
-		public void ping(long instanceId, String host) {
-			byte[] h = host.getBytes(Charsets.UTF_8);
-			ByteBuffer bb = ByteBuffer.allocate(Longs.BYTES + Ints.BYTES + h.length);
-			bb.putLong(instanceId);
-			bb.putInt(h.length);
-			bb.put(h);
-			bb.flip();
-			write.handle(null, bb);
-		}
-	}
-	
-	private static final class Instance {
-		private final PingWriter write;
-		private PingClientHandler.Callback.PingCallback callback;
-		public long instanceId;
 
-		public Instance(PingClientHandler.Callback.PingCallback callback, PingWriter write) {
-			this.callback = callback;
-			this.write = write;
-		}
-		
-		public void closeAll() {
-			write.close();
-			
-			if (callback == null) {
-				return;
+	public PingRequestBuilder request() {
+		return new PingRequestBuilder() {
+			private PingReceiver receiver = null;
+
+			@Override
+			public PingRequestBuilder receiving(PingReceiver receiver) {
+				this.receiver = receiver;
+				return this;
 			}
+
+			private long id = -1L;
 			
-			//%% PingClientHandler.Callback.PingCallback c = callback;
-			callback = null;
-			//%% c.failed(new IOException("Closed by peer"));
-		}
-		
-		private void handle(double time) {
-			PingClientHandler.Callback.PingCallback c = callback;
-			callback = null;
-			c.pong(time);
-		}
+			@Override
+			public PingRequest ping(final String host) {
+				final PingReceiver r = receiver;
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (id < 0L) {
+							id = nextId;
+							nextId++;
+							if (nextId == ID_LIMIT) {
+								nextId = 0L;
+							}
+							receivers.put(id, r);
+						}
+
+						byte[] sendData = new byte[16];
+
+						ByteBuffer b = ByteBuffer.wrap(sendData);
+						b.put((byte) 8); // requestType (Echo)
+						b.put((byte) 0); // code
+						int checksumPosition = b.position();
+						b.putShort((short) 0); // checksum
+						b.putShort((short) ((id >>> 16) & 0xFFFF)); // identifier
+						b.putShort((short) (id & 0xFFFF)); // sequence
+						long nt = System.nanoTime();
+						b.putLong(nt);
+						int endPosition = b.position();
+
+						b.position(0);
+						int checksum = 0;
+						while (b.position() < endPosition) {
+							checksum += b.getShort() & 0xFFFF;
+						}
+					    while((checksum & 0xFFFF0000) != 0) {
+					    	checksum = (checksum & 0xFFFF) + (checksum >>> 16);
+					    }
+
+					    checksum = (~checksum & 0xffff);
+						b.position(checksumPosition);
+						b.putShort((short) (checksum & 0xFFFF));
+						b.position(endPosition);
+						b.flip();
+						
+						connector.send(new Address(host, 0), b);
+					}
+				});
+				
+				return new PingRequest() {
+					@Override
+					public void cancel() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (id < 0L) {
+									return;
+								}
+								receivers.remove(id);
+							}
+						});
+					}
+				};
+			}
+		};
 	}
 }

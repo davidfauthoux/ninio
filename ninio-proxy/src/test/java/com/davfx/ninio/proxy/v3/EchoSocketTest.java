@@ -11,14 +11,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.v3.Closing;
-import com.davfx.ninio.core.v3.Connecting;
-import com.davfx.ninio.core.v3.Connector;
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.NinioSocketBuilder;
-import com.davfx.ninio.core.v3.Receiver;
+import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connecting;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.NinioSocketBuilder;
+import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyConnectorProvider;
+import com.davfx.ninio.proxy.ProxyListening;
+import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.util.Lock;
 import com.google.common.base.Charsets;
 

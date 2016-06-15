@@ -7,10 +7,13 @@ import java.util.concurrent.Executors;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.ping.v3.PingClient;
-import com.davfx.ninio.ping.v3.PingReceiver;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.ping.PingClient;
+import com.davfx.ninio.ping.PingReceiver;
+import com.davfx.ninio.proxy.ProxyClient;
+import com.davfx.ninio.proxy.ProxyConnectorProvider;
+import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.util.Lock;
 
 public class PingTest {

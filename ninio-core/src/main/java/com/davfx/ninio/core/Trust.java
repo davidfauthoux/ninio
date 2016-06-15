@@ -172,7 +172,7 @@ public final class Trust {
 		}
 	}
 	
-	SSLEngine createEngine(boolean clientMode) {
+	public SSLEngine createEngine(boolean clientMode) {
 		SSLEngine engine = sslContext.createSSLEngine();
 		engine.setUseClientMode(clientMode);
 		return engine;

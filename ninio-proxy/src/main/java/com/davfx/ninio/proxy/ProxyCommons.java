@@ -1,23 +1,27 @@
 package com.davfx.ninio.proxy;
 
+import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 interface ProxyCommons {
 	interface Commands {
-		int ESTABLISH_CONNECTION = 1;
-		int FAIL_CONNECTION = 2;
+		int SEND_WITH_ADDRESS = 0;
+		int SEND_WITHOUT_ADDRESS = 1;
+		int CLOSE = 2;
+		int CONNECT_WITH_ADDRESS = 3;
+		int CONNECT_WITHOUT_ADDRESS = 4;
 	}
 	
 	final class Types {
 		
-		private static final Config CONFIG = ConfigFactory.load(ProxyCommons.class.getClassLoader());
+		private static final Config CONFIG = ConfigUtils.load(ProxyCommons.class);
 		
-		public static final String SOCKET = CONFIG.getString("ninio.proxy.socket");
-		public static final String SSL = CONFIG.getString("ninio.proxy.ssl");
-		public static final String DATAGRAM = CONFIG.getString("ninio.proxy.datagram");
-		public static final String PING = CONFIG.getString("ninio.proxy.ping");
-		public static final String HOP = CONFIG.getString("ninio.proxy.hop");
+		public static final String TCP = CONFIG.getString("tcp");
+		public static final String SSL = CONFIG.getString("ssl");
+		public static final String UDP = CONFIG.getString("udp");
+		public static final String RAW = CONFIG.getString("raw");
+		public static final String WEBSOCKET = CONFIG.getString("websocket");
+		public static final String HTTP = CONFIG.getString("http");
 		
 		private Types() {
 		}

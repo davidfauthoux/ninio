@@ -3,7 +3,7 @@
 
 	<groupId>com.davfx.ninio</groupId>
 	<artifactId>ninio</artifactId>
-	<version>2.3.8-SNAPSHOT</version>
+	<version>3.0.0-SNAPSHOT</version>
 	<!-- mvn versions:set -DgenerateBackupPoms=false -->
 
 	<packaging>pom</packaging>
@@ -77,18 +77,17 @@
 		<module>ninio-snmp</module>
 		<module>ninio-telnet</module>
 		<module>ninio-ssh</module>
-		<module>ninio-ftp</module>
 		<module>ninio-ping</module>
 		<module>ninio-proxy</module>
 		<module>ninio-http</module>
+		<module>ninio-util</module>
+		<module>ninio-script</module>
+		<module>ninio-sort</module>
+		<module>ninio-string</module>
+		<module>ninio-csv</module>
 	</modules>
 
 	<dependencies>
-		<dependency>
-			<groupId>com.davfx</groupId>
-			<artifactId>davfx-util</artifactId>
-			<version>2.1.6-SNAPSHOT</version>
-		</dependency>
 		<dependency>
 			<groupId>com.google.guava</groupId>
 			<artifactId>guava</artifactId>
@@ -159,11 +158,6 @@
 			</dependency>
 			<dependency>
 				<groupId>com.davfx.ninio</groupId>
-				<artifactId>ninio-ftp</artifactId>
-				<version>${project.version}</version>
-			</dependency>
-			<dependency>
-				<groupId>com.davfx.ninio</groupId>
 				<artifactId>ninio-ping</artifactId>
 				<version>${project.version}</version>
 			</dependency>
@@ -175,6 +169,26 @@
 			<dependency>
 				<groupId>com.davfx.ninio</groupId>
 				<artifactId>ninio-http</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-util</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-script</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-string</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-csv</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 		</dependencies>

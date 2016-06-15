@@ -24,43 +24,43 @@ extern "C" {
 #endif
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1libStartup
+Java_com_davfx_ninio_core_NativeRawSocket__1_1libStartup
 (JNIEnv *, jclass);
 
 JNIEXPORT void JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1libShutdown
+Java_com_davfx_ninio_core_NativeRawSocket__1_1libShutdown
 (JNIEnv *, jclass);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1PF_1INET
+Java_com_davfx_ninio_core_NativeRawSocket__1_1PF_1INET
 (JNIEnv *, jclass);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1PF_1INET6
+Java_com_davfx_ninio_core_NativeRawSocket__1_1PF_1INET6
 (JNIEnv *, jclass);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1socket
+Java_com_davfx_ninio_core_NativeRawSocket__1_1socket
 (JNIEnv *, jclass, jint, jint);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1bind
+Java_com_davfx_ninio_core_NativeRawSocket__1_1bind
 (JNIEnv *, jclass, jint, jint, jbyteArray, jint);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1close
+Java_com_davfx_ninio_core_NativeRawSocket__1_1close
 (JNIEnv *, jclass, jint);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1recvfrom1
+Java_com_davfx_ninio_core_NativeRawSocket__1_1recvfrom1
 (JNIEnv *, jclass, jint, jbyteArray, jint, jint, jint);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1recvfrom2
+Java_com_davfx_ninio_core_NativeRawSocket__1_1recvfrom2
 (JNIEnv *, jclass, jint, jbyteArray, jint, jint, jint, jbyteArray);
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1sendto
+Java_com_davfx_ninio_core_NativeRawSocket__1_1sendto
 (JNIEnv *, jclass, jint, jbyteArray, jint, jint, jint, jbyteArray, jint);
 
 #ifdef __cplusplus

@@ -7,9 +7,12 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpReceiver;
+import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 
 public class Test {

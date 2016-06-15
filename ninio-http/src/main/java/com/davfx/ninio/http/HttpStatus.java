@@ -6,5 +6,6 @@ public interface HttpStatus {
 	int INTERNAL_SERVER_ERROR = 500;
 	int NOT_FOUND = 404;
 	int FORBIDDEN = 403;
+	int BAD_REQUEST = 400;
 
 }

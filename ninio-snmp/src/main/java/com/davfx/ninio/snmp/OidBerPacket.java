@@ -10,7 +10,7 @@ public final class OidBerPacket implements BerPacket {
 	private final ByteBuffer bb;
 
 	public OidBerPacket(Oid oid) {
-		int[] raw = oid.getRaw();
+		int[] raw = oid.raw;
 
 		if (raw.length < 2) {
 			throw new IllegalArgumentException();

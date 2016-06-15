@@ -1,10 +1,13 @@
 package com.davfx.ninio.http;
 
-import java.nio.ByteBuffer;
-import java.util.Map;
+import java.util.Deque;
+import java.util.LinkedList;
+import java.util.List;
 
 import com.davfx.ninio.core.Address;
-import com.google.common.base.Charsets;
+import com.google.common.base.Optional;
+import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMultimap;
 
 public final class HttpRequest {
@@ -12,17 +15,17 @@ public final class HttpRequest {
 	public final Address address;
 	public final boolean secure;
 	public final HttpMethod method;
-	public final HttpPath path;
+	public final String path;
 	public final ImmutableMultimap<String, String> headers;
 	
-	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path, ImmutableMultimap<String, String> headers) {
+	public HttpRequest(Address address, boolean secure, HttpMethod method, String path, ImmutableMultimap<String, String> headers) {
 		this.address = address;
 		this.secure = secure;
 		this.method = method;
 		this.path = path;
 		this.headers = headers;
 	}
-	public HttpRequest(Address address, boolean secure, HttpMethod method, HttpPath path) {
+	public HttpRequest(Address address, boolean secure, HttpMethod method, String path) {
 		this(address, secure, method, path, ImmutableMultimap.<String, String>of());
 	}
 	
@@ -62,7 +65,7 @@ public final class HttpRequest {
 				int p = Integer.parseInt(a.substring(k + 1));
 				address = new Address(h, p);
 			}
-			return new HttpRequest(address, secure, method, HttpPath.ROOT, headers);
+			return new HttpRequest(address, secure, method, String.valueOf(HttpSpecification.PATH_SEPARATOR), headers);
 		} else {
 			String a = url.substring(protocol.length(), i);
 			int k = a.indexOf(':');
@@ -74,42 +77,73 @@ public final class HttpRequest {
 				int p = Integer.parseInt(a.substring(k + 1));
 				address = new Address(h, p);
 			}
-			return new HttpRequest(address, secure, method, HttpPath.of(url.substring(i)), headers);
+			return new HttpRequest(address, secure, method, url.substring(i), headers);
 		}
 	}
 	
-	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
-	private static final String DEFAULT_ACCEPT = "*/*";
-
-	private static void appendHeader(StringBuilder buffer, String key, String value) {
-		buffer.append(key).append(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR).append(HttpSpecification.HEADER_BEFORE_VALUE).append(value.toString()).append(HttpSpecification.CR).append(HttpSpecification.LF);
-	}
-	
-	public ByteBuffer toByteBuffer() {
-		StringBuilder header = new StringBuilder();
-		header.append(method.toString()).append(HttpSpecification.START_LINE_SEPARATOR).append(path).append(HttpSpecification.START_LINE_SEPARATOR).append(HttpSpecification.HTTP11).append(HttpSpecification.CR).append(HttpSpecification.LF);
-		
-		for (Map.Entry<String, String> h : headers.entries()) {
-			appendHeader(header, h.getKey(), h.getValue());
-		}
-		if (!headers.containsKey(HttpHeaderKey.HOST)) {
-			appendHeader(header, HttpHeaderKey.HOST, address.getHost()); //TODO check that! // Adding the port looks to fail with Apache/Coyote // + Http.PORT_SEPARATOR + request.getAddress().getPort());
-		}
-		if (!headers.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
-			appendHeader(header, HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
-		}
-		if (!headers.containsKey(HttpHeaderKey.CONNECTION)) {
-			appendHeader(header, HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
-		}
-		if (!headers.containsKey(HttpHeaderKey.USER_AGENT)) {
-			appendHeader(header, HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
-		}
-		if (!headers.containsKey(HttpHeaderKey.ACCEPT)) {
-			appendHeader(header, HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
+	public static ImmutableList<String> path(String path) {
+		int i = path.indexOf(HttpSpecification.PARAMETERS_START);
+		if (i < 0) {
+			i = path.indexOf(HttpSpecification.HASH_SEPARATOR);
+		} else {
+			int j = path.indexOf(HttpSpecification.HASH_SEPARATOR);
+			if ((j >= 0) && (j < i)) {
+				i = j;
+			}
 		}
 		
-		header.append(HttpSpecification.CR).append(HttpSpecification.LF);
-		return ByteBuffer.wrap(header.toString().getBytes(Charsets.US_ASCII));
+		if (i < 0) {
+			i = path.length();
+		}
+		
+		String p = path.substring(0, i);
+		if (p.charAt(0) != HttpSpecification.PATH_SEPARATOR) {
+			throw new IllegalArgumentException("Path must start with '" + HttpSpecification.PATH_SEPARATOR + "': " + p);
+		}
+		String s = p.substring(1);
+		Deque<String> l = new LinkedList<>();
+		for (String k : Splitter.on(HttpSpecification.PATH_SEPARATOR).splitToList(s)) {
+			if (k.isEmpty()) {
+				continue;
+			}
+			if (k.equals(".")) {
+				continue;
+			}
+			if (k.equals("..")) {
+				if (!l.isEmpty()) {
+					l.removeLast();
+				}
+				continue;
+			}
+			l.add(k);
+		}
+		return ImmutableList.copyOf(l);
 	}
 
+	public static ImmutableMultimap<String, Optional<String>> parameters(String path) {
+		int i = path.indexOf(HttpSpecification.PARAMETERS_START);
+		if (i < 0) {
+			return ImmutableMultimap.of();
+		} else {
+			int j = path.indexOf(HttpSpecification.HASH_SEPARATOR);
+			String s;
+			if (j < 0) {
+				s = path.substring(i + 1);
+			} else {
+				s = path.substring(i + 1, j);
+			}
+			ImmutableMultimap.Builder<String, Optional<String>> m = ImmutableMultimap.builder();
+			for (String kv : Splitter.on(HttpSpecification.PARAMETERS_SEPARATOR).splitToList(s)) {
+				List<String> l = Splitter.on(HttpSpecification.PARAMETER_KEY_VALUE_SEPARATOR).splitToList(kv);
+				if (!l.isEmpty()) {
+					if (l.size() == 1) {
+						m.put(UrlUtils.decode(l.get(0)), Optional.<String>absent());
+					} else {
+						m.put(UrlUtils.decode(l.get(0)), Optional.of(UrlUtils.decode(l.get(1))));
+					}
+				}
+			}
+			return m.build();
+		}
+	}
 }

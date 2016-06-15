@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.davfx.ninio</groupId>
 		<artifactId>ninio</artifactId>
-		<version>2.3.8-SNAPSHOT</version>
+		<version>3.0.0-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>ninio-core</artifactId>
@@ -12,6 +12,10 @@
 	<packaging>bundle</packaging>
 	
 	<dependencies>
+		<dependency>
+			<groupId>com.davfx.ninio</groupId>
+			<artifactId>ninio-util</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>

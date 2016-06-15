@@ -1,65 +1,128 @@
 package com.davfx.ninio.telnet;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.Listen;
+import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connecting;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.QueueListen;
-import com.davfx.ninio.core.SocketListen;
-import com.davfx.ninio.core.SocketListening;
+import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.TcpSocketServer;
 
 public final class TelnetServer {
+	
+	public static void main(String[] args) throws Exception {
+		try (Ninio ninio = Ninio.create()) {
+			Disconnectable ss = ninio.create(TelnetServer.builder().listening(new Listening() {
+				@Override
+				public Connection connecting(Address from, final Connector connector) {
+					return new Listening.Connection() {
+						@Override
+						public Receiver receiver() {
+							return new Receiver() {
+								@Override
+								public void received(Address address, ByteBuffer buffer) {
+									connector.send(null, buffer);
+								}
+							};
+						}
+						@Override
+						public Failing failing() {
+							return null;
+						}
+						@Override
+						public Connecting connecting() {
+							return null;
+						}
+						@Override
+						public Closing closing() {
+							return null;
+						}
+					};
+				}
+			}).with(TcpSocketServer.builder().bind(new Address(Address.ANY, 8080))));
+			try {
+				Thread.sleep(100000);
+			} finally {
+				ss.close();
+			}
+		}
+	}
+	
+	public static interface Builder extends NinioBuilder<Disconnectable> {
+		Builder with(TcpSocketServer.Builder builder);
+		Builder listening(Listening listening);
+	}
 
-	public TelnetServer(final Queue queue, Address address, final SocketListening socketListening) {
-		Listen listen = new SocketListen(queue.getSelector(), queue.allocator());
-		
-		new QueueListen(queue, listen).listen(address, new SocketListening() {
+	public static Builder builder() {
+		return new Builder() {
+			private Listening listening = null;
+			private TcpSocketServer.Builder builder = null;
 			
 			@Override
-			public void listening(Listening listening) {
-				socketListening.listening(listening);
+			public Builder listening(Listening listening) {
+				this.listening = listening;
+				return this;
 			}
 			
 			@Override
-			public void close() {
-				socketListening.close();
+			public Builder with(TcpSocketServer.Builder builder) {
+				this.builder = builder;
+				return this;
 			}
-			
-			@Override
-			public void failed(IOException e) {
-				socketListening.failed(e);
-			}
-			
-			@Override
-			public CloseableByteBufferHandler connected(Address address, final CloseableByteBufferHandler connection) {
-				final TelnetResponseReader reader = new TelnetResponseReader();
 
-				final CloseableByteBufferHandler listeningConnection = socketListening.connected(address, new CloseableByteBufferHandler() {
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						connection.handle(address, buffer);
-					}
-					
-					@Override
-					public void close() {
-						connection.close();
-					}
-				});
+			@Override
+			public Disconnectable create(Queue queue) {
+				if (builder == null) {
+					throw new NullPointerException("builder");
+				}
 				
-				return new CloseableByteBufferHandler() {
+				final Listening l = listening;
+				final TelnetReader telnetReader = new TelnetReader();
+				return builder.listening((l == null) ? null : new Listening() {
 					@Override
-					public void close() {
-						listeningConnection.close();
+					public Connection connecting(Address from, final Connector connector) {
+						Connection c = l.connecting(from, connector);
+						final Receiver connectionReceiver = c.receiver();
+						final Closing connectionClosing = c.closing();
+						final Connecting connectionConnecting = c.connecting();
+						final Failing connectionFailing = c.failing();
+						return new Listening.Connection() {
+							@Override
+							public Receiver receiver() {
+								return new Receiver() {
+									@Override
+									public void received(Address address, ByteBuffer buffer) {
+										telnetReader.handle(buffer, connectionReceiver, connector);
+									}
+								};
+							}
+							
+							@Override
+							public Failing failing() {
+								return connectionFailing;
+							}
+							@Override
+							public Connecting connecting() {
+								return connectionConnecting;
+							}
+							@Override
+							public Closing closing() {
+								return connectionClosing;
+							}
+						};
 					}
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						reader.handle(address, buffer, listeningConnection, connection);
-					}
-				};
+				}).create(queue);
 			}
-		});
+		};
+	}
+	
+	private TelnetServer() {
 	}
 }

@@ -9,14 +9,22 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.v3.Disconnectable;
-import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
+import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpContentReceiver;
+import com.davfx.ninio.http.HttpHeaderKey;
+import com.davfx.ninio.http.HttpMethod;
+import com.davfx.ninio.http.HttpReceiver;
+import com.davfx.ninio.http.HttpRequest;
+import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpServer;
 import com.davfx.ninio.http.HttpServerHandler;
 import com.davfx.ninio.http.HttpServerHandlerFactory;
 import com.davfx.ninio.http.InMemoryBuffers;
+import com.davfx.ninio.http.com;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 

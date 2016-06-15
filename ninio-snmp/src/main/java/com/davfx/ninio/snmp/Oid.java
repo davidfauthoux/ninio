@@ -1,11 +1,12 @@
 package com.davfx.ninio.snmp;
 
+import java.util.Arrays;
 import java.util.List;
 
 import com.google.common.base.Splitter;
 
 public final class Oid implements Comparable<Oid> {
-	private final int[] raw;
+	public final int[] raw;
 
 	public Oid(String dotNotation) {
 		List<String> s = Splitter.on('.').splitToList(dotNotation);
@@ -27,10 +28,6 @@ public final class Oid implements Comparable<Oid> {
 		this.raw = raw;
 	}
 
-	public int[] getRaw() {
-		return raw;
-	}
-	
 	public Oid sub(Oid child) {
 		if (child.raw.length <= raw.length) {
 			return null;
@@ -54,11 +51,7 @@ public final class Oid implements Comparable<Oid> {
 
 	@Override
 	public int hashCode() {
-		int h = 0;
-		for (int e : raw) {
-			h += e;
-		}
-		return (h / raw.length);
+		return Arrays.hashCode(raw);
 	}
 
 	@Override
@@ -97,20 +90,12 @@ public final class Oid implements Comparable<Oid> {
 			return false;
 		}
 		Oid oid = (Oid) o;
-		if (oid.raw.length != raw.length) {
-			return false;
-		}
-		for (int i = 0; i < raw.length; i++) {
-			if (raw[i] != oid.raw[i]) {
-				return false;
-			}
-		}
-		return true;
+		return Arrays.equals(oid.raw, raw);
 	}
 	
 	@Override
 	public int compareTo(Oid handledOid) {
-		int[] handledOidRaw = handledOid.getRaw();
+		int[] handledOidRaw = handledOid.raw;
 		int i = 0;
 		while ((i < raw.length) && (i < handledOidRaw.length)) {
 			int o = raw[i];

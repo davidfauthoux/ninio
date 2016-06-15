@@ -1,323 +1,678 @@
 package com.davfx.ninio.proxy;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.net.ProtocolFamily;
+import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closeable;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
+import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connecting;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.ExecutorUtils;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Ready;
-import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.util.ClassThreadFactory;
-import com.davfx.util.ConfigUtils;
-import com.davfx.util.Pair;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
+import com.davfx.ninio.core.RawSocket;
+import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.SecureSocketBuilder;
+import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.Trust;
+import com.davfx.ninio.core.UdpSocket;
+import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpSocket;
+import com.davfx.ninio.http.WebsocketSocket;
+import com.davfx.ninio.util.ClassThreadFactory;
+import com.google.common.base.Charsets;
+import com.google.common.primitives.Ints;
 
-public final class ProxyServer implements AutoCloseable, Closeable {
+public final class ProxyServer implements Listening {
+	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyServer.class);
-	
-	private static final Config CONFIG = ConfigFactory.load(ProxyServer.class.getClassLoader());
 
-	public static final double READ_TIMEOUT = ConfigUtils.getDuration(CONFIG, "ninio.proxy.timeout.read");
-	public static final int BACKLOG = CONFIG.getInt("ninio.proxy.backlog");
-	
-	private final BaseServerSide proxyServerSide;
-	private final ExecutorService listenExecutor;
-	private final ExecutorService clientExecutor;
-	private final Set<Address> addressesToFilter = new HashSet<>();
-	private final ServerSocket serverSocket;
-	
-	private final List<Socket> sockets = new LinkedList<>();
-	private boolean closed = false;
-	
-	public ProxyServer(Queue queue, Address address, int maxNumberOfSimultaneousClients) throws IOException {
-		proxyServerSide = new BaseServerSide(queue);
-		LOGGER.debug("Proxy server on {}", address);
-		listenExecutor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, "listen"));
-		clientExecutor = Executors.newFixedThreadPool(maxNumberOfSimultaneousClients, new ClassThreadFactory(ProxyServer.class, "read"));
-		serverSocket = new ServerSocket(address.getPort(), BACKLOG, InetAddress.getByName(address.getHost()));
-	}
-
-	private void add(Socket socket) throws IOException {
-		synchronized (sockets) {
-			if (closed) {
-				try {
-					socket.close();
-				} catch (IOException ioe) {
-				}
-				throw new IOException("Closed");
-			}
-			sockets.add(socket);
-		}
-	}
-	
-	@Override
-	public void close() {
-		LOGGER.debug("Closing proxy server socket");
-		try {
-			serverSocket.close();
-		} catch (IOException ioe) {
-		}
-		
-		synchronized (sockets) {
-			closed = true;
-			for (Socket s : sockets) {
-				try {
-					s.close();
-				} catch (IOException ioe) {
-				}
-			}
-		}
-
-		listenExecutor.shutdown();
-		clientExecutor.shutdown();
-		proxyServerSide.close();
-	}
-	
-	public ReadyFactory datagramReadyFactory() {
-		return proxyServerSide.datagramReadyFactory();
-	}
-	public ReadyFactory socketReadyFactory() {
-		return proxyServerSide.socketReadyFactory();
-	}
-
-	public ProxyServer override(String type, ServerSideConfigurator configurator) {
-		proxyServerSide.override(type, configurator);
-		return this;
-	}
-	
-	public ProxyServer filter(Address address) {
-		LOGGER.debug("Will filter out: {}", address);
-		addressesToFilter.add(address);
-		return this;
-	}
-	
-	public ProxyServer start() {
-		listenExecutor.execute(new Runnable() {
-			@Override
-			public void run() {
-				try {
-					while (true) {
-						final Socket socket = serverSocket.accept();
-						add(socket);
-						try {
-							socket.setKeepAlive(true);
-							socket.setSoTimeout((int) (READ_TIMEOUT * 1000d));
-						} catch (IOException e) {
-							LOGGER.error("Could not configure client socket", e);
+	public static NinioBuilder<Disconnectable> defaultServer(final Address address, final ProxyListening listening) {
+		return new NinioBuilder<Disconnectable>() {
+			public Disconnectable create(Queue queue) {
+				final Trust trust = new Trust();
+				final ExecutorService executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, true));
+				final HttpClient httpClient = HttpClient.builder().with(executor).create(queue);
+				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
+					@Override
+					public ProxyListening.Builder create(Address address, String header) {
+						if (header.startsWith(ProxyCommons.Types.TCP)) {
+							final TcpSocket.Builder b = TcpSocket.builder().to(address);
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
 						}
+						if (header.startsWith(ProxyCommons.Types.UDP)) {
+							final UdpSocket.Builder b = UdpSocket.builder();
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
+						}
+						if (header.startsWith(ProxyCommons.Types.SSL)) {
+							final TcpSocket.Builder b = new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
+						}
+						if (header.startsWith(ProxyCommons.Types.RAW)) {
+							ProtocolFamily family = (header.charAt(ProxyCommons.Types.RAW.length()) == '4') ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
+							int protocol = Integer.parseInt(header.substring(ProxyCommons.Types.RAW.length() + 1));
+							final RawSocket.Builder b = RawSocket.builder().family(family).protocol(protocol);
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
+						}
+						if (header.startsWith(ProxyCommons.Types.WEBSOCKET)) {
+							final WebsocketSocket.Builder b = WebsocketSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.WEBSOCKET.length()));
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
+						}
+						if (header.startsWith(ProxyCommons.Types.HTTP)) {
+							final HttpSocket.Builder b = HttpSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.HTTP.length()));
+							return new ProxyListening.Builder() {
+								@Override
+								public Builder closing(Closing closing) {
+									b.closing(closing);
+									return this;
+								}
+								@Override
+								public Builder connecting(Connecting connecting) {
+									b.connecting(connecting);
+									return this;
+								}
+								@Override
+								public Builder failing(Failing failing) {
+									b.failing(failing);
+									return this;
+								}
+								@Override
+								public Builder receiving(Receiver receiver) {
+									b.receiving(receiver);
+									return this;
+								}
+								@Override
+								public Connector create(Queue queue) {
+									return b.create(queue);
+								}
+							};
+						}
+						if (listening == null) {
+							return null;
+						}
+						return listening.create(address, header);
+					}
+				}).create(queue)).create(queue);
+				return new Disconnectable() {
+					@Override
+					public void close() {
+						server.close();
+						httpClient.close();
+						ExecutorUtils.shutdown(executor);
+					}
+				};
+			}
+		};
+	}
 	
-						clientExecutor.execute(new Runnable() {
-							@Override
-							public void run() {
-								final Map<Integer, Pair<Address, CloseableByteBufferHandler>> establishedConnections = new HashMap<>();
-								final boolean[] closed = new boolean[] { false };
+	public static interface Builder extends NinioBuilder<ProxyServer> {
+		Builder with(Executor executor);
+		Builder listening(ProxyListening listening);
+	}
 	
-								try {
-									OutputStream sout;
-									InputStream sin;
-									try {
-										sout = new GZIPOutputStream(socket.getOutputStream(), true);
-										sin = new GZIPInputStream(socket.getInputStream());
-									} catch (IOException ee) {
-										try {
-											socket.close();
-										} catch (IOException se) {
-										}
-										throw ee;
-									}
-									
-									final DataOutputStream out = new DataOutputStream(sout);
-									DataInputStream in = new DataInputStream(sin);
+	public static Builder builder() {
+		return new Builder() {
+			private Executor executor = null;
+			private ProxyListening listening = new ProxyListening() {
+				@Override
+				public Builder create(Address address, String header) {
+					return new Builder() {
+						@Override
+						public Builder closing(Closing closing) {
+							return null;
+						}
+						@Override
+						public Builder failing(Failing failing) {
+							failing.failed(new IOException());
+							return null;
+						}
+						@Override
+						public Builder receiving(Receiver receiver) {
+							return null;
+						}
+						@Override
+						public Builder connecting(Connecting connecting) {
+							return null;
+						}
+						@Override
+						public Connector create(Queue queue) {
+							return new Connector() {
+								@Override
+								public void close() {
+								}
+								@Override
+								public Connector send(Address address, ByteBuffer buffer) {
+									return this;
+								}
+							};
+						}
+					};
+				}
+			};
 
-									LOGGER.debug("Accepted connection from: {}", socket.getInetAddress());
+			@Override
+			public Builder with(Executor executor) {
+				this.executor = executor;
+				return this;
+			}
+			
+			@Override
+			public Builder listening(ProxyListening listening) {
+				this.listening = listening;
+				return this;
+			}
+
+			@Override
+			public ProxyServer create(Queue queue) {
+				if (executor == null) {
+					throw new NullPointerException("executor");
+				}
+				return new ProxyServer(queue, executor, listening);
+			}
+		};
+	}
 	
-									while (true) {
-										LOGGER.trace("Server waiting for connection ID");
-										final int connectionId = in.readInt();
-										LOGGER.trace("Server received connection ID: {}", connectionId);
-										int len = in.readInt();
-										if (len < 0) {
-											int command = -len;
-											if (command == ProxyCommons.Commands.ESTABLISH_CONNECTION) {
-												final Address address = in.readBoolean() ? new Address(in.readUTF(), in.readInt()) : null;
-												ReadyFactory factory = proxyServerSide.read(in);
-												//%% Ready r = new QueueReady(queue, factory.create());
-												Ready r = factory.create();
-												r.connect(address, new ReadyConnection() {
-													@Override
-													public void failed(IOException e) {
-														LOGGER.warn("Could not connect to {}", address, e);
-														synchronized (out) {
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(-ProxyCommons.Commands.FAIL_CONNECTION);
-																out.flush();
-															} catch (IOException ioe) {
-																try {
-																	out.close();
-																} catch (IOException se) {
-																}
-															}
-														}
-													}
-													
-													@Override
-													public void connected(FailableCloseableByteBufferHandler write) {
-														synchronized (establishedConnections) {
-															if (closed[0]) {
-																write.close();
-																return;
-															}
-															establishedConnections.put(connectionId, new Pair<Address, CloseableByteBufferHandler>(address, write));
-														}
+	private final Queue queue;
+	private final Executor proxyExecutor;
+	private final ProxyListening listening;
+
+	private ProxyServer(Queue queue, Executor proxyExecutor, ProxyListening listening) {
+		this.queue = queue;
+		this.proxyExecutor = proxyExecutor;
+		this.listening = listening;
+	}
 	
-														synchronized (out) {
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(-ProxyCommons.Commands.ESTABLISH_CONNECTION);
-																out.flush();
-															} catch (IOException ioe) {
-																try {
-																	out.close();
-																} catch (IOException se) {
-																}
-															}
-														}
-													}
-													
-													@Override
-													public void close() {
-														synchronized (out) {
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(0);
-																out.flush();
-															} catch (IOException ioe) {
-																try {
-																	out.close();
-																} catch (IOException se) {
-																}
-															}
-														}
-													}
-													
-													@Override
-													public void handle(Address address, ByteBuffer buffer) {
-														if (!buffer.hasRemaining()) {
-															return;
-														}
-														synchronized (out) {
-															try {
-																out.writeInt(connectionId);
-																out.writeInt(buffer.remaining());
-																if (address == null) {
-																	out.writeBoolean(false);
-																} else {
-																	out.writeBoolean(true);
-																	out.writeUTF(address.getHost());
-																	out.writeInt(address.getPort());
-																}
-																out.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-																out.flush();
-															} catch (IOException ioe) {
-																try {
-																	out.close();
-																} catch (IOException se) {
-																}
-															}
-														}
-														buffer.position(buffer.position() + buffer.remaining());
-													}
-												});
-											}
-										} else if (len == 0) {
-											Pair<Address, CloseableByteBufferHandler> connection;
-											synchronized (establishedConnections) {
-												connection = establishedConnections.remove(connectionId);
-											}
-											if (connection != null) {
-												if (connection.second != null) {
-													connection.second.close();
-												}
-											}
-										} else {
-											Pair<Address, CloseableByteBufferHandler> connection;
-											synchronized (establishedConnections) {
-												connection = establishedConnections.get(connectionId);
-											}
-											Address a;
-											if (in.readBoolean()) {
-												a = new Address(in.readUTF(), in.readInt());
-											} else {
-												a = (connection == null) ? null : connection.first;
-											}
-											byte[] b = new byte[len];
-											in.readFully(b);
-											if (connection != null) {
-												if (!addressesToFilter.contains(a)) {
-													if (connection.second != null) {
-														connection.second.handle(a, ByteBuffer.wrap(b));
-													}
-												}
-											} else {
-												LOGGER.debug("Invalid connection ID: {}", connectionId);
-											}
+	private void closedRegisteredConnections(Map<Integer, Connector> connections, IOException ioe) {
+		for (final Connector c : connections.values()) {
+			c.close();
+		}
+		connections.clear();
+	}
+
+	@Override
+	public Connection connecting(Address from, final Connector proxyConnector) {
+		final Map<Integer, Connector> connections = new HashMap<>();
+
+		return new Listening.Connection() {
+			
+			@Override
+			public Receiver receiver() {
+				return new Receiver() {
+					private ByteBuffer readByteBuffer;
+
+					private int readConnectionId = -1;
+					private int command = -1;
+
+					private int readHostLength = -1;
+					private String readHost = null;
+					private int readPort = -1;
+					private int readLength = -1;
+					private int readHeaderLength = -1;
+					private String readHeader = null;
+
+					private int readByte(int old, ByteBuffer receivedBuffer) {
+						if (old >= 0) {
+							return old;
+						}
+						if (!receivedBuffer.hasRemaining()) {
+							return -1;
+						}
+						return receivedBuffer.get() & 0xFF;
+					}
+					private int readInt(int old, ByteBuffer receivedBuffer) {
+						if (old >= 0) {
+							return old;
+						}
+						if (readByteBuffer == null) {
+							readByteBuffer = ByteBuffer.allocate(Ints.BYTES);
+						}
+						while (true) {
+							if (!receivedBuffer.hasRemaining()) {
+								return -1;
+							}
+							readByteBuffer.put(receivedBuffer.get());
+							if (readByteBuffer.position() == readByteBuffer.capacity()) {
+								readByteBuffer.flip();
+								int i = readByteBuffer.getInt();
+								readByteBuffer = null;
+								return i;
+							}
+						}
+					}
+					private String readString(String old, ByteBuffer receivedBuffer, int len) {
+						if (old != null) {
+							return old;
+						}
+						if (readByteBuffer == null) {
+							readByteBuffer = ByteBuffer.allocate(len);
+						}
+						while (true) {
+							if (!receivedBuffer.hasRemaining()) {
+								return null;
+							}
+							readByteBuffer.put(receivedBuffer.get());
+							if (readByteBuffer.position() == readByteBuffer.capacity()) {
+								String s = new String(readByteBuffer.array(), readByteBuffer.arrayOffset(), readByteBuffer.position(), Charsets.UTF_8);
+								readByteBuffer = null;
+								return s;
+							}
+						}
+					}
+					
+					@Override
+					public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
+						while (true) {
+							command = readByte(command, receivedBuffer);
+							if (command < 0) {
+								return;
+							}
+			
+							readConnectionId = readInt(readConnectionId, receivedBuffer);
+							if (readConnectionId < 0) {
+								return;
+							}
+							
+							final int connectionId = readConnectionId;
+							final Closing closing = new Closing() {
+								@Override
+								public void closed() {
+									proxyExecutor.execute(new Runnable() {
+										@Override
+										public void run() {
+											connections.remove(connectionId);
 										}
-									}
-								} catch (IOException e) {
-									LOGGER.info("Socket closed by peer: {}", e.getMessage());
-	
-									try {
-										socket.close();
-									} catch (IOException ioe) {
-									}
-									
-									List<CloseableByteBufferHandler> toClose = new LinkedList<>();
-									synchronized (establishedConnections) {
-										closed[0] = true;
-										for (Pair<Address, CloseableByteBufferHandler> connection : establishedConnections.values()) {
-											if (connection.second != null) {
-												toClose.add(connection.second);
-											}
-										}
-									}
-									for (CloseableByteBufferHandler c : toClose) {
-										c.close();
+									});
+			
+									ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES);
+									b.put((byte) ProxyCommons.Commands.CLOSE);
+									b.putInt(connectionId);
+									b.flip();
+			
+									proxyConnector.send(null, b);
+								}
+							};
+							final Failing failing = new Failing() {
+								@Override
+								public void failed(IOException e) {
+									closing.closed();
+								}
+							};
+							final Receiver receiver = new Receiver() {
+								@Override
+								public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
+									if (receivedAddress == null) {
+										ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
+										b.put((byte) ProxyCommons.Commands.SEND_WITHOUT_ADDRESS);
+										b.putInt(connectionId);
+										b.putInt(receivedBuffer.remaining());
+										b.put(receivedBuffer);
+										b.flip();
+										proxyConnector.send(null, b);
+									} else {
+										byte[] hostAsBytes = receivedAddress.host.getBytes(Charsets.UTF_8);
+										ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
+										b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
+										b.putInt(connectionId);
+										b.putInt(hostAsBytes.length);
+										b.put(hostAsBytes);
+										b.putInt(receivedAddress.port);
+										b.putInt(receivedBuffer.remaining());
+										b.put(receivedBuffer);
+										b.flip();
+										proxyConnector.send(null, b);
 									}
 								}
+							};
+							final Connecting connecting = new Connecting() {
+								@Override
+								public void connected() {
+								}
+							};
+							
+							switch (command) {
+							case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
+								readHostLength = readInt(readHostLength, receivedBuffer);
+								if (readHostLength < 0) {
+									return;
+								}
+								readHost = readString(readHost, receivedBuffer, readHostLength);
+								if (readHost == null) {
+									return;
+								}
+								readPort = readInt(readPort, receivedBuffer);
+								if (readPort < 0) {
+									return;
+								}
+								readLength = readInt(readLength, receivedBuffer);
+								if (readLength < 0) {
+									return;
+								}
+								int len = readLength;
+								if (receivedBuffer.remaining() < len) {
+									len = receivedBuffer.remaining();
+								}
+								final ByteBuffer b = receivedBuffer.duplicate();
+								b.limit(b.position() + len);
+								final Address a = new Address(readHost, readPort);
+								proxyExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										Connector receivedInnerConnection = connections.get(connectionId);
+										if (receivedInnerConnection != null) {
+											receivedInnerConnection.send(a, b);
+										}
+									}
+								});
+								receivedBuffer.position(receivedBuffer.position() + len);
+								readLength -= len;
+								if (readLength == 0) {
+									readConnectionId = -1;
+									command = -1;
+									readHostLength = -1;
+									readHost = null;
+									readPort = -1;
+									readLength = -1;
+								}
+								break;
 							}
-						});
+							case ProxyCommons.Commands.SEND_WITHOUT_ADDRESS: {
+								readLength = readInt(readLength, receivedBuffer);
+								if (readLength < 0) {
+									return;
+								}
+								int len = readLength;
+								if (receivedBuffer.remaining() < len) {
+									len = receivedBuffer.remaining();
+								}
+								final ByteBuffer b = receivedBuffer.duplicate();
+								b.limit(b.position() + len);
+								proxyExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										Connector receivedInnerConnection = connections.get(connectionId);
+										if (receivedInnerConnection != null) {
+											receivedInnerConnection.send(null, b);
+										}
+									}
+								});
+								receivedBuffer.position(receivedBuffer.position() + len);
+								readLength -= len;
+								if (readLength == 0) {
+									readConnectionId = -1;
+									command = -1;
+									readLength = -1;
+								}
+								break;
+							}
+							case ProxyCommons.Commands.CLOSE: {
+								proxyExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										Connector receivedInnerConnection = connections.remove(connectionId);
+										if (receivedInnerConnection != null) {
+											receivedInnerConnection.close();
+										}
+									}
+								});
+								readConnectionId = -1;
+								command = -1;
+								break;
+							}
+							case ProxyCommons.Commands.CONNECT_WITH_ADDRESS: {
+								readHostLength = readInt(readHostLength, receivedBuffer);
+								if (readHostLength < 0) {
+									return;
+								}
+								readHost = readString(readHost, receivedBuffer, readHostLength);
+								if (readHost == null) {
+									return;
+								}
+								readPort = readInt(readPort, receivedBuffer);
+								if (readPort < 0) {
+									return;
+								}
+								readHeaderLength = readInt(readHeaderLength, receivedBuffer);
+								if (readHeaderLength < 0) {
+									return;
+								}
+								readHeader = readString(readHeader, receivedBuffer, readHeaderLength);
+								if (readHeader == null) {
+									return;
+								}
+								
+								final String header = readHeader;
+								final Address a = new Address(readHost, readPort);
+								proxyExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										ProxyListening.Builder externalBuilder = listening.create(a, header);
+										if (externalBuilder == null) {
+											LOGGER.error("Unknown header (CONNECT_WITH_ADDRESS): {}", header);
+										} else {
+											externalBuilder.closing(closing);
+											externalBuilder.failing(failing);
+											externalBuilder.receiving(receiver);
+											externalBuilder.connecting(connecting);
+											Connector externalConnector = externalBuilder.create(queue);
+											connections.put(connectionId, externalConnector);
+										}
+									}
+								});
+								
+								readConnectionId = -1;
+								command = -1;
+								readHostLength = -1;
+								readHost = null;
+								readPort = -1;
+								readLength = -1;
+								readHeaderLength = -1;
+								readHeader = null;
+								break;
+							}
+							case ProxyCommons.Commands.CONNECT_WITHOUT_ADDRESS: {
+								readHeaderLength = readInt(readHeaderLength, receivedBuffer);
+								if (readHeaderLength < 0) {
+									return;
+								}
+								readHeader = readString(readHeader, receivedBuffer, readHeaderLength);
+								if (readHeader == null) {
+									return;
+								}
+			
+								final String header = readHeader;
+								proxyExecutor.execute(new Runnable() {
+									@Override
+									public void run() {
+										ProxyListening.Builder externalBuilder = listening.create(null, header);
+										if (externalBuilder == null) {
+											LOGGER.error("Unknown header (CONNECT_WITHOUT_ADDRESS): {}", header);
+										} else {
+											externalBuilder.closing(closing);
+											externalBuilder.failing(failing);
+											externalBuilder.receiving(receiver);
+											externalBuilder.connecting(connecting);
+											Connector externalConnector = externalBuilder.create(queue);
+											connections.put(connectionId, externalConnector);
+										}
+									}
+								});
+			
+								readConnectionId = -1;
+								command = -1;
+								readLength = -1;
+								readHeaderLength = -1;
+								readHeader = null;
+								break;
+							}
+							}
+						}
 					}
-				} catch (IOException se) {
-					LOGGER.debug("Server socket closed: {}", se.getMessage());
-				}
+				};
 			}
-		});
-		return this;
+			
+			@Override
+			public Failing failing() {
+				return new Failing() {
+					@Override
+					public void failed(IOException e) {
+						closedRegisteredConnections(connections, new IOException("Connection to proxy lost", e));
+					}
+				};
+			}
+			
+			@Override
+			public Connecting connecting() {
+				return null;
+			}
+			
+			@Override
+			public Closing closing() {
+				return new Closing() {
+					@Override
+					public void closed() {
+						closedRegisteredConnections(connections, new IOException("Connection to proxy lost"));
+					}
+				};
+			}
+		};
 	}
 }

@@ -80,7 +80,7 @@ init_sockaddr_in6(JNIEnv *env, struct sockaddr_in6 *sin6, jbyteArray address, in
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1libStartup
+Java_com_davfx_ninio_core_NativeRawSocket__1_1libStartup
 (JNIEnv *env, jclass cls) {
 #if defined(_WIN32)
 	WORD version = MAKEWORD(2, 0);
@@ -92,7 +92,7 @@ Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1libStartup
 }
 
 JNIEXPORT void JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1libShutdown
+Java_com_davfx_ninio_core_NativeRawSocket__1_1libShutdown
 (JNIEnv *env, jclass cls) {
 #if defined(_WIN32)
 	WSACleanup();
@@ -100,19 +100,19 @@ Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1libShutdown
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1PF_1INET
+Java_com_davfx_ninio_core_NativeRawSocket__1_1PF_1INET
 (JNIEnv *env, jclass cls) {
 	return PF_INET;
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1PF_1INET6
+Java_com_davfx_ninio_core_NativeRawSocket__1_1PF_1INET6
 (JNIEnv *env, jclass cls) {
 	return PF_INET6;
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1socket
+Java_com_davfx_ninio_core_NativeRawSocket__1_1socket
 (JNIEnv *env, jclass cls, jint family, jint protocol) {
 	int s;
 	
@@ -126,7 +126,7 @@ Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1socket
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1bind
+Java_com_davfx_ninio_core_NativeRawSocket__1_1bind
 (JNIEnv *env, jclass cls, jint socket, jint family, jbyteArray address, jint scope_id) {
 	struct sockaddr *saddr;
 	socklen_t socklen;
@@ -150,13 +150,13 @@ Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1bind
 
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1close
+Java_com_davfx_ninio_core_NativeRawSocket__1_1close
 (JNIEnv *env, jclass cls, jint socket) {
 	return close(socket);
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1recvfrom1
+Java_com_davfx_ninio_core_NativeRawSocket__1_1recvfrom1
 (JNIEnv *env, jclass cls, jint socket,jbyteArray data, jint offset, jint len, jint family) {
 	int result;
 	jbyte *buf;
@@ -175,7 +175,7 @@ Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1recvfrom1
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1recvfrom2
+Java_com_davfx_ninio_core_NativeRawSocket__1_1recvfrom2
 (JNIEnv *env, jclass cls, jint socket, jbyteArray data, jint offset, jint len, jint family, jbyteArray address) {
 	int result;
 	jbyte *buf;
@@ -220,7 +220,7 @@ Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1recvfrom2
 }
 
 JNIEXPORT jint JNICALL
-Java_com_davfx_ninio_core_v3_NativeRawSocket__1_1sendto
+Java_com_davfx_ninio_core_NativeRawSocket__1_1sendto
 (JNIEnv *env, jclass cls, jint socket, jbyteArray data, jint offset, jint len, jint family, jbyteArray address, jint scope_id) {
 	int result;
 	jbyte *buf;

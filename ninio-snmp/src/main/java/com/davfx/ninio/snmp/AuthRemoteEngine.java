@@ -142,7 +142,7 @@ public final class AuthRemoteEngine {
 
 		int count = 0;
 		// Use while loop until we've done 1 Megabyte
-		while (count < 1048576) {
+		while (count < (1024 * 1024)) {
 			byte[] b = new byte[64];
 			for (int i = 0; i < b.length; i++) {
 				// Take the next octet of the password, wrapping to the

@@ -5,9 +5,12 @@ import java.util.concurrent.Executors;
 
 import org.junit.Test;
 
-import com.davfx.ninio.core.v3.Failing;
-import com.davfx.ninio.core.v3.Ninio;
-import com.davfx.ninio.core.v3.Timeout;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.Timeout;
+import com.davfx.ninio.ping.PingClient;
+import com.davfx.ninio.ping.PingReceiver;
+import com.davfx.ninio.ping.PingTimeout;
 import com.davfx.util.Lock;
 
 public class PingTest {

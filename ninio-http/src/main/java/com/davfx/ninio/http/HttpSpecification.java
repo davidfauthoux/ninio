@@ -1,8 +1,7 @@
 package com.davfx.ninio.http;
 
 public interface HttpSpecification {
-	String HTTP10 = "HTTP/1.0";
-	String HTTP11 = "HTTP/1.1";
+	String HTTP_VERSION_PREFIX = "HTTP/";
 	
 	char CR = '\r';
 	char LF = '\n';

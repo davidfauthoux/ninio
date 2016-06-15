@@ -2,9 +2,7 @@ package com.davfx.ninio.ssh;
 
 import java.nio.ByteBuffer;
 
-import com.google.common.base.Charsets;
-
-public final class SshPacket {
+final class SshPacket {
 	
 	private final ByteBuffer buffer;
 	
@@ -30,6 +28,6 @@ public final class SshPacket {
 		return b;
 	}
 	public String readString() {
-		return new String(readBlob(), Charsets.UTF_8);
+		return new String(readBlob(), SshSpecification.CHARSET);
 	}
 }

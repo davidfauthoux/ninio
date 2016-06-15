@@ -19,7 +19,7 @@ public final class Version3PacketParser {
 	private final int requestId;
 	private final int errorStatus;
 	private final int errorIndex;
-	private final List<Result> results = new LinkedList<Result>();
+	private final List<SnmpResult> results = new LinkedList<SnmpResult>();
 
 	public Version3PacketParser(AuthRemoteEngine authEngine, ByteBuffer buffer) throws IOException {
 		BerReader ber = new BerReader(buffer);
@@ -145,7 +145,7 @@ public final class Version3PacketParser {
 							String value = pdu.readValue();
 							LOGGER.trace("<- {} = {}", oid, value);
 							if (value != null) {
-								results.add(new Result(oid, value));
+								results.add(new SnmpResult(oid, value));
 							}
 						}
 						pdu.endReadSequence();
@@ -164,7 +164,7 @@ public final class Version3PacketParser {
 		//%%%%% authEngine.setReady();
 	}
 
-	public Iterable<Result> getResults() {
+	public Iterable<SnmpResult> getResults() {
 		return results;
 	}
 

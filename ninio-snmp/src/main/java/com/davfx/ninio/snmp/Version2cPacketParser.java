@@ -32,7 +32,7 @@ public final class Version2cPacketParser {
 	private final int requestId;
 	private final int errorStatus;
 	private final int errorIndex;
-	private final List<Result> results = new LinkedList<Result>();
+	private final List<SnmpResult> results = new LinkedList<SnmpResult>();
 
 	public Version2cPacketParser(ByteBuffer buffer) throws IOException {
 		BerReader ber = new BerReader(buffer);
@@ -63,7 +63,7 @@ public final class Version2cPacketParser {
 							if (value == null) {
 								LOGGER.trace("Opaque value: {}", oid);
 							} else {
-								results.add(new Result(oid, value));
+								results.add(new SnmpResult(oid, value));
 							}
 						}
 						ber.endReadSequence();
@@ -76,7 +76,7 @@ public final class Version2cPacketParser {
 		ber.endReadSequence();
 	}
 
-	public Iterable<Result> getResults() {
+	public Iterable<SnmpResult> getResults() {
 		return results;
 	}
 

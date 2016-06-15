@@ -4,104 +4,296 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ByteBufferHandler;
-import com.davfx.ninio.core.Closeable;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Ready;
-import com.davfx.ninio.core.ReadyConnection;
-import com.davfx.ninio.core.ReadyFactory;
-import com.davfx.ninio.util.QueueScheduled;
-import com.davfx.util.ConfigUtils;
-import com.davfx.util.DateUtils;
+import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.UdpSocket;
+import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
-public final class SnmpClient implements AutoCloseable, Closeable {
+public final class SnmpClient implements Disconnectable, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
-	private static final Config CONFIG = ConfigFactory.load(SnmpClient.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(SnmpClient.class);
 
-	private static final int BULK_SIZE = CONFIG.getInt("ninio.snmp.bulkSize");
-	private static final double MIN_TIME_TO_REPEAT = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeat.min");
-	private static final int GET_LIMIT = CONFIG.getInt("ninio.snmp.getLimit");
-	private static final double REPEAT_TIME = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeat.time");
-	private static final double REPEAT_RANDOMIZATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.repeat.randomization");
-	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "ninio.snmp.auth.cache");
-	
-	private final Queue queue;
-	private final ReadyFactory readyFactory;
-	// private final Address address;
-	// private final String community;
-	// private final AuthRemoteEngine authEngine;
-	// private final double timeoutFromBeginning;
+	public static final int DEFAULT_PORT = 161;
 
-	private final Closeable closeable;
-	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final Set<InstanceMapper> instanceMappers = new HashSet<>();
+	private static final int BULK_SIZE = CONFIG.getInt("bulkSize");
+	private static final int GET_LIMIT = CONFIG.getInt("getLimit");
+	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "auth.cache");
 
-	public SnmpClient(Queue queue, ReadyFactory readyFactory) {
-	// public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, String community, AuthRemoteEngine authEngine, double timeoutFromBeginning) {
-		this.queue = queue;
-		this.readyFactory = readyFactory;
-		// this.address = address;
-		// this.community = community;
-		// this.authEngine = authEngine;
-		// this.timeoutFromBeginning = timeoutFromBeginning;
-		
-		closeable = QueueScheduled.schedule(queue, REPEAT_TIME, new Runnable() {
-			@Override
-			public void run() {
-				double now = DateUtils.now();
-				for (InstanceMapper i : instanceMappers) {
-					i.repeat(now);
-				}
-				{
-					Iterator<InstanceMapper> it = instanceMappers.iterator();
-					while (it.hasNext()) {
-						if (it.next().terminated) {
-							it.remove();
-						}
-					}
-				}
-			}
-		});
+	public static interface Builder extends NinioBuilder<SnmpClient> {
+		Builder with(Executor executor);
+		Builder with(UdpSocket.Builder connectorFactory);
 	}
-	// public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, String community, double timeoutFromBeginning) {
-	// this(queue, readyFactory, address, community, null, timeoutFromBeginning);
-	// }
-	// public SnmpClient(Queue queue, ReadyFactory readyFactory, Address address, AuthRemoteEngine authEngine, double timeoutFromBeginning) {
-	// this(queue, readyFactory, address, null, authEngine, timeoutFromBeginning);
-	// }
+	
+	public static Builder builder() {
+		return new Builder() {
+			private Executor executor = null;
+			private UdpSocket.Builder connectorFactory = UdpSocket.builder();
+			
+			@Override
+			public Builder with(Executor executor) {
+				this.executor = executor;
+				return this;
+			}
+			
+			@Override
+			public Builder with(UdpSocket.Builder connectorFactory) {
+				this.connectorFactory = connectorFactory;
+				return this;
+			}
+
+			@Override
+			public SnmpClient create(Queue queue) {
+				if (executor == null) {
+					throw new NullPointerException("executor");
+				}
+				return new SnmpClient(queue, executor, connectorFactory);
+			}
+		};
+	}
+	
+	private final Executor executor;
+	
+	private final Connector connector;
+	private final InstanceMapper instanceMapper;
+
+	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
+	private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
+
+	public SnmpClient(Queue queue, final Executor executor, UdpSocket.Builder connectorFactory) {
+		this.executor = executor;
+		instanceMapper = new InstanceMapper(requestIdProvider);
+
+		connector = connectorFactory.receiving(new Receiver() {
+			@Override
+			public void received(final Address address, final ByteBuffer buffer) {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
+						int instanceId;
+						int errorStatus;
+						int errorIndex;
+						Iterable<SnmpResult> results;
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+						boolean ready;
+						if (authRemoteEnginePendingRequestManager != null) {
+							ready = authRemoteEnginePendingRequestManager.isReady();
+						} else {
+							ready = true;
+						}
+						try {
+							if (authRemoteEnginePendingRequestManager == null) {
+								Version2cPacketParser parser = new Version2cPacketParser(buffer);
+								instanceId = parser.getRequestId();
+								errorStatus = parser.getErrorStatus();
+								errorIndex = parser.getErrorIndex();
+								results = parser.getResults();
+							} else {
+								Version3PacketParser parser = new Version3PacketParser(authRemoteEnginePendingRequestManager.engine, buffer);
+								instanceId = parser.getRequestId();
+								errorStatus = parser.getErrorStatus();
+								errorIndex = parser.getErrorIndex();
+								results = parser.getResults();
+							}
+						} catch (Exception e) {
+							LOGGER.error("Invalid packet", e);
+							return;
+						}
+						
+						if (authRemoteEnginePendingRequestManager != null) {
+							if (ready && (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED)) {
+								authRemoteEnginePendingRequestManager.reset();
+							}
+
+							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, connector);
+							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
+						}
+						
+						instanceMapper.handle(instanceId, errorStatus, errorIndex, results);
+					}
+				});
+			}
+		}).create(queue);
+	}
 	
 	@Override
 	public void close() {
-		closeable.close();
-		queue.post(new Runnable() {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				for (InstanceMapper i : instanceMappers) {
-					i.closeAll();
-				}
-				instanceMappers.clear();
+				instanceMapper.close();
 			}
 		});
+		
+		connector.close();
+	}
+	
+	private static final class AuthRemoteEnginePendingRequestManager {
+		private static final Oid DISCOVER_OID = new Oid(new int[] { 1, 1 });
+		
+		public static final class PendingRequest {
+			public final int request;
+			public final int instanceId;
+			public final Oid oid;
+
+			public PendingRequest(int request, int instanceId, Oid oid) {
+				this.request = request;
+				this.instanceId = instanceId;
+				this.oid = oid;
+			}
+		}
+		
+		public AuthRemoteEngine engine = null;
+		public final List<PendingRequest> pendingRequests = new LinkedList<>();
+		
+		public AuthRemoteEnginePendingRequestManager() {
+		}
+		
+		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, Connector connector) {
+			if (engine == null) {
+				engine = new AuthRemoteEngine(authRemoteSpecification);
+				discoverIfNecessary(address, connector);
+			} else {
+				if (!engine.authRemoteSpecification.equals(authRemoteSpecification)) {
+					engine = new AuthRemoteEngine(authRemoteSpecification);
+					discoverIfNecessary(address, connector);
+				}
+			}
+		}
+		
+		public boolean isReady() {
+			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+				return false;
+			}
+			return true;
+		}
+		
+		public void reset() {
+			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
+		}
+		
+		public void discoverIfNecessary(Address address, Connector connector) {
+			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
+				ByteBuffer b = builder.getBuffer();
+				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
+				connector.send(address, b);
+			}
+		}
+		
+		public void registerPendingRequest(PendingRequest r) {
+			pendingRequests.add(r);
+		}
+		
+		public void sendPendingRequestsIfReady(Address address, Connector connector) {
+			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+				return;
+			}
+			
+			for (PendingRequest r : pendingRequests) {
+				switch (r.request) { 
+				case BerConstants.GET: {
+						Version3PacketBuilder builder = Version3PacketBuilder.get(engine, r.instanceId, r.oid);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b);
+					}
+					break;
+				case BerConstants.GETNEXT:
+					{
+						Version3PacketBuilder builder = Version3PacketBuilder.getNext(engine, r.instanceId, r.oid);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b);
+					}
+					break;
+				case BerConstants.GETBULK:
+					{
+						Version3PacketBuilder builder = Version3PacketBuilder.getBulk(engine, r.instanceId, r.oid, BULK_SIZE);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b);
+					}
+					break;
+				default:
+					break;
+				}
+			}
+			pendingRequests.clear();
+		}
+	}
+	
+	public SnmpRequestBuilder request() {
+		return new SnmpRequestBuilder() {
+			private SnmpReceiver receiver = null;
+			private Failing failing = null;
+			
+			@Override
+			public SnmpRequestBuilder receiving(SnmpReceiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+			@Override
+			public SnmpRequestBuilder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			private Instance instance;
+			
+			@Override
+			public SnmpRequest get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid) {
+				final SnmpReceiver r = receiver;
+				final Failing f = failing;
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
+						if (authRemoteSpecification != null) {
+							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+							if (authRemoteEnginePendingRequestManager == null) {
+								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+							}
+							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connector);
+						}
+						
+						instance = new Instance(connector, instanceMapper, r, f, oid, address, community, authRemoteEnginePendingRequestManager);
+					}
+				});
+				
+				return new SnmpRequest() {
+					@Override
+					public void cancel() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								instance.cancel();
+							}
+						});
+					}
+				};
+			}
+		};
 	}
 	
 	private static final class RequestIdProvider {
@@ -132,259 +324,21 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 		}
 	}
 	
-	private static final class AuthRemoteEnginePendingRequestManager {
-		private static final Oid DISCOVER_OID = new Oid(new int[] { 1, 1 });
-		
-		public static final class PendingRequest {
-			public final int request;
-			public final int instanceId;
-			public final Oid oid;
-
-			public PendingRequest(int request, int instanceId, Oid oid) {
-				this.request = request;
-				this.instanceId = instanceId;
-				this.oid = oid;
-			}
-		}
-		
-		public AuthRemoteEngine engine = null;
-		public final List<PendingRequest> pendingRequests = new LinkedList<>();
-		
-		public AuthRemoteEnginePendingRequestManager() {
-		}
-		
-		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, ByteBufferHandler write) {
-			if (engine == null) {
-				engine = new AuthRemoteEngine(authRemoteSpecification);
-				discoverIfNecessary(address, write);
-			} else {
-				if (!engine.authRemoteSpecification.equals(authRemoteSpecification)) {
-					engine = new AuthRemoteEngine(authRemoteSpecification);
-					discoverIfNecessary(address, write);
-				}
-			}
-		}
-		
-		public boolean isReady() {
-			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
-				return false;
-			}
-			return true;
-		}
-		
-		public void reset() {
-			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
-		}
-		
-		public void discoverIfNecessary(Address address, ByteBufferHandler write) {
-			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
-				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
-				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
-				write.handle(address, b);
-			}
-		}
-		
-		public void registerPendingRequest(PendingRequest r) {
-			pendingRequests.add(r);
-		}
-		
-		public void sendPendingRequestsIfReady(Address address, ByteBufferHandler write) {
-			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
-				return;
-			}
-			
-			for (PendingRequest r : pendingRequests) {
-				switch (r.request) { 
-				case BerConstants.GET: {
-						Version3PacketBuilder builder = Version3PacketBuilder.get(engine, r.instanceId, r.oid);
-						ByteBuffer b = builder.getBuffer();
-						LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
-						write.handle(address, b);
-					}
-					break;
-				case BerConstants.GETNEXT:
-					{
-						Version3PacketBuilder builder = Version3PacketBuilder.getNext(engine, r.instanceId, r.oid);
-						ByteBuffer b = builder.getBuffer();
-						LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
-						write.handle(address, b);
-					}
-					break;
-				case BerConstants.GETBULK:
-					{
-						Version3PacketBuilder builder = Version3PacketBuilder.getBulk(engine, r.instanceId, r.oid, BULK_SIZE);
-						ByteBuffer b = builder.getBuffer();
-						LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
-						write.handle(address, b);
-					}
-					break;
-				default:
-					{
-						LOGGER.error("Invalid writing v3: {} #{}, request type = {}", r.oid, r.instanceId, r.request);
-					}
-					break;
-				}
-			}
-			pendingRequests.clear();
-		}
-	}
-	
-	public void connect(final SnmpClientHandler clientHandler) {
-		queue.post(new Runnable() {
-			@Override
-			public void run() {
-				Ready ready = readyFactory.create();
-				
-				final InstanceMapper instanceMapper = new InstanceMapper(requestIdProvider);
-				// final InstanceMapper instanceMapper = new InstanceMapper(address, requestIdProvider);
-				instanceMappers.add(instanceMapper);
-				
-				ready.connect(null, new ReadyConnection() {
-				// ready.connect(address, new ReadyConnection() {
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						if (instanceMapper.terminated) {
-							return;
-						}
-
-						LOGGER.trace("Received SNMP packet, size = {}", buffer.remaining());
-						int instanceId;
-						int errorStatus;
-						int errorIndex;
-						Iterable<Result> results;
-						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = instanceMapper.authRemoteEngines.getIfPresent(address);
-						boolean ready;
-						if (authRemoteEnginePendingRequestManager != null) {
-							ready = authRemoteEnginePendingRequestManager.isReady();
-						} else {
-							ready = true;
-						}
-						try {
-							if (authRemoteEnginePendingRequestManager == null) {
-								Version2cPacketParser parser = new Version2cPacketParser(buffer);
-								instanceId = parser.getRequestId();
-								errorStatus = parser.getErrorStatus();
-								errorIndex = parser.getErrorIndex();
-								results = parser.getResults();
-							} else {
-								Version3PacketParser parser = new Version3PacketParser(authRemoteEnginePendingRequestManager.engine, buffer);
-								instanceId = parser.getRequestId();
-								errorStatus = parser.getErrorStatus();
-								errorIndex = parser.getErrorIndex();
-								results = parser.getResults();
-							}
-						} catch (Exception e) {
-							LOGGER.error("Invalid packet", e);
-							return;
-						}
-
-						LOGGER.trace("SNMP packet instanceId = {}", instanceId);
-
-						if (authRemoteEnginePendingRequestManager != null) {
-							if (ready && (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED)) {
-								authRemoteEnginePendingRequestManager.reset();
-							}
-
-							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, instanceMapper.write);
-							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, instanceMapper.write);
-						}
-						
-						instanceMapper.handle(instanceId, errorStatus, errorIndex, results);
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						if (instanceMapper.terminated) {
-							return;
-						}
-						instanceMapper.terminated = true;
-						clientHandler.failed(e);
-					}
-					
-					@Override
-					public void connected(final FailableCloseableByteBufferHandler write) {
-						instanceMapper.write = write;
-						
-						clientHandler.launched(new SnmpClientHandler.Callback() {
-							@Override
-							public void close() {
-								queue.post(new Runnable() {
-									@Override
-									public void run() {
-										if (instanceMapper.terminated) {
-											return;
-										}
-										instanceMapper.terminated = true;
-										write.close();
-									}
-								});
-							}
-							@Override
-							public void get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final double timeout, final Oid oid, final GetCallback callback) {
-							// public void get(Oid oid, GetCallback callback) {
-								queue.post(new Runnable() {
-									@Override
-									public void run() {
-										AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
-										if (authRemoteSpecification != null) {
-											authRemoteEnginePendingRequestManager = instanceMapper.authRemoteEngines.getIfPresent(address);
-											if (authRemoteEnginePendingRequestManager == null) {
-												authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-												instanceMapper.authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
-											}
-											authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, write);
-										}
-										
-										new Instance(instanceMapper, callback, write, oid, timeout, address, community, authRemoteEnginePendingRequestManager);
-									}
-								});
-							}
-						});
-					}
-					
-					@Override
-					public void close() {
-						if (instanceMapper.terminated) {
-							return;
-						}
-						instanceMapper.terminated = true;
-						clientHandler.close();
-					}
-				});
-			}
-		});
-	}
-	
-	private static final class InstanceMapper { // extends CheckAllocationObject {
-		// private final Address address;
-		private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
-
+	private static final class InstanceMapper {
+		private final RequestIdProvider requestIdProvider;
 		private final Map<Integer, Instance> instances = new HashMap<>();
-		private RequestIdProvider requestIdProvider;
-		
-		private FailableCloseableByteBufferHandler write = null;
-		
-		public boolean terminated = false;
 		
 		public InstanceMapper(RequestIdProvider requestIdProvider) {
-		// public InstanceMapper(Address address, RequestIdProvider requestIdProvider) {
-			// super(InstanceMapper.class);
-			// this.address = address;
 			this.requestIdProvider = requestIdProvider;
 		}
 		
 		public void map(Instance instance) {
-			if (terminated) {
-				return;
-			}
-			
 			instances.remove(instance.instanceId);
 			
 			int instanceId = requestIdProvider.get();
 
 			if (instances.containsKey(instanceId)) {
-				LOGGER.warn("The maximum number of simultaneous request has been reached"); // [{}]", address);
+				LOGGER.warn("The maximum number of simultaneous request has been reached");
 				return;
 			}
 			
@@ -394,24 +348,19 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			instance.instanceId = instanceId;
 		}
 		
-		public void closeAll() {
-			if (terminated) {
-				return;
-			}
+		public void unmap(Instance instance) {
+			instances.remove(instance.instanceId);
+			instance.instanceId = RequestIdProvider.IGNORE_ID;
+		}
+		
+		public void close() {
 			for (Instance i : instances.values()) {
-				i.closeAll();
-			}
-			if (write != null) {
-				write.close();
+				i.close();
 			}
 			instances.clear();
 		}
 
-		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<Result> results) {
-			if (terminated) {
-				return;
-			}
-			/*%%%%%%
+		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<SnmpResult> results) {
 			if (instanceId == Integer.MAX_VALUE) {
 				LOGGER.trace("Calling all instances (request ID = {})", Integer.MAX_VALUE);
 				List<Instance> l = new LinkedList<>(instances.values());
@@ -421,7 +370,6 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				}
 				return;
 			}
-			*/
 			
 			Instance i = instances.remove(instanceId);
 			if (i == null) {
@@ -429,103 +377,57 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 			}
 			i.handle(errorStatus, errorIndex, results);
 		}
-		
-		public void repeat(double now) {
-			if (terminated) {
-				return;
-			}
-			
-			for (Map.Entry<Address, AuthRemoteEnginePendingRequestManager> e : authRemoteEngines.asMap().entrySet()) {
-				e.getValue().discoverIfNecessary(e.getKey(), write);
-			}
-			
-			for (Instance i : instances.values()) {
-				i.repeat(now);
-			}
-			
-			Iterator<Instance> ii = instances.values().iterator();
-			while (ii.hasNext()) {
-				Instance i = ii.next();
-				if (i.callback == null) {
-					ii.remove();
-				}
-			}
-		}
 	}
 	
 	private static final class Instance {
-		private static final Random RANDOM = new Random(System.currentTimeMillis());
-
+		private final Connector connector;
 		private final InstanceMapper instanceMapper;
-		private SnmpClientHandler.Callback.GetCallback callback;
-		private final CloseableByteBufferHandler write;
+		
+		private SnmpReceiver receiver;
+		private Failing failing;
+		
 		private final Oid initialRequestOid;
 		private Oid requestOid;
 		private int countResults = 0;
-		private final double timeout;
-		private double sendTimestamp;
-		private int shouldRepeatWhat;
+		private int shouldRepeatWhat = BerConstants.GET;
 		public int instanceId = RequestIdProvider.IGNORE_ID;
-		private final double repeatRandomizationRandomized;
 
 		private final Address address;
 		private final String community;
 		private final AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
 
-		public Instance(InstanceMapper instanceMapper, SnmpClientHandler.Callback.GetCallback callback, CloseableByteBufferHandler write, Oid requestOid, double timeout, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
-			// super(Instance.class);
+		public Instance(Connector connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Failing failing, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
+			this.connector = connector;
 			this.instanceMapper = instanceMapper;
-			this.callback = callback;
-			this.write = write;
+			
+			this.receiver = receiver;
+			this.failing = failing;
+
 			this.requestOid = requestOid;
-			this.timeout = timeout;
 			initialRequestOid = requestOid;
 			
 			this.address = address;
 			this.community = community;
 			this.authRemoteEnginePendingRequestManager = authRemoteEnginePendingRequestManager;
-			
-			repeatRandomizationRandomized = (RANDOM.nextDouble() * REPEAT_RANDOMIZATION) - (1d / 2d); // [ -0.5, 0.5 [
 
 			instanceMapper.map(this);
-			sendTimestamp = DateUtils.now();
 			shouldRepeatWhat = BerConstants.GET;
 			write();
 		}
 		
-		public void closeAll() {
-			write.close();
-
-			if (callback == null) {
-				return;
-			}
-			if (requestOid == null) {
-				return;
-			}
-			
+		public void close() {
 			shouldRepeatWhat = 0;
 			requestOid = null;
-			callback = null;
+			receiver = null;
+			failing = null;
 		}
 		
-		public void repeat(double now) {
-			if (callback == null) {
-				return;
-			}
-			if (requestOid == null) {
-				return;
-			}
-			
-			double t = now - sendTimestamp;
-			if (t >= timeout) {
-				fail(new IOException("Timeout [" + t + " seconds] requesting: " + address + " " + initialRequestOid));
-				return;
-			}
-
-			if (t >= (MIN_TIME_TO_REPEAT + repeatRandomizationRandomized)) {
-				LOGGER.trace("Repeating {} {}", address, requestOid);
-				write();
-			}
+		public void cancel() {
+			instanceMapper.unmap(this);
+			shouldRepeatWhat = 0;
+			requestOid = null;
+			receiver = null;
+			failing = null;
 		}
 		
 		private void write() {
@@ -535,21 +437,21 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 					Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, requestOid);
 					ByteBuffer b = builder.getBuffer();
 					LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					write.handle(address, b);
+					connector.send(address, b);
 					break;
 				}
 				case BerConstants.GETNEXT: {
 					Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, requestOid);
 					ByteBuffer b = builder.getBuffer();
 					LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					write.handle(address, b);
+					connector.send(address, b);
 					break;
 				}
 				case BerConstants.GETBULK: {
 					Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, requestOid, BULK_SIZE);
 					ByteBuffer b = builder.getBuffer();
 					LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					write.handle(address, b);
+					connector.send(address, b);
 					break;
 				}
 				default:
@@ -557,28 +459,23 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				}
 			} else {
 				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(shouldRepeatWhat, instanceId, requestOid));
-				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, write);
+				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 			}
 		}
-		
+	
 		private void fail(IOException e) {
-			LOGGER.trace("Failed ({}:{})", address, requestOid, e);
 			shouldRepeatWhat = 0;
 			requestOid = null;
-			SnmpClientHandler.Callback.GetCallback c = callback;
-			callback = null;
-			c.failed(e);
+			failing.failed(e);
+			receiver = null;
+			failing = null;
 		}
 		
-		private void handle(int errorStatus, int errorIndex, Iterable<Result> results) {
-			if (callback == null) {
-				LOGGER.trace("Received more but finished");
-				return;
-			}
+		private void handle(int errorStatus, int errorIndex, Iterable<SnmpResult> results) {
 			if (requestOid == null) {
 				return;
 			}
-			
+
 			if (errorStatus == BerConstants.ERROR_STATUS_AUTHENTICATION_NOT_SYNCED) {
 				fail(new IOException("Authentication engine not synced"));
 				return;
@@ -594,85 +491,68 @@ public final class SnmpClient implements AutoCloseable, Closeable {
 				return;
 			}
 
-			/*%%%%%%%%%
-			if (errorStatus == BerConstants.ERROR_STATUS_RETRY) {
-				String newSendState = shouldRepeatWhat + "/" + requestOid + "/" + BaseEncoding.base64().encode(authEngine.getId()) + "/" + authEngine.getBootCount() + "/" + authEngine.getTime();
-				if (!newSendState.equals(sendState)) {
-					sendState = newSendState;
-					instanceMapper.map(this);
-					LOGGER.trace("Repeating after receiving auth engine completion message ({}) --> {}", instanceId, sendState);
-					sendTimestamp = DateUtils.now();
-					write();
-				} else {
-					instanceMapper.remap(this);
-					LOGGER.trace("NOT repeating after receiving auth engine completion message ({}) --> {}", instanceId, newSendState);
-				}
-				return;
-			}
-			*/
-
 			if (errorStatus != 0) {
-				LOGGER.trace("Received error: {}/{} ({}:{})", errorStatus, errorIndex, address, requestOid);
+				LOGGER.trace("Received error: {}/{}", errorStatus, errorIndex);
 			}
 
 			if (shouldRepeatWhat == BerConstants.GET) {
-				Result found = null;
-				for (Result r : results) {
-					if (requestOid.equals(r.getOid())) {
+				SnmpResult found = null;
+				for (SnmpResult r : results) {
+					if (requestOid.equals(r.oid)) {
 						LOGGER.trace("Scalar found: {}", r);
 						found = r;
 					}
 				}
 				if (found != null) {
 					requestOid = null;
-					SnmpClientHandler.Callback.GetCallback c = callback;
-					callback = null;
-					c.result(found);
-					c.close();
+					receiver.received(found);
+					receiver.finished();
+					receiver = null;
+					failing = null;
 					return;
 				} else {
 					instanceMapper.map(this);
-					sendTimestamp = DateUtils.now();
 					shouldRepeatWhat = BerConstants.GETBULK;
 					write();
 				}
 			} else {
 				Oid lastOid = null;
-				for (Result r : results) {
-					LOGGER.trace("Received in bulk: {} ({}:{})", r, address, requestOid);
+				for (SnmpResult r : results) {
+					LOGGER.trace("Received in bulk: {}", r);
 				}
-				for (Result r : results) {
-					if (!initialRequestOid.isPrefixOf(r.getOid())) {
-						LOGGER.trace("{} not prefixed by {} ({}:{})", r.getOid(), initialRequestOid, address, requestOid);
+				for (SnmpResult r : results) {
+					if (r.value == null) {
+						continue;
+					}
+					if (!initialRequestOid.isPrefixOf(r.oid)) {
+						LOGGER.trace("{} not prefixed by {}", r.oid, initialRequestOid);
 						lastOid = null;
 						break;
 					}
-					LOGGER.trace("Addind to results: {} ({}:{})", r, address, requestOid);
+					LOGGER.trace("Addind to results: {}", r);
 					if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-						LOGGER.warn("{} reached limit ({}:{})", requestOid, address, requestOid);
+						LOGGER.warn("{} reached limit", requestOid);
 						lastOid = null;
 						break;
 					}
 					countResults++;
-					callback.result(r);
-					lastOid = r.getOid();
+					receiver.received(r);
+					lastOid = r.oid;
 				}
 				if (lastOid != null) {
-					LOGGER.trace("Continuing from: {} ({}:{})", lastOid, address, requestOid);
+					LOGGER.trace("Continuing from: {}", lastOid);
 					
 					requestOid = lastOid;
 					
 					instanceMapper.map(this);
-					sendTimestamp = DateUtils.now();
 					shouldRepeatWhat = BerConstants.GETBULK;
 					write();
 				} else {
-					LOGGER.trace("Stop ({}:{})", address, requestOid);
 					// Stop here
 					requestOid = null;
-					SnmpClientHandler.Callback.GetCallback c = callback;
-					callback = null;
-					c.close();
+					receiver.finished();
+					receiver = null;
+					failing = null;
 				}
 			}
 		}
