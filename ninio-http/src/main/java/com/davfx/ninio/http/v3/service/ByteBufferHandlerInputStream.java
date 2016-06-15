@@ -9,14 +9,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.http.v3.HttpContentReceiver;
+import com.davfx.ninio.http.v3.HttpListening;
+import com.davfx.util.ConfigUtils;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 
 public final class ByteBufferHandlerInputStream extends InputStream {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByteBufferHandlerInputStream.class);
 	
-	private static final Config CONFIG = ConfigFactory.load(ByteBufferHandlerInputStream.class.getClassLoader());
+	private static final Config CONFIG = ConfigUtils.load(HttpListening.class);
 	private static final int POST_LIMIT = CONFIG.getBytes("ninio.http.service.post.limit").intValue();
 
 	private final Deque<ByteBuffer> buffers = new LinkedList<>();

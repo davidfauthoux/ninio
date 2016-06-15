@@ -15,6 +15,7 @@ public interface HttpController {
 		HttpAsyncOutput ok();
 		HttpAsyncOutput internalServerError();
 		HttpAsyncOutput notFound();
+		HttpAsyncOutput badRequest();
 		HttpAsyncOutput header(String key, String value);
 		HttpAsyncOutput contentType(String contentType);
 		HttpAsyncOutput contentLength(long contentLength);
@@ -139,6 +140,9 @@ public interface HttpController {
 		}
 		public static Http notFound() {
 			return new Http(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND);
+		}
+		public static Http badRequest() {
+			return new Http(HttpStatus.BAD_REQUEST, HttpMessage.BAD_REQUEST);
 		}
 		
 		public static Http wrap(HttpWrap wrap) {

@@ -96,46 +96,4 @@ final class GzipWriter implements HttpContentSender {
 		finished = true;
 		wrappee.cancel();
 	}
-
-	/*%%
-	public static void main(String[] args) {
-		GzipWriter w = new GzipWriter(new HttpContentSender() {
-			private final GzipReader r = new GzipReader(new Failing() {
-				@Override
-				public void failed(IOException e) {
-					System.out.println("failed");
-				}
-			}, new HttpContentReceiver() {
-				@Override
-				public void received(ByteBuffer buffer) {
-					System.out.println(">>> " + new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), Charsets.UTF_8));
-				}
-				@Override
-				public void ended() {
-					System.out.println("ended");
-				}
-			});
-			@Override
-			public HttpContentSender send(ByteBuffer buffer) {
-				r.received(buffer);
-				return this;
-			}
-			
-			@Override
-			public void finish() {
-				System.out.println("finish");
-			}
-			@Override
-			public void cancel() {
-				System.out.println("cancel");
-			}
-		});
-		for (int i = 0; i < 5; i++) {
-			w.send(ByteBuffer.wrap(("teeeeeeeeeeest-" + i + "                 ").getBytes(Charsets.UTF_8)));
-		}
-		//w.send(ByteBuffer.wrap(("----").getBytes(Charsets.UTF_8)));
-		//w.send(ByteBuffer.wrap(("++++").getBytes(Charsets.UTF_8)));
-		//w.finish();
-	}
-	*/
 }

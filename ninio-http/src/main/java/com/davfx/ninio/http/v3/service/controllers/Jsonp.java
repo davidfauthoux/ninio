@@ -78,6 +78,11 @@ public final class Jsonp implements HttpController {
 									return this;
 								}
 								@Override
+								public HttpAsyncOutput badRequest() {
+									output.badRequest();
+									return this;
+								}
+								@Override
 								public HttpAsyncOutput header(String key, String value) {
 									output.header(key, value);
 									return this;
