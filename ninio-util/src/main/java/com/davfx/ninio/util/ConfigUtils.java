@@ -33,10 +33,12 @@ public final class ConfigUtils {
 		return s.charAt(0);
 	}
 	
-	private static final String loadConfig(Class<?> clazz, String resource) throws IOException {
+	private static final String loadConfig(Class<?> clazz, String resource, boolean warn) throws IOException {
 		InputStream i = clazz.getClassLoader().getResourceAsStream(resource + ".conf");
 		if (i == null) {
-			LOGGER.warn("Config file not found: {}", resource);
+			if (warn) {
+				LOGGER.warn("Config file not found: {}", resource);
+			}
 			return "";
 		}
 		try (BufferedReader r = new BufferedReader(new InputStreamReader(i, Charsets.UTF_8))) {
@@ -48,7 +50,7 @@ public final class ConfigUtils {
 				}
 				String l = line.trim();
 				if (l.startsWith("include ")) {
-					b.append(loadConfig(clazz, l.substring("include ".length()).trim()));
+					b.append(loadConfig(clazz, l.substring("include ".length()).trim(), true));
 				} else {
 					b.append(line);
 				}
@@ -60,14 +62,14 @@ public final class ConfigUtils {
 	public static final Config load(Class<?> clazz) {
 		String r;
 		try {
-			r = loadConfig(clazz, clazz.getPackage().getName());
+			r = loadConfig(clazz, clazz.getPackage().getName(), true);
 		} catch (Exception e) {
 			throw new RuntimeException("Could not load package config", e);
 		}
 
 		String a;
 		try {
-			a = loadConfig(clazz, "configure");
+			a = loadConfig(clazz, "configure", false);
 		} catch (Exception e) {
 			throw new RuntimeException("Could not load application config", e);
 		}
