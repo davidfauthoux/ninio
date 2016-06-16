@@ -176,6 +176,7 @@ public final class TcpSocketServer implements Disconnectable {
 													context.currentSelectionKey = null;
 												}
 											});
+											//%% queue.waitFor();
 										}
 										
 										@Override
@@ -285,7 +286,7 @@ public final class TcpSocketServer implements Disconnectable {
 																
 																readBuffer.flip();
 																if (receiver != null) {
-																	receiver.received(null, readBuffer);
+																	receiver.received(innerConnector, null, readBuffer);
 																}
 															} else if (key.isWritable()) {
 																while (true) {
@@ -347,7 +348,7 @@ public final class TcpSocketServer implements Disconnectable {
 											}
 
 											if (connecting != null) {
-												connecting.connected();
+												connecting.connected(innerConnector, clientAddress);
 											}
 										}
 									});
@@ -424,7 +425,7 @@ public final class TcpSocketServer implements Disconnectable {
 				currentAcceptSelectionKey = null;
 			}
 		});
-		queue.waitFor();
+		//%% queue.waitFor();
 	}
 	
 	private static final class InnerSocketContext {

@@ -124,7 +124,7 @@ public final class WebsocketSocket implements Connector {
 		);
 
 		if (connecting != null) {
-			connecting.connected();
+			connecting.connected(this, connectAddress);
 		}
 		
 		sender = httpClient.request()
@@ -271,7 +271,7 @@ public final class WebsocketSocket implements Connector {
 										sender.send(partialBuffer);
 									} else if ((opcode == 0x01) || (opcode == 0x02)) {
 										if (receiver != null) {
-											receiver.received(null, partialBuffer);
+											receiver.received(WebsocketSocket.this, null, partialBuffer);
 										}
 									} else if (opcode == 0x08) {
 										LOGGER.debug("Connection closed by peer");

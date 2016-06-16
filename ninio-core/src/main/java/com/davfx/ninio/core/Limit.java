@@ -5,19 +5,16 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.ClassThreadFactory;
-
-public final class Limit implements AutoCloseable {
+public final class Limit {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Limit.class);
 
-	private final ExecutorService executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(Timeout.class));
+	private final Executor executor = new ThreadingSerialExecutor(Timeout.class);
 	
 	private static final class Task {
 		public long id = -1L;
@@ -42,11 +39,6 @@ public final class Limit implements AutoCloseable {
 			throw new IllegalArgumentException();
 		}
 		this.max = max;
-	}
-	
-	@Override
-	public void close() {
-		ExecutorUtils.shutdown(executor);
 	}
 	
 	public static interface Manager {

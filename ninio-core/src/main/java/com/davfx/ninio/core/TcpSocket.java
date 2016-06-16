@@ -163,7 +163,7 @@ public final class TcpSocket implements Connector {
 
 												readBuffer.flip();
 												if (receiver != null) {
-													receiver.received(null, readBuffer);
+													receiver.received(TcpSocket.this, null, readBuffer);
 												}
 											} else if (key.isWritable()) {
 												while (true) {
@@ -211,7 +211,7 @@ public final class TcpSocket implements Connector {
 									}
 		
 									if (connecting != null) {
-										connecting.connected();
+										connecting.connected(TcpSocket.this, connectAddress);
 									}
 									
 								} catch (final IOException e) {
@@ -296,7 +296,7 @@ public final class TcpSocket implements Connector {
 				currentSelectionKey = null;
 			}
 		});
-		queue.waitFor();
+		//%% queue.waitFor();
 	}
 	
 	@Override

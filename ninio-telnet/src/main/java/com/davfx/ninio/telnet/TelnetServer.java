@@ -27,7 +27,7 @@ public final class TelnetServer {
 						public Receiver receiver() {
 							return new Receiver() {
 								@Override
-								public void received(Address address, ByteBuffer buffer) {
+								public void received(Connector conn, Address address, ByteBuffer buffer) {
 									connector.send(null, buffer);
 								}
 							};
@@ -98,7 +98,7 @@ public final class TelnetServer {
 							public Receiver receiver() {
 								return new Receiver() {
 									@Override
-									public void received(Address address, ByteBuffer buffer) {
+									public void received(Connector conn, Address address, ByteBuffer buffer) {
 										telnetReader.handle(buffer, connectionReceiver, connector);
 									}
 								};

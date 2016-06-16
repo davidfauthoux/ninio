@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Receiver;
 
 final class ReadingSshHeaderReceiverClosing implements Receiver, Closing {
@@ -36,9 +37,9 @@ final class ReadingSshHeaderReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Address address, ByteBuffer b) {
+	public void received(Connector conn, Address address, ByteBuffer b) {
 		if (header != null) {
-			wrappee.received(address, b);
+			wrappee.received(conn, address, b);
 			return;
 		}
 		
@@ -53,7 +54,7 @@ final class ReadingSshHeaderReceiverClosing implements Receiver, Closing {
 			}
 		}
 		if (b.hasRemaining()) {
-			wrappee.received(address, b);
+			wrappee.received(conn, address, b);
 		}
 	}
 	

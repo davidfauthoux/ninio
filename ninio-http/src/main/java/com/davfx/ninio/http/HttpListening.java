@@ -236,7 +236,7 @@ public final class HttpListening implements Listening {
 					private boolean closed = false;
 					
 					@Override
-					public void received(Address address, final ByteBuffer buffer) {
+					public void received(Connector conn, Address address, final ByteBuffer buffer) {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {

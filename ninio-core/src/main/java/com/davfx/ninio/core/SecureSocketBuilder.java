@@ -5,7 +5,7 @@ import java.util.concurrent.Executor;
 public final class SecureSocketBuilder implements TcpSocket.Builder {
 	private Trust trust = new Trust();
 	private Executor executor = null;
-	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
+	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator(SecureSocketManager.REQUIRED_BUFFER_SIZE);
 
 	private Address bindAddress = null;
 	
@@ -75,23 +75,28 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	}
 	
 	@Override
-	public Connector create(Queue queue) {
-		SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
+	public Connector create(final Queue queue) {
+		final SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
 		sslManager.connectAddress = connectAddress;
 		sslManager.connecting = connecting;
 		sslManager.closing = closing;
 		sslManager.failing = failing;
 		sslManager.receiver = receiver;
 
-		sslManager.connector = wrappee
-			.with(byteBufferAllocator)
-			.connecting(sslManager)
-			.receiving(sslManager)
-			.closing(sslManager)
-			.failing(sslManager)
-			.bind(bindAddress)
-			.to(connectAddress)
-			.create(queue);
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				sslManager.connector = wrappee
+					.with(byteBufferAllocator)
+					.connecting(sslManager)
+					.receiving(sslManager)
+					.closing(sslManager)
+					.failing(sslManager)
+					.bind(bindAddress)
+					.to(connectAddress)
+					.create(queue);
+			}
+		});
 
 		return sslManager;
 	}

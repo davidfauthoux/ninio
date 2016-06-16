@@ -7,13 +7,13 @@ import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpHeaderKey;
@@ -25,7 +25,6 @@ import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.service.HttpController.HttpAsyncOutput;
-import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.google.common.base.Optional;
@@ -36,7 +35,7 @@ import com.google.common.collect.Multimap;
 import com.google.common.net.HttpHeaders;
 import com.typesafe.config.Config;
 
-public final class HttpService implements HttpListeningHandler, Disconnectable, AutoCloseable {
+public final class HttpService implements HttpListeningHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpService.class);
 	
@@ -92,17 +91,20 @@ public final class HttpService implements HttpListeningHandler, Disconnectable, 
 		};
 	}
 	
-	private final ExecutorService executor;
+	private final Executor[] executors;
+	private final AtomicInteger loop = new AtomicInteger(0);
 	private final ImmutableList<HandlerElement> handlers;
 	
 	private HttpService(int threads, ImmutableList<HandlerElement> handlers) {
 		this.handlers = handlers;
-		executor = Executors.newFixedThreadPool(threads, new ClassThreadFactory(HttpService.class));
+		executors = new Executor[threads];
+		for (int i = 0; i < executors.length; i++) {
+			executors[i] = new ThreadingSerialExecutor(HttpService.class);
+		}
 	}
 	
-	@Override
-	public void close() {
-		executor.shutdown();
+	private void execute(Runnable r) {
+		executors[Math.abs(loop.getAndIncrement()) % executors.length].execute(r);;
 	}
 	
 	@Override
@@ -122,7 +124,7 @@ public final class HttpService implements HttpListeningHandler, Disconnectable, 
 					private double streamingRate = Double.NaN;
 					
 					{
-						executor.execute(new Runnable() {
+						execute(new Runnable() {
 							@Override
 							public void run() {
 								HttpController.Http r = null;
@@ -209,7 +211,7 @@ public final class HttpService implements HttpListeningHandler, Disconnectable, 
 					
 					@Override
 					public void ended() {
-						executor.execute(new Runnable() {
+						execute(new Runnable() {
 							@Override
 							public void run() {
 								synchronized (lock) {
@@ -241,7 +243,7 @@ public final class HttpService implements HttpListeningHandler, Disconnectable, 
 										
 										@Override
 										public void finish() {
-											executor.execute(new Runnable() {
+											execute(new Runnable() {
 												@Override
 												public void run() {
 													send();
@@ -252,7 +254,7 @@ public final class HttpService implements HttpListeningHandler, Disconnectable, 
 										
 										@Override
 										public void cancel() {
-											executor.execute(new Runnable() {
+											execute(new Runnable() {
 												@Override
 												public void run() {
 													send();
@@ -302,7 +304,7 @@ public final class HttpService implements HttpListeningHandler, Disconnectable, 
 	
 										@Override
 										public HttpAsyncOutput produce(final ByteBuffer buffer) {
-											executor.execute(new Runnable() {
+											execute(new Runnable() {
 												@Override
 												public void run() {
 													send();

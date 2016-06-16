@@ -14,23 +14,20 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.ClassThreadFactory;
-import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Function;
 import com.google.common.collect.Ordering;
 import com.google.common.primitives.Ints;
-import com.typesafe.config.Config;
 
 public final class ExternalSort<T> {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExternalSort.class);
 	
+	/*%%
 	private static final Config CONFIG = ConfigUtils.load(ExternalSort.class);
 	private static final int NUMBER_OF_LINES_TO_SPLIT = CONFIG.getInt("split");
 	private static final int THREADS = CONFIG.getInt("threads");
@@ -47,6 +44,7 @@ public final class ExternalSort<T> {
 			}
 		}, toByteBuffer, fromByteBuffer);
 	}
+	*/
 	
 	private final Comparator<T> comparator;
 	private final int numberOfLinesToSplit;

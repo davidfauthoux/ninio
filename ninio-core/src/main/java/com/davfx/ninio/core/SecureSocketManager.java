@@ -15,12 +15,15 @@ import org.slf4j.LoggerFactory;
 final class SecureSocketManager implements Connector, Connecting, Closing, Failing, Receiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SecureSocketManager.class);
 
+	public static final int REQUIRED_BUFFER_SIZE = 17 * 1024;
+
 	private final Trust trust;
 	private final boolean clientMode;
 	private final Executor executor;
 	private final ByteBufferAllocator byteBufferAllocator;
 	
 	public Connector connector = null;
+	public Address connectAddress;
 	public Connecting connecting = null;
 	public Closing closing = null;
 	public Failing failing = null;
@@ -30,8 +33,6 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 	private Deque<ByteBuffer> received = new LinkedList<ByteBuffer>();
 
 	private SSLEngine engine = null;
-	
-	public Address connectAddress = null;
 	
 	public SecureSocketManager(Trust trust, boolean clientMode, Executor executor, ByteBufferAllocator byteBufferAllocator) {
 		if (executor == null) {
@@ -140,14 +141,14 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		unwrapBuffer.flip();
 		if (unwrapBuffer.hasRemaining()) {
 			if (receiver != null) {
-				receiver.received(null, unwrapBuffer);
+				receiver.received(this, null, unwrapBuffer);
 			}
 		}
 		return !underflow;
 	}
 	
 	private void doContinue() {
-		if (connector == null) {
+		if ((connector == null) || (connectAddress == null)) {
 			return;
 		}
 		if (sent == null) {
@@ -165,9 +166,10 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				LOGGER.error("Could not begin handshake", e);
 				doClose(true);
 				failing.failed(e);
+				return;
 			}
 			if (connecting != null) {
-				connecting.connected();
+				connecting.connected(this, connectAddress);
 			}
 		}
 		
@@ -221,13 +223,14 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 
 		if (closeConnector && (connector != null)) {
 			connector.close();
+			connector = null;
 		}
 	}
 
 	//
 	
 	@Override
-	public void received(Address address, final ByteBuffer buffer) {
+	public void received(Connector conn, Address address, final ByteBuffer buffer) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -278,7 +281,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		});
 	}
 	@Override
-	public void connected() {
+	public void connected(Connector conn, Address address) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -297,6 +300,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				doClose(true);
 			}
 		});
+		//%% ExecutorUtils.waitFor(executor);
 	}
 	@Override
 	public Connector send(Address address, final ByteBuffer buffer) {

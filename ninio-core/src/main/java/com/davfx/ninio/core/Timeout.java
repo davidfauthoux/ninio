@@ -24,7 +24,7 @@ public final class Timeout implements AutoCloseable {
 	private static final Config CONFIG = ConfigUtils.load(Timeout.class);
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "timeout.precision");
 
-	private final ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(Timeout.class));
+	private final ScheduledExecutorService executoTODOr = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(Timeout.class));
 	
 	private static final class Task {
 		public long id = -1L;

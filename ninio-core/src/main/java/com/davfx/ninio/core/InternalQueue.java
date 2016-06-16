@@ -56,6 +56,8 @@ final class InternalQueue implements Queue, AutoCloseable {
 									s.clear();
 								}
 							}
+						} else {
+							return;
 						}
 					} catch (Throwable e) {
 						LOGGER.error("Error in selector ", e);
@@ -92,27 +94,14 @@ final class InternalQueue implements Queue, AutoCloseable {
 		return channel.register(selector, 0);
 	}
 	
+	/*%%
 	@Override
 	public void waitFor() {
-		final boolean[] w = new boolean[] { false };
-		execute(new Runnable() {
-			@Override
-			public void run() {
-				synchronized (w) {
-					w[0] = true;
-					w.notifyAll();
-				}
-			}
-		});
-		synchronized (w) {
-			while (!w[0]) {
-				try {
-					w.wait();
-				} catch (InterruptedException ie) {
-				}
-			}
-		}
+		Wait w = new Wait();
+		execute(w);
+		w.waitFor();
 	}
+	*/
 	
 	@Override
 	public void close() {

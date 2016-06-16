@@ -97,9 +97,9 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		Listening.Connection connection = listening.connecting(request.address, innerConnector);
 
 		Connecting connecting = connection.connecting();
-		receiver = new WebsocketFrameReader(connection.receiver(), connection.closing(), sender);
+		receiver = new WebsocketFrameReader(innerConnector, connection.receiver(), connection.closing(), sender);
 
-		connecting.connected();
+		connecting.connected(innerConnector, request.address);
 	}
 
 	@Override
@@ -117,6 +117,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 	}
 	
 	private static final class WebsocketFrameReader implements HttpContentReceiver {
+		private final Connector innerConnector;
 		
 		private boolean opcodeRead = false;
 		private int currentOpcode;
@@ -137,7 +138,8 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		private final Closing closing;
 		private final HttpContentSender sender;
 		
-		public WebsocketFrameReader(Receiver receiver, Closing closing, HttpContentSender sender) {
+		public WebsocketFrameReader(Connector innerConnector, Receiver receiver, Closing closing, HttpContentSender sender) {
+			this.innerConnector = innerConnector;
 			this.receiver = receiver;
 			this.closing = closing;
 			this.sender = sender;
@@ -256,7 +258,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 						sender.send(partialBuffer);
 					} else if ((opcode == 0x01) || (opcode == 0x02)) {
 						if (receiver != null) {
-							receiver.received(null, partialBuffer);
+							receiver.received(innerConnector, null, partialBuffer);
 						}
 					} else if (opcode == 0x08) {
 						LOGGER.debug("Connection closed by peer");

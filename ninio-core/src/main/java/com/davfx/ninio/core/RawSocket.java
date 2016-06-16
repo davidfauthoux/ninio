@@ -5,13 +5,10 @@ import java.net.InetAddress;
 import java.net.ProtocolFamily;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.davfx.ninio.util.ClassThreadFactory;
 
 public final class RawSocket implements Connector {
 	
@@ -88,7 +85,7 @@ public final class RawSocket implements Connector {
 	}
 	
 	private final NativeRawSocket socket;
-	private final ExecutorService loop = Executors.newSingleThreadExecutor(new ClassThreadFactory(RawSocket.class));
+	private final Executor loop = new ThreadingSerialExecutor(RawSocket.class);
 
 	private RawSocket(final ProtocolFamily family, int protocol, Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		NativeRawSocket s;
@@ -124,7 +121,7 @@ public final class RawSocket implements Connector {
 				@Override
 				public void run() {
 					if (connecting != null) {
-						connecting.connected();
+						connecting.connected(RawSocket.this, null);
 					}
 					
 					while (true) {
@@ -140,7 +137,7 @@ public final class RawSocket implements Connector {
 									int headerLength = (b.get() & 0x0F) * 4;
 									b.position(headerLength);
 								}
-								receiver.received(new Address(host, 0), b);
+								receiver.received(RawSocket.this, new Address(host, 0), b);
 							}
 						} catch (Exception e) {
 							LOGGER.trace("Error, probably closed", e);
@@ -178,6 +175,5 @@ public final class RawSocket implements Connector {
 				LOGGER.trace("Error", e);
 			}
 		}
-		loop.shutdown();
 	}
 }

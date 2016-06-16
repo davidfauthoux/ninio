@@ -5,7 +5,7 @@ import java.util.concurrent.Executor;
 public final class SecureSocketServerBuilder {
 	private Trust trust = new Trust();
 	private Executor executor = null;
-	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
+	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator(SecureSocketManager.REQUIRED_BUFFER_SIZE);
 
 	private Listening listening = new Listening() {
 		@Override
@@ -54,20 +54,28 @@ public final class SecureSocketServerBuilder {
 	}
 	
 	public Listening build() {
-		final SecureSocketManager sslManager = new SecureSocketManager(trust, false, executor, byteBufferAllocator);
+		final Trust thisTrust = trust;
+		final Executor thisExecutor = executor;
+		final ByteBufferAllocator thisByteBufferAllocator = byteBufferAllocator;
 		final Listening thisListening = listening;
 		return new Listening() {
 			@Override
-			public Listening.Connection connecting(Address from, Connector connector) {
+			public Listening.Connection connecting(final Address from, Connector connector) {
+				final SecureSocketManager sslManager = new SecureSocketManager(thisTrust, false, thisExecutor, thisByteBufferAllocator);
 				sslManager.connectAddress = from;
 				sslManager.connector = connector;
-		
-				Listening.Connection connection = thisListening.connecting(from, sslManager);
-		
-				sslManager.connecting = connection.connecting();
-				sslManager.closing = connection.closing();
-				sslManager.failing = connection.failing();
-				sslManager.receiver = connection.receiver();
+
+				thisExecutor.execute(new Runnable() {
+					@Override
+					public void run() {
+						Listening.Connection connection = thisListening.connecting(from, sslManager);
+
+						sslManager.connecting = connection.connecting();
+						sslManager.closing = connection.closing();
+						sslManager.failing = connection.failing();
+						sslManager.receiver = connection.receiver();
+					}
+				});
 				
 				return new Listening.Connection() {
 					@Override

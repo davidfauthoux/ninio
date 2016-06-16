@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
@@ -35,9 +36,9 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Address address, ByteBuffer deflated) {
+	public void received(Connector conn, Address address, ByteBuffer deflated) {
 		if (!activated) {
-			wrappee.received(address, deflated);
+			wrappee.received(conn, address, deflated);
 			return;
 		}
 
@@ -60,7 +61,7 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 					return;
 				}
 				inflated.flip();
-				wrappee.received(address, inflated);
+				wrappee.received(conn, address, inflated);
 			}
 		}
 	}

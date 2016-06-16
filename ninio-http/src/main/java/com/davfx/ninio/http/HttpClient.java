@@ -108,7 +108,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 			
 			factory.receiving(new Receiver() {
 				@Override
-				public void received(Address address, final ByteBuffer buffer) {
+				public void received(Connector conn, Address address, final ByteBuffer buffer) {
 					executor.execute(new Runnable() {
 						@Override
 						public void run() {
@@ -116,7 +116,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 								if (receiver == null) {
 									break;
 								}
-								receiver.received(null, buffer);
+								receiver.received(null, null, buffer);
 							}
 						}
 					});
@@ -214,6 +214,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 				reusableConnectors.clear();
 			}
 		});
+		//%% ExecutorUtils.waitFor(executor);
 	}
 
 	public HttpRequestBuilder request() {
@@ -381,7 +382,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							}
 							
 							@Override
-							public void received(Address address, ByteBuffer buffer) {
+							public void received(Connector conn, Address address, ByteBuffer buffer) {
 								if (reusableConnector == null) {
 									return;
 								}

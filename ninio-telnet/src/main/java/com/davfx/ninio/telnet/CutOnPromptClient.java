@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,15 +20,16 @@ import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.google.common.base.Charsets;
 
-public final class CutOnPromptClient {
+public final class CutOnPromptClient implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CutOnPromptClient.class);
 	
 	public static void main(String[] args) throws Exception {
 		try (Ninio ninio = Ninio.create()) {
-			Disconnectable c = ninio.create(CutOnPromptClient.builder().with(Executors.newSingleThreadExecutor()).with(new Handler() {
+			Disconnectable c = ninio.create(CutOnPromptClient.builder().with(new ThreadingSerialExecutor(CutOnPromptClient.class)).with(new Handler() {
 				@Override
 				public void disconnected() {
 					System.out.println("DISCONNECTED");
@@ -149,18 +149,26 @@ public final class CutOnPromptClient {
 					throw new NullPointerException("executor");
 				}
 
-				final String endOfLine = eol;
-				final Charset c = charset;
-				
-				final Executor e = executor;
-				final Handler h = handler;
-				
-				final InnerHolder innerHolder = new InnerHolder();
+				return new CutOnPromptClient(queue, executor, builder, eol, charset, limit, handler);
+			}
+		};
+	}
+	
+	private Handler.Receive receiveCallback;
+	private Connector connector;
+	private CuttingReceiver cuttingReceiver;
+	private final Executor e;
 
+	public CutOnPromptClient(final Queue queue, final Executor e, final TcpSocket.Builder builder, final String endOfLine, final Charset c, final int limit, final Handler h) {
+		this.e = e;
+		
+		e.execute(new Runnable() {
+			@Override
+			public void run() {
 				final Handler.Write write = new Handler.Write() {
 					@Override
 					public void close() {
-						innerHolder.connector.close();
+						connector.close();
 					}
 					
 					@Override
@@ -169,10 +177,10 @@ public final class CutOnPromptClient {
 							@Override
 							public void run() {
 								LOGGER.trace("Sending command: {}, with prompt: {}", command, prompt);
-								innerHolder.cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(c)));
-								innerHolder.receiveCallback = callback;
+								cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(c)));
+								receiveCallback = callback;
 								if (command != null) {
-									innerHolder.connector.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(c)));
+									connector.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(c)));
 								}
 							}
 						});
@@ -180,16 +188,16 @@ public final class CutOnPromptClient {
 					}
 				};
 				
-				innerHolder.cuttingReceiver = new CuttingReceiver(limit, new Receiver() {
+				cuttingReceiver = new CuttingReceiver(limit, new Receiver() {
 					private InMemoryBuffers buffers = null;
 					@Override
-					public void received(Address address, final ByteBuffer buffer) {
+					public void received(Connector conn, Address address, final ByteBuffer buffer) {
 						e.execute(new Runnable() {
 							@Override
 							public void run() {
-								if (innerHolder.receiveCallback != null) {
+								if (receiveCallback != null) {
 									if (buffer == null) {
-										innerHolder.receiveCallback.received(write, buffers.toString(c));
+										receiveCallback.received(write, buffers.toString(c));
 										buffers = null;
 									} else {
 										if (buffers == null) {
@@ -203,14 +211,14 @@ public final class CutOnPromptClient {
 					}
 				});
 
-				innerHolder.connector = builder.connecting(new Connecting() {
+				connector = builder.connecting(new Connecting() {
 					@Override
-					public void connected() {
+					public void connected(Connector conn, Address address) {
 						if (h != null) {
 							h.connected(write);
 						}
 					}
-				}).receiving(innerHolder.cuttingReceiver).closing(new Closing() {
+				}).receiving(cuttingReceiver).closing(new Closing() {
 					@Override
 					public void closed() {
 						if (h != null) {
@@ -225,15 +233,28 @@ public final class CutOnPromptClient {
 						}
 					}
 				}).create(queue);
-				
-				return innerHolder.connector;
 			}
-		};
+		});
 	}
 	
-	private static final class InnerHolder {
-		public Handler.Receive receiveCallback;
-		public Connector connector;
-		public CuttingReceiver cuttingReceiver;
+	@Override
+	public Connector send(final Address address, final ByteBuffer buffer) {
+		e.execute(new Runnable() {
+			@Override
+			public void run() {
+				connector.send(address, buffer);
+			}
+		});
+		return this;
+	}
+	
+	@Override
+	public void close() {
+		e.execute(new Runnable() {
+			@Override
+			public void run() {
+				connector.close();
+			}
+		});
 	}
 }

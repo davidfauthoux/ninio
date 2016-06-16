@@ -8,7 +8,6 @@ public final class Ninio implements AutoCloseable {
 	
 	@Override
 	public void close() {
-		internalQueue.waitFor();
 		internalQueue.close();
 	}
 	

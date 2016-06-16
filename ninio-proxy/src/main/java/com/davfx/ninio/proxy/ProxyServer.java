@@ -7,8 +7,6 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +16,6 @@ import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.ExecutorUtils;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
@@ -28,12 +25,12 @@ import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.WebsocketSocket;
-import com.davfx.ninio.util.ClassThreadFactory;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
@@ -45,7 +42,7 @@ public final class ProxyServer implements Listening {
 		return new NinioBuilder<Disconnectable>() {
 			public Disconnectable create(Queue queue) {
 				final Trust trust = new Trust();
-				final ExecutorService executor = Executors.newSingleThreadExecutor(new ClassThreadFactory(ProxyServer.class, true));
+				final Executor executor = new ThreadingSerialExecutor(ProxyServer.class);
 				final HttpClient httpClient = HttpClient.builder().with(executor).create(queue);
 				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
@@ -237,7 +234,6 @@ public final class ProxyServer implements Listening {
 					public void close() {
 						server.close();
 						httpClient.close();
-						ExecutorUtils.shutdown(executor);
 					}
 				};
 			}
@@ -399,7 +395,7 @@ public final class ProxyServer implements Listening {
 					}
 					
 					@Override
-					public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
+					public void received(Connector conn, Address receivedAddress, ByteBuffer receivedBuffer) {
 						while (true) {
 							command = readByte(command, receivedBuffer);
 							if (command < 0) {
@@ -438,7 +434,7 @@ public final class ProxyServer implements Listening {
 							};
 							final Receiver receiver = new Receiver() {
 								@Override
-								public void received(Address receivedAddress, ByteBuffer receivedBuffer) {
+								public void received(Connector conn, Address receivedAddress, ByteBuffer receivedBuffer) {
 									if (receivedAddress == null) {
 										ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
 										b.put((byte) ProxyCommons.Commands.SEND_WITHOUT_ADDRESS);
@@ -464,7 +460,7 @@ public final class ProxyServer implements Listening {
 							};
 							final Connecting connecting = new Connecting() {
 								@Override
-								public void connected() {
+								public void connected(Connector conn, Address address) {
 								}
 							};
 							

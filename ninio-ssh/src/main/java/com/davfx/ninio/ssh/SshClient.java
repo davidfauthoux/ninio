@@ -28,7 +28,7 @@ import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
 
-public final class SshClient {
+public final class SshClient implements Connector {
 	/*%%
 	//TO DO move to test
 	public static void main(String[] args) throws Exception {
@@ -88,34 +88,6 @@ public final class SshClient {
 		Builder bind(Address bindAddress);
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);
-	}
-
-	private static final class ExchangeHolder {
-		public String serverHeader;
-		public byte[] clientCookie;
-		public byte[] serverCookie;
-		public final List<String> clientExchange = new LinkedList<>();
-		public final List<String> serverExchange = new LinkedList<>();
-		
-		public ZlibUncompressingReceiverClosing uncompressingCloseableByteBufferHandler;
-		public UncipheringReceiverClosing uncipheringCloseableByteBufferHandler;
-		public CipheringConnector cipheringCloseableByteBufferHandler;
-		public ZlibCompressingConnector compressingCloseableByteBufferHandler;
-
-		public Connector rawConnector;
-		
-		public ExchangeHolder() {
-			clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
-			clientExchange.add("ssh-rsa");
-			clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
-			clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
-			clientExchange.add("hmac-md5,hmac-sha1,hmac-sha2-256"); //,hmac-sha1-96,hmac-md5-96");
-			clientExchange.add("hmac-md5,hmac-sha1,hmac-sha2-256"); //,hmac-sha1-96,hmac-md5-96");
-			clientExchange.add("zlib@openssh.com,none");
-			clientExchange.add("zlib@openssh.com,none");
-			clientExchange.add("");
-			clientExchange.add("");
-		}
 	}
 
 	// https://tools.ietf.org/html/draft-ietf-secsh-assignednumbers-12
@@ -256,26 +228,50 @@ public final class SshClient {
 					throw new NullPointerException("executor");
 				}
 				
-				final String finalLogin = login;
-				final String finalPassword = password;
-				final SshPublicKey finalPublicKey = publicKey;
-				final String finalExec = exec;
+				return new SshClient(queue, builder, byteBufferAllocator, bindAddress, connectAddress, login, password, publicKey, exec, receiver, closing, failing, connecting, executor);
+			}
+		};
+	}
+	
+	private final Executor e;
+	
+	private String serverHeader;
+	private byte[] clientCookie;
+	private byte[] serverCookie;
+	private final List<String> clientExchange = new LinkedList<>();
+	private final List<String> serverExchange = new LinkedList<>();
+	
+	private ZlibUncompressingReceiverClosing uncompressingCloseableByteBufferHandler;
+	private UncipheringReceiverClosing uncipheringCloseableByteBufferHandler;
+	private CipheringConnector cipheringCloseableByteBufferHandler;
+	private ZlibCompressingConnector compressingCloseableByteBufferHandler;
 
+	private Connector rawConnector;
+	
+	private SshClient(final Queue queue, final TcpSocket.Builder builder, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final String finalLogin, final String finalPassword, final SshPublicKey finalPublicKey, final String finalExec, final Receiver r, final Closing c, final Failing clientFailing, final Connecting clientConnecting, final Executor e) {
+		this.e = e;
+		
+		e.execute(new Runnable() {
+			@Override
+			public void run() {
+				clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
+				clientExchange.add("ssh-rsa");
+				clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
+				clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
+				clientExchange.add("hmac-md5,hmac-sha1,hmac-sha2-256"); //,hmac-sha1-96,hmac-md5-96");
+				clientExchange.add("hmac-md5,hmac-sha1,hmac-sha2-256"); //,hmac-sha1-96,hmac-md5-96");
+				clientExchange.add("zlib@openssh.com,none");
+				clientExchange.add("zlib@openssh.com,none");
+				clientExchange.add("");
+				clientExchange.add("");
+		
 				final SecureRandom random = new SecureRandom();
-				final ExchangeHolder exchangeHolder = new ExchangeHolder();
-
-				final Receiver r = receiver;
-				final Closing c = closing;
-				final Failing clientFailing = failing;
-				final Connecting clientConnecting = connecting;
-				
-				final Executor e = executor;
-				
+		
 				final Receiver rawReceiver = new Receiver() {
 					@Override
-					public void received(Address address, ByteBuffer buffer) {
+					public void received(Connector conn, Address address, ByteBuffer buffer) {
 						if (r != null) {
-							r.received(address, buffer);
+							r.received(conn, address, buffer);
 						}
 					}
 				};
@@ -304,7 +300,7 @@ public final class SshClient {
 					private long lengthToRead = 0L;
 					
 					@Override
-					public void received(final Address address, final ByteBuffer buffer) {
+					public void received(Connector conn, final Address address, final ByteBuffer buffer) {
 						e.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -312,13 +308,13 @@ public final class SshClient {
 									int l = buffer.remaining();
 									if (lengthToRead >= l) {
 										lengthToRead -= l;
-										rawReceiver.received(address, buffer);
+										rawReceiver.received(SshClient.this, address, buffer);
 										return;
 									}
 									ByteBuffer b = buffer.duplicate();
 									b.limit(b.position() + ((int) lengthToRead));
 									lengthToRead = 0L;
-									rawReceiver.received(address, b);
+									rawReceiver.received(SshClient.this, address, b);
 									buffer.position(buffer.position() + l);
 								}
 								
@@ -330,20 +326,20 @@ public final class SshClient {
 									LOGGER.trace("Command: {}", command);
 									
 									if (command == SSH_MSG_KEXINIT) {
-										exchangeHolder.serverCookie = new byte[16];
-										for (int i = 0; i < exchangeHolder.serverCookie.length; i++) {
-											exchangeHolder.serverCookie[i] = (byte) packet.readByte();
+										serverCookie = new byte[16];
+										for (int i = 0; i < serverCookie.length; i++) {
+											serverCookie[i] = (byte) packet.readByte();
 										}
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
-										exchangeHolder.serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
+										serverExchange.add(packet.readString());
 		
 										for (int i = 0; i < 5; i++) {
 											int c = packet.readByte();
@@ -352,7 +348,7 @@ public final class SshClient {
 											}
 										}
 		
-										String keyExchangeAlgorithm = selectServerClientCommonConfiguration(0, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
+										String keyExchangeAlgorithm = selectServerClientCommonConfiguration(0, serverExchange, clientExchange);
 										if (keyExchangeAlgorithm.equals("diffie-hellman-group1-sha1")) {
 											groupKeyExchange = false;
 											p = DiffieHellmanGroupKeyExchange.DiffieHellmanGroup1.p;
@@ -365,20 +361,20 @@ public final class SshClient {
 											groupKeyExchange = true;
 										}
 										
-										encryptionKeyExchangeAlgorithm = selectServerClientCommonConfiguration(1, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
+										encryptionKeyExchangeAlgorithm = selectServerClientCommonConfiguration(1, serverExchange, clientExchange);
 										
 										if (groupKeyExchange) {
 											SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEX_DH_GEX_REQUEST);
 											b.writeInt(DiffieHellmanGroupKeyExchange.GROUP_EXCHANGE_MIN);
 											b.writeInt(DiffieHellmanGroupKeyExchange.GROUP_EXCHANGE_PREFERRED);
 											b.writeInt(DiffieHellmanGroupKeyExchange.GROUP_EXCHANGE_MAX);
-											exchangeHolder.rawConnector.send(null, b.finish());
+											rawConnector.send(null, b.finish());
 										} else {
 											keyExchange.init(p, g);
 		
 											SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEXDH_INIT);
 											b.writeMpInt(keyExchange.getE());
-											exchangeHolder.rawConnector.send(null, b.finish());
+											rawConnector.send(null, b.finish());
 										}
 		
 									} else if (groupKeyExchange && (command == SSH_MSG_KEX_DH_GEX_GROUP)) {
@@ -388,7 +384,7 @@ public final class SshClient {
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEX_DH_GEX_INIT);
 										b.writeMpInt(keyExchange.getE());
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 		
 									} else if ((groupKeyExchange && (command == SSH_MSG_KEX_DH_GEX_REPLY)) || (command == SSH_MSG_KEXDH_REPLY)) {
 										byte[] K_S = packet.readBlob();
@@ -399,12 +395,12 @@ public final class SshClient {
 		
 										SshPacketBuilder h = new SshPacketBuilder();
 										h.writeString(CLIENT_HEADER);
-										h.writeString(exchangeHolder.serverHeader);
+										h.writeString(serverHeader);
 		
 										SshPacketBuilder ch = new SshPacketBuilder();
 										ch.writeByte(SSH_MSG_KEXINIT);
-										ch.append(exchangeHolder.clientCookie);
-										for (String s : exchangeHolder.clientExchange) {
+										ch.append(clientCookie);
+										for (String s : clientExchange) {
 											ch.writeString(s);
 										}
 										ch.writeByte(0);
@@ -413,8 +409,8 @@ public final class SshClient {
 		
 										SshPacketBuilder sh = new SshPacketBuilder();
 										sh.writeByte(SSH_MSG_KEXINIT);
-										sh.append(exchangeHolder.serverCookie);
-										for (String s : exchangeHolder.serverExchange) {
+										sh.append(serverCookie);
+										for (String s : serverExchange) {
 											sh.writeString(s);
 										}
 										sh.writeByte(0);
@@ -473,33 +469,33 @@ public final class SshClient {
 										sessionId = H;
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_NEWKEYS);
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 		
 									} else if (command == SSH_MSG_NEWKEYS) {
 										if (sessionId == null) {
 											throw new IOException("Aborted key exchange");
 										}
 										
-										String clientToServerEncryptionAlgorithmConfiguration = selectServerClientCommonConfiguration(2, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
-										String serverToClientEncryptionAlgorithmConfiguration = selectServerClientCommonConfiguration(3, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
-										String clientToServerMacAlgorithmConfiguration = selectServerClientCommonConfiguration(4, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
-										String serverToClientMacAlgorithmConfiguration = selectServerClientCommonConfiguration(5, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
+										String clientToServerEncryptionAlgorithmConfiguration = selectServerClientCommonConfiguration(2, serverExchange, clientExchange);
+										String serverToClientEncryptionAlgorithmConfiguration = selectServerClientCommonConfiguration(3, serverExchange, clientExchange);
+										String clientToServerMacAlgorithmConfiguration = selectServerClientCommonConfiguration(4, serverExchange, clientExchange);
+										String serverToClientMacAlgorithmConfiguration = selectServerClientCommonConfiguration(5, serverExchange, clientExchange);
 		
 										// String clientToServerCompressionAlgorithmConfiguration = selectServerClientCommonConfiguration(6, serverExchange, clientExchange);
 										// String serverToClientCompressionAlgorithmConfiguration = selectServerClientCommonConfiguration(7, serverExchange, clientExchange);
 		
-										exchangeHolder.uncipheringCloseableByteBufferHandler.init(getEncryptionAlgorithm(serverToClientEncryptionAlgorithmConfiguration), getCipherAlgorithm(serverToClientEncryptionAlgorithmConfiguration), getKeyLength(serverToClientEncryptionAlgorithmConfiguration), getMacAlgorithm(serverToClientMacAlgorithmConfiguration), K, H, sessionId);
-										exchangeHolder.cipheringCloseableByteBufferHandler.init(getEncryptionAlgorithm(clientToServerEncryptionAlgorithmConfiguration), getCipherAlgorithm(clientToServerEncryptionAlgorithmConfiguration), getKeyLength(clientToServerEncryptionAlgorithmConfiguration), getMacAlgorithm(clientToServerMacAlgorithmConfiguration), K, H, sessionId);
+										uncipheringCloseableByteBufferHandler.init(getEncryptionAlgorithm(serverToClientEncryptionAlgorithmConfiguration), getCipherAlgorithm(serverToClientEncryptionAlgorithmConfiguration), getKeyLength(serverToClientEncryptionAlgorithmConfiguration), getMacAlgorithm(serverToClientMacAlgorithmConfiguration), K, H, sessionId);
+										cipheringCloseableByteBufferHandler.init(getEncryptionAlgorithm(clientToServerEncryptionAlgorithmConfiguration), getCipherAlgorithm(clientToServerEncryptionAlgorithmConfiguration), getKeyLength(clientToServerEncryptionAlgorithmConfiguration), getMacAlgorithm(clientToServerMacAlgorithmConfiguration), K, H, sessionId);
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_SERVICE_REQUEST);
 										b.writeString("ssh-userauth");
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 									} else if (command == SSH_MSG_SERVICE_ACCEPT) {
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_USERAUTH_REQUEST);
 										b.writeString(finalLogin);
 										b.writeString("ssh-connection");
 										b.writeString("none");
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 									} else if (command == SSH_MSG_USERAUTH_FAILURE) {
 										List<String> methods = Splitter.on(',').splitToList(packet.readString());
 										int partialSuccess = packet.readByte();
@@ -533,7 +529,7 @@ public final class SshClient {
 										} else {
 											throw new IOException("No password/public key provided");
 										}
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 										passwordWritten = true;
 									} else if (command == SSH_MSG_USERAUTH_PK_OK) {
 										String alg = finalPublicKey.getAlgorithm();
@@ -559,20 +555,20 @@ public final class SshClient {
 										b.writeBlob(finalPublicKey.getBlob());
 										b.writeBlob(signature);
 										
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 										passwordWritten = true;
 									} else if (command == SSH_MSG_USERAUTH_SUCCESS) {
 										int channelId = 0;
 										long windowSize = Integer.MAX_VALUE * 2L;
 										int maxPacketSize = 64 * 1024;
 		
-										String clientToServerCompressionAlgorithmConfiguration = selectServerClientCommonConfiguration(6, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
-										String serverToClientCompressionAlgorithmConfiguration = selectServerClientCommonConfiguration(7, exchangeHolder.serverExchange, exchangeHolder.clientExchange);
+										String clientToServerCompressionAlgorithmConfiguration = selectServerClientCommonConfiguration(6, serverExchange, clientExchange);
+										String serverToClientCompressionAlgorithmConfiguration = selectServerClientCommonConfiguration(7, serverExchange, clientExchange);
 										if (clientToServerCompressionAlgorithmConfiguration.equals("zlib@openssh.com")) {
-											exchangeHolder.compressingCloseableByteBufferHandler.init();
+											compressingCloseableByteBufferHandler.init();
 										}
 										if (serverToClientCompressionAlgorithmConfiguration.equals("zlib@openssh.com")) {
-											exchangeHolder.uncompressingCloseableByteBufferHandler.init();
+											uncompressingCloseableByteBufferHandler.init();
 										}
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_OPEN);
@@ -580,7 +576,7 @@ public final class SshClient {
 										b.writeInt(channelId);
 										b.writeInt(windowSize);
 										b.writeInt(maxPacketSize);
-										exchangeHolder.rawConnector.send(null, b.finish());
+										rawConnector.send(null, b.finish());
 									} else if (command == SSH_MSG_CHANNEL_OPEN_CONFIRMATION) { // Without this command, the shell would have no prompt
 										if (finalExec == null) {
 											int channelId = 0;
@@ -595,7 +591,7 @@ public final class SshClient {
 											b.writeInt(480);
 											byte[] terminalModes = {};
 											b.writeBlob(terminalModes);
-											exchangeHolder.rawConnector.send(null, b.finish());
+											rawConnector.send(null, b.finish());
 										} else {
 											if (!channelOpen) {
 												channelOpen = true;
@@ -605,9 +601,9 @@ public final class SshClient {
 												b.writeString("exec");
 												b.writeByte(1); // With reply
 												b.writeString(finalExec);
-												exchangeHolder.rawConnector.send(null, b.finish());
+												rawConnector.send(null, b.finish());
 											} else {
-												clientConnecting.connected();
+												clientConnecting.connected(SshClient.this, connectAddress);
 											}
 										}
 									} else if (command == SSH_MSG_CHANNEL_SUCCESS) {
@@ -618,9 +614,9 @@ public final class SshClient {
 											b.writeInt(channelId);
 											b.writeString("shell");
 											b.writeByte(1); // With reply
-											exchangeHolder.rawConnector.send(null, b.finish());
+											rawConnector.send(null, b.finish());
 										} else {
-											clientConnecting.connected();
+											clientConnecting.connected(SshClient.this, connectAddress);
 										}
 									} else if (command == SSH_MSG_CHANNEL_WINDOW_ADJUST) {
 										// Ignored
@@ -632,10 +628,10 @@ public final class SshClient {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
-											rawReceiver.received(null, b);
+											rawReceiver.received(SshClient.this, null, b);
 										} else {
 											lengthToRead -= buffer.remaining();
-											rawReceiver.received(null, buffer);
+											rawReceiver.received(SshClient.this, null, buffer);
 										}
 									} else if (command == SSH_MSG_CHANNEL_EXTENDED_DATA) {
 										packet.readInt(); // Channel ID
@@ -647,10 +643,10 @@ public final class SshClient {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
-											rawReceiver.received(null, b);
+											rawReceiver.received(SshClient.this, null, b);
 										} else {
 											lengthToRead -= buffer.remaining();
-											rawReceiver.received(null, buffer);
+											rawReceiver.received(SshClient.this, null, buffer);
 										}
 									} else if (command == SSH_MSG_CHANNEL_REQUEST) {
 										packet.readInt();
@@ -662,7 +658,7 @@ public final class SshClient {
 									} else if (command == SSH_MSG_CHANNEL_EOF) {
 										// Ignored
 									} else if (command == SSH_MSG_CHANNEL_CLOSE) {
-										exchangeHolder.rawConnector.close();
+										rawConnector.close();
 										rawClosing.closed();
 									} else if (command == SSH_MSG_DISCONNECT) {
 										packet.readInt();
@@ -675,17 +671,17 @@ public final class SshClient {
 									}
 								} catch (Exception eee) {
 									LOGGER.error("Fatal error", eee);
-									exchangeHolder.rawConnector.close();
+									rawConnector.close();
 									clientFailing.failed(new IOException("Fatal error", eee));
 								}
 							}
 						});
 					}
 				};
-
-				exchangeHolder.uncompressingCloseableByteBufferHandler = new ZlibUncompressingReceiverClosing(sshReceiver, rawClosing);
-				SshPacketReceiverClosing sshPacketInputHandler = new SshPacketReceiverClosing(exchangeHolder.uncompressingCloseableByteBufferHandler, exchangeHolder.uncompressingCloseableByteBufferHandler);
-				exchangeHolder.uncipheringCloseableByteBufferHandler = new UncipheringReceiverClosing(sshPacketInputHandler, sshPacketInputHandler);
+		
+				uncompressingCloseableByteBufferHandler = new ZlibUncompressingReceiverClosing(sshReceiver, rawClosing);
+				SshPacketReceiverClosing sshPacketInputHandler = new SshPacketReceiverClosing(uncompressingCloseableByteBufferHandler, uncompressingCloseableByteBufferHandler);
+				uncipheringCloseableByteBufferHandler = new UncipheringReceiverClosing(sshPacketInputHandler, sshPacketInputHandler);
 				
 				ReadingSshHeaderReceiverClosing readingSshHeaderCloseableByteBufferHandler = new ReadingSshHeaderReceiverClosing(new ReadingSshHeaderReceiverClosing.Handler() {
 					@Override
@@ -693,133 +689,11 @@ public final class SshClient {
 						e.execute(new Runnable() {
 							@Override
 							public void run() {
-								exchangeHolder.serverHeader = header;
-		
-								exchangeHolder.clientCookie = new byte[16];
-								random.nextBytes(exchangeHolder.clientCookie);
-		
-								SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEXINIT);
-								for (int i = 0; i < exchangeHolder.clientCookie.length; i++) {
-									b.writeByte(exchangeHolder.clientCookie[i]);
-								}
-								for (String s : exchangeHolder.clientExchange) {
-									b.writeString(s);
-								}
-								b.writeByte(0);
-								b.writeInt(0);
-								exchangeHolder.rawConnector.send(null, b.finish());
-							}
-						});
-					}
-				}, exchangeHolder.uncipheringCloseableByteBufferHandler, exchangeHolder.uncipheringCloseableByteBufferHandler);
-
-
-				Connector rawConnector = builder
-						.failing(clientFailing)
-						.connecting(null) // Cleared to be consistent with other handlers set
-						.closing(readingSshHeaderCloseableByteBufferHandler)
-						.receiving(readingSshHeaderCloseableByteBufferHandler)
-						.to(connectAddress)
-						.bind(bindAddress)
-						.with(byteBufferAllocator)
-						.create(queue);
-				
-				exchangeHolder.cipheringCloseableByteBufferHandler = new CipheringConnector(rawConnector);
-				SshPacketConnector sshPacketOuputHandler = new SshPacketConnector(exchangeHolder.cipheringCloseableByteBufferHandler);
-				exchangeHolder.compressingCloseableByteBufferHandler = new ZlibCompressingConnector(sshPacketOuputHandler);
-				exchangeHolder.rawConnector = exchangeHolder.compressingCloseableByteBufferHandler;
-				
-				rawConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)));
-
-				return new Connector() {
-					@Override
-					public void close() {
-						exchangeHolder.rawConnector.close();
-					}
-					@Override
-					public Connector send(Address address, ByteBuffer buffer) {
-						int channelId = 0;
-						SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
-						b.writeInt(channelId);
-						b.writeBlob(buffer);
-						exchangeHolder.rawConnector.send(address, b.finish());
-						return this;
-					}
-				};
-			}
-		};
-	}
-	
-	private SshClient() {
-	}
-	/*
-	@Override
-	public void connect(final ReadyConnection clientHandler) {
-		queue.post(new Runnable() {
-			@Override
-			public void run() {
-				Ready ready = readyFactory.create();
-				ready.connect(address, new ReadyConnection() {
-					@Override
-					public void failed(IOException e) {
-						clientHandler.failed(e);
-					}
-
-					@Override
-					public void close() {
-						read.close();
-					}
-
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						read.handle(address, buffer);
-					}
-
-					@Override
-					public void connected(FailableCloseableByteBufferHandler hw) {
-						CloseableByteBufferHandler w = hw;
-						
-						cipheringCloseableByteBufferHandler = new CipheringCloseableByteBufferHandler(w);
-						w = cipheringCloseableByteBufferHandler;
-
-						w = new SshPacketOuputHandler(w);
-						
-						compressingCloseableByteBufferHandler = new ZlibCompressingCloseableByteBufferHandler(w);
-						w = compressingCloseableByteBufferHandler;
-						
-						write = w;
-
-						CloseableByteBufferHandler handler = new CloseableByteBufferHandler() {
-							
-							private long lengthToRead = 0L;
-							
-							@Override
-							public void close() {
-								write.close();
-							}
-
-							@Override
-							public void handle(Address address, ByteBuffer buffer) {
-
-							}
-						};
-		
-						uncompressingCloseableByteBufferHandler = new ZlibUncompressingCloseableByteBufferHandler(handler);
-						handler = uncompressingCloseableByteBufferHandler;
-						
-						handler = new SshPacketInputHandler(handler);
-						
-						uncipheringCloseableByteBufferHandler = new UncipheringCloseableByteBufferHandler(handler);
-						handler = uncipheringCloseableByteBufferHandler;
-
-						read = new ReadingSshHeaderCloseableByteBufferHandler(new ReadingSshHeaderCloseableByteBufferHandler.Handler() {
-							@Override
-							public void handle(String header) {
 								serverHeader = header;
-
+		
 								clientCookie = new byte[16];
 								random.nextBytes(clientCookie);
-
+		
 								SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEXINIT);
 								for (int i = 0; i < clientCookie.length; i++) {
 									b.writeByte(clientCookie[i]);
@@ -829,17 +703,59 @@ public final class SshClient {
 								}
 								b.writeByte(0);
 								b.writeInt(0);
-								write.handle(null, b.finish());
+								rawConnector.send(null, b.finish());
 							}
-						}, handler);
-
-						hw.handle(null, ByteBuffer.wrap((CLIENT_HEADER + EOL).getBytes(Charsets.UTF_8)));
+						});
 					}
-				});
+				}, uncipheringCloseableByteBufferHandler, uncipheringCloseableByteBufferHandler);
+		
+		
+				Connector builtConnector = builder
+						.failing(clientFailing)
+						.connecting(null) // Cleared to be consistent with other handlers set
+						.closing(readingSshHeaderCloseableByteBufferHandler)
+						.receiving(readingSshHeaderCloseableByteBufferHandler)
+						.to(connectAddress)
+						.bind(bindAddress)
+						.with(byteBufferAllocator)
+						.create(queue);
+				
+				cipheringCloseableByteBufferHandler = new CipheringConnector(builtConnector);
+				SshPacketConnector sshPacketOuputHandler = new SshPacketConnector(cipheringCloseableByteBufferHandler);
+				compressingCloseableByteBufferHandler = new ZlibCompressingConnector(sshPacketOuputHandler);
+				rawConnector = compressingCloseableByteBufferHandler;
+				
+				builtConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)));
 			}
 		});
 	}
-	*/
+
+	@Override
+	public void close() {
+		e.execute(new Runnable() {
+			@Override
+			public void run() {
+				rawConnector.close();
+			}
+		});
+		//%% ExecutorUtils.waitFor(e);
+	}
+
+	@Override
+	public Connector send(final Address address, final ByteBuffer buffer) {
+		e.execute(new Runnable() {
+			@Override
+			public void run() {
+				int channelId = 0;
+				SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
+				b.writeInt(channelId);
+				b.writeBlob(buffer);
+				rawConnector.send(address, b.finish());
+			}
+		});
+		return this;
+	}
+	
 	private static String getEncryptionAlgorithm(String alg) {
 		String s = Splitter.on('-').splitToList(alg).get(0);
 		if (s.equals("aes128")) {

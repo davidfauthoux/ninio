@@ -248,7 +248,7 @@ public final class TcpdumpSocket implements Connector {
 							@Override
 							public void handle(double timestamp, Address sourceAddress, Address destinationAddress, ByteBuffer buffer) {
 								if (receiver != null) {
-									receiver.received(sourceAddress, buffer);
+									receiver.received(TcpdumpSocket.this, sourceAddress, buffer);
 								}
 							}
 						});
@@ -295,7 +295,7 @@ public final class TcpdumpSocket implements Connector {
 		});
 		
 		if (connecting != null) {
-			connecting.connected();
+			connecting.connected(this, null);
 		}
 	}
 	

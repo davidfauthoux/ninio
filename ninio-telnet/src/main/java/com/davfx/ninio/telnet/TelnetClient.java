@@ -121,28 +121,22 @@ public final class TelnetClient {
 				final Receiver r = receiver;
 				final TelnetReader telnetReader = new TelnetReader();
 
-				final InnerHolder innerHolder = new InnerHolder();
-				innerHolder.connector = builder
+				return builder
 						.failing(failing)
 						.connecting(connecting)
 						.closing(closing)
 						.receiving(new Receiver() {
 							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								telnetReader.handle(buffer, r, innerHolder.connector);
+							public void received(Connector conn, Address address, ByteBuffer buffer) {
+								telnetReader.handle(buffer, r, conn);
 							}
 						})
 						.to(connectAddress)
 						.bind(bindAddress)
 						.with(byteBufferAllocator)
 						.create(queue);
-				return innerHolder.connector;
 			}
 		};
-	}
-	
-	private static final class InnerHolder {
-		public Connector connector;
 	}
 	
 	private TelnetClient() {
