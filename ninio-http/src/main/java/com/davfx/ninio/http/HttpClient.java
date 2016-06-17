@@ -93,7 +93,7 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 	}
 
 	private static final class ReusableConnector {
-		public final Connector connector;
+		public Connector connector;
 		public final Address address;
 		public final boolean secure;
 
@@ -102,10 +102,12 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 		private ClosingFailingReceiver receiver = null;
 		private final Deque<ClosingFailingReceiver> nextReceivers = new LinkedList<>();
 		
-		public ReusableConnector(final Executor executor, TcpSocket.Builder factory, Queue queue, Address address, boolean secure, final Runnable onClose) {
+		public ReusableConnector(Address address, boolean secure) {
 			this.address = address;
 			this.secure = secure;
-			
+		}
+		
+		public void launch(final Executor executor, TcpSocket.Builder factory, Queue queue, final Runnable onClose) {
 			factory.receiving(new Receiver() {
 				@Override
 				public void received(Connector conn, Address address, final ByteBuffer buffer) {
@@ -250,20 +252,15 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 					private HttpContentSender sender = null;
 
 					private long id = -1L;
-					private ReusableConnector reusableConnector = null;
+					private ReusableConnector reusableConnector;
 					private HttpVersion requestVersion;
 					private Multimap<String, String> completedHeaders;
 					
 					private void abruptlyClose(IOException ioe) {
 						LOGGER.trace("Abruptly closed ({})", ioe.getMessage());
 						
-						if (reusableConnector == null) {
-							return;
-						}
-						
 						reusableConnector.fail(ioe);
 						reusableConnectors.remove(id);
-						//%%%%%%%% reusableConnector = null;
 					}
 					
 					private void prepare(HttpRequest request) {
@@ -367,10 +364,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							
 							@Override
 							public void closed() {
-								if (reusableConnector == null) {
-									return;
-								}
-								
 								responseReceiver.ended();
 								
 								abruptlyClose(new IOException("Connection closed by peer"));
@@ -383,10 +376,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 							
 							@Override
 							public void received(Connector conn, Address address, ByteBuffer buffer) {
-								if (reusableConnector == null) {
-									return;
-								}
-								
 								while (!responseLineRead) {
 									String line = lineReader.handle(buffer);
 									if (line == null) {
@@ -414,10 +403,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 										responseReceiver = new HttpContentReceiver() {
 											@Override
 											public void received(ByteBuffer buffer) {
-												if (reusableConnector == null) {
-													return;
-												}
-												
 												if (receiver != null) {
 													receiver.received(buffer.duplicate());
 												}
@@ -425,10 +410,6 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 											}
 											@Override
 											public void ended() {
-												if (reusableConnector == null) {
-													return;
-												}
-												
 												if (receiver != null) {
 													LOGGER.trace("Correctly ended");
 													receiver.ended();
@@ -505,29 +486,17 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 						sender = new HttpContentSender() {
 							@Override
 							public HttpContentSender send(ByteBuffer buffer) {
-								if (reusableConnector == null) {
-									return this;
-								}
-								
 								reusableConnector.connector.send(null, buffer);
 								return this;
 							}
 							
 							@Override
 							public void finish() {
-								if (reusableConnector == null) {
-									return;
-								}
-									
 								reusableConnector.reusable = true;
 							}
 		
 							@Override
 							public void cancel() {
-								if (reusableConnector == null) {
-									return;
-								}
-									
 								abruptlyClose(new IOException("Canceled"));
 							}
 						};
@@ -640,14 +609,15 @@ public final class HttpClient implements Disconnectable, AutoCloseable {
 
 						LOGGER.trace("Creating a new connection (id = {})", id);
 
-						reusableConnector = new ReusableConnector(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, request.address, request.secure, new Runnable() {
+						reusableConnector = new ReusableConnector(request.address, request.secure);
+						reusableConnectors.put(id, reusableConnector);
+						reusableConnector.launch(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, new Runnable() {
 							@Override
 							public void run() {
 								LOGGER.trace("Connection removed (id = {})", id);
 								abruptlyClose(new IOException("Connection closed"));
 							}
 						});
-						reusableConnectors.put(id, reusableConnector);
 
 						reusableConnector.reusable = false;
 						prepare(request);

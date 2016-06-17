@@ -76,7 +76,7 @@ public final class ConfigUtils {
 		
 		String c = r + "\n" + a;
 
-		LOGGER.debug("Config: \n{}\n", c);
+		// LOGGER.trace("Config: \n{}\n", c);
 
 		return ConfigFactory.parseString(c).resolve().getConfig(clazz.getPackage().getName());
 	}
