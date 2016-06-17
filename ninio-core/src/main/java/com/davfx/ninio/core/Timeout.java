@@ -4,27 +4,23 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class Timeout implements AutoCloseable {
-	
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(Timeout.class);
 	
 	private static final Config CONFIG = ConfigUtils.load(Timeout.class);
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "timeout.precision");
 
-	private final ScheduledExecutorService executoTODOr = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(Timeout.class));
+	private final Executor executor = new ThreadingSerialExecutor(Timeout.class);
 	
 	private static final class Task {
 		public long id = -1L;
@@ -47,89 +43,59 @@ public final class Timeout implements AutoCloseable {
 	
 	private long nextId = 0L;
 	private final Map<Long, Task> tasks = new HashMap<>();
-	private double scheduledAt = Double.NaN;
-	private ScheduledFuture<?> future = null;
+	private boolean closed = false;
 	
 	public Timeout() {
+		executeWait();
 	}
 	
 	@Override
 	public void close() {
-		ScheduledFuture<?> f = future;
-		if (f != null) {
-			f.cancel(false);
-		}
-		
-		LOGGER.trace("Closed");
-		
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				if (future != null) {
-					future.cancel(false);
-					future = null;
+				closed = true;
+			}
+		});
+	}
+	
+	private void executeWait() {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					Thread.sleep((long) (PRECISION * 1000d));
+				} catch (InterruptedException ie) {
+				}
+
+				if (!closed) {
+					executeCheck();
 				}
 			}
 		});
-		ExecutorUtils.shutdown(executor);
 	}
-	
-	private void reschedule(double at) {
-		if (!Double.isNaN(scheduledAt) && (at >= scheduledAt)) {
-			return;
-		}
-		scheduledAt = at;
-
-		if (future != null) {
-			future.cancel(false);
-			future = null;
-		}
-		
-		double now = DateUtils.now();
-
-		if (Double.isNaN(scheduledAt)) {
-			LOGGER.trace("[now = {}] Unscheduled", (long) (now * 1000L));
-			return;
-		}
-		
-		if (scheduledAt < now) {
-			scheduledAt = now;
-		}
-		double t = scheduledAt - now + PRECISION;
-		LOGGER.trace("[now = {}] Scheduled in {} seconds (precision = {}) -> at {} ms, in {} ms", (long) (now * 1000L), t, PRECISION, (long) (scheduledAt * 1000d), (long) (t * 1000d));
-		
-		future = executor.schedule(new Runnable() {
+	private void executeCheck() {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				future = null;
-				scheduledAt = Double.NaN;
-				
 				double now = DateUtils.now();
 
-				LOGGER.trace("[now = {}] Executing", (long) (now * 1000L));
-
 				Iterator<Task> i = tasks.values().iterator();
-				double next = Double.NaN;
 				while (i.hasNext()) {
 					Task task = i.next();
-					if (task.time > now) {
-						if (Double.isNaN(next)) {
-							next = task.time;
-						} else {
-							next = Math.min(next, task.time);
+					if (task.time <= now) {
+						if (task.failing != null) {
+							task.failing.failed(new IOException("Timeout"));
 						}
-						continue;
+						i.remove();
 					}
-					
-					if (task.failing != null) {
-						task.failing.failed(new IOException("Timeout"));
-					}
-					i.remove();
 				}
 				
-				reschedule(next);
+				if (!closed) {
+					executeWait();
+				}
 			}
-		}, (long) (t  * 1000d), TimeUnit.MILLISECONDS);
+		});
 	}
 	
 	public static interface Manager {
@@ -154,7 +120,6 @@ public final class Timeout implements AutoCloseable {
 						nextId++;
 						tasks.put(task.id, task);
 						task.reset();
-						reschedule(task.time);
 					}
 				});
 			}

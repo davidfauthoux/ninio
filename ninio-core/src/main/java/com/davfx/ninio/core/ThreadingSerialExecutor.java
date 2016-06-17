@@ -7,7 +7,8 @@ import java.util.concurrent.Executor;
 import com.davfx.ninio.util.ClassThreadFactory;
 
 public final class ThreadingSerialExecutor implements Executor {
-	private static final double TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD = 10d;
+	
+	private static final double TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD = 10d;//TODO conf
 	
 	private final Class<?> clazz;
 	private Thread thread = null;
@@ -38,7 +39,7 @@ public final class ThreadingSerialExecutor implements Executor {
 								}
 								
 								if (last == null) {
-									thread = null;
+									thread = null;//TODO check rerun
 									break;
 								}
 								

@@ -14,7 +14,7 @@ public final class Limit {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Limit.class);
 
-	private final Executor executor = new ThreadingSerialExecutor(Timeout.class);
+	private final Executor executor = new ThreadingSerialExecutor(Limit.class);
 	
 	private static final class Task {
 		public long id = -1L;
