@@ -3,9 +3,7 @@ package com.davfx.ninio.http.v3;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executors;
 
-import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,6 +17,7 @@ import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpListening;
@@ -27,7 +26,6 @@ import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.WebsocketHttpContentReceiver;
 import com.google.common.base.Charsets;
-import com.google.common.collect.ImmutableMultimap;
 import com.google.common.io.Files;
 
 public class WebsocketTest {
@@ -37,7 +35,7 @@ public class WebsocketTest {
 	private static Disconnectable server(Ninio ninio, int port) throws IOException {
 		final byte[] indexHtml= Files.toByteArray(new File("src/test/resources/ws.html"));
 		
-		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(Executors.newSingleThreadExecutor()).with(new HttpListeningHandler() {
+		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new ThreadingSerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
 			@Override
 			public ConnectionHandler create() {
 				return new ConnectionHandler() {
@@ -60,7 +58,7 @@ public class WebsocketTest {
 										public Connecting connecting() {
 											return new Connecting() {
 												@Override
-												public void connected(Connector connector) {
+												public void connected(Connector connector, Address address) {
 													LOGGER.debug("Socket connected <--");
 												}
 											};
@@ -104,15 +102,12 @@ public class WebsocketTest {
 		return tcp;
 	}
 	
-	@Test
-	public void testGet() throws Exception {
+	public static void main(String[] args) throws Exception {
 		int port = 8080;
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			Disconnectable tcp = server(ninio, port);
-			try {
-				Thread.sleep(1000000);
-			} finally {
-				tcp.close();
+			try (Disconnectable tcp = server(ninio, port)) {
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/");
+				Thread.sleep(10000);
 			}
 		}
 	}

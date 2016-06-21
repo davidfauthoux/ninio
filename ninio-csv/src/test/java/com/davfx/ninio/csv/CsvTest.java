@@ -10,7 +10,7 @@ import org.junit.Test;
 
 import com.google.common.base.Charsets;
 
-public class TestCsv {
+public class CsvTest {
 
 	@Test
 	public void test() throws Exception {
