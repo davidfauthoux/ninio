@@ -165,7 +165,9 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			} catch (IOException e) {
 				LOGGER.error("Could not begin handshake", e);
 				doClose(true);
-				failing.failed(e);
+				if (failing != null) {
+					failing.failed(e);
+				}
 				return;
 			}
 			if (connecting != null) {
@@ -249,12 +251,6 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			public void run() {
 				doClose(false);
 				
-				if (sent == null) {
-					return;
-				}
-				if (received == null) {
-					return;
-				}
 				if (closing != null) {
 					closing.closed();
 				}
@@ -268,12 +264,6 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			public void run() {
 				doClose(false);
 				
-				if (sent == null) {
-					return;
-				}
-				if (received == null) {
-					return;
-				}
 				if (failing != null) {
 					failing.failed(e);
 				}

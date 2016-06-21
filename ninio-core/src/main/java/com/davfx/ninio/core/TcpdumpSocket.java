@@ -105,12 +105,13 @@ public final class TcpdumpSocket implements Connector {
 	private static final boolean RAW;
 	static {
 		String mode = CONFIG.getString("tcpdump.mode");
+		LOGGER.debug("Tcpdump mode = {}", mode);
 		if (mode.equals("raw")) {
 			RAW = true;
 		} else if (mode.equals("hex")) {
 			RAW = false;
 		} else {
-			throw new ConfigException.BadValue("ninio.tcpdump.mode", "Invalid: " + mode + ", only 'raw' and 'hex' allowed");
+			throw new ConfigException.BadValue("tcpdump.mode", "Invalid: " + mode + ", only 'raw' and 'hex' allowed");
 		}
 	}
 	private static final String TCPDUMP_COMMAND = CONFIG.getString("tcpdump.path");
@@ -125,7 +126,7 @@ public final class TcpdumpSocket implements Connector {
 	private DatagramSocket socket = null;
 	private Process process = null;
 	
-	private TcpdumpSocket(String interfaceId, String rule, Address bindAddress, Connecting connecting, final Failing failing, final Closing closing, final Receiver receiver) { //, final boolean promiscuous) {
+	private TcpdumpSocket(String interfaceId, String rule, Address bindAddress, final Connecting connecting, final Failing failing, final Closing closing, final Receiver receiver) { //, final boolean promiscuous) {
 		DatagramSocket s;
 		try {
 			if (bindAddress == null) {
@@ -162,7 +163,16 @@ public final class TcpdumpSocket implements Connector {
 
 		//
 		
-		final TcpdumpReader tcpdumpReader = RAW ? new RawTcpdumpReader(interfaceId.equals("any")) : new HexTcpdumpReader();
+		Runnable connected = new Runnable() {
+			@Override
+			public void run() {
+				if (connecting != null) {
+					connecting.connected(TcpdumpSocket.this, null);
+				}
+			}
+		};
+		
+		final TcpdumpReader tcpdumpReader = RAW ? new RawTcpdumpReader(interfaceId.equals("any"), connected) : new HexTcpdumpReader(connected);
 		
 		File dir = new File(".");
 
@@ -233,7 +243,7 @@ public final class TcpdumpSocket implements Connector {
 						error.close();
 					}
 				} catch (IOException e) {
-					LOGGER.error("Error in tcpdump process", e);
+					LOGGER.trace("Error in tcpdump process", e);
 				}
 			}
 		});
@@ -256,7 +266,7 @@ public final class TcpdumpSocket implements Connector {
 						input.close();
 					}
 				} catch (IOException e) {
-					LOGGER.error("Error in tcpdump process", e);
+					LOGGER.trace("Error in tcpdump process", e);
 				}
 			}
 		});
@@ -293,10 +303,6 @@ public final class TcpdumpSocket implements Connector {
 				}
 			}
 		});
-		
-		if (connecting != null) {
-			connecting.connected(this, null);
-		}
 	}
 	
 	@Override
@@ -317,7 +323,7 @@ public final class TcpdumpSocket implements Connector {
 		
 		LOGGER.trace("Sending datagram to: {}", address);
 		try {
-			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.capacity(), InetAddress.getByName(address.host), address.port);
+			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByName(address.host), address.port);
 			socket.send(packet);
 		} catch (IOException ioe) {
 			LOGGER.trace("Error while sending datagram to: {}", address, ioe);

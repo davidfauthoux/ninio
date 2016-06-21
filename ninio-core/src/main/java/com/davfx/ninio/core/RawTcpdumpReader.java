@@ -15,10 +15,12 @@ final class RawTcpdumpReader implements TcpdumpReader {
 	
 	private static final int MAX_SIZE = 100 * 1024;
 
+	private final Runnable connected;
 	private final boolean any;
 	
-	public RawTcpdumpReader(boolean any) {
+	public RawTcpdumpReader(boolean any, Runnable connected) {
 		this.any = any;
+		this.connected = connected;
 	}
 	
 	@Override
@@ -55,6 +57,9 @@ final class RawTcpdumpReader implements TcpdumpReader {
 		long maxCaptureLength = in.readInt() & 0xFFFFFFFF;
 		long dataLinkType = in.readInt() & 0xFFFFFFFF;
 		LOGGER.debug("Tcpdump header recognized (version = {}/{}, zone = {}, maxCaptureLength = {}, dataLinkType = {})", majorVersionNumber, minorVersionNumber, zone, maxCaptureLength, dataLinkType);
+		
+		connected.run();
+		
 		/*
 		https://wiki.wireshark.org/Development/LibpcapFileFormat
 		

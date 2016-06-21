@@ -4,97 +4,53 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Ignore;
 import org.junit.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import com.davfx.util.Lock;
-import com.google.common.base.Charsets;
+import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.Wait;
 
 // Mac OS X:
 // sudo chmod go=r /dev/bpf*
 
 public class TcpdumpTest {
-
-	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpTest.class);
 	
-	@Ignore
+	static {
+		ConfigUtils.override("com.davfx.ninio.core.tcpdump.mode = hex"); // raw not working on Mac OS X
+	}
+	
 	@Test
-	public void test() throws Exception {
-		System.setProperty("ninio.tcpdump.mode", "hex"); // raw not working on Mac OS X
-		final Lock<String, IOException> lock = new Lock<>();
+	public void testDatagram() throws Exception {
+		Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
-		try (Queue queue = new Queue()) {
-			
-			final int port = 8080;
+		try (Ninio ninio = Ninio.create()) {
+			int port = 8080;
 	
-			TcpdumpSyncDatagramReady.Receiver receiver = new TcpdumpSyncDatagramReady.Receiver(new TcpdumpSyncDatagramReady.DestinationPortRule(port), "lo0", new Address(Address.LOCALHOST, port));
-			{
-				Ready ready = new TcpdumpSyncDatagramReady(receiver);
-		
-				new QueueReady(queue, ready).connect(null, new ReadyConnection() { // Address MUST be specified for the packet to be mapped
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.debug("Received {} <--: {}", address, s);
-						lock.set(s);
-					}
-					
-					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
-						LOGGER.debug("Connected <--");
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed <--");
-						lock.fail(new IOException("Closed"));
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed <--", e);
-						lock.fail(e);
-					}
-				});
+			Wait wait = new Wait();
+			try (Connector server = ninio.create(TcpdumpSocket.builder().on("lo0").rule("dst port " + port).bind(new Address(Address.ANY, port))
+				.failing(new LockFailing(lock))
+				.closing(new LockClosing(lock))
+				.receiving(new EchoReceiver())
+				.connecting(new WaitConnecting(wait)))) {
+				
+				wait.waitFor();
+				
+				try (Connector client = ninio.create(UdpSocket.builder()
+					.failing(new LockFailing(lock))
+					.closing(new LockClosing(lock))
+					.receiving(new LockReceiver(lock)))) {
+
+					client.send(new Address(Address.LOCALHOST, port), ByteBufferUtils.toByteBuffer("test"));
+					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
+				}
 			}
-			
-			queue.finish().waitFor();
-			
-			{
-				Ready ready = new DatagramReady(queue.getSelector(), queue.allocator());
-		
-				new QueueReady(queue, ready).connect(null, new ReadyConnection() {
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-						LOGGER.warn("Received {} -->: {}", address, s);
-					}
-					
-					@Override
-					public void connected(FailableCloseableByteBufferHandler write) {
-						LOGGER.debug("Connected -->");
-						write.handle(new Address(Address.LOCALHOST, port), ByteBuffer.wrap(("test").getBytes(Charsets.UTF_8)));
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Closed -->");
-						lock.fail(new IOException("Closed"));
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed -->", e);
-						lock.fail(e);
-					}
-				});
-			}
-			
-			Assertions.assertThat(lock.waitFor()).isEqualTo("test");
-			queue.finish().waitFor();
 		}
 	}
 	
+	// This test is exactly the same as above, but it is used to check a new DatagramReady can be open another time, maybe in the same JVM
+	@Test
+	public void testDatagramSameToCheckClose() throws Exception {
+		testDatagram();
+	}
+
 }

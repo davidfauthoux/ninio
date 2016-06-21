@@ -4,6 +4,8 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
@@ -33,7 +35,7 @@ public final class ConfigUtils {
 		return s.charAt(0);
 	}
 	
-	private static final String loadConfig(Class<?> clazz, String resource, boolean warn) throws IOException {
+	private static String loadConfig(Class<?> clazz, String resource, boolean warn) throws IOException {
 		InputStream i = clazz.getClassLoader().getResourceAsStream(resource + ".conf");
 		if (i == null) {
 			if (warn) {
@@ -58,8 +60,10 @@ public final class ConfigUtils {
 			}
 		}
 	}
+
+	private static final List<String> staticOverride = new LinkedList<>();
 	
-	public static final Config load(Class<?> clazz) {
+	public static Config load(Class<?> clazz) {
 		String r;
 		try {
 			r = loadConfig(clazz, clazz.getPackage().getName(), true);
@@ -74,13 +78,29 @@ public final class ConfigUtils {
 			throw new RuntimeException("Could not load application config", e);
 		}
 		
-		String c = r + "\n" + a;
+		StringBuilder c = new StringBuilder();
+		c.append(r);
+		c.append('\n');
+		c.append(a);
+		synchronized (staticOverride) {
+			for (String o : staticOverride) {
+				c.append('\n');
+				c.append(o);
+			}
+		}
+		String conf = c.toString();
 
-		// LOGGER.trace("Config: \n{}\n", c);
+		// LOGGER.trace("Config: \n{}\n", conf);
 
-		return ConfigFactory.parseString(c).resolve().getConfig(clazz.getPackage().getName());
+		return ConfigFactory.parseString(conf).resolve().getConfig(clazz.getPackage().getName());
 	}
 
+	public static void override(String config) {
+		synchronized (staticOverride) {
+			staticOverride.add(config);
+		}
+	}
+	
 	/*%%
 	public static final Config load() {
 		return load("root");

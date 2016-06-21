@@ -4,11 +4,15 @@ import java.io.IOException;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Timeout;
 
 public class TimeoutTest {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(TimeoutTest.class);
 	
 	@Test
 	public void test() throws Exception {
@@ -19,7 +23,7 @@ public class TimeoutTest {
 			Runnable r = new Runnable() {
 				@Override
 				public void run() {
-					System.out.println("---");
+					LOGGER.debug("----");
 				}
 			};
 			
