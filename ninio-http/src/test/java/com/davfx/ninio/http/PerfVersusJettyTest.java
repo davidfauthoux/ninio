@@ -2,6 +2,7 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -21,12 +22,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.http.util.AnnotatedHttpService;
-import com.davfx.ninio.http.util.HttpController;
-import com.davfx.ninio.http.util.annotations.QueryParameter;
-import com.davfx.ninio.http.util.annotations.Route;
-import com.davfx.util.Lock;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.InMemoryBuffers;
+import com.davfx.ninio.core.Limit;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
+import com.davfx.ninio.core.Timeout;
+import com.davfx.ninio.core.WaitListenConnecting;
+import com.davfx.ninio.http.service.Annotated;
+import com.davfx.ninio.http.service.HttpContentType;
+import com.davfx.ninio.http.service.HttpController;
+import com.davfx.ninio.http.service.HttpService;
+import com.davfx.ninio.http.service.annotations.QueryParameter;
+import com.davfx.ninio.http.service.annotations.Route;
+import com.davfx.ninio.http.v3.HttpGetTest;
+import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 
@@ -38,8 +51,7 @@ public class PerfVersusJettyTest {
 	
 	static {
 		// System.setProperty("http.keepAlive", "false");
-		// System.setProperty("ninio.http.recyclers.ttl", "0");
-		System.setProperty("ninio.http.gzip.default", "false");
+		//TODO test w/o gzip
 	}
 	
 	private static final class JettyHandler extends AbstractHandler {
@@ -55,7 +67,8 @@ public class PerfVersusJettyTest {
 	public static final class TestGetWithQueryParameterController implements HttpController {
 		@Route(method = HttpMethod.GET)
 		public Http echo(@QueryParameter("message") String message) {
-			return Http.ok().contentType(HttpContentType.html()).content("<html><body>" + message + "</body></html>");
+			String c = "<html><body>" + message + "</body></html>";
+			return Http.ok().contentType(HttpContentType.html()).contentLength(c.length() /* assumed utf-8 */).content(c);
 		}
 	}
 	
@@ -85,28 +98,50 @@ public class PerfVersusJettyTest {
 		return b.toString();
 	}
 	*/
-	
-	private static final Http http = new Http();
+
+	private static final Ninio ninio = Ninio.create();
+	private static final com.davfx.ninio.http.HttpClient ninioClient;
+	private static final Timeout timeout = new Timeout();
+	private static final Executor executor = new ThreadingSerialExecutor(HttpGetTest.class);
+	private static final Limit limit = new Limit(10);
+	static {
+		ninioClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor));
+	}
+
 	private static String getNinio(int port) throws Exception {
 		final Lock<String, IOException> lock = new Lock<>();
-		http.send(new HttpRequest(new Address(Address.LOCALHOST, port), false, HttpMethod.GET, HttpPath.of(path())), null, new Http.InMemoryHandler() {
-			@Override
-			public void failed(IOException e) {
-				lock.fail(e);
-			}
-			@Override
-			public void handle(HttpResponse response, InMemoryBuffers content) {
-				String s = content.toString();
-				lock.set(s);
-			}
-		});
-		String s = lock.waitFor();
-		return s;
+		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, ninioClient.request()))
+			.failing(new Failing() {
+				@Override
+				public void failed(IOException e) {
+					lock.fail(e);
+				}
+			})
+			.receiving(new HttpReceiver() {
+				@Override
+				public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+					return new HttpContentReceiver() {
+						private final InMemoryBuffers b = new InMemoryBuffers();
+						@Override
+						public void received(ByteBuffer buffer) {
+							LOGGER.debug("-----------------> {}", new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining()));
+							b.add(buffer);
+						}
+						@Override
+						public void ended() {
+							LOGGER.debug("-----------------> END {}", b.toString());
+							lock.set(b.toString());
+						}
+					};
+				}
+			})
+			.build(HttpRequest.of("http://127.0.0.1:" + port + path(), HttpMethod.GET, ImmutableMultimap.<String, String>of(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY))).finish();
+		return lock.waitFor();
 	}
-	private static final HttpClient httpClient = new HttpClient();
+	private static final HttpClient jettyClient = new HttpClient();
 	static {
 		try {
-			httpClient.start();
+			jettyClient.start();
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
@@ -121,7 +156,7 @@ public class PerfVersusJettyTest {
 			}
 		};
 		c.setURL("http://localhost:" + port + path());
-		httpClient.send(c);
+		jettyClient.send(c);
 		c.waitForDone();
 		String s = lock.waitFor();
 		return s;
@@ -133,83 +168,64 @@ public class PerfVersusJettyTest {
 	private static final int PORT = 8888;
 	
 	private static final class NinioServer1 implements AutoCloseable {
-		private final Queue queue = new Queue();
-		private final HttpServer server;
+		private final Disconnectable server;
 		public NinioServer1() {
-			server = new HttpServer(queue, null, new Address(Address.ANY, PORT), new HttpServerHandlerFactory() {
+			Wait wait = new Wait();
+			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)).connecting(new WaitListenConnecting(wait)).listening(HttpListening.builder().with(new ThreadingSerialExecutor(NinioServer1.class)).with(new HttpListeningHandler() {
 				@Override
-				public void failed(IOException e) {
-					LOGGER.error("Failed", e);
-				}
-				@Override
-				public void closed() {
-				}
-				
-				@Override
-				public HttpServerHandler create() {
-					return new HttpServerHandler() {
-						private HttpRequest request;
-						private final InMemoryBuffers b = new InMemoryBuffers();
-						
+				public ConnectionHandler create() {
+					return new ConnectionHandler() {
 						@Override
-						public void failed(IOException e) {
-							LOGGER.warn("Failed", e);
+						public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
+							return new HttpContentReceiver() {
+								@Override
+								public void received(ByteBuffer buffer) {
+								}
+								@Override
+								public void ended() {
+									String message = HttpRequest.parameters(request.path).get("message").iterator().next().get();
+									ByteBuffer m = ByteBuffer.wrap(("<html><body>" + message + "</body></html>").getBytes(Charsets.UTF_8));
+
+									HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(
+											HttpHeaderKey.CONTENT_TYPE, HttpContentType.html(),
+											HttpHeaderKey.CONTENT_LENGTH, String.valueOf(m.remaining())
+										)));
+									
+									sender.send(m).finish();
+								}
+							};
 						}
 						@Override
-						public void close() {
-							LOGGER.debug("Closed");
+						public void closed() {
 						}
-						
-						@Override
-						public void handle(HttpRequest request) {
-							this.request = request;
-						}
-	
-						@Override
-						public void handle(Address address, ByteBuffer buffer) {
-							b.add(buffer);
-						}
-						
-						@Override
-						public void ready(Write write) {
-							String message = request.path.parameters.get("message").iterator().next().get();
-							ByteBuffer m = ByteBuffer.wrap(("<html><body>" + message + "</body></html>").getBytes(Charsets.UTF_8));
-							write.write(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(
-									HttpHeaderKey.CONTENT_TYPE, HttpContentType.html(),
-									HttpHeaderKey.CONTENT_LENGTH, String.valueOf(m.remaining())
-								)));
-							write.handle(null, m);
-							write.close();
-						}
-						
 					};
 				}
-			});
-			queue.finish().waitFor();
+			}).build()));
+			wait.waitFor();
 		}
 		
 		@Override
 		public void close() {
 			server.close();
-			queue.finish().waitFor();
-			queue.close();
 		}
 	}
 	
 	private static final class NinioServer2 implements AutoCloseable {
-		private final Queue queue = new Queue();
-		private final AnnotatedHttpService server;
+		private final Disconnectable server;
 		public NinioServer2() {
-			server = new AnnotatedHttpService(queue, new Address(Address.ANY, PORT));
-			server.register(HttpQueryPath.of(), new TestGetWithQueryParameterController());
-			queue.finish().waitFor();
+			Annotated.Builder a = Annotated.builder(HttpService.builder());
+			a.register(new TestGetWithQueryParameterController());
+
+			Wait wait = new Wait();
+			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT))
+					.connecting(new WaitListenConnecting(wait)).listening(
+							HttpListening.builder().with(new ThreadingSerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
+			wait.waitFor();
 		}
 		
 		@Override
 		public void close() {
 			server.close();
-			queue.finish().waitFor();
-			queue.close();
 		}
 	}
 
@@ -220,7 +236,7 @@ public class PerfVersusJettyTest {
 			server.setHandler(new JettyHandler());
 	
 			server.start();
-			LOGGER.debug("Jetty pool: {}", server.getThreadPool().getThreads());
+			LOGGER.info("Jetty pool: {}", server.getThreadPool().getThreads());
 			
 			for (int i = 0; i < WARM_UP; i++) {
 				Assertions.assertThat(getNinio(PORT)).startsWith(EXPECTED_RESPONSE);
@@ -282,7 +298,7 @@ public class PerfVersusJettyTest {
 			server.setHandler(new JettyHandler());
 	
 			server.start();
-			LOGGER.debug("Jetty pool: {}", server.getThreadPool().getThreads());
+			LOGGER.info("Jetty pool: {}", server.getThreadPool().getThreads());
 			
 			for (int i = 0; i < WARM_UP; i++) {
 				Assertions.assertThat(getJetty(PORT)).startsWith(EXPECTED_RESPONSE);

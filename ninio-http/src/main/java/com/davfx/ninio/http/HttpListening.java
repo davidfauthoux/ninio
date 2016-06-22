@@ -455,8 +455,10 @@ public final class HttpListening implements Listening {
 									handler = new HttpContentReceiver() {
 										@Override
 										public void received(ByteBuffer buffer) {
+											ByteBuffer b = buffer.duplicate();
+											buffer.position(buffer.position() + buffer.remaining());
 											if (h != null) {
-												h.received(buffer);
+												h.received(b);
 											}
 										}
 										@Override

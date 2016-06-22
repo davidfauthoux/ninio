@@ -102,7 +102,9 @@ public final class Jsonp implements HttpController {
 					});
 				} else { // if (http.contentType().contains(HttpContentType.json().asString())) {
 					http.contentType("application/javascript");
-					http.contentLength(jsonpHeaderAsBytes.length + http.contentLength() + jsonpFooterAsBytes.length);
+					if (http.contentLength() >= 0L) {
+						http.contentLength(jsonpHeaderAsBytes.length + http.contentLength() + jsonpFooterAsBytes.length);
+					}
 
 					final InputStream stream = http.stream();
 					if (stream != null) {

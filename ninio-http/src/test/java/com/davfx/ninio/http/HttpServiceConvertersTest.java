@@ -1,24 +1,19 @@
 package com.davfx.ninio.http;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.LinkedList;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.http.util.AnnotatedHttpService;
-import com.davfx.ninio.http.util.HttpController;
-import com.davfx.ninio.http.util.ParameterConverter;
-import com.davfx.ninio.http.util.annotations.Path;
-import com.davfx.ninio.http.util.annotations.QueryParameter;
-import com.davfx.ninio.http.util.annotations.Route;
-import com.google.common.base.Charsets;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.http.service.Annotated;
+import com.davfx.ninio.http.service.HttpController;
+import com.davfx.ninio.http.service.ParameterConverter;
+import com.davfx.ninio.http.service.annotations.Path;
+import com.davfx.ninio.http.service.annotations.QueryParameter;
+import com.davfx.ninio.http.service.annotations.Route;
 import com.google.common.reflect.TypeToken;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -38,27 +33,10 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithQueryParameter() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.register(TestGetWithQueryParameterController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=world").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
-				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:world\n");
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.ControllerVisitor(TestGetWithQueryParameterController.class))) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?message=world")).isEqualTo("text/plain; charset=UTF-8/GET hello:world\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 
@@ -71,27 +49,10 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithInteger() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.register(TestGetWithIntegerController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=42").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
-				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:" + (42 + 666) + "\n");
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.ControllerVisitor(TestGetWithIntegerController.class))) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?message=42")).isEqualTo("text/plain; charset=UTF-8/GET hello:" + (42 + 666) + "\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 	
@@ -104,27 +65,10 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithInt() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.register(TestGetWithIntController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?message=42").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
-				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:" + (42 + 666) + "\n");
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.ControllerVisitor(TestGetWithIntController.class))) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?message=42")).isEqualTo("text/plain; charset=UTF-8/GET hello:" + (42 + 666) + "\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 	
@@ -146,27 +90,10 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithAll() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.register(TestGetWithAllController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?boolean=true&byte=1&short=2&int=3&long=4&float=5.5&double=6.6&char=c").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
-				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:true 1 2 3 4 5.5 6.6 c\n");
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.ControllerVisitor(TestGetWithAllController.class))) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?boolean=true&byte=1&short=2&int=3&long=4&float=5.5&double=6.6&char=c")).isEqualTo("text/plain; charset=UTF-8/GET hello:true 1 2 3 4 5.5 6.6 c\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 
@@ -198,54 +125,30 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithConverter() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.parameters(A.class, new AConverter());
-				server.register(TestGetWithConverterController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?p=aaa").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.Visitor() {
+				@Override
+				public void visit(Annotated.Builder builder) {
+					builder.parameters(A.class, new AConverter());
+					builder.register(TestGetWithConverterController.class);
 				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:_aaa_\n");
+			})) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=aaa")).isEqualTo("text/plain; charset=UTF-8/GET hello:_aaa_\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 	@Test
 	public void testGetWithClazzConverter() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.parameters(A.class);
-				server.register(TestGetWithConverterController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?p=aaa").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.Visitor() {
+				@Override
+				public void visit(Annotated.Builder builder) {
+					builder.parameters(A.class);
+					builder.register(TestGetWithConverterController.class);
 				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:_aaa_\n");
+			})) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=aaa")).isEqualTo("text/plain; charset=UTF-8/GET hello:_aaa_\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 	
@@ -258,39 +161,27 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithListConverter() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.parameters(new TypeToken<List<A>>() {
-					private static final long serialVersionUID = 1L;
-				}, new ParameterConverter<List<A>>() {
-					@Override
-					public List<A> of(String s) throws Exception {
-						List<A> l = new LinkedList<>();
-						for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
-							l.add(A.of(e.getAsString()));
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.Visitor() {
+				@Override
+				public void visit(Annotated.Builder builder) {
+					builder.parameters(new TypeToken<List<A>>() {
+						private static final long serialVersionUID = 1L;
+					}, new ParameterConverter<List<A>>() {
+						@Override
+						public List<A> of(String s) throws Exception {
+							List<A> l = new LinkedList<>();
+							for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
+								l.add(A.of(e.getAsString()));
+							}
+							return l;
 						}
-						return l;
-					}
-				});
-				server.register(TestGetWithListConverterController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?p=['a','a','a']").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
+					});
+					builder.register(TestGetWithListConverterController.class);
 				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:[_a_, _a_, _a_]\n");
+			})) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=['a','a','a']")).isEqualTo("text/plain; charset=UTF-8/GET hello:[_a_, _a_, _a_]\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 
@@ -316,51 +207,39 @@ public class HttpServiceConvertersTest {
 	}
 	@Test
 	public void testGetWithTwoListConverter() throws Exception {
-		try (Queue queue = new Queue()) {
-			try (AnnotatedHttpService server = new AnnotatedHttpService(queue, new Address(Address.ANY, 8080))) {
-				server.parameters(new TypeToken<List<A>>() {
-					private static final long serialVersionUID = 1L;
-				}, new ParameterConverter<List<A>>() {
-					@Override
-					public List<A> of(String s) throws Exception {
-						List<A> l = new LinkedList<>();
-						for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
-							l.add(A.of(e.getAsString()));
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.Visitor() {
+				@Override
+				public void visit(Annotated.Builder builder) {
+					builder.parameters(new TypeToken<List<A>>() {
+						private static final long serialVersionUID = 1L;
+					}, new ParameterConverter<List<A>>() {
+						@Override
+						public List<A> of(String s) throws Exception {
+							List<A> l = new LinkedList<>();
+							for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
+								l.add(A.of(e.getAsString()));
+							}
+							return l;
 						}
-						return l;
-					}
-				});
-				server.parameters(new TypeToken<List<B>>() {
-					private static final long serialVersionUID = 1L;
-				}, new ParameterConverter<List<B>>() {
-					@Override
-					public List<B> of(String s) throws Exception {
-						List<B> l = new LinkedList<>();
-						for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
-							l.add(B.of(e.getAsString()));
+					});
+					builder.parameters(new TypeToken<List<B>>() {
+						private static final long serialVersionUID = 1L;
+					}, new ParameterConverter<List<B>>() {
+						@Override
+						public List<B> of(String s) throws Exception {
+							List<B> l = new LinkedList<>();
+							for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
+								l.add(B.of(e.getAsString()));
+							}
+							return l;
 						}
-						return l;
-					}
-				});
-				server.register(TestGetWithTwoListConverterController.class);
-
-				queue.finish().waitFor();
-				
-				HttpURLConnection c = (HttpURLConnection) new URL("http://127.0.0.1:8080/get/hello?p=['a','a','a']&q=['b']").openConnection();
-				StringBuilder b = new StringBuilder();
-				try (BufferedReader r = new BufferedReader(new InputStreamReader(c.getInputStream(), Charsets.UTF_8))) {
-					while (true) {
-						String line = r.readLine();
-						if (line == null) {
-							break;
-						}
-						b.append(line).append('\n');
-					}
+					});
+					builder.register(TestGetWithTwoListConverterController.class);
 				}
-				c.disconnect();
-				Assertions.assertThat(b.toString()).isEqualTo("GET hello:[_a_, _a_, _a_][^b^]\n");
+			})) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=['a','a','a']&q=['b']")).isEqualTo("text/plain; charset=UTF-8/GET hello:[_a_, _a_, _a_][^b^]\n");
 			}
-			queue.finish().waitFor();
 		}
 	}
 

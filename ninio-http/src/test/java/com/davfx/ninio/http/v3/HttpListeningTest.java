@@ -11,6 +11,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpListening;
@@ -26,7 +27,7 @@ public class HttpListeningTest {
 	@Test
 	public void testPostServerWithJavaClient() throws Exception {
 		try (Ninio ninio = Ninio.create()) {
-			Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, 8080)).listening(HttpListening.builder().with(Executors.newSingleThreadExecutor()).with(new HttpListeningHandler() {
+			Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, 8080)).listening(HttpListening.builder().with(new ThreadingSerialExecutor(HttpListeningTest.class)).with(new HttpListeningHandler() {
 				@Override
 				public ConnectionHandler create() {
 					return new ConnectionHandler() {
@@ -109,7 +110,7 @@ public class HttpListeningTest {
 				
 				queue.finish().waitFor();
 
-				try (HttpClient client = ninio.create(HttpClient.builder().with(Executors.newSingleThreadExecutor()))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor()))) {
 					{
 						client.request()
 						.failing(new Failing() {

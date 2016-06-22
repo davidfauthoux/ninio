@@ -211,6 +211,7 @@ public final class HttpService implements HttpListeningHandler {
 					
 					@Override
 					public void ended() {
+						post.receiver.ended();
 						execute(new Runnable() {
 							@Override
 							public void run() {
@@ -231,7 +232,7 @@ public final class HttpService implements HttpListeningHandler {
 										private Multimap<String, String> headers = HashMultimap.create();
 										private HttpContentSender sender = null;
 	
-										private synchronized void send() {
+										private void send() {
 											if (sender != null) {
 												return;
 											}
@@ -242,25 +243,15 @@ public final class HttpService implements HttpListeningHandler {
 										}
 										
 										@Override
-										public void finish() {
-											execute(new Runnable() {
-												@Override
-												public void run() {
-													send();
-													sender.finish();
-												}
-											});
+										public synchronized void finish() {
+											send();
+											sender.finish();
 										}
 										
 										@Override
-										public void cancel() {
-											execute(new Runnable() {
-												@Override
-												public void run() {
-													send();
-													sender.cancel();
-												}
-											});
+										public synchronized void cancel() {
+											send();
+											sender.cancel();
 										}
 										
 										@Override
@@ -303,14 +294,9 @@ public final class HttpService implements HttpListeningHandler {
 										}
 	
 										@Override
-										public HttpAsyncOutput produce(final ByteBuffer buffer) {
-											execute(new Runnable() {
-												@Override
-												public void run() {
-													send();
-													sender.send(buffer);
-												}
-											});
+										public synchronized HttpAsyncOutput produce(final ByteBuffer buffer) {
+											send();
+											sender.send(buffer);
 											return this;
 										}
 	
