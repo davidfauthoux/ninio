@@ -264,7 +264,7 @@ public final class WebsocketSocket implements Connector {
 									if (opcode == 0x09) {
 										if (toPing == 0L) {
 											toPing = frameLength;
-											sender.send(headerOf(0x0A, frameLength));
+											sender.send(WebsocketUtils.headerOf(0x0A, frameLength));
 										}
 
 										toPing -= partialBuffer.remaining();
@@ -301,40 +301,14 @@ public final class WebsocketSocket implements Connector {
 
 	@Override
 	public void close() {
-		sender.send(headerOf(0x08, 0));
+		LOGGER.trace("Close requested");
+		sender.send(WebsocketUtils.headerOf(0x08, 0L));
 	}
 	
 	@Override
 	public Connector send(Address address, ByteBuffer buffer) {
-		sender.send(headerOf(0x02, buffer.remaining()));
+		sender.send(WebsocketUtils.headerOf(0x02, buffer.remaining()));
 		sender.send(buffer);
 		return this;
 	}
-	
-	public static ByteBuffer headerOf(int opcode, long len) { // No mask
-		int extendedPayloadLengthLen;
-		if (len <= 125) {
-			extendedPayloadLengthLen = 0;
-		} else if (len <= 65535) {
-			extendedPayloadLengthLen = 2;
-		} else {
-			extendedPayloadLengthLen = 8;
-		}
-		ByteBuffer res = ByteBuffer.allocate(2 + extendedPayloadLengthLen);
-		byte first = (byte) opcode;
-		first |= 0x80; // Not an ACK
-		res.put(first);
-		if (len <= 125) {
-			res.put((byte) len);
-		} else if (len <= 65535) {
-			res.put((byte) 126);
-			res.putShort((short) len);
-		} else {
-			res.put((byte) 127);
-			res.putLong(len);
-		}
-		res.flip();
-		return res;
-	}
-
 }

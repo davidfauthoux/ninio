@@ -19,4 +19,9 @@ public final class HttpServiceRequest {
 		path = HttpRequest.path(request.path);
 		parameters = HttpRequest.parameters(request.path);
 	}
+	
+	@Override
+	public String toString() {
+		return "[method=" + method + ", path=" + path + ", headers=" + headers + ", parameters=" + parameters + "]";
+	}
 }

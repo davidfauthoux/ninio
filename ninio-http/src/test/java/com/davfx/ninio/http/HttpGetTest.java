@@ -1,4 +1,4 @@
-package com.davfx.ninio.http.v3;
+package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

@@ -1,26 +1,30 @@
 package com.davfx.ninio.http;
 
-import java.io.File;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.util.Arrays;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.http.util.AnnotatedHttpService;
-import com.davfx.ninio.http.util.HttpController;
-import com.davfx.ninio.http.util.HttpPost;
-import com.davfx.ninio.http.util.annotations.BodyParameter;
-import com.davfx.ninio.http.util.annotations.DefaultValue;
-import com.davfx.ninio.http.util.annotations.HeaderParameter;
-import com.davfx.ninio.http.util.annotations.Path;
-import com.davfx.ninio.http.util.annotations.PathParameter;
-import com.davfx.ninio.http.util.annotations.QueryParameter;
-import com.davfx.ninio.http.util.annotations.Route;
-import com.davfx.ninio.http.util.controllers.Assets;
-import com.davfx.util.Wait;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
+import com.davfx.ninio.core.WaitListenConnecting;
+import com.davfx.ninio.http.service.Annotated;
+import com.davfx.ninio.http.service.HttpContentType;
+import com.davfx.ninio.http.service.HttpController;
+import com.davfx.ninio.http.service.HttpPost;
+import com.davfx.ninio.http.service.HttpService;
+import com.davfx.ninio.http.service.HttpServiceRequest;
+import com.davfx.ninio.http.service.annotations.BodyParameter;
+import com.davfx.ninio.http.service.annotations.DefaultValue;
+import com.davfx.ninio.http.service.annotations.HeaderParameter;
+import com.davfx.ninio.http.service.annotations.Path;
+import com.davfx.ninio.http.service.annotations.PathParameter;
+import com.davfx.ninio.http.service.annotations.QueryParameter;
+import com.davfx.ninio.http.service.annotations.Route;
+import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
-import com.google.common.reflect.ClassPath;
 
 public final class ReadmeWithAnnotatedHttpService {
 
@@ -59,11 +63,11 @@ public final class ReadmeWithAnnotatedHttpService {
 			return Http.ok().content("post " + text + " " + post + " " + post.parameters());
 		}
 		@Route(method = HttpMethod.GET, path = "/r?submit=Submit")
-		public Http echoGetAll(HttpRequest r) {
+		public Http echoGetAll(HttpServiceRequest r) {
 			return Http.ok().content("GET " + r);
 		}
 		@Route(method = HttpMethod.GET, path = "/r?submit2")
-		public Http echoGetFirst(HttpRequest r) {
+		public Http echoGetFirst(HttpServiceRequest r) {
 			return Http.ok().content("GET2 " + r);
 		}
 	}
@@ -96,18 +100,15 @@ public final class ReadmeWithAnnotatedHttpService {
 	public static final class EchoHelloWorldController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/{message}/{to}")
 		public Http echo(final @PathParameter("message") String message, final @PathParameter("to") String to, final @QueryParameter("n") String n) throws IOException {
-			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new HttpStream() {
-				@Override
-				public void produce(OutputStream out) throws Exception {
-					int nn = Integer.parseInt(n);
-					for (int i = 0; i < nn; i++) {
-						out.write((message + " " + to + "\n").getBytes(Charsets.UTF_8));
-					}
-				}
-			});
+			StringBuilder b = new StringBuilder();
+			int nn = Integer.parseInt(n);
+			for (int i = 0; i < nn; i++) {
+				b.append(message + " " + to + "\n");
+			}
+			return Http.ok().contentType(HttpContentType.plainText(Charsets.UTF_8)).stream(new ByteArrayInputStream(b.toString().getBytes(Charsets.UTF_8)));
 		}
 	}
-	
+
 	@Path("/header")
 	public static final class EchoHeaderController implements HttpController {
 		@Route(method = HttpMethod.GET)
@@ -124,38 +125,35 @@ public final class ReadmeWithAnnotatedHttpService {
 		}
 	}
 
+	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws Exception {
-		Wait wait = new Wait();
 		int port = 8080;
-		try (AnnotatedHttpService server = new AnnotatedHttpService(new Queue(), new Address(Address.ANY, port))) {
-			server.register(HttpQueryPath.of("/files"), new Assets(new File("src/test/resources"), "index.html"));
-			ClassPath classPath = ClassPath.from(ReadmeWithAnnotatedHttpService.class.getClassLoader());
-			
-			for (ClassPath.ClassInfo classInfo : classPath.getAllClasses()) {
-				Class<?> clazz;
-				try {
-					clazz = classInfo.load();
-				} catch (LinkageError e) {
-					continue;
-				}
+		try (Ninio ninio = Ninio.create()) {
+			Annotated.Builder a = Annotated.builder(HttpService.builder());
+			for (Class<?> clazz : ReadmeWithAnnotatedHttpService.class.getDeclaredClasses()) {
 				if (Arrays.asList(clazz.getInterfaces()).contains(HttpController.class)) {
-					@SuppressWarnings("unchecked")
-					Class<? extends HttpController> c = (Class<? extends HttpController>) clazz;
-					server.register(c);
+					a.register((Class<? extends HttpController>) clazz);
 				}
 			}
-
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/a/echo?message=helloworld");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/b?message=helloworld");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/e/Hello/World");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/ech/Hello?to=World");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/hello/world?n=100");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/header");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/headerWithDefaultValue");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/post/s");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files");
-			System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files/ws.html");
-			wait.waitFor();
+	
+			Wait wait = new Wait();
+			try (Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
+					.connecting(new WaitListenConnecting(wait)).listening(
+							HttpListening.builder().with(new ThreadingSerialExecutor(ReadmeWithAnnotatedHttpService.class)).with(a.build()).build()))) {
+				wait.waitFor();
+	
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/a/echo?message=helloworld");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/b?message=helloworld");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/e/Hello/World");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/ech/Hello?to=World");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/echo/hello/world?n=100");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/header");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/headerWithDefaultValue");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/post/s");
+				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files");
+				//System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/files/ws.html");
+				Thread.sleep(60000);
+			}
 		}
 	}
 

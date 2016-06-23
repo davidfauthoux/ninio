@@ -61,7 +61,9 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 			
 			@Override
 			public void close() {
-				sender.send(headerOf(0x08, 0L));
+				// sender.send(WebsocketUtils.headerOf(0x08, 0L));
+				LOGGER.trace("Close requested");
+				sender.cancel();
 			}
 			
 			@Override
@@ -88,7 +90,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 				}
 				*/
 				
-				sender.send(headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()));
+				sender.send(WebsocketUtils.headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()));
 				sender.send(buffer);
 				return this;
 			}
@@ -214,7 +216,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 					}
 				}
 				
-				if (opcodeRead && lenRead && !mustReadExtendedLen16 && !mustReadExtendedLen64 && !mustReadMask && buffer.hasRemaining() && (currentRead < currentLen)) {
+				if (opcodeRead && lenRead && !mustReadExtendedLen16 && !mustReadExtendedLen64 && !mustReadMask) { //%% && buffer.hasRemaining() && (currentRead < currentLen)) {
 					ByteBuffer partialBuffer;
 					int len = (int) Math.min(buffer.remaining(), currentLen - currentRead);
 					if (currentMask == null) {
@@ -235,7 +237,6 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 					}
 					int opcode = currentOpcode;
 					long frameLength = currentLen;
-
 					if (currentRead == currentLen) {
 						opcodeRead = false;
 						lenRead = false;
@@ -251,7 +252,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 					if (opcode == 0x09) {
 						if (toPing == 0L) {
 							toPing = frameLength;
-							sender.send(headerOf(0x0A, frameLength));
+							sender.send(WebsocketUtils.headerOf(0x0A, frameLength));
 						}
 
 						toPing -= partialBuffer.remaining();
@@ -261,7 +262,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 							receiver.received(innerConnector, null, partialBuffer);
 						}
 					} else if (opcode == 0x08) {
-						LOGGER.debug("Connection closed by peer");
+						LOGGER.trace("Connection requested by peer");
 						sender.cancel();
 						if (closing != null) {
 							closing.closed();
@@ -274,34 +275,8 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		
 		@Override
 		public void ended() {
-			LOGGER.debug("Connection closed");
+			LOGGER.trace("Connection closed");
 			sender.cancel();
 		}
-	}
-
-	public static ByteBuffer headerOf(int opcode, long len) { // No mask
-		int extendedPayloadLengthLen;
-		if (len <= 125) {
-			extendedPayloadLengthLen = 0;
-		} else if (len <= 65535) {
-			extendedPayloadLengthLen = 2;
-		} else {
-			extendedPayloadLengthLen = 8;
-		}
-		ByteBuffer res = ByteBuffer.allocate(2 + extendedPayloadLengthLen);
-		byte first = (byte) opcode;
-		first |= 0x80; // Not an ACK
-		res.put(first);
-		if (len <= 125) {
-			res.put((byte) len);
-		} else if (len <= 65535) {
-			res.put((byte) 126);
-			res.putShort((short) len);
-		} else {
-			res.put((byte) 127);
-			res.putLong(len);
-		}
-		res.flip();
-		return res;
 	}
 }

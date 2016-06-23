@@ -37,7 +37,6 @@ import com.davfx.ninio.http.service.HttpController;
 import com.davfx.ninio.http.service.HttpService;
 import com.davfx.ninio.http.service.annotations.QueryParameter;
 import com.davfx.ninio.http.service.annotations.Route;
-import com.davfx.ninio.http.v3.HttpGetTest;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;

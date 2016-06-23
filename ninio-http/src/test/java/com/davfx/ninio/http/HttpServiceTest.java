@@ -24,10 +24,6 @@ import com.google.common.base.Charsets;
 
 public class HttpServiceTest {
 	
-	static {
-		System.setProperty("http.keepAlive", "false");
-	}
-	
 	@Path("/get")
 	public static final class TestGetWithQueryParameterController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/hello")
