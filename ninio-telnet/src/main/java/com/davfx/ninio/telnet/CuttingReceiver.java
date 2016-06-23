@@ -13,15 +13,24 @@ final class CuttingReceiver implements Receiver {
 
 	private final Receiver wrappee;
 	
-	private ByteBuffer currentPrompt = null;
+	private final ByteBuffer prompt;
+	private ByteBuffer currentPrompt;
 	private List<ByteBuffer> previous = null;
 	private final List<ByteBuffer> buffers = new LinkedList<>();
 	private final int limit;
 	private int count = 0;
 
+	public CuttingReceiver(int limit, ByteBuffer prompt, Receiver wrappee) {
+		this.limit = limit;
+		this.prompt = prompt;
+		this.wrappee = wrappee;
+		currentPrompt = prompt.duplicate();
+	}
 	public CuttingReceiver(int limit, Receiver wrappee) {
 		this.limit = limit;
+		prompt = null;
 		this.wrappee = wrappee;
+		currentPrompt = null;
 	}
 	
 	public void on(ByteBuffer prompt) {
@@ -96,7 +105,7 @@ final class CuttingReceiver implements Receiver {
 	
 	@Override
 	public void received(Connector conn, Address address, ByteBuffer buffer) {
-		//%% LOGGER.debug("Received: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
+		//%% LOGGER.debug("Received: ***{}***", encode(ByteBufferUtils.toString(buffer)));
 		while (true) {
 			if (currentPrompt == null) {
 				return;
@@ -117,7 +126,7 @@ final class CuttingReceiver implements Receiver {
 					newPrevious.add(0, b);
 					lengthToKeep -= b.remaining();
 				} else {
-					newPrevious.add(0, ByteBuffer.wrap(b.array(), b.position() + b.remaining() - lengthToKeep, lengthToKeep));
+					newPrevious.add(0, ByteBuffer.wrap(b.array(), b.arrayOffset() + b.position() + b.remaining() - lengthToKeep, lengthToKeep));
 					break;
 				}
 				
@@ -141,8 +150,8 @@ final class CuttingReceiver implements Receiver {
 			}
 			
 			ByteBuffer startBuffer = ByteBuffer.wrap(buffer.array(), buffer.position(), position);
-			buffer = ByteBuffer.wrap(buffer.array(), buffer.position() + position, buffer.remaining() - position);
-			//%% LOGGER.debug("Cut with prompt: {} --> /{}/ <> /{}/", new String(currentPrompt.array(), currentPrompt.position(), currentPrompt.remaining(), TelnetSpecification.CHARSET), new String(startBuffer.array(), startBuffer.position(), startBuffer.remaining(), TelnetSpecification.CHARSET), new String(buffer.array(), buffer.position(), buffer.remaining(), TelnetSpecification.CHARSET));
+			buffer = ByteBuffer.wrap(buffer.array(), buffer.arrayOffset() + buffer.position() + position, buffer.remaining() - position);
+			//%% LOGGER.debug("Cut with prompt: ***{}*** --> /{}/ <> /{}/", encode(ByteBufferUtils.toString(currentPrompt)), encode(ByteBufferUtils.toString(startBuffer)), encode(ByteBufferUtils.toString(buffer)));
 			buffers.add(startBuffer);
 
 			for (ByteBuffer b : buffers) {
@@ -153,7 +162,21 @@ final class CuttingReceiver implements Receiver {
 			buffers.clear();
 			count = 0;
 			previous = null;
-			currentPrompt = null;
+			if (prompt == null) {
+				currentPrompt = null;
+			} else {
+				currentPrompt = prompt.duplicate();
+			}
 		}
 	}
+
+	/*%%
+	private static String encode(String input) {
+		try {
+			return URLEncoder.encode(input, Charsets.UTF_8.name());
+		} catch (UnsupportedEncodingException e) {
+			throw new RuntimeException(e);
+		}
+	}
+	*/
 }

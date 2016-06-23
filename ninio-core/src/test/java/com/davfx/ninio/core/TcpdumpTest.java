@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import com.davfx.ninio.util.ConfigUtils;
@@ -13,6 +14,7 @@ import com.davfx.ninio.util.Wait;
 // Mac OS X:
 // sudo chmod go=r /dev/bpf*
 
+@Ignore
 public class TcpdumpTest {
 	
 	static {
@@ -34,6 +36,8 @@ public class TcpdumpTest {
 				.connecting(new WaitConnecting(wait)))) {
 				
 				wait.waitFor();
+				
+				Thread.sleep(100);
 				
 				try (Connector client = ninio.create(UdpSocket.builder()
 					.failing(new LockFailing(lock))

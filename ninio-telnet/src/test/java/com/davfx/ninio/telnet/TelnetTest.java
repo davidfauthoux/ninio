@@ -1,6 +1,7 @@
 package com.davfx.ninio.telnet;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
@@ -8,9 +9,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.SocketReadyFactory;
-import com.davfx.util.Lock;
+import com.davfx.ninio.core.ByteBufferUtils;
+import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connecting;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.InMemoryBuffers;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.ThreadingSerialExecutor;
+import com.davfx.ninio.telnet.CutOnPromptClient.Handler;
+import com.davfx.ninio.util.Lock;
 import com.google.common.base.Function;
 
 public class TelnetTest {
@@ -18,79 +30,106 @@ public class TelnetTest {
 
 	@Test
 	public void test() throws Exception {
-		int port = 8080;
-		try (Queue queue = new Queue()) {
-			try (CommandTelnetServer server = new CommandTelnetServer(queue, new Address(Address.LOCALHOST, port), "Tell me: ", TelnetSpecification.EOL, new Function<String, String>() {
-				@Override
-				public String apply(String input) {
-					LOGGER.debug("--> {}", input);
-					String result;
-					if (input.equals("Hello")) {
-						result = "World!";
-					} else if (input.equals("Bye")) {
-						result = null;
-					} else {
-						result = "Did you say " + input + "?";
-					}
-					LOGGER.debug("<-- {}", result);
-					return result;
+		final Function<String, String> f = new Function<String, String>() {
+			@Override
+			public String apply(String input) {
+				input = input.trim();
+				LOGGER.debug("--> {}", input);
+				String result;
+				if (input.equals("Hello")) {
+					result = "World!";
+				} else if (input.equals("Bye")) {
+					result = null;
+				} else {
+					result = "Did you say " + input + "?";
 				}
-			})) {
-
-				queue.finish().waitFor();
-
-				final Lock<String, IOException> lock = new Lock<>();
+				LOGGER.debug("<-- {}", result);
+				return result;
+			}
+		};
+		
+		int port = 8080;
+		
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable ss = ninio.create(TelnetServer.builder().listening(new Listening() {
+				@Override
+				public Connection connecting(Address from, final Connector connector) {
+					return new Listening.Connection() {
+						@Override
+						public Receiver receiver() {
+							return  new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(TelnetSpecification.EOL), new Receiver() {
+								private InMemoryBuffers buffers = new InMemoryBuffers();
+								@Override
+								public void received(Connector conn, Address address, ByteBuffer buffer) {
+									if (buffer == null) {
+										String r = f.apply(buffers.toString());
+										buffers = new InMemoryBuffers();
+										if (r == null) {
+											conn.close();
+										} else {
+											conn.send(null, ByteBufferUtils.toByteBuffer(r + TelnetSpecification.EOL));
+										}
+									} else {
+										buffers.add(buffer);
+									}
+								}
+							});
+						}
+						@Override
+						public Failing failing() {
+							return null;
+						}
+						@Override
+						public Connecting connecting() {
+							return null;
+						}
+						@Override
+						public Closing closing() {
+							return null;
+						}
+					};
+				}
+			}).with(TcpSocketServer.builder().bind(new Address(Address.ANY, port))))) {
 				
-				try (TelnetSharing sharing = new TelnetSharing(queue, new SocketReadyFactory(queue))) {
-					TelnetSharingHandler handler = sharing.client(Telnet.sharing(), new Address(Address.LOCALHOST, port));
-					handler.init(null, ": ", new TelnetSharingHandler.Callback() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void handle(String response) {
-							LOGGER.debug("1/ RECEIVED /" + response + "/");
-						}
-					});
-					handler.init("Hello", "World!", new TelnetSharingHandler.Callback() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void handle(String response) {
-							LOGGER.debug("2/ RECEIVED /" + response + "/");
-						}
-					});
-					handler.write("Hello", "World!", new TelnetSharingHandler.Callback() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void handle(String response) {
-							LOGGER.debug("3/ RECEIVED /" + response + "/");
-						}
-					});
-					handler.write("Hey", "?", new TelnetSharingHandler.Callback() {
-						@Override
-						public void failed(IOException e) {
-							lock.fail(e);
-						}
-						@Override
-						public void handle(String response) {
-							LOGGER.debug("4/ RECEIVED /" + response + "/");
-							lock.set(response);
-						}
-					});
-
-					LOGGER.debug("Waiting for result");
-					
-					Assertions.assertThat(lock.waitFor()).isEqualTo("Did you say Hey?");
+				final Lock<String, IOException> lock0 = new Lock<>();
+				final Lock<String, IOException> lock1 = new Lock<>();
+				final Lock<String, IOException> lock2 = new Lock<>();
+				
+				try (Disconnectable c = ninio.create(CutOnPromptClient.builder().with(new ThreadingSerialExecutor(CutOnPromptClient.class)).with(new Handler() {
+					@Override
+					public void disconnected() {
+						lock2.set("Disconnected");
+					}
+					@Override
+					public void connected(Write write) {
+						write.write("Hello", TelnetSpecification.EOL, new Handler.Receive() {
+							@Override
+							public void received(Write write, String result) {
+								lock0.set(result);
+								LOGGER.debug("---------------> ***{}***", result);
+								write.write("Hello again", TelnetSpecification.EOL, new Handler.Receive() {
+									@Override
+									public void received(Write write, String result) {
+										LOGGER.debug("---------------> ***{}***", result);
+										lock1.set(result);
+										write.write("Bye", TelnetSpecification.EOL, new Handler.Receive() {
+											@Override
+											public void received(Write write, String result) {
+												LOGGER.debug("---------------> ***{}***", result);
+												lock2.set(result);
+											}
+										});
+									}
+								});
+							}
+						});
+					}
+				}).with(TelnetClient.builder().to(new Address(Address.LOCALHOST, port))))) {
+					Assertions.assertThat(lock0.waitFor()).isEqualTo("World!" + TelnetSpecification.EOL);
+					Assertions.assertThat(lock1.waitFor()).isEqualTo("Did you say Hello again?" + TelnetSpecification.EOL);
+					Assertions.assertThat(lock2.waitFor()).isEqualTo("Disconnected");
 				}
 			}
-			queue.finish().waitFor();
 		}
 	}
 	

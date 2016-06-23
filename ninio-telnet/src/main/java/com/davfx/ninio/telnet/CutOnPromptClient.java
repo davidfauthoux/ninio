@@ -15,18 +15,16 @@ import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.InMemoryBuffers;
-import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocket;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.google.common.base.Charsets;
 
 public final class CutOnPromptClient implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CutOnPromptClient.class);
-	
+	/*%%
 	public static void main(String[] args) throws Exception {
 		try (Ninio ninio = Ninio.create()) {
 			Disconnectable c = ninio.create(CutOnPromptClient.builder().with(new ThreadingSerialExecutor(CutOnPromptClient.class)).with(new Handler() {
@@ -64,16 +62,16 @@ public final class CutOnPromptClient implements Connector {
 				}
 			}).with(TelnetClient.builder().to(new Address(Address.LOCALHOST, TelnetSpecification.DEFAULT_PORT))));
 			try {
-				Thread.sleep(100000);
+				Thread.sleep(60000);
 			} finally {
 				c.close();
 			}
 		}
-	}
+	}*/
 	
 	private static final Charset DEFAULT_CHARSET = Charsets.UTF_8;
 	private static final int DEFAULT_LIMIT = 100;
-	private static final String DEFAULT_EOL = "\n";
+	private static final String DEFAULT_EOL = TelnetSpecification.EOL;
 	
 	public static interface Handler {
 		interface Receive {

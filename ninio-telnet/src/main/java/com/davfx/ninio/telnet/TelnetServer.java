@@ -9,17 +9,16 @@ import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Listening;
-import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
 
 public final class TelnetServer {
-	
+	/*%%
 	public static void main(String[] args) throws Exception {
 		try (Ninio ninio = Ninio.create()) {
-			Disconnectable ss = ninio.create(TelnetServer.builder().listening(new Listening() {
+			try (Disconnectable ss = ninio.create(TelnetServer.builder().listening(new Listening() {
 				@Override
 				public Connection connecting(Address from, final Connector connector) {
 					return new Listening.Connection() {
@@ -46,14 +45,11 @@ public final class TelnetServer {
 						}
 					};
 				}
-			}).with(TcpSocketServer.builder().bind(new Address(Address.ANY, 8080))));
-			try {
-				Thread.sleep(100000);
-			} finally {
-				ss.close();
+			}).with(TcpSocketServer.builder().bind(new Address(Address.ANY, 8080))))) {
+				Thread.sleep(60000);
 			}
 		}
-	}
+	}*/
 	
 	public static interface Builder extends NinioBuilder<Disconnectable> {
 		Builder with(TcpSocketServer.Builder builder);

@@ -1,6 +1,5 @@
 package com.davfx.ninio.telnet;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -10,32 +9,30 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
-import com.google.common.base.Charsets;
+import com.davfx.ninio.core.ByteBufferUtils;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.InMemoryBuffers;
+import com.davfx.ninio.core.Receiver;
 
-public class CutOnPromptReadyConnectionTest {
+public class CuttingReceiverTest {
 
 	private List<String> test(List<String> content, String prompt) {
 		final List<String> result = new LinkedList<>();
-		CuttingByteBufferHandler c = new CuttingByteBufferHandler(0, new FailableCloseableByteBufferHandler() {
+		CuttingReceiver c = new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(prompt), new Receiver() {
+			private InMemoryBuffers buffers = new InMemoryBuffers();
 			@Override
-			public void failed(IOException e) {
-			}
-			@Override
-			public void close() {
-			}
-			
-			@Override
-			public void handle(Address address, ByteBuffer buffer) {
-				String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-				result.add(s);
+			public void received(Connector conn, Address address, ByteBuffer buffer) {
+				if (buffer == null) {
+					result.add(buffers.toString());
+					buffers = new InMemoryBuffers();
+				} else {
+					buffers.add(buffer);
+				}
 			}
 		});
 		
-		c.setPrompt(ByteBuffer.wrap(prompt.getBytes(Charsets.UTF_8)));
-		
 		for (String contentString : content) {
-			c.handle(null, ByteBuffer.wrap(contentString.getBytes(Charsets.UTF_8)));
+			c.received(null, null, ByteBufferUtils.toByteBuffer(contentString));
 		}
 		
 		return result;

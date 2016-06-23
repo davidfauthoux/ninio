@@ -13,16 +13,17 @@ import org.junit.Test;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.LockFailing;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.snmp.FromMapSnmpServerHandler;
 import com.davfx.ninio.snmp.Oid;
-import com.davfx.ninio.snmp.Result;
 import com.davfx.ninio.snmp.SnmpClient;
 import com.davfx.ninio.snmp.SnmpReceiver;
+import com.davfx.ninio.snmp.SnmpResult;
 import com.davfx.ninio.snmp.SnmpServer;
 import com.davfx.ninio.snmp.SnmpTimeout;
-import com.davfx.util.Lock;
+import com.davfx.ninio.util.Lock;
 
 public class SnmpServerTest {
 	
@@ -43,14 +44,14 @@ public class SnmpServerTest {
 					.bind(new Address(Address.LOCALHOST, port))
 					.handle(new FromMapSnmpServerHandler(map)));
 			try {
-				final Lock<List<Result>, IOException> lock = new Lock<>();
+				final Lock<List<SnmpResult>, IOException> lock = new Lock<>();
 				try (SnmpClient snmpClient = ninio.create(SnmpClient.builder().with(executor))) {
 					snmpClient
 						.request()
 						.receiving(new SnmpReceiver() {
-							private final List<Result> r = new LinkedList<>();
+							private final List<SnmpResult> r = new LinkedList<>();
 							@Override
-							public void received(Result result) {
+							public void received(SnmpResult result) {
 								r.add(result);
 							}
 							@Override
@@ -58,12 +59,7 @@ public class SnmpServerTest {
 								lock.set(r);
 							}
 						})
-						.failing(new Failing() {
-							@Override
-							public void failed(IOException e) {
-								lock.fail(e);
-							}
-						})
+						.failing(new LockFailing(lock))
 						.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
 
 					Assertions.assertThat(lock.waitFor().toString()).isEqualTo("[1.1.1:val1.1.1]");
@@ -81,7 +77,7 @@ public class SnmpServerTest {
 			int port = 8080;
 			final Lock<String, IOException> lock = new Lock<>();
 			try (SnmpClient snmpClient = ninio.create(SnmpClient.builder().with(executor))) {
-				SnmpTimeout.wrap(timeout, 1d, snmpClient
+				SnmpTimeout.wrap(timeout, 0.5d, snmpClient
 					.request())
 					.failing(new Failing() {
 						@Override
