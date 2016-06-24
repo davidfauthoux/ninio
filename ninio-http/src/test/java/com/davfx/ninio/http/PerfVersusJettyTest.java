@@ -28,7 +28,6 @@ import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitListenConnecting;
 import com.davfx.ninio.http.service.Annotated;
@@ -38,6 +37,7 @@ import com.davfx.ninio.http.service.HttpService;
 import com.davfx.ninio.http.service.annotations.QueryParameter;
 import com.davfx.ninio.http.service.annotations.Route;
 import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
@@ -101,7 +101,7 @@ public class PerfVersusJettyTest {
 	private static final Ninio ninio = Ninio.create();
 	private static final com.davfx.ninio.http.HttpClient ninioClient;
 	private static final Timeout timeout = new Timeout();
-	private static final Executor executor = new ThreadingSerialExecutor(HttpGetTest.class);
+	private static final Executor executor = new SerialExecutor(HttpGetTest.class);
 	private static final Limit limit = new Limit(10);
 	static {
 		ninioClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor));
@@ -170,7 +170,7 @@ public class PerfVersusJettyTest {
 		private final Disconnectable server;
 		public NinioServer1() {
 			Wait wait = new Wait();
-			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)).connecting(new WaitListenConnecting(wait)).listening(HttpListening.builder().with(new ThreadingSerialExecutor(NinioServer1.class)).with(new HttpListeningHandler() {
+			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)).connecting(new WaitListenConnecting(wait)).listening(HttpListening.builder().with(new SerialExecutor(NinioServer1.class)).with(new HttpListeningHandler() {
 				@Override
 				public ConnectionHandler create() {
 					return new ConnectionHandler() {
@@ -218,7 +218,7 @@ public class PerfVersusJettyTest {
 			Wait wait = new Wait();
 			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT))
 					.connecting(new WaitListenConnecting(wait)).listening(
-							HttpListening.builder().with(new ThreadingSerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
+							HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
 			wait.waitFor();
 		}
 		

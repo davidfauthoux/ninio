@@ -17,7 +17,6 @@ import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpContentReceiver;
@@ -35,6 +34,7 @@ import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.HttpTimeout;
 import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 
@@ -115,7 +115,7 @@ public class HttpGetTest {
 	}
 	
 	private static Disconnectable server(Ninio ninio, int port, final String suffix) {
-		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
+		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
 			@Override
 			public ConnectionHandler create() {
 				return new ConnectionHandler() {
@@ -158,7 +158,7 @@ public class HttpGetTest {
 		final int LIMIT = 10; // Max number of concurrent HTTP requests
 		
 		try (Ninio ninio = Ninio.create()) { // Should always be created globally
-			Executor executor = new ThreadingSerialExecutor(HttpGetTest.class);
+			Executor executor = new SerialExecutor(HttpGetTest.class);
 			Limit limit = new Limit(LIMIT);
 			try (Timeout timeout = new Timeout()) {
 				try (HttpClient client = ninio.create(HttpClient.builder().with(executor))) {
@@ -204,7 +204,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
 				}
 			} finally {
@@ -220,7 +220,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "TEST1", "TEST1");
 				}
 			} finally {
@@ -236,7 +236,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "/test1");
 				}
 			} finally {
@@ -252,7 +252,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true, "/test2");
 				}
@@ -269,7 +269,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "TEST1", "TEST1");
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true, "TEST2", "TEST2");
 				}
@@ -286,7 +286,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "/test1");
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", false, "/test2");
 				}
@@ -301,7 +301,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
@@ -324,7 +324,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "/test1");
@@ -347,7 +347,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "TEST1", "TEST1");
@@ -370,7 +370,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "TEST1", "TEST1");
@@ -394,7 +394,7 @@ public class HttpGetTest {
 		final int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				new Thread(new Runnable() {
 					@Override
 					public void run() {
@@ -490,7 +490,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					Lock<Object, IOException> lock1 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true);
 					Lock<Object, IOException> lock2 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true);
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("/test1");
@@ -510,7 +510,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().pipelining().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient client = ninio.create(HttpClient.builder().pipelining().with(new SerialExecutor(HttpGetTest.class)))) {
 					Lock<Object, IOException> lock1 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true);
 					Lock<Object, IOException> lock2 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true);
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("/test1");

@@ -13,7 +13,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpHeaderKey;
@@ -26,6 +25,7 @@ import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.service.HttpController.HttpAsyncOutput;
 import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.base.Optional;
 import com.google.common.collect.HashMultimap;
@@ -99,7 +99,7 @@ public final class HttpService implements HttpListeningHandler {
 		this.handlers = handlers;
 		executors = new Executor[threads];
 		for (int i = 0; i < executors.length; i++) {
-			executors[i] = new ThreadingSerialExecutor(HttpService.class);
+			executors[i] = new SerialExecutor(HttpService.class);
 		}
 	}
 	

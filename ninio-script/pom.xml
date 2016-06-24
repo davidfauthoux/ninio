@@ -17,5 +17,10 @@
 			<artifactId>rhino</artifactId>
 			<version>1.7.7.1</version>
 		</dependency>
+
+		<dependency>
+			<groupId>com.davfx.ninio</groupId>
+			<artifactId>ninio-util</artifactId>
+		</dependency>
 	</dependencies>
 </project>

@@ -17,12 +17,12 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.RoutingTcpSocketServer;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.WaitListenConnecting;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.Annotated.Builder;
 import com.davfx.ninio.http.service.HttpController;
 import com.davfx.ninio.http.service.HttpService;
+import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 import com.google.common.base.Supplier;
@@ -69,7 +69,7 @@ class TestUtils {
 		Wait wait = new Wait();
 		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
 				.connecting(new WaitListenConnecting(wait)).listening(
-						HttpListening.builder().with(new ThreadingSerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
+						HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
 		wait.waitFor();
 		return tcp;
 	}
@@ -81,7 +81,7 @@ class TestUtils {
 		Wait wait = new Wait();
 		final Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
 				.connecting(new WaitListenConnecting(wait)).listening(
-						HttpListening.builder().with(new ThreadingSerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
+						HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
 		wait.waitFor();
 
 		Wait routedWait = new Wait();

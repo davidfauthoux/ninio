@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.DateUtils;
+import com.davfx.ninio.util.SerialExecutor;
 import com.typesafe.config.Config;
 
 public final class Timeout implements AutoCloseable {
@@ -20,7 +21,7 @@ public final class Timeout implements AutoCloseable {
 	private static final Config CONFIG = ConfigUtils.load(Timeout.class);
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "timeout.precision");
 
-	private final Executor executor = new ThreadingSerialExecutor(Timeout.class);
+	private final Executor executor = new SerialExecutor(Timeout.class);
 	
 	private static final class Task {
 		public long id = -1L;

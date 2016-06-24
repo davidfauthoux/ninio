@@ -2,33 +2,31 @@ package com.davfx.ninio.script;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Executor;
 
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
+import javax.script.ScriptException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory;
+import com.davfx.ninio.util.SerialExecutor;
 
 //import lu.flier.script.V8ScriptEngineFactory;
 
-public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
+public final class ExecutorScriptRunner implements ScriptRunner {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 
 	private ScriptEngine scriptEngine;
-	private final ThreadPoolExecutor executorService; // = Executors.newSingleThreadExecutor(new ClassThreadFactory(ExecutorScriptRunner.class));
+	private final Executor executor = new SerialExecutor(ExecutorScriptRunner.class);
+	private boolean wrapConvert;
 
 	public ExecutorScriptRunner() {
 		this(null);
 	}
 	public ExecutorScriptRunner(final String engineProvider) {
-		executorService = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingQueue<Runnable>());
-
 		doExecute(new Runnable() {
 			@Override
 			public void run() {
@@ -46,15 +44,34 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 					throw new IllegalArgumentException("Bad engine: " + engineProvider);
 				}
 				
+				if (scriptEngine.getFactory().getEngineName().equals("Mozilla Rhino")) {
+					try {
+						scriptEngine.eval("function __js(o) {"
+							+ "if (o instanceof java.util.Map) {"
+								+ "var r = {};"
+								+ "var i = o.keySet().iterator();"
+								+ "while (i.hasNext()) {"
+									+ "var k = i.next();"
+									+ "r[k] = __js(o.get(k));"
+								+ "}"
+								+ "return r;"
+								+ "} else if (o instanceof java.lang.Number) {"
+									+ "return 1.0 * o;"
+								+ "} else {"
+									+ "return '' + o;"
+								+ "}"
+							+ "}");
+					} catch (ScriptException e) {
+						LOGGER.error("Could not prepare engine", e);
+					}
+					wrapConvert = true;
+				} else {
+					wrapConvert = false;
+				}
+
 				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 			}
 		});
-	}
-	
-	@Override
-	public void close() {
-		LOGGER.debug("Script engine closed");
-		executorService.shutdown();
 	}
 	
 	private static final class EndManager {
@@ -69,7 +86,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 		}
 		public void fail(Exception e) {
 			ended = true;
-			LOGGER.error("Failed", e);
+			// LOGGER.error("Failed", e);
 			End ee = end;
 			end = null;
 			if (ee != null) {
@@ -147,7 +164,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 					});
 				}
 				@Override
-				public void handle(final Object response) {
+				public AsyncScriptFunction.Callback<Object> handle(final Object response) {
 					doExecute(new Runnable() {
 						@Override
 						public void run() {
@@ -176,6 +193,7 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 							}
 						}
 					});
+					return this;
 				}
 			});
 		}
@@ -270,7 +288,15 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 						b.append(", (function() {\n"
 								+ "var ").append(prefix).append(prefix).append("f = ").append(prefix).append(f).append(";\n"
 								+ "return function(request) {\n"
-									+ "return ").append(prefix).append(prefix).append("f.call(request);\n"
+									+ "return ");
+						if (wrapConvert) {
+							b.append("__js(");
+						}
+						b.append(prefix).append(prefix).append("f.call(request)");
+						if (wrapConvert) {
+							b.append(")");
+						}
+						b.append(";\n"
 								+ "}\n"
 							+ "})()\n");
 					}
@@ -279,7 +305,13 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 								+ "var ").append(prefix).append(prefix).append("f = ").append(prefix).append(f).append(";\n"
 								+ "var ").append(prefix).append(prefix).append("e = ").append(prefix).append("endManager;\n"
 								+ "return function(request, callback) {\n"
-									+ "").append(prefix).append(prefix).append("f.call(").append(prefix).append(prefix).append("e, request, callback);\n"
+									+ "").append(prefix).append(prefix).append("f.call(").append(prefix).append(prefix).append("e, request, ");
+						if (wrapConvert) {
+							b.append("function(r) { if (callback) { callback(__js(r)); } }");
+						} else {
+							b.append("callback || function() {}");
+						}
+						b.append(");\n"
 								+ "}\n"
 							+ "})()\n");
 					}
@@ -345,11 +377,6 @@ public final class ExecutorScriptRunner implements ScriptRunner, AutoCloseable {
 	}
 
 	private void doExecute(Runnable r) {
-		int queueSize = executorService.getQueue().size();
-		LOGGER.trace("Queue size = {}", queueSize);
-		try {
-			executorService.execute(r);
-		} catch (RejectedExecutionException ree) {
-		}
+		executor.execute(r);
 	}
 }

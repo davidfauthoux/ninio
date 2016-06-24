@@ -26,12 +26,12 @@ import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.WebsocketSocket;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
@@ -43,7 +43,7 @@ public final class ProxyServer implements Listening {
 		return new NinioBuilder<Disconnectable>() {
 			public Disconnectable create(Queue queue) {
 				final Trust trust = new Trust();
-				final Executor executor = new ThreadingSerialExecutor(ProxyServer.class);
+				final Executor executor = new SerialExecutor(ProxyServer.class);
 				final HttpClient httpClient = HttpClient.builder().with(executor).create(queue);
 				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override

@@ -2,7 +2,7 @@ package com.davfx.ninio.script;
 
 import java.util.Map;
 
-public interface ScriptRunner extends AutoCloseable {
+public interface ScriptRunner {
 	interface End {
 		void failed(Exception e);
 		void ended();
@@ -24,6 +24,4 @@ public interface ScriptRunner extends AutoCloseable {
 		Engine sub();
 	}
 	Engine engine();
-	
-	void close();
 }

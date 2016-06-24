@@ -10,6 +10,8 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.util.SerialExecutor;
+
 public final class RawSocket implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RawSocket.class);
@@ -81,7 +83,7 @@ public final class RawSocket implements Connector {
 	}
 	
 	private final NativeRawSocket socket;
-	private final Executor loop = new ThreadingSerialExecutor(RawSocket.class);
+	private final Executor loop = new SerialExecutor(RawSocket.class);
 
 	private RawSocket(final ProtocolFamily family, int protocol, Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
 		NativeRawSocket s;

@@ -10,11 +10,13 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.util.SerialExecutor;
+
 public final class Limit {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Limit.class);
 
-	private final Executor executor = new ThreadingSerialExecutor(Limit.class);
+	private final Executor executor = new SerialExecutor(Limit.class);
 	
 	private static final class Task {
 		public long id = -1L;

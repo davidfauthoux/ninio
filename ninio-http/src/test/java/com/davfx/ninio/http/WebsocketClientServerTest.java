@@ -21,7 +21,6 @@ import com.davfx.ninio.core.LockReceiver;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.core.WaitConnecting;
@@ -34,6 +33,7 @@ import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.WebsocketHttpContentReceiver;
 import com.davfx.ninio.http.WebsocketSocket;
 import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class WebsocketClientServerTest {
@@ -51,7 +51,7 @@ public class WebsocketClientServerTest {
 			try (Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
 					.failing(new LockFailing(lock))
 					.connecting(new WaitListenConnecting(wait))
-					.listening(HttpListening.builder().with(new ThreadingSerialExecutor(WebsocketClientServerTest.class)).with(new HttpListeningHandler() {
+					.listening(HttpListening.builder().with(new SerialExecutor(WebsocketClientServerTest.class)).with(new HttpListeningHandler() {
 				@Override
 				public ConnectionHandler create() {
 					return new ConnectionHandler() {
@@ -87,7 +87,7 @@ public class WebsocketClientServerTest {
 				
 				wait.waitFor();
 
-				try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new ThreadingSerialExecutor(HttpGetTest.class)))) {
+				try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					
 					try (Connector client = ninio.create(WebsocketSocket.builder().with(httpClient).to(new Address(Address.LOCALHOST, port))
 						.failing(new LockFailing(lock))

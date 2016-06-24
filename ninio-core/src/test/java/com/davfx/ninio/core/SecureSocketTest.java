@@ -8,6 +8,7 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class SecureSocketTest {
@@ -16,7 +17,7 @@ public class SecureSocketTest {
 	public void testSocket() throws Exception {
 		final Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
 
-		Executor executor = new ThreadingSerialExecutor(SecureSocketTest.class);
+		Executor executor = new SerialExecutor(SecureSocketTest.class);
 
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
 		

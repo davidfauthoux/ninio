@@ -1,14 +1,15 @@
-package com.davfx.ninio.core;
+package com.davfx.ninio.util;
 
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
-import com.davfx.ninio.util.ClassThreadFactory;
+import com.typesafe.config.Config;
 
-public final class ThreadingSerialExecutor implements Executor {
+public final class SerialExecutor implements Executor {
 	
-	private static final double TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD = 10d;//TODO conf
+	private static final Config CONFIG = ConfigUtils.load(SerialExecutor.class);
+	private static final double TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD = ConfigUtils.getDuration(CONFIG, "executor.serial.autoshutdown");
 	
 	private final Class<?> clazz;
 	private Thread thread = null;
@@ -16,7 +17,7 @@ public final class ThreadingSerialExecutor implements Executor {
 	private Runnable last = null;
 	private List<Runnable> toExecute = null;
 	
-	public ThreadingSerialExecutor(Class<?> clazz) {
+	public SerialExecutor(Class<?> clazz) {
 		this.clazz = clazz;
 	}
 	
@@ -30,10 +31,10 @@ public final class ThreadingSerialExecutor implements Executor {
 						while (true) {
 							Runnable lastRunnable;
 							List<Runnable> listToExecute;
-							synchronized (ThreadingSerialExecutor.this) {
+							synchronized (SerialExecutor.this) {
 								if (last == null) {
 									try {
-										ThreadingSerialExecutor.this.wait((long) (TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD * 1000d));
+										SerialExecutor.this.wait((long) (TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD * 1000d));
 									} catch (InterruptedException ie) {
 									}
 								}

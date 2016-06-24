@@ -19,12 +19,12 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocket;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.WebsocketSocket;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
@@ -34,7 +34,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		return new NinioBuilder<ProxyConnectorProvider>() {
 			@Override
 			public ProxyConnectorProvider create(Queue queue) {
-				final Executor executor = new ThreadingSerialExecutor(ProxyClient.class);
+				final Executor executor = new SerialExecutor(ProxyClient.class);
 				final ProxyClient client = ProxyClient.builder().with(executor).with(TcpSocket.builder().to(address)).create(queue);
 				return new ProxyConnectorProvider() {
 					@Override

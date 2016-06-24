@@ -17,7 +17,6 @@ import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpListening;
@@ -25,6 +24,7 @@ import com.davfx.ninio.http.HttpListeningHandler;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.WebsocketHttpContentReceiver;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.io.Files;
 
@@ -35,7 +35,7 @@ public class WebsocketTest {
 	private static Disconnectable server(Ninio ninio, int port) throws IOException {
 		final byte[] indexHtml= Files.toByteArray(new File("src/test/resources/files/ws.html"));
 		
-		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new ThreadingSerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
+		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
 			@Override
 			public ConnectionHandler create() {
 				return new ConnectionHandler() {

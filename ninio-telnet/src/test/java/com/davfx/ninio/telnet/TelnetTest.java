@@ -20,9 +20,9 @@ import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.ThreadingSerialExecutor;
 import com.davfx.ninio.telnet.CutOnPromptClient.Handler;
 import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Function;
 
 public class TelnetTest {
@@ -95,7 +95,7 @@ public class TelnetTest {
 				final Lock<String, IOException> lock1 = new Lock<>();
 				final Lock<String, IOException> lock2 = new Lock<>();
 				
-				try (Disconnectable c = ninio.create(CutOnPromptClient.builder().with(new ThreadingSerialExecutor(CutOnPromptClient.class)).with(new Handler() {
+				try (Disconnectable c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class)).with(new Handler() {
 					@Override
 					public void disconnected() {
 						lock2.set("Disconnected");
