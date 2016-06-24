@@ -21,13 +21,9 @@ public final class UdpSocket implements Connector {
 	private static final Config CONFIG = ConfigUtils.load(UdpSocket.class);
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("datagram.write.buffer").longValue();
 
-	public static interface Builder extends NinioBuilder<Connector> {
+	public static interface Builder extends ConfigurableNinioBuilder<Connector, Builder> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
-		Builder failing(Failing failing);
-		Builder closing(Closing closing);
-		Builder connecting(Connecting connecting);
-		Builder receiving(Receiver receiver);
 	}
 
 	public static Builder builder() {

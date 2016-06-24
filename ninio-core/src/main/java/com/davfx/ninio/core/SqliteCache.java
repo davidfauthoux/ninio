@@ -23,26 +23,59 @@ public final class SqliteCache {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SqliteCache.class);
 
-	interface WrappedBuilder<T> extends NinioBuilder<Connector> {
-		Builder<T> receiving(Receiver receiver);
-	}
-
-	public static interface Builder<T> extends NinioBuilder<Connector> {
+	public static interface Builder<T> extends ConfigurableNinioBuilder<Connector, Builder<T>> {
 		Builder<T> database(File database);
 		Builder<T> expiration(double expiration);
 		Builder<T> using(Interpreter<T> interpreter);
-		Builder<T> on(WrappedBuilder<T> builder);
-		Builder<T> receiving(Receiver receiver);
+		Builder<T> on(ConfigurableNinioBuilder<Connector, ?> builder);
 	}
 
 	public static <T> Builder<T> builder() {
 		return new Builder<T>() {
-			private WrappedBuilder<T> builder = null;
-			private Receiver receiver = null;
+			private ConfigurableNinioBuilder<Connector, ?> builder = UdpSocket.builder();
 			
 			private double expiration = 0d;
 			private Interpreter<T> interpreter = null;
-			private File database = null;
+			private File database;
+			{
+				try {
+					database = File.createTempFile(SqliteCache.class.getName(), null);
+				} catch (IOException ioe) {
+					database = null;
+				}
+				if (database != null) {
+					database.deleteOnExit();
+				}
+			}
+			
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			
+			@Override
+			public Builder<T> closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public Builder<T> connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public Builder<T> failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public Builder<T> receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
 			
 			@Override
 			public Builder<T> using(Interpreter<T> interpreter) {
@@ -51,17 +84,11 @@ public final class SqliteCache {
 			}
 			
 			@Override
-			public Builder<T> on(WrappedBuilder<T> builder) {
+			public Builder<T> on(ConfigurableNinioBuilder<Connector, ?> builder) {
 				this.builder = builder;
 				return this;
 			}
 		
-			@Override
-			public Builder<T> receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
 			@Override
 			public Builder<T> database(File database) {
 				this.database = database;
@@ -85,6 +112,9 @@ public final class SqliteCache {
 					throw new NullPointerException("database");
 				}
 				
+				builder.closing(closing);
+				builder.connecting(connecting);
+				builder.failing(failing);
 				return new InnerConnector<>(queue, database, expiration, interpreter, receiver, builder);
 			}
 		};
@@ -99,7 +129,7 @@ public final class SqliteCache {
 		private final Connection sqlConnection;
 		private final double expiration;
 		
-		public InnerConnector(Queue queue, File database, double expiration, Interpreter<T> interpreter, Receiver receiver, WrappedBuilder<T> builder) {
+		public InnerConnector(Queue queue, File database, double expiration, Interpreter<T> interpreter, Receiver receiver, ConfigurableNinioBuilder<Connector, ?> builder) {
 			this.expiration = expiration;
 			
 			databaseFile = database;
@@ -119,11 +149,11 @@ public final class SqliteCache {
 				throw new RuntimeException("Could not connect to sqlite database", e);
 			}
 
-			cacheByDestinationAddress = ((expiration == 0d) ? CacheBuilder.newBuilder() : CacheBuilder.newBuilder().expireAfterAccess((long) (expiration * 1000d), TimeUnit.MILLISECONDS)).build();
+			cacheByDestinationAddress = cacheMapExpiringAfterAccess(expiration);
 			r = receiver;
 			i = interpreter;
 
-			c = builder.receiving(new Receiver() {
+			builder.receiving(new Receiver() {
 				@Override
 				public void received(Connector conn, Address address, ByteBuffer sourceBuffer) {
 					T sub = i.handleResponse(sourceBuffer.duplicate());
@@ -143,7 +173,7 @@ public final class SqliteCache {
 						
 						key = cache.subToKey.getIfPresent(sub);
 						if (key == null) {
-							LOGGER.trace("No key (address = {}, sub = {})", address, sub);
+							LOGGER.trace("No key (address = {}, sub = {}) - {}", address, sub, cache.subToKey.asMap());
 							return;
 						}
 	
@@ -184,7 +214,9 @@ public final class SqliteCache {
 						LOGGER.error("SQL error", se);
 					}
 				}
-			}).create(queue);
+			});
+			
+			c = builder.create(queue);
 		}
 
 		@Override
@@ -218,24 +250,26 @@ public final class SqliteCache {
 	
 				Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
 				if (subs == null) {
-					subs = CacheBuilder.newBuilder().expireAfterWrite((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
+					subs = cacheMapExpiringAfterWrite(expiration);
 					cache.requestsByKey.put(context.key, subs);
 	
 					subs.put(context.sub, now);
 					cache.subToKey.put(context.sub, context.key);
+
 					send = true;
+					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
 				} else {
+					subs.put(context.sub, now);
+					cache.subToKey.put(context.sub, context.key);
+
 					send = false;
+					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
 				}
 			}
 
 			if (send) {
-				LOGGER.trace("New request (address = {}, key = {}, sub = {})", address, context.key, context.sub);
-				
 				c.send(address, sourceBuffer);
 			} else {
-				LOGGER.trace("Request already sent (address = {}, key = {}, sub = {})", address, context.key, context.sub);
-				
 				try {
 					try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `packet` FROM `data` WHERE `address`= ? AND `key` = ?")) {
 						int k = 1;
@@ -282,8 +316,15 @@ public final class SqliteCache {
 		public final Cache<String, Cache<T, Double>> requestsByKey;
 		public final Cache<T, String> subToKey;
 		public CacheByAddress(double expiration) {
-			requestsByKey = CacheBuilder.newBuilder().expireAfterAccess((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
-			subToKey = CacheBuilder.newBuilder().expireAfterWrite((long) (expiration * 1000d), TimeUnit.MILLISECONDS).build();
+			requestsByKey = cacheMapExpiringAfterAccess(expiration);
+			subToKey = cacheMapExpiringAfterWrite(expiration);
 		}
+	}
+
+	private static <T, U> Cache<T, U> cacheMapExpiringAfterAccess(double expiration) {
+		return ((expiration == 0d) ? CacheBuilder.newBuilder() : CacheBuilder.newBuilder().expireAfterAccess((long) (expiration * 1000d), TimeUnit.MILLISECONDS)).build();
+	}
+	private static <T, U> Cache<T, U> cacheMapExpiringAfterWrite(double expiration) {
+		return ((expiration == 0d) ? CacheBuilder.newBuilder() : CacheBuilder.newBuilder().expireAfterWrite((long) (expiration * 1000d), TimeUnit.MILLISECONDS)).build();
 	}
 }

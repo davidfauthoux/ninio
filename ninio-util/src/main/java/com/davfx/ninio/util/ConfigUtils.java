@@ -64,9 +64,13 @@ public final class ConfigUtils {
 	private static final List<String> staticOverride = new LinkedList<>();
 	
 	public static Config load(Class<?> clazz) {
+		return load(clazz, clazz.getPackage().getName()).getConfig(clazz.getPackage().getName());
+	}
+
+	public static Config load(Class<?> clazz, String resource) {
 		String r;
 		try {
-			r = loadConfig(clazz, clazz.getPackage().getName(), true);
+			r = loadConfig(clazz, resource, true);
 		} catch (Exception e) {
 			throw new RuntimeException("Could not load package config", e);
 		}
@@ -92,7 +96,7 @@ public final class ConfigUtils {
 
 		// LOGGER.trace("Config: \n{}\n", conf);
 
-		return ConfigFactory.parseString(conf).resolve().getConfig(clazz.getPackage().getName());
+		return ConfigFactory.parseString(conf).resolve();
 	}
 
 	public static void override(String config) {

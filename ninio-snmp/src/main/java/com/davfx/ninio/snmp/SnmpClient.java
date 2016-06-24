@@ -15,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.ConfigurableNinioBuilder;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
@@ -40,13 +41,13 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 
 	public static interface Builder extends NinioBuilder<SnmpClient> {
 		Builder with(Executor executor);
-		Builder with(UdpSocket.Builder connectorFactory);
+		Builder with(ConfigurableNinioBuilder<Connector, ?> connectorFactory);
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = null;
-			private UdpSocket.Builder connectorFactory = UdpSocket.builder();
+			private ConfigurableNinioBuilder<Connector, ?> connectorFactory = UdpSocket.builder();
 			
 			@Override
 			public Builder with(Executor executor) {
@@ -55,7 +56,7 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 			}
 			
 			@Override
-			public Builder with(UdpSocket.Builder connectorFactory) {
+			public Builder with(ConfigurableNinioBuilder<Connector, ?> connectorFactory) {
 				this.connectorFactory = connectorFactory;
 				return this;
 			}
@@ -78,11 +79,11 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
 
-	public SnmpClient(Queue queue, final Executor executor, UdpSocket.Builder connectorFactory) {
+	private SnmpClient(Queue queue, final Executor executor, ConfigurableNinioBuilder<Connector, ?> connectorFactory) {
 		this.executor = executor;
 		instanceMapper = new InstanceMapper(requestIdProvider);
 
-		connector = connectorFactory.receiving(new Receiver() {
+		connectorFactory.receiving(new Receiver() {
 			@Override
 			public void received(Connector conn, final Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
@@ -132,7 +133,9 @@ public final class SnmpClient implements Disconnectable, AutoCloseable {
 					}
 				});
 			}
-		}).create(queue);
+		});
+		
+		connector = connectorFactory.create(queue);
 	}
 	
 	@Override
