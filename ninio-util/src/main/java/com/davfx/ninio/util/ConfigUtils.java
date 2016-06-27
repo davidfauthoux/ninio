@@ -1,6 +1,8 @@
 package com.davfx.ninio.util;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -36,12 +38,20 @@ public final class ConfigUtils {
 	}
 	
 	private static String loadConfig(Class<?> clazz, String resource, boolean warn) throws IOException {
-		InputStream i = clazz.getClassLoader().getResourceAsStream(resource + ".conf");
-		if (i == null) {
-			if (warn) {
-				LOGGER.warn("Config file not found: {}", resource);
+		File rootDir = new File(".");
+		LOGGER.trace("Absolute path: {}", rootDir.getAbsolutePath());
+		InputStream i;
+		File f = new File(rootDir, resource + ".conf");
+		if (f.exists()) {
+			i = new FileInputStream(f);
+		} else {
+			i = clazz.getClassLoader().getResourceAsStream(resource + ".conf");
+			if (i == null) {
+				if (warn) {
+					LOGGER.warn("Config file not found: {}", resource);
+				}
+				return "";
 			}
-			return "";
 		}
 		try (BufferedReader r = new BufferedReader(new InputStreamReader(i, Charsets.UTF_8))) {
 			StringBuilder b = new StringBuilder();
