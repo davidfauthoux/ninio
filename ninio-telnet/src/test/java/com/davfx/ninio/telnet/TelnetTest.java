@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,6 +29,11 @@ import com.google.common.base.Function;
 public class TelnetTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TelnetTest.class);
 
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
+	
 	@Test
 	public void test() throws Exception {
 		final Function<String, String> f = new Function<String, String>() {

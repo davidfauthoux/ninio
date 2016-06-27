@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -19,6 +20,11 @@ public class TcpdumpTest {
 	
 	static {
 		ConfigUtils.override("com.davfx.ninio.core.tcpdump.mode = hex"); // raw not working on Mac OS X
+	}
+	
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
 	}
 	
 	@Test

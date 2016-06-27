@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -37,6 +38,11 @@ import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class WebsocketClientServerTest {
+	
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
 	
 	@Test
 	public void test() throws Exception {

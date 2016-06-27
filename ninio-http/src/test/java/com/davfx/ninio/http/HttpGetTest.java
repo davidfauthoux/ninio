@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -42,6 +43,11 @@ public class HttpGetTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpGetTest.class);
 
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
+	
 	private static final int LIMIT = 2;
 	
 	private static Lock<Object, IOException> getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {

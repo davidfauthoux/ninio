@@ -1,6 +1,7 @@
 package com.davfx.ninio.http;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Disconnectable;
@@ -12,6 +13,11 @@ import com.davfx.ninio.http.service.annotations.QueryParameter;
 import com.davfx.ninio.http.service.annotations.Route;
 
 public class HttpServiceSimpleTest {
+	
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
 	
 	//@Headers({@Header(key = "User-Agent", pattern = "Java/1.7.0_11")})
 	@Path("/get")

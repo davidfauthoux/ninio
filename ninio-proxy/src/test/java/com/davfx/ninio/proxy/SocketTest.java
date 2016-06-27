@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -32,6 +33,11 @@ import com.google.common.base.Charsets;
 
 public class SocketTest {
 
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
+	
 	@Test
 	public void testSocket() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();

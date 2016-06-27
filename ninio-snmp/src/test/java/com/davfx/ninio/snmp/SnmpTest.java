@@ -8,6 +8,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,6 +34,11 @@ import com.davfx.ninio.util.Lock;
 public class SnmpTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpTest.class);
+	
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
 	
 	@Test
 	public void test() throws Exception {

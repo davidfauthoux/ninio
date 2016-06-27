@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 
 import org.assertj.core.api.Assertions;
+import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.util.Lock;
@@ -13,6 +14,11 @@ import com.davfx.ninio.util.Wait;
 
 public class SecureSocketTest {
 
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
+	
 	@Test
 	public void testSocket() throws Exception {
 		final Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");

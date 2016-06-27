@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import org.junit.After;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +32,11 @@ import com.google.common.io.Files;
 public class WebsocketTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketTest.class);
+	
+	@After
+	public void waitALittleBit() throws Exception {
+		Thread.sleep(100);
+	}
 	
 	private static Disconnectable server(Ninio ninio, int port) throws IOException {
 		final byte[] indexHtml= Files.toByteArray(new File("src/test/resources/files/ws.html"));
