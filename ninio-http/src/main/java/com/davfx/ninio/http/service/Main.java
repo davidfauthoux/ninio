@@ -8,16 +8,19 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.service.controllers.FileAssets;
+import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
+import com.typesafe.config.Config;
 
 public final class Main {
 	private Main() {
 	}
 	
 	public static void main(String[] args) {
-		int port = Integer.parseInt(System.getProperty("port"));
-		File dir = new File(System.getProperty("directory"));
+		Config config = ConfigUtils.load(Main.class, "run");
+		int port = config.getInt("port");
+		File dir = new File(config.getString("directory"));
 		try (Ninio ninio = Ninio.create()) {
 			try (Disconnectable tcp = ninio.create(TcpSocketServer.builder()
 					.bind(new Address(Address.ANY, port))

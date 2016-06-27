@@ -11,6 +11,7 @@
 
 	<packaging>bundle</packaging>
 
+	<!-- JAVA_HOME=/Library/Java/JavaVirtualMachines/jdk1.7.0_11.jdk/Contents/Home mvn clean install exec:exec -DskipTests -->
 	<build>
 		<plugins>
 			<plugin>
@@ -27,8 +28,6 @@
 				<configuration>
 					<executable>java</executable>
 					<arguments>
-						<argument>-Dport=8080</argument>
-						<argument>-Ddirectory=${project.basedir}</argument>
 						<argument>-classpath</argument>
 						<classpath />
 						<argument>com.davfx.ninio.http.service.Main</argument>
