@@ -22,9 +22,9 @@ public class PerfTest {
 				final Lock<Void, Exception> lock = new Lock<>();
 				
 				ScriptRunner.Engine engine = runner.engine();
-				engine.register("syncEcho", new SyncScriptFunction<Object, Object>() {
+				engine.register("syncEcho", new SyncScriptFunction() {
 					@Override
-					public Object call(Object request) {
+					public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 						// LOGGER.debug("syncEcho({})", request);
 						return request;
 					}

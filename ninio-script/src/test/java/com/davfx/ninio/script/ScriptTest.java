@@ -32,6 +32,138 @@ public class ScriptTest {
 	}
 
 	@Test
+	public void testNullSimpleSync() throws Exception {
+		ScriptRunner runner = new ExecutorScriptRunner();
+		ScriptRunner.Engine engine = runner.engine();
+		
+		{
+			final Lock<ScriptElement, Exception> lock = new Lock<>();
+			
+			engine.register("syncEcho0", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(builder.undefined());
+					return request;
+				}
+			});
+			engine.register("syncEcho1", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(request);
+					return request;
+				}
+			});
+
+			Wait wait = new Wait();
+			ScriptRunner.Engine subEngine = engine.sub();
+			subEngine.eval("syncEcho0('aaa');", null, new WaitLockScriptRunnerEnd(wait, lock));
+			
+			Assertions.assertThat(lock.waitFor().isUndefined()).isTrue();
+			wait.waitFor();
+		}
+		{
+			final Lock<ScriptElement, Exception> lock = new Lock<>();
+			
+			engine.register("syncEcho0", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(builder.undefined());
+					return request;
+				}
+			});
+			engine.register("syncEcho1", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(request);
+					return request;
+				}
+			});
+
+			Wait wait = new Wait();
+			ScriptRunner.Engine subEngine = engine.sub();
+			subEngine.eval("syncEcho1('aaa');", null, new WaitLockScriptRunnerEnd(wait, lock));
+			
+			Assertions.assertThat(lock.waitFor().isUndefined()).isFalse();
+			wait.waitFor();
+		}
+		{
+			final Lock<ScriptElement, Exception> lock = new Lock<>();
+			
+			engine.register("syncEcho0", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(builder.undefined());
+					return request;
+				}
+			});
+			engine.register("syncEcho1", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(request);
+					return request;
+				}
+			});
+
+			Wait wait = new Wait();
+			ScriptRunner.Engine subEngine = engine.sub();
+			subEngine.eval("syncEcho1(null);", null, new WaitLockScriptRunnerEnd(wait, lock));
+			
+			Assertions.assertThat(lock.waitFor().isUndefined()).isTrue();
+			wait.waitFor();
+		}
+		{
+			final Lock<ScriptElement, Exception> lock = new Lock<>();
+			
+			engine.register("syncEcho0", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(builder.undefined());
+					return request;
+				}
+			});
+			engine.register("syncEcho1", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(request);
+					return request;
+				}
+			});
+
+			Wait wait = new Wait();
+			ScriptRunner.Engine subEngine = engine.sub();
+			subEngine.eval("syncEcho1(undefined);", null, new WaitLockScriptRunnerEnd(wait, lock));
+			
+			Assertions.assertThat(lock.waitFor().isUndefined()).isTrue();
+			wait.waitFor();
+		}
+		{
+			final Lock<ScriptElement, Exception> lock = new Lock<>();
+			
+			engine.register("syncEcho0", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(builder.undefined());
+					return request;
+				}
+			});
+			engine.register("syncEcho1", new SyncScriptFunction() {
+				@Override
+				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+					lock.set(request);
+					return request;
+				}
+			});
+
+			Wait wait = new Wait();
+			ScriptRunner.Engine subEngine = engine.sub();
+			subEngine.eval("syncEcho1('');", null, new WaitLockScriptRunnerEnd(wait, lock));
+			
+			Assertions.assertThat(lock.waitFor().isUndefined()).isFalse();
+			wait.waitFor();
+		}
+	}
+
+	@Test
 	public void testSimpleSync() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
@@ -92,7 +224,6 @@ public class ScriptTest {
 		
 		ScriptRunner.Engine subEngine = engine.sub();
 		subEngine.eval("syncEcho2(syncEcho1(['aa', 'bb'])[2]);", null, new WaitLockScriptRunnerEnd(wait, lock));
-		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("+");
 		wait.waitFor();
 	}

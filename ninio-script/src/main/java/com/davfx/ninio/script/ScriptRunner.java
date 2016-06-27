@@ -2,7 +2,7 @@ package com.davfx.ninio.script;
 
 import java.util.Map;
 
-public interface ScriptRunner extends ScriptElementBuilder {
+public interface ScriptRunner {
 	interface End {
 		void failed(Exception e);
 		void ended();
