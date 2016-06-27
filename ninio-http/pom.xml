@@ -11,6 +11,34 @@
 
 	<packaging>bundle</packaging>
 
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>1.5.0</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>exec</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<executable>java</executable>
+					<arguments>
+						<argument>-Dport=8080</argument>
+						<argument>-Ddirectory=${project.basedir}</argument>
+						<argument>-classpath</argument>
+						<classpath />
+						<argument>com.davfx.ninio.http.service.Main</argument>
+					</arguments>
+					<workingDirectory>${project.basedir}</workingDirectory>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
 	<dependencies>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
@@ -22,6 +50,19 @@
 			<artifactId>jetty-all-server</artifactId>
 			<version>8.1.18.v20150929</version>
 			<scope>test</scope>
+		</dependency>
+
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-core</artifactId>
+			<version>1.1.3</version>
+			<scope>runtime</scope>
+		</dependency>
+		<dependency>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>1.1.3</version>
+			<scope>runtime</scope>
 		</dependency>
 	</dependencies>
 </project>

@@ -1,5 +1,8 @@
 package com.davfx.ninio.http.service;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.LinkedList;
 import java.util.List;
@@ -12,14 +15,13 @@ import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.service.HttpController.Http;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Joiner;
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.typesafe.config.Config;
 
-public final class ResourcesHandler {
+public final class FileHandler {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(ResourcesHandler.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(FileHandler.class);
 	
 	private static final Config CONFIG = ConfigUtils.load(HttpListening.class);
 	
@@ -32,43 +34,39 @@ public final class ResourcesHandler {
 		DEFAULT_CONTENT_TYPES = b.build();
 	}
 	
-	private final Class<?> clazz;
-	private final boolean rooted;
-	private final List<String> dir;
+	private final File dir;
 	private final String index;
 	
-	// dir uses '/' and does not end with '/'
-	public ResourcesHandler(Class<?> clazz, String dir, String index) {
-		this.clazz = clazz;
-		if (dir.startsWith("/")) {
-			dir = dir.substring("/".length());
-			rooted = true;
-		} else {
-			rooted = false;
-		}
-		this.dir = dir.isEmpty() ? new LinkedList<String>() : Splitter.on('/').splitToList(dir);
+	public FileHandler(File dir, String index) {
+		this.dir = dir;
 		this.index = index;
 	}
 	
 	public Http handle(ImmutableList<String> path) {
-		List<String> p = new LinkedList<>(dir);
-		p.addAll(path);
+		List<String> p = new LinkedList<>(path);
 		String rootName = Joiner.on('/').join(p);
 		p.add(index);
 		String indexName = Joiner.on('/').join(p);
 		
-		if (rooted) {
-			rootName = '/' + rootName;
-			indexName = '/' + indexName;
-		}
-		
 		String name = indexName;
-		LOGGER.debug("Resources dir: {}", clazz.getResource("."));
-		InputStream in = clazz.getResourceAsStream(name);
-		if (in == null) {
+		LOGGER.debug("Resources dir: {}", dir);
+		File f = new File(dir, name);
+		InputStream in;
+		if (f.exists()) {
+			try {
+				in = new FileInputStream(f);
+			} catch (IOException e) {
+				in = null;
+			}
+		} else {
 			LOGGER.debug("Resource not found: {}", name);
 			name = rootName;
-			in = clazz.getResourceAsStream(name);
+			f = new File(dir, name);
+			try {
+				in = new FileInputStream(f);
+			} catch (IOException e) {
+				in = null;
+			}
 		}
 
 		if (in != null) {

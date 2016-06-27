@@ -306,4 +306,17 @@ public class HttpServiceTest {
 			}
 		}
 	}
+	
+	@Test
+	public void testFilesOnly() throws Exception {
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.Visitor() {
+				@Override
+				public void visit(Builder builder) {
+				}
+			})) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/files/index.html")).isEqualTo("text/html; charset=UTF-8/<!doctype html><html><head><meta charset=\"utf-8\" /></head><body><div>Hello</div></body>\n");
+			}
+		}
+	}
 }

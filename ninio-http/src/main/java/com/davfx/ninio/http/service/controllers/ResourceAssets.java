@@ -6,11 +6,11 @@ import com.davfx.ninio.http.service.HttpServiceRequest;
 import com.davfx.ninio.http.service.ResourcesHandler;
 import com.davfx.ninio.http.service.annotations.Route;
 
-public final class Assets implements HttpController {
+public final class ResourceAssets implements HttpController {
 	
 	private final ResourcesHandler handler;
 	
-	public Assets(String dir, String index) {
+	public ResourceAssets(String dir, String index) {
 		handler = new ResourcesHandler(this.getClass(), dir, index);
 	}
 	
