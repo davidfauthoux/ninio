@@ -12,13 +12,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory;
+import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
+import com.typesafe.config.Config;
 
 //import lu.flier.script.V8ScriptEngineFactory;
 
 public final class ExecutorScriptRunner implements ScriptRunner {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 
+	private static final Config CONFIG = ConfigUtils.load(ExecutorScriptRunner.class);
+	private static final String UNICITY_PREFIX = CONFIG.getString("unicity.prefix");
+	
 	private ScriptEngine scriptEngine;
 	private ConvertingBuilder builder;
 	private final Executor executor = new SerialExecutor(ExecutorScriptRunner.class);
@@ -52,8 +57,8 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 				}
 				
 				try {
-					scriptEngine.eval("function __fromjs(o) {" + builder.fromJsScript("o") + "}");
-					scriptEngine.eval("function __tojs(o) {" + builder.toJsScript("o") + "}");
+					scriptEngine.eval("function " + UNICITY_PREFIX + "fromjs(o) {" + builder.fromJsScript("o") + "}");
+					scriptEngine.eval("function " + UNICITY_PREFIX + "tojs(o) {" + builder.toJsScript("o") + "}");
 				} catch (ScriptException e) {
 					LOGGER.error("Could not prepare engine", e);
 				}
@@ -231,16 +236,6 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 			doExecute(new Runnable() {
 				@Override
 				public void run() {
-					StringBuilder prefixBuilder = new StringBuilder();
-					int max = 0;
-					for (String f : syncFunctions.keySet()) {
-						max = Math.max(max, f.length());
-					}
-					for (int i = 0; i < max; i++) {
-						prefixBuilder.append('_');
-					}
-					String prefix = prefixBuilder.toString();
-					
 					StringBuilder b = new StringBuilder();
 					b.append("(function($");
 					if (parameters != null) {
@@ -259,27 +254,27 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 					b.append(";\n");
 					b.append("return $;\n"
 							+ "})(")
-						.append(prefix).append("$ || {}");
+						.append(UNICITY_PREFIX).append("$ || {}");
 					if (parameters != null) {
 						for (String p : parameters.keySet()) {
-							b.append(", ").append(prefix).append(p);
+							b.append(", ").append(UNICITY_PREFIX).append(p);
 						}
 					}
 					for (String f : syncFunctions.keySet()) {
 						b.append(", (function() {\n"
-								+ "var ").append(prefix).append(prefix).append("f = ").append(prefix).append(f).append(";\n"
+								+ "var ").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("f = ").append(UNICITY_PREFIX).append(f).append(";\n"
 								+ "return function(request) {\n"
-									+ "return __tojs(").append(prefix).append(prefix).append("f.call(__fromjs(request)));\n"
+									+ "return " + UNICITY_PREFIX + "tojs(").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("f.call(" + UNICITY_PREFIX + "fromjs(request)));\n"
 								+ "}\n"
 							+ "})()\n");
 					}
 					for (String f : asyncFunctions.keySet()) {
 						b.append(", (function() {\n"
-								+ "var ").append(prefix).append(prefix).append("f = ").append(prefix).append(f).append(";\n"
-								+ "var ").append(prefix).append(prefix).append("e = ").append(prefix).append("endManager;\n"
+								+ "var ").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("f = ").append(UNICITY_PREFIX).append(f).append(";\n"
+								+ "var ").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("e = ").append(UNICITY_PREFIX).append("endManager;\n"
 								+ "return function(request, callback) {\n"
-									+ "").append(prefix).append(prefix).append("f.call(").append(prefix).append(prefix).append("e, __fromjs(request), ");
-									b.append("function(r) { if (callback) { callback(__tojs(r)); } }");
+									+ "").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("f.call(").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("e, " + UNICITY_PREFIX + "fromjs(request), ");
+									b.append("function(r) { if (callback) { callback(" + UNICITY_PREFIX + "tojs(r)); } }");
 								b.append(");\n"
 								+ "}\n"
 							+ "})()\n");
@@ -293,18 +288,18 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 					try {
 						try {
 							try {
-								scriptEngine.put(prefix + "$", context);
-								scriptEngine.put(prefix + "endManager", endManager);
+								scriptEngine.put(UNICITY_PREFIX + "$", context);
+								scriptEngine.put(UNICITY_PREFIX + "endManager", endManager);
 								if (parameters != null) {
 									for (Map.Entry<String, ?> e : parameters.entrySet()) {
-										scriptEngine.put(prefix + e.getKey(), e.getValue());
+										scriptEngine.put(UNICITY_PREFIX + e.getKey(), e.getValue());
 									}
 								}
 								for (Map.Entry<String, SyncInternal> e : syncFunctions.entrySet()) {
-									scriptEngine.put(prefix + e.getKey(), e.getValue());
+									scriptEngine.put(UNICITY_PREFIX + e.getKey(), e.getValue());
 								}
 								for (Map.Entry<String, AsyncInternal> e : asyncFunctions.entrySet()) {
-									scriptEngine.put(prefix + e.getKey(), e.getValue());
+									scriptEngine.put(UNICITY_PREFIX + e.getKey(), e.getValue());
 								}
 								/*
 								if (!executed.contains(composedScript)) {
@@ -314,18 +309,18 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 								*/
 								context = cast(scriptEngine.eval(composedScript));
 							} finally {
-								scriptEngine.put(prefix + "$", null);
-								scriptEngine.put(prefix + "endManager", null);
+								scriptEngine.put(UNICITY_PREFIX + "$", null);
+								scriptEngine.put(UNICITY_PREFIX + "endManager", null);
 								if (parameters != null) {
 									for (String p : parameters.keySet()) {
-										scriptEngine.put(prefix + p, null);
+										scriptEngine.put(UNICITY_PREFIX + p, null);
 									}
 								}
 								for (String f : syncFunctions.keySet()) {
-									scriptEngine.put(prefix + f, null);
+									scriptEngine.put(UNICITY_PREFIX + f, null);
 								}
 								for (String f : asyncFunctions.keySet()) {
-									scriptEngine.put(prefix + f, null);
+									scriptEngine.put(UNICITY_PREFIX + f, null);
 								}
 							}
 						} catch (Throwable se) {
