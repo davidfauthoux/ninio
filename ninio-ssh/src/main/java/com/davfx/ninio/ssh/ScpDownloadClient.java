@@ -7,154 +7,128 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.CloseableByteBufferHandler;
-import com.davfx.ninio.core.FailableCloseableByteBufferHandler;
-import com.davfx.ninio.core.ReadyConnection;
+import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connecting;
+import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Receiver;
 import com.google.common.base.Splitter;
 
-public final class ScpDownloadClient {
-	
+public final class ScpDownloadClient implements Receiver, Connecting, Closing {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ScpDownloadClient.class);
-	
-	private final SshClient client;
-	
-	public ScpDownloadClient(SshClient client) {
-		this.client = client;
+
+	public static interface Builder {
+		Builder failing(Failing failing);
+		Builder closing(Closing closing);
+		Builder receiving(Receiver receiver);
+		Builder path(String path);
+		
+		SshClient.Builder build(SshClient.Builder builder);
 	}
-	
-	public void get(String filePath, final FailableCloseableByteBufferHandler handler) {
-		client.exec("scp -f " + filePath.replace(" ", "\\ ")).connect(new ReadyConnection() {
-			private CloseableByteBufferHandler write;
-			private long size = -1L;
-			private long count = 0L;
-			private boolean closed = false;
+
+	public static Builder builder() {
+		return new Builder() {
+			private Receiver receiver = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private String path = null;
 			
 			@Override
-			public void failed(IOException e) {
-				if (closed) {
-					return;
+			public Builder path(String path) {
+				this.path = path;
+				return this;
+			}
+
+			@Override
+			public Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public Builder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+
+			@Override
+			public SshClient.Builder build(SshClient.Builder builder) {
+				if (builder == null) {
+					throw new NullPointerException("builder");
 				}
+
+				ScpDownloadClient c = new ScpDownloadClient(receiver, closing, failing);
+				return builder.exec("scp -f " + path.replace(" ", "\\ ")).receiving(c).connecting(c).closing(c);
+			}
+		};
+	}
+	
+	private final Receiver receiver;
+	private final Closing closing;
+	private final Failing failing;
+	
+	private long size = -1L;
+	private long count = 0L;
+	private boolean closed = false;
+
+	private ScpDownloadClient(Receiver receiver, Closing closing, Failing failing) {
+		this.receiver = receiver;
+		this.closing = closing;
+		this.failing = failing;
+	}
+	
+	@Override
+	public void closed() {
+		if (closed) {
+			return;
+		}
+		closed = true;
+		if (count < size) {
+			failing.failed(new IOException("Closed before whole file received"));
+		} else {
+			closing.closed();
+		}
+	}
+	
+	@Override
+	public void received(Connector conn, Address address, ByteBuffer buffer) {
+		if (closed) {
+			return;
+		}
+
+		if (size >= 0L) {
+			if (buffer.remaining() > (size - count)) { // Terminated by \0
+				buffer.limit(buffer.position() + ((int) (size - count)));
+			}
+			count += buffer.remaining();
+			receiver.received(null, address, buffer);
+			if (count == size) {
 				closed = true;
-				handler.failed(e);
+				conn.close();
+				closing.closed();
 			}
-
-			@Override
-			public void close() {
-				if (closed) {
-					return;
-				}
+		} else {
+			String header = new String(buffer.array(), buffer.position(), buffer.remaining());
+			LOGGER.trace("Header: {}", header);
+			try {
+				size = Long.parseLong(Splitter.on(' ').splitToList(header).get(1));
+			} catch (Exception e) {
 				closed = true;
-				if (count < size) {
-					handler.failed(new IOException("Closed before whole file received"));
-				} else {
-					handler.close();
-				}
+				conn.close();
+				failing.failed(new IOException("SCP header corrupted: " + header, e));
 			}
-			
-			@Override
-			public void handle(Address address, ByteBuffer buffer) {
-				if (closed) {
-					return;
-				}
-
-				if (size >= 0L) {
-					if (buffer.remaining() > (size - count)) { // Terminated by \0
-						buffer.limit(buffer.position() + ((int) (size - count)));
-					}
-					count += buffer.remaining();
-					handler.handle(address, buffer);
-					if (count == size) {
-						write.close();
-						closed = true;
-						handler.close();
-					}
-				} else {
-					String header = new String(buffer.array(), buffer.position(), buffer.remaining());
-					LOGGER.trace("Header: {}", header);
-					try {
-						size = Long.parseLong(Splitter.on(' ').splitToList(header).get(1));
-					} catch (Exception e) {
-						write.close();
-						closed = true;
-						handler.failed(new IOException("SCP header corrupted: " + header, e));
-					}
-					write.handle(null, ByteBuffer.wrap(new byte[] { 0 }));
-				}
-			}
-
-			@Override
-			public void connected(FailableCloseableByteBufferHandler write) {
-				this.write = write;
-				write.handle(null, ByteBuffer.wrap(new byte[] { 0 }));
-			}
-		});
+			conn.send(null, ByteBuffer.wrap(new byte[] { 0 }));
+		}
 	}
-	
-	/*%% Not working with big files
-	public void put(final String filePath, final long fileSize, final ReadyConnection in) {
-		client.exec("scp -t " + filePath.replace(" ", "\\ ")).connect(new ReadyConnection() {
-			private CloseableByteBufferHandler write;
-			private int countAck = 0;
-			
-			@Override
-			public void failed(IOException e) {
-				in.failed(e);
-			}
 
-			@Override
-			public void close() {
-				if (write == null) {
-					return;
-				}
-				in.failed(new IOException("Closed by peer"));
-			}
-			
-			@Override
-			public void handle(Address address, ByteBuffer buffer) {
-				LOGGER.debug("Upload response: {}", new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8));
-				if (write == null) {
-					return;
-				}
-				countAck++;
-				if (countAck == 3) {
-					LOGGER.debug("Upload done: {}", filePath);
-					write.close();
-					write = null;
-					in.close();
-				}
-			}
-
-			@Override
-			public void connected(final FailableCloseableByteBufferHandler write) {
-				this.write = write;
-				
-				String name = filePath;
-				int k = name.lastIndexOf('/');
-				if (k >= 0) {
-					name = name.substring(k + 1);
-				}
-				name = name.replace(" ", "\\ ");
-				
-				write.handle(null, ByteBuffer.wrap(("C0644 " + fileSize + " " + name + SshClient.EOL).getBytes(Charsets.UTF_8)));
-				in.connected(new FailableCloseableByteBufferHandler() {
-					@Override
-					public void failed(IOException e) {
-						write.failed(e);
-					}
-					
-					@Override
-					public void close() {
-						LOGGER.debug("Upload closed");
-						write.handle(null, ByteBuffer.wrap(new byte[] { 0 }));
-					}
-					
-					@Override
-					public void handle(Address address, ByteBuffer buffer) {
-						write.handle(null, buffer);
-					}
-				});
-			}
-		});
+	@Override
+	public void connected(Connector conn, Address address) {
+		conn.send(null, ByteBuffer.wrap(new byte[] { 0 }));
 	}
-	*/
 }

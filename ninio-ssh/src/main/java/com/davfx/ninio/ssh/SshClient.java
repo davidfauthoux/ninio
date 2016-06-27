@@ -29,49 +29,6 @@ import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
 
 public final class SshClient implements Connector {
-	/*%%
-	//TO DO move to test
-	public static void main(String[] args) throws Exception {
-		Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
-		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));
-
-		try (Ninio ninio = Ninio.create()) {
-			Connector c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(Executors.newSingleThreadExecutor()).to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)).receiving(new Receiver() {
-				private int n = 0;
-				@Override
-				public void received(Address address, ByteBuffer buffer) {
-					System.out.println(n + " ---> "+ new String(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), Charsets.UTF_8));
-					switch (n) {
-					case 0:
-						connector.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
-						break;
-					}
-					n++;
-				}
-			}).failing(new Failing() {
-				@Override
-				public void failed(IOException e) {
-					e.printStackTrace();
-				}
-			}).closing(new Closing() {
-				@Override
-				public void closed() {
-					System.out.println("CLOSED");
-				}
-			}).connecting(new Connecting() {
-				@Override
-				public void connected() {
-					System.out.println("CONNECTED");
-				}
-			}).with(TcpSocket.builder()));
-			try {
-				Thread.sleep(100000);
-			} finally {
-				c.close();
-			}
-		}
-	}*/
-	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshClient.class);
 
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
@@ -88,6 +45,7 @@ public final class SshClient implements Connector {
 		Builder bind(Address bindAddress);
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);
+		Builder exec(String exec);
 	}
 
 	// https://tools.ietf.org/html/draft-ietf-secsh-assignednumbers-12
@@ -147,6 +105,12 @@ public final class SshClient implements Connector {
 			
 			private Executor executor = null;
 
+			@Override
+			public Builder exec(String exec) {
+				this.exec = exec;
+				return this;
+			}
+			
 			@Override
 			public Builder bind(Address bindAddress) {
 				this.bindAddress = bindAddress;
