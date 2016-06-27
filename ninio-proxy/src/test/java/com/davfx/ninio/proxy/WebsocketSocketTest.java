@@ -1,4 +1,4 @@
-package com.davfx.ninio.proxy.v3;
+package com.davfx.ninio.proxy;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -29,7 +29,8 @@ import com.davfx.ninio.http.WebsocketHttpContentReceiver;
 import com.davfx.ninio.proxy.ProxyClient;
 import com.davfx.ninio.proxy.ProxyConnectorProvider;
 import com.davfx.ninio.proxy.ProxyServer;
-import com.davfx.util.Lock;
+import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 
 public class WebsocketSocketTest {
@@ -46,7 +47,7 @@ public class WebsocketSocketTest {
 				
 				final int port = 8080;
 
-				Disconnectable websocketServer = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(Executors.newSingleThreadExecutor()).with(new HttpListeningHandler() {
+				Disconnectable websocketServer = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(WebsocketSocketTest.class)).with(new HttpListeningHandler() {
 					@Override
 					public ConnectionHandler create() {
 						return new ConnectionHandler() {
@@ -69,8 +70,8 @@ public class WebsocketSocketTest {
 												public Connecting connecting() {
 													return new Connecting() {
 														@Override
-														public void connected(Address to, Connector connector) {
-															LOGGER.debug("Socket connected {} <--", to);
+														public void connected(Connector conn, Address address) {
+															LOGGER.debug("Socket connected {} <--", address);
 														}
 													};
 												}
@@ -143,8 +144,8 @@ public class WebsocketSocketTest {
 								})
 								.connecting(new Connecting() {
 									@Override
-									public void connected(Address to, Connector connector) {
-										LOGGER.debug("Client socket connected {} <--", to);
+									public void connected(Connector conn, Address address) {
+										LOGGER.debug("Client socket connected {} <--", address);
 									}
 								})
 							);

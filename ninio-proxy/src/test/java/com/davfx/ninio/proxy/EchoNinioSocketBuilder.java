@@ -1,18 +1,18 @@
-package com.davfx.ninio.proxy.v3;
+package com.davfx.ninio.proxy;
 
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.ConfigurableNinioBuilder;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Failing;
-import com.davfx.ninio.core.NinioSocketBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Receiver;
 import com.google.common.base.Charsets;
 
-public final class EchoNinioSocketBuilder implements NinioSocketBuilder<Void> {
+public final class EchoNinioSocketBuilder implements ConfigurableNinioBuilder<Connector, Void> {
 	private Receiver receiver;
 	
 	@Override

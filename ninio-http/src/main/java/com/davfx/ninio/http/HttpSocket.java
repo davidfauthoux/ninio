@@ -108,7 +108,7 @@ public final class HttpSocket implements Connector {
 	private final HttpContentSender sender;
 	
 	private HttpSocket(HttpClient httpClient, String path, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.GET, path, ImmutableMultimap.<String, String>builder()
+		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()
 			// GZIP deflate cannot stream/flush
 			.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)
 			.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY)
