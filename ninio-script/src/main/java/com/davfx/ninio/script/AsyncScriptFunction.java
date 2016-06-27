@@ -1,9 +1,9 @@
 package com.davfx.ninio.script;
 
-public interface AsyncScriptFunction<T, U> {
-	interface Callback<U> {
-		Callback<U> handle(U response);
+public interface AsyncScriptFunction {
+	interface Callback {
+		Callback handle(ScriptElement response);
 		void done();
 	}
-	void call(T request, Callback<U> callback);
+	void call(ScriptElement request, ScriptElementBuilder builder, Callback callback);
 }

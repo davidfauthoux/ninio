@@ -2,7 +2,7 @@ package com.davfx.ninio.script;
 
 import java.util.Map;
 
-public interface ScriptRunner {
+public interface ScriptRunner extends ScriptElementBuilder {
 	interface End {
 		void failed(Exception e);
 		void ended();
@@ -16,10 +16,10 @@ public interface ScriptRunner {
 	*/
 	
 	interface Engine {
-		<T, U> void register(String function, SyncScriptFunction<T, U> syncFunction);
-		<T, U> void register(String function, AsyncScriptFunction<T, U> asyncFunction);
+		void register(String function, SyncScriptFunction syncFunction);
+		void register(String function, AsyncScriptFunction asyncFunction);
 
-		<P> void eval(String script, Map<String, ?> parameters, End end);
+		void eval(String script, Map<String, ?> parameters, End end);
 
 		Engine sub();
 	}

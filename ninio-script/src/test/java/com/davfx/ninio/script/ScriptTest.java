@@ -1,9 +1,5 @@
 package com.davfx.ninio.script;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
@@ -14,25 +10,47 @@ import com.google.common.collect.ImmutableMap;
 public class ScriptTest {
 
 	@Test
-	public void testSimpleSync() throws Exception {
+	public void testVerySimpleSync() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<Object, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		Wait wait = new Wait();
 		
-		engine.register("syncEcho1", new SyncScriptFunction<Map<String, String>, Map<String, String>>() {
+		engine.register("syncEcho", new SyncScriptFunction() {
 			@Override
-			public Map<String, String> call(Map<String,String> request) {
-				Map<String, String> m = new HashMap<>();
-				m.put("out", request.get("message"));
-				return m;
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				lock.set(request);
+				return request;
 			}
 		});
 		
-		engine.register("syncEcho2", new SyncScriptFunction<Map<String, String>, Map<String, String>>() {
+		ScriptRunner.Engine subEngine = engine.sub();
+		subEngine.eval("syncEcho('aaa');", null, new WaitLockScriptRunnerEnd(wait, lock));
+		
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aaa");
+		wait.waitFor();
+	}
+
+	@Test
+	public void testSimpleSync() throws Exception {
+		ScriptRunner runner = new ExecutorScriptRunner();
+		ScriptRunner.Engine engine = runner.engine();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
+		Wait wait = new Wait();
+		
+		engine.register("syncEcho1", new SyncScriptFunction() {
 			@Override
-			public Map<String, String> call(Map<String,String> request) {
-				lock.set(request.get("out"));
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				ScriptObjectBuilder m = builder.object();
+				m.put("out", request.asObject().get("message"));
+				return m.build();
+			}
+		});
+		
+		engine.register("syncEcho2", new SyncScriptFunction() {
+			@Override
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				lock.set(request.asObject().get("out"));
 				return request;
 			}
 		});
@@ -40,7 +58,7 @@ public class ScriptTest {
 		ScriptRunner.Engine subEngine = engine.sub();
 		subEngine.eval("var echoed = syncEcho2(syncEcho1({'message':'bb'}));", null, new WaitLockScriptRunnerEnd(wait, lock));
 		
-		Assertions.assertThat(lock.waitFor().toString()).isEqualTo("bb");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("bb");
 		wait.waitFor();
 	}
 
@@ -48,35 +66,34 @@ public class ScriptTest {
 	public void testArraySync() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		Wait wait = new Wait();
 		
-		engine.register("syncEcho1", new SyncScriptFunction<Map<Object, String>, String[]>() {
+		engine.register("syncEcho1", new SyncScriptFunction() {
 			@Override
-			public String[] call(Map<Object, String> request) {
-				System.out.println(request.getClass());
-				String[] r = new String[request.size() + 1];
-				for (Map.Entry<Object, String> e : request.entrySet()) {
-					System.out.println(e.getKey() + " " + e.getKey().getClass() + " -> " + e.getValue());
-					r[Integer.parseInt(e.getKey().toString())] = e.getValue();
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				ScriptArray a = request.asArray();
+				ScriptArrayBuilder r = builder.array();
+				for (ScriptElement e : a) {
+					r.add(e);
 				}
-				r[r.length - 1] = "+";
-				return r;
+				r.add(builder.string("+"));
+				return r.build();
 			}
 		});
 		
-		engine.register("syncEcho2", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho2", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("java.lang.System.out.println(syncEcho1(['aa', 'bb']) instanceof Array);syncEcho2(syncEcho1(['aa', 'bb'])[2]);", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("syncEcho2(syncEcho1(['aa', 'bb'])[2]);", null, new WaitLockScriptRunnerEnd(wait, lock));
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("+");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("+");
 		wait.waitFor();
 	}
 
@@ -84,28 +101,28 @@ public class ScriptTest {
 	public void testSimpleAsync() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<Object, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		Wait wait = new Wait();
 
-		engine.register("syncEcho", new SyncScriptFunction<Object, Object>() {
+		engine.register("syncEcho", new SyncScriptFunction() {
 			@Override
-			public Object call(Object request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
 		});
-		engine.register("asyncEcho", new AsyncScriptFunction<Object, Object>() {
+		engine.register("asyncEcho", new AsyncScriptFunction() {
 			@Override
-			public void call(Object request, AsyncScriptFunction.Callback<Object> callback) {
+			public void call(ScriptElement request, ScriptElementBuilder builder, Callback callback) {
 				callback.handle(request);
 				callback.done();
 			}
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("asyncEcho('aaa', function(r) { syncEcho(r); });", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("asyncEcho('aaa', syncEcho);", null, new WaitLockScriptRunnerEnd(wait, lock));
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("aaa");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aaa");
 		wait.waitFor();
 	}
 
@@ -116,12 +133,12 @@ public class ScriptTest {
 		final Lock<Double, Exception> lock = new Lock<>();
 		Wait wait = new Wait();
 		
-		engine.register("syncEcho", new SyncScriptFunction<Map<String, Double>, Double>() {
+		engine.register("syncEcho", new SyncScriptFunction() {
 			@Override
-			public Double call(Map<String, Double> request) {
-				double d = request.get("d");
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				double d = request.asObject().get("d").asNumber().value();
 				lock.set(d);
-				return d;
+				return builder.number(d);
 			}
 		});
 		
@@ -160,14 +177,14 @@ public class ScriptTest {
 		final Lock<String, Exception> lock = new Lock<>();
 		Wait wait = new Wait();
 		
-		engine.register("syncEcho", new SyncScriptFunction<Map<String, String>, String>() {
+		engine.register("syncEcho", new SyncScriptFunction() {
 			@Override
-			public String call(Map<String, String> request) {
-				String c = request.get("c");
-				String d = request.get("d");
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				String c = request.asObject().get("c").asString().value();
+				String d = request.asObject().get("d").asString().value();
 				String r = c + "/" + d;
 				lock.set(r);
-				return r;
+				return builder.string(r);
 			}
 		});
 		
@@ -185,14 +202,14 @@ public class ScriptTest {
 		final Lock<String, Exception> lock = new Lock<>();
 		Wait wait = new Wait();
 		
-		engine.register("asyncEcho", new AsyncScriptFunction<Map<String, String>, String>() {
+		engine.register("asyncEcho", new AsyncScriptFunction() {
 			@Override
-			public void call(Map<String, String> request, Callback<String> callback) {
-				String c = request.get("c");
-				String d = request.get("d");
+			public void call(ScriptElement request, ScriptElementBuilder builder, Callback callback) {
+				String c = request.asObject().get("c").asString().value();
+				String d = request.asObject().get("d").asString().value();
 				String r = c + "/" + d;
 				lock.set(r);
-				callback.handle(r);
+				callback.handle(builder.string(r));
 				callback.done();
 			}
 		});
@@ -208,11 +225,11 @@ public class ScriptTest {
 	public void testContextIsolated() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		
-		engine.register("syncEcho", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
@@ -240,11 +257,11 @@ public class ScriptTest {
 	public void testContextPassing() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		
-		engine.register("syncEcho", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
@@ -261,26 +278,24 @@ public class ScriptTest {
 			wait.waitFor();
 		}
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("aa");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
 	}
 	
 	@Test
 	public void testPojoSync() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		
-		engine.register("syncEcho1", new SyncScriptFunction<String, Map<String, String>>() {
+		engine.register("syncEcho1", new SyncScriptFunction() {
 			@Override
-			public Map<String, String> call(String request) {
-				Map<String, String> m = new HashMap<>();
-				m.put("a", request);
-				return m;
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
+				return builder.object().put("a", request).build();
 			}
 		});
-		engine.register("syncEcho2", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho2", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
@@ -290,26 +305,24 @@ public class ScriptTest {
 		engine.eval("syncEcho2(syncEcho1('aa')['a']);", null, new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("aa");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
 	}
 
 	@Test
 	public void testPojoAsync() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		
-		engine.register("asyncEcho1", new AsyncScriptFunction<String, Map<String, String>>() {
+		engine.register("asyncEcho1", new AsyncScriptFunction() {
 			@Override
-			public void call(String request, Callback<Map<String, String>> callback) {
-				Map<String, String> m = new HashMap<>();
-				m.put("a", request);
-				callback.handle(m).done();
+			public void call(ScriptElement request, ScriptElementBuilder builder, Callback callback) {
+				callback.handle(builder.object().put("a", request).build()).done();
 			}
 		});
-		engine.register("syncEcho2", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho2", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
@@ -319,26 +332,24 @@ public class ScriptTest {
 		engine.eval("asyncEcho1('aa', function(r) { syncEcho2(r['a']); });", null, new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("aa");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
 	}
 
 	@Test
 	public void testEachObject() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		
-		engine.register("asyncEcho1", new AsyncScriptFunction<String, Map<String, String>>() {
+		engine.register("asyncEcho1", new AsyncScriptFunction() {
 			@Override
-			public void call(String request, Callback<Map<String, String>> callback) {
-				Map<String, String> m = new HashMap<>();
-				m.put("a", request);
-				callback.handle(m).done();
+			public void call(ScriptElement request, ScriptElementBuilder builder, Callback callback) {
+				callback.handle(builder.object().put("a", request).build()).done();
 			}
 		});
-		engine.register("syncEcho2", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho2", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
@@ -364,7 +375,7 @@ public class ScriptTest {
 			+ "asyncEcho1('aa', function(r) { each(r, function(v, k) { syncEcho2(v); }); });", null, new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("aa");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
 	}
 
 
@@ -372,19 +383,17 @@ public class ScriptTest {
 	public void testEachArray() throws Exception {
 		ScriptRunner runner = new ExecutorScriptRunner();
 		ScriptRunner.Engine engine = runner.engine();
-		final Lock<String, Exception> lock = new Lock<>();
+		final Lock<ScriptElement, Exception> lock = new Lock<>();
 		
-		engine.register("asyncEcho1", new AsyncScriptFunction<String, Map<String, String>>() {
+		engine.register("asyncEcho1", new AsyncScriptFunction() {
 			@Override
-			public void call(String request, Callback<Map<String, String>> callback) {
-				Map<String, String> m = new HashMap<>();
-				m.put("a", request);
-				callback.handle(m).done();
+			public void call(ScriptElement request, ScriptElementBuilder builder, Callback callback) {
+				callback.handle(builder.object().put("a", request).build()).done();
 			}
 		});
-		engine.register("syncEcho2", new SyncScriptFunction<String, String>() {
+		engine.register("syncEcho2", new SyncScriptFunction() {
 			@Override
-			public String call(String request) {
+			public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
 				lock.set(request);
 				return request;
 			}
@@ -410,7 +419,7 @@ public class ScriptTest {
 			+ "asyncEcho1('aa', function(r) { each(r, function(v, k) { syncEcho2(v); }); });", null, new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
-		Assertions.assertThat(lock.waitFor()).isEqualTo("aa");
+		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
 	}
 //	array
 }

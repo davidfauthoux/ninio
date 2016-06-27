@@ -1,5 +1,5 @@
 package com.davfx.ninio.script;
 
-public interface SyncScriptFunction<T, U> {
-	U call(T request);
+public interface SyncScriptFunction {
+	ScriptElement call(ScriptElement request, ScriptElementBuilder builder);
 }

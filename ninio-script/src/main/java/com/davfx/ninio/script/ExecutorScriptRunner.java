@@ -1,6 +1,7 @@
 package com.davfx.ninio.script;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
@@ -13,6 +14,14 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory;
 import com.davfx.ninio.util.SerialExecutor;
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Iterators;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.JsonPrimitive;
 
 //import lu.flier.script.V8ScriptEngineFactory;
 
@@ -21,7 +30,6 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 
 	private ScriptEngine scriptEngine;
 	private final Executor executor = new SerialExecutor(ExecutorScriptRunner.class);
-	private boolean wrapConvert;
 
 	public ExecutorScriptRunner() {
 		this(null);
@@ -44,9 +52,35 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 					throw new IllegalArgumentException("Bad engine: " + engineProvider);
 				}
 				
+				try {
+					scriptEngine.eval(""
+							+ "function __tojs(o) {"
+								+ "return JSON.parse(o);"
+							+ "}"
+							+ "function __fromjs(o) {"
+								+ "return JSON.stringify(o);"
+							+ "}"
+							+ "");
+				} catch (ScriptException e) {
+					LOGGER.error("Could not prepare engine", e);
+				}
+				/*
 				if (scriptEngine.getFactory().getEngineName().equals("Mozilla Rhino")) {
 					try {
-						scriptEngine.eval("function __js(o) {"
+						scriptEngine.eval(""
+								+ "function __tojs(o) {"
+									+ "return JSON.parse(o);"
+								+ "}"
+								+ "function __fromjs(o) {"
+									+ "return JSON.stringify(o);"
+								+ "}"
+								+ "");
+					} catch (ScriptException e) {
+						LOGGER.error("Could not prepare engine", e);
+					}
+				} else {
+					try {
+						scriptEngine.eval("function __tojs(o) {"
 							+ "if (o instanceof java.util.Map) {"
 								+ "var r = {};"
 								+ "var i = o.keySet().iterator();"
@@ -60,14 +94,26 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 								+ "} else {"
 									+ "return '' + o;"
 								+ "}"
-							+ "}");
+							+ "}"
+							+ "function __fromjs(o) {"
+									+ "if (o instanceof java.util.Map) {"
+										+ "var r = {};"
+										+ "var i = o.keySet().iterator();"
+										+ "while (i.hasNext()) {"
+											+ "var k = i.next();"
+											+ "r[k] = __js(o.get(k));"
+										+ "}"
+										+ "return r;"
+										+ "} else if (o instanceof java.lang.Number) {"
+											+ "return 1.0 * o;"
+										+ "} else {"
+											+ "return '' + o;"
+										+ "}"
+									+ "}");
 					} catch (ScriptException e) {
 						LOGGER.error("Could not prepare engine", e);
 					}
-					wrapConvert = true;
-				} else {
-					wrapConvert = false;
-				}
+				}*/
 
 				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 			}
@@ -110,39 +156,31 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private static <T, U> SyncScriptFunction<Object, Object> cast(SyncScriptFunction<T, U> f) {
-		return (SyncScriptFunction<Object, Object>) f;
-	}
-	@SuppressWarnings("unchecked")
-	private static <T, U> AsyncScriptFunction<Object, Object> cast(AsyncScriptFunction<T, U> f) {
-		return (AsyncScriptFunction<Object, Object>) f;
-	}
-	@SuppressWarnings("unchecked")
 	private static Map<String, Object> cast(Object f) {
 		return (Map<String, Object>) f;
 	}
 	
 	// Must be be public to be called from javascript
 	public final class SyncInternal {
-		private final SyncScriptFunction<Object, Object> syncFunction;
-		private SyncInternal(SyncScriptFunction<Object, Object> syncFunction) {
+		private final SyncScriptFunction syncFunction;
+		private SyncInternal(SyncScriptFunction syncFunction) {
 			this.syncFunction = syncFunction;
 		}
 		public Object call(Object requestAsObject) {
-			return syncFunction.call(requestAsObject);
+			return fromJava(syncFunction.call(toJava(requestAsObject), ExecutorScriptRunner.this));
 		}
 	}
 	
 	// Must be be public to be called from javascript
 	public final class AsyncInternal {
-		private final AsyncScriptFunction<Object, Object> asyncFunction;
-		private AsyncInternal(AsyncScriptFunction<Object, Object> asyncFunction) {
+		private final AsyncScriptFunction asyncFunction;
+		private AsyncInternal(AsyncScriptFunction asyncFunction) {
 			this.asyncFunction = asyncFunction;
 		}
 		public void call(final EndManager endManager, Object requestAsObject, final Object callbackObject) {
 			endManager.inc();
 			
-			asyncFunction.call(requestAsObject, new AsyncScriptFunction.Callback<Object>() {
+			asyncFunction.call(toJava(requestAsObject), ExecutorScriptRunner.this, new AsyncScriptFunction.Callback() {
 				private boolean decCalled = false;
 				/*%%% MEM LEAK!!!!
 				@Override
@@ -164,7 +202,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 					});
 				}
 				@Override
-				public AsyncScriptFunction.Callback<Object> handle(final Object response) {
+				public AsyncScriptFunction.Callback handle(final ScriptElement response) {
 					doExecute(new Runnable() {
 						@Override
 						public void run() {
@@ -172,11 +210,11 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 								LOGGER.warn("Callback called on a terminated object");
 								return;
 							}
-
+							
 							try {
 								try {
 									scriptEngine.put("callback", callbackObject);
-									scriptEngine.put("r", response);
+									scriptEngine.put("r", fromJava(response));
 									scriptEngine.eval(""
 										+ "(function(callback, r) {\n"
 											+ "if (callback) {\n"
@@ -188,7 +226,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 									scriptEngine.put("r", null);
 								}
 							} catch (Throwable se) {
-								LOGGER.error("Callback script error", se);
+								LOGGER.error("Callback script error (response = {})", response, se);
 								endManager.fail(new Exception(se));
 							}
 						}
@@ -227,26 +265,26 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 		}
 		
 		@Override
-		public <T, U> void register(final String function, final SyncScriptFunction<T, U> syncFunction) {
+		public void register(final String function, final SyncScriptFunction syncFunction) {
 			doExecute(new Runnable() {
 				@Override
 				public void run() {
-					syncFunctions.put(function, new SyncInternal(cast(syncFunction)));
+					syncFunctions.put(function, new SyncInternal(syncFunction));
 				}
 			});
 		}
 		@Override
-		public <T, U> void register(final String function, final AsyncScriptFunction<T, U> asyncFunction) {
+		public void register(final String function, final AsyncScriptFunction asyncFunction) {
 			doExecute(new Runnable() {
 				@Override
 				public void run() {
-					asyncFunctions.put(function, new AsyncInternal(cast(asyncFunction)));
+					asyncFunctions.put(function, new AsyncInternal(asyncFunction));
 				}
 			});
 		}
 		
 		@Override
-		public <P> void eval(final String script, final Map<String, ?> parameters, final End end) {
+		public void eval(final String script, final Map<String, ?> parameters, final End end) {
 			doExecute(new Runnable() {
 				@Override
 				public void run() {
@@ -288,15 +326,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 						b.append(", (function() {\n"
 								+ "var ").append(prefix).append(prefix).append("f = ").append(prefix).append(f).append(";\n"
 								+ "return function(request) {\n"
-									+ "return ");
-						if (wrapConvert) {
-							b.append("__js(");
-						}
-						b.append(prefix).append(prefix).append("f.call(request)");
-						if (wrapConvert) {
-							b.append(")");
-						}
-						b.append(";\n"
+									+ "return __tojs(").append(prefix).append(prefix).append("f.call(__fromjs(request)));\n"
 								+ "}\n"
 							+ "})()\n");
 					}
@@ -305,13 +335,9 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 								+ "var ").append(prefix).append(prefix).append("f = ").append(prefix).append(f).append(";\n"
 								+ "var ").append(prefix).append(prefix).append("e = ").append(prefix).append("endManager;\n"
 								+ "return function(request, callback) {\n"
-									+ "").append(prefix).append(prefix).append("f.call(").append(prefix).append(prefix).append("e, request, ");
-						if (wrapConvert) {
-							b.append("function(r) { if (callback) { callback(__js(r)); } }");
-						} else {
-							b.append("callback || function() {}");
-						}
-						b.append(");\n"
+									+ "").append(prefix).append(prefix).append("f.call(").append(prefix).append(prefix).append("e, __fromjs(request), ");
+									b.append("function(r) { if (callback) { callback(__tojs(r)); } }");
+								b.append(");\n"
 								+ "}\n"
 							+ "})()\n");
 					}
@@ -378,5 +404,278 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 
 	private void doExecute(Runnable r) {
 		executor.execute(r);
+	}
+
+	private static interface Internal {
+		JsonElement toJs();
+	}
+	
+	private static final class InternalScriptString implements ScriptString, Internal {
+		private final JsonPrimitive value;
+		public InternalScriptString(JsonPrimitive value) {
+			this.value = value;
+		}
+		
+		@Override
+		public ScriptString asString() {
+			return this;
+		}
+		
+		@Override
+		public ScriptObject asObject() {
+			return null;
+		}
+		
+		@Override
+		public ScriptNumber asNumber() {
+			return new InternalScriptNumber(value);
+		}
+		
+		@Override
+		public ScriptArray asArray() {
+			return null;
+		}
+		
+		@Override
+		public String value() {
+			return value.getAsString();
+		}
+		
+		@Override
+		public JsonElement toJs() {
+			return value;
+		}
+		
+		@Override
+		public String toString() {
+			return toJs().toString();
+		}
+	}
+	private static final class InternalScriptNumber implements ScriptNumber, Internal {
+		private final JsonPrimitive value;
+		public InternalScriptNumber(JsonPrimitive value) {
+			this.value = value;
+		}
+		
+		@Override
+		public ScriptString asString() {
+			return new InternalScriptString(value);
+		}
+		
+		@Override
+		public ScriptObject asObject() {
+			return null;
+		}
+		
+		@Override
+		public ScriptNumber asNumber() {
+			return this;
+		}
+		
+		@Override
+		public ScriptArray asArray() {
+			return null;
+		}
+		
+		@Override
+		public double value() {
+			return value.getAsDouble();
+		}
+		
+		@Override
+		public JsonElement toJs() {
+			return value;
+		}
+		
+		@Override
+		public String toString() {
+			return toJs().toString();
+		}
+	}
+	private static final class InternalScriptObject implements ScriptObject, Internal {
+		private final JsonObject value;
+		public InternalScriptObject(JsonObject value) {
+			this.value = value;
+		}
+		
+		@Override
+		public ScriptString asString() {
+			return null;
+		}
+		
+		@Override
+		public ScriptObject asObject() {
+			return this;
+		}
+		
+		@Override
+		public ScriptNumber asNumber() {
+			return null;
+		}
+		
+		@Override
+		public ScriptArray asArray() {
+			return null;
+		}
+		
+		@Override
+		public ScriptElement get(String key) {
+			return new InternalScriptElement(value.get(key));
+		}
+		@Override
+		public Iterable<Entry> entries() {
+			return Iterables.transform(value.entrySet(), new Function<java.util.Map.Entry<String, JsonElement>, ScriptObject.Entry>() {
+				@Override
+				public Entry apply(final java.util.Map.Entry<String, JsonElement> input) {
+					return new Entry() {
+						@Override
+						public ScriptElement value() {
+							return new InternalScriptElement(input.getValue());
+						}
+						@Override
+						public String key() {
+							return input.getKey();
+						}
+					};
+				}
+			});
+		}
+		
+		@Override
+		public JsonElement toJs() {
+			return value;
+		}
+		
+		@Override
+		public String toString() {
+			return toJs().toString();
+		}
+	}
+	private static final class InternalScriptArray implements ScriptArray, Internal {
+		private final JsonArray value;
+		public InternalScriptArray(JsonArray value) {
+			this.value = value;
+		}
+		
+		@Override
+		public ScriptString asString() {
+			return null;
+		}
+		
+		@Override
+		public ScriptObject asObject() {
+			return null;
+		}
+		
+		@Override
+		public ScriptNumber asNumber() {
+			return null;
+		}
+		
+		@Override
+		public ScriptArray asArray() {
+			return this;
+		}
+		
+		@Override
+		public Iterator<ScriptElement> iterator() {
+			return Iterators.transform(value.iterator(), new Function<JsonElement, ScriptElement>() {
+				@Override
+				public ScriptElement apply(JsonElement input) {
+					return new InternalScriptElement(input);
+				}
+			});
+		}
+		
+		@Override
+		public JsonElement toJs() {
+			return value;
+		}
+		
+		@Override
+		public String toString() {
+			return toJs().toString();
+		}
+	}
+	private static final class InternalScriptElement implements ScriptElement, Internal {
+		private final JsonElement value;
+		public InternalScriptElement(JsonElement value) {
+			this.value = value;
+		}
+		
+		@Override
+		public ScriptString asString() {
+			return new InternalScriptString(value.getAsJsonPrimitive());
+		}
+		@Override
+		public ScriptObject asObject() {
+			return new InternalScriptObject(value.getAsJsonObject());
+		}
+		@Override
+		public ScriptNumber asNumber() {
+			return new InternalScriptNumber(value.getAsJsonPrimitive());
+		}
+		@Override
+		public ScriptArray asArray() {
+			return new InternalScriptArray(value.getAsJsonArray());
+		}
+		
+		@Override
+		public JsonElement toJs() {
+			return value;
+		}
+		
+		@Override
+		public String toString() {
+			return toJs().toString();
+		}
+	}
+
+	private static ScriptElement toJava(Object o) {
+		return new InternalScriptElement(new JsonParser().parse((String) o));
+	}
+	private static Object fromJava(ScriptElement o) {
+		return ((Internal) o).toJs().toString();
+	}
+	
+	@Override
+	public ScriptElement string(String value) {
+		return new InternalScriptString(new JsonPrimitive(value));
+	}
+	@Override
+	public ScriptElement number(double value) {
+		return new InternalScriptString(new JsonPrimitive(value));
+	}
+	@Override
+	public ScriptObjectBuilder object() {
+		return new ScriptObjectBuilder() {
+			private final JsonObject o = new JsonObject();
+			@Override
+			public ScriptObjectBuilder put(String key, ScriptElement value) {
+				o.add(key, ((Internal) value).toJs());
+				return this;
+			}
+			
+			@Override
+			public ScriptObject build() {
+				return new InternalScriptObject(o);
+			}
+		};
+	}
+	@Override
+	public ScriptArrayBuilder array() {
+		return new ScriptArrayBuilder() {
+			private final JsonArray o = new JsonArray();
+			@Override
+			public ScriptArrayBuilder add(ScriptElement value) {
+				o.add(((Internal) value).toJs());
+				return this;
+			}
+			
+			@Override
+			public ScriptArray build() {
+				return new InternalScriptArray(o);
+			}
+		};
 	}
 }
