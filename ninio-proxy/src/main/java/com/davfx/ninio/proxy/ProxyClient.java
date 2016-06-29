@@ -19,6 +19,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.TcpdumpSocket;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpSocket;
@@ -26,6 +27,7 @@ import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.WebsocketSocket;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.Ints;
 
 public final class ProxyClient implements ProxyConnectorProvider {
@@ -53,6 +55,10 @@ public final class ProxyClient implements ProxyConnectorProvider {
 					@Override
 					public UdpSocket.Builder udp() {
 						return client.udp();
+					}
+					@Override
+					public TcpdumpSocket.Builder tcpdump() {
+						return client.tcpdump();
 					}
 					@Override
 					public RawSocket.Builder raw() {
@@ -155,7 +161,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 	@Override
 	public WithHeaderSocketBuilder factory() {
 		return new WithHeaderSocketBuilder() {
-			private String header;
+			private Header header;
 			private Address address;
 			private Connecting connecting = null;
 			private Closing closing = null;
@@ -187,7 +193,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
-			public WithHeaderSocketBuilder header(String header) {
+			public WithHeaderSocketBuilder header(Header header) {
 				this.header = header;
 				return this;
 			}
@@ -260,7 +266,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue ignoredQueue) {
-				return createConnector(ProxyCommons.Types.TCP, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(new Header(ProxyCommons.Types.TCP), connectAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}
@@ -317,7 +323,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue ignoredQueue) {
-				return createConnector(ProxyCommons.Types.SSL, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(new Header(ProxyCommons.Types.SSL), connectAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}
@@ -366,7 +372,64 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.UDP, null, failing, receiver, closing, connecting);
+				return createConnector(new Header(ProxyCommons.Types.UDP), null, failing, receiver, closing, connecting);
+			}
+		};
+	}
+	
+	@Override
+	public TcpdumpSocket.Builder tcpdump() {
+		return new TcpdumpSocket.Builder() {
+			private Connecting connecting = null;
+			private Closing closing = null;
+			private Failing failing = null;
+			private Receiver receiver = null;
+			private String interfaceId = null;
+			private String rule = null;
+			
+			@Override
+			public TcpdumpSocket.Builder closing(Closing closing) {
+				this.closing = closing;
+				return this;
+			}
+		
+			@Override
+			public TcpdumpSocket.Builder connecting(Connecting connecting) {
+				this.connecting = connecting;
+				return this;
+			}
+			
+			@Override
+			public TcpdumpSocket.Builder failing(Failing failing) {
+				this.failing = failing;
+				return this;
+			}
+			
+			@Override
+			public TcpdumpSocket.Builder receiving(Receiver receiver) {
+				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public TcpdumpSocket.Builder bind(Address bindAddress) {
+				return this;
+			}
+			
+			@Override
+			public TcpdumpSocket.Builder on(String interfaceId) {
+				this.interfaceId = interfaceId;
+				return this;
+			}
+			@Override
+			public TcpdumpSocket.Builder rule(String rule) {
+				this.rule = rule;
+				return this;
+			}
+			
+			@Override
+			public Connector create(Queue queue) {
+				return createConnector(new Header(ProxyCommons.Types.TCPDUMP, ImmutableMap.of("interfaceId", interfaceId, "rule", rule)), null, failing, receiver, closing, connecting);
 			}
 		};
 	}
@@ -424,7 +487,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.RAW + String.valueOf((family == StandardProtocolFamily.INET) ? '4' : '6') + String.valueOf(protocol), null, failing, receiver, closing, connecting);
+				return createConnector(new Header(ProxyCommons.Types.RAW, ImmutableMap.of("family", (family == StandardProtocolFamily.INET6) ? "6" : "4", "protocol", String.valueOf(protocol))), null, failing, receiver, closing, connecting);
 			}
 		};
 	}
@@ -434,7 +497,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		return new WebsocketSocket.Builder() {
 			private Address connectAddress = null;
 			
-			private String path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+			private String route = String.valueOf(HttpSpecification.PATH_SEPARATOR);
 
 			private Connecting connecting = null;
 			private Closing closing = null;
@@ -477,8 +540,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
-			public WebsocketSocket.Builder route(String path) {
-				this.path = path;
+			public WebsocketSocket.Builder route(String route) {
+				this.route = route;
 				return this;
 			}
 			
@@ -494,7 +557,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.WEBSOCKET + path, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(new Header(ProxyCommons.Types.WEBSOCKET, ImmutableMap.of("route", route)), connectAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}
@@ -504,7 +567,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		return new HttpSocket.Builder() {
 			private Address connectAddress = null;
 			
-			private String path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+			private String route = String.valueOf(HttpSpecification.PATH_SEPARATOR);
 
 			private Connecting connecting = null;
 			private Closing closing = null;
@@ -547,8 +610,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
-			public HttpSocket.Builder route(String path) {
-				this.path = path;
+			public HttpSocket.Builder route(String route) {
+				this.route = route;
 				return this;
 			}
 			
@@ -564,21 +627,21 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.HTTP + path, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(new Header(ProxyCommons.Types.HTTP, ImmutableMap.of("route", route)), connectAddress, failing, receiver, closing, connecting);
 			}
 		};
 	}
 	
-	private Connector createConnector(final String header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
+	private Connector createConnector(final Header header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
 		return new InnerConnector(header, connectAddress, failing, receiver, closing, connecting);
 	}
 	
 	private final class InnerConnector implements Connector {
-		private final String header;
+		private final Header header;
 		private final Address connectAddress;
 		private final InnerConnection innerConnection;
 		
-		public InnerConnector(String header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
+		public InnerConnector(Header header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
 			this.header = header;
 			this.connectAddress = connectAddress;
 			
@@ -783,7 +846,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 								})
 								.create(queue);
 
-						byte[] headerAsBytes = header.getBytes(Charsets.UTF_8);
+						byte[] headerAsBytes = header.toString().getBytes(Charsets.UTF_8);
 
 						if (connectAddress == null) {
 							ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + headerAsBytes.length);

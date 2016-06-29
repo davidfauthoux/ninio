@@ -54,7 +54,7 @@ public class EchoTest {
 				Wait clientWait = new Wait();
 		
 				try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
-					try (Connector client = ninio.create(proxyClient.factory().header("_").with(new Address(Address.LOCALHOST, port))
+					try (Connector client = ninio.create(proxyClient.factory().header(new Header("_")).with(new Address(Address.LOCALHOST, port))
 						.failing(new LockFailing(lock))
 						.closing(new LockClosing(lock))
 						.receiving(new LockReceiver(lock))

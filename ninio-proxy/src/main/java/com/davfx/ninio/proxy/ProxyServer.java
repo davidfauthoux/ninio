@@ -26,6 +26,7 @@ import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.TcpdumpSocket;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpClient;
@@ -48,25 +49,30 @@ public final class ProxyServer implements Listening {
 				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
 					public ConfigurableNinioBuilder<Connector, ?> create(Address address, String header) {
-						if (header.startsWith(ProxyCommons.Types.TCP)) {
+						Header h = Header.of(header);
+						
+						if (h.type.equals(ProxyCommons.Types.TCP)) {
 							return TcpSocket.builder().to(address);
 						}
-						if (header.startsWith(ProxyCommons.Types.UDP)) {
+						if (h.type.equals(ProxyCommons.Types.UDP)) {
 							return UdpSocket.builder();
 						}
-						if (header.startsWith(ProxyCommons.Types.SSL)) {
+						if (h.type.equals(ProxyCommons.Types.TCPDUMP)) {
+							return TcpdumpSocket.builder().on(h.parameters.get("interfaceId")).rule(h.parameters.get("rule"));
+						}
+						if (h.type.equals(ProxyCommons.Types.SSL)) {
 							return new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
 						}
-						if (header.startsWith(ProxyCommons.Types.RAW)) {
-							ProtocolFamily family = (header.charAt(ProxyCommons.Types.RAW.length()) == '4') ? StandardProtocolFamily.INET : StandardProtocolFamily.INET6;
-							int protocol = Integer.parseInt(header.substring(ProxyCommons.Types.RAW.length() + 1));
+						if (h.type.equals(ProxyCommons.Types.RAW)) {
+							ProtocolFamily family = "6".equals(h.parameters.get("family")) ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET;
+							int protocol = Integer.parseInt(h.parameters.get("protocol"));
 							return RawSocket.builder().family(family).protocol(protocol);
 						}
-						if (header.startsWith(ProxyCommons.Types.WEBSOCKET)) {
-							return WebsocketSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.WEBSOCKET.length()));
+						if (h.type.equals(ProxyCommons.Types.WEBSOCKET)) {
+							return WebsocketSocket.builder().to(address).with(httpClient).route(h.parameters.get("route"));
 						}
-						if (header.startsWith(ProxyCommons.Types.HTTP)) {
-							return HttpSocket.builder().to(address).with(httpClient).route(header.substring(ProxyCommons.Types.HTTP.length()));
+						if (h.type.equals(ProxyCommons.Types.HTTP)) {
+							return HttpSocket.builder().to(address).with(httpClient).route(h.parameters.get("route"));
 						}
 						if (listening == null) {
 							return null;

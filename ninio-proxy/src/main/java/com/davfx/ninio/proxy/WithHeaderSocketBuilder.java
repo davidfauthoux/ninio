@@ -9,7 +9,7 @@ import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Receiver;
 
 public interface WithHeaderSocketBuilder extends NinioBuilder<Connector> {
-	WithHeaderSocketBuilder header(String header);
+	WithHeaderSocketBuilder header(Header header);
 	WithHeaderSocketBuilder with(Address address);
 	WithHeaderSocketBuilder failing(Failing failing);
 	WithHeaderSocketBuilder closing(Closing closing);
