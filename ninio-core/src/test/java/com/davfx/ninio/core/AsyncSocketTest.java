@@ -2,38 +2,30 @@ package com.davfx.ninio.core;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executor;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
-public class SecureSocketTest {
+public class AsyncSocketTest {
 
 	@Test
 	public void testSocket() throws Exception {
-		final Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
-
-		Executor executor = new SerialExecutor(SecureSocketTest.class);
-
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
 		try (Ninio ninio = Ninio.create()) {
-			final int port = 8080;
+			int port = 8080;
 	
 			Wait wait = new Wait();
-			Wait waitForServerClosing = new Wait();
-			Wait waitForClientClosing = new Wait();
+			final Wait waitClosing = new Wait();
 			final Wait waitServerConnecting = new Wait();
 			final Wait waitServerClosing = new Wait();
-			final Wait waitClientConnecting = new Wait();
 			try (Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-				.closing(new WaitClosing(waitForServerClosing)).failing(new LockFailing(lock))
+				.closing(new WaitClosing(waitClosing)).failing(new LockFailing(lock))
 				.connecting(new WaitListenConnecting(wait))
-				.listening(new SecureSocketServerBuilder().with(executor).trust(trust).listening(new Listening() {
+				.listening(new Listening() {
 					@Override
 					public Connection connecting(Address from, Connector connector) {
 						return new Connection() {
@@ -51,27 +43,28 @@ public class SecureSocketTest {
 							}
 						};
 					}
-				}).build()))) {
+				}))) {
 
 				wait.waitFor();
 
-				try (Connector client = ninio.create(new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(new Address(Address.LOCALHOST, port))
-					.closing(new WaitClosing(waitForClientClosing)).failing(new LockFailing(lock))
-					//.closing(new LockClosing(lock))
-					.receiving(new LockReceiver(lock))
-					.connecting(new WaitConnecting(waitClientConnecting)))) {
+				AsyncTcpSocket client = new AsyncTcpSocket(ninio);
+				try {
+					client.connect(new Address(Address.LOCALHOST, port)).get();
 
-					client.send(null, ByteBufferUtils.toByteBuffer("test"));
+					client.write(ByteBufferUtils.toByteBuffer("test"));
+					
+					Future<ByteBuffer> f = client.read();
 
-					waitClientConnecting.waitFor();
 					waitServerConnecting.waitFor();
-					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
+					Assertions.assertThat(ByteBufferUtils.toString(f.get())).isEqualTo("test");
+				} finally {
+					client.close().get();
 				}
 
-				waitForClientClosing.waitFor();
 				waitServerClosing.waitFor();
 			}
-			waitForServerClosing.waitFor();
+			
+			waitClosing.waitFor();
 		}
 	}
 	

@@ -17,6 +17,7 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.RoutingTcpSocketServer;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.core.WaitListenConnecting;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.Annotated.Builder;
@@ -67,11 +68,19 @@ class TestUtils {
 		v.visit(a);
 
 		Wait wait = new Wait();
-		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
+		final Wait waitForClosing = new Wait();
+		final Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
+				.closing(new WaitClosing(waitForClosing))
 				.connecting(new WaitListenConnecting(wait)).listening(
 						HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
 		wait.waitFor();
-		return tcp;
+		return new Disconnectable() {
+			@Override
+			public void close() {
+				tcp.close();
+				waitForClosing.waitFor();
+			}
+		};
 	}
 
 	static Disconnectable routedServer(Ninio ninio, int routedPort, final int port, Visitor v) {

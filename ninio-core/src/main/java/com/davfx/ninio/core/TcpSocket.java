@@ -90,7 +90,8 @@ public final class TcpSocket implements Connector {
 	}
 	
 	private final Queue queue;
-
+	private final Closing closing;
+	
 	private SocketChannel currentChannel = null;
 	private SelectionKey currentInboundKey = null;
 	private SelectionKey currentSelectionKey = null;
@@ -98,8 +99,9 @@ public final class TcpSocket implements Connector {
 	private final Deque<ByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	private TcpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private TcpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final Connecting connecting, Closing closing, final Failing failing, final Receiver receiver) {
 		this.queue = queue;
+		this.closing = closing;
 
 		queue.execute(new Runnable() {
 			@Override
@@ -140,9 +142,6 @@ public final class TcpSocket implements Connector {
 														currentChannel = null;
 														currentInboundKey = null;
 														currentSelectionKey = null;
-														if (closing != null) {
-															closing.closed();
-														}
 														return;
 													}
 												} catch (IOException e) {
@@ -151,9 +150,6 @@ public final class TcpSocket implements Connector {
 													currentChannel = null;
 													currentInboundKey = null;
 													currentSelectionKey = null;
-													if (closing != null) {
-														closing.closed();
-													}
 													return;
 												}
 
@@ -178,9 +174,6 @@ public final class TcpSocket implements Connector {
 														currentChannel = null;
 														currentInboundKey = null;
 														currentSelectionKey = null;
-														if (closing != null) {
-															closing.closed();
-														}
 														return;
 													}
 													
@@ -276,6 +269,10 @@ public final class TcpSocket implements Connector {
 		}
 		if (selectionKey != null) {
 			selectionKey.cancel();
+		}
+
+		if (closing != null) {
+			closing.closed();
 		}
 	}
 

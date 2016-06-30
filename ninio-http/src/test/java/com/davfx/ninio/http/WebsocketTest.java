@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import org.junit.After;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,12 +18,6 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.http.HttpContentReceiver;
-import com.davfx.ninio.http.HttpListening;
-import com.davfx.ninio.http.HttpListeningHandler;
-import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.WebsocketHttpContentReceiver;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.io.Files;
@@ -32,11 +25,6 @@ import com.google.common.io.Files;
 public class WebsocketTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketTest.class);
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
 	
 	private static Disconnectable server(Ninio ninio, int port) throws IOException {
 		final byte[] indexHtml= Files.toByteArray(new File("src/test/resources/files/ws.html"));

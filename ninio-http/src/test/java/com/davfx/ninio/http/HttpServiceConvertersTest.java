@@ -4,7 +4,6 @@ import java.util.LinkedList;
 import java.util.List;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Disconnectable;
@@ -23,11 +22,6 @@ public class HttpServiceConvertersTest {
 	
 	static {
 		System.setProperty("http.keepAlive", "false");
-	}
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
 	}
 	
 	@Path("/get")

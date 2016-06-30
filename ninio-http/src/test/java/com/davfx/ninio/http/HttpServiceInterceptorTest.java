@@ -5,7 +5,6 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Disconnectable;
@@ -27,11 +26,6 @@ public class HttpServiceInterceptorTest {
 		System.setProperty("http.keepAlive", "false");
 	}
 
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
-	
 	public static final class TestInterceptorBeforeController implements HttpController {
 		@Route(method = HttpMethod.GET)
 		public Http checkMessage(@QueryParameter("check") String check) {

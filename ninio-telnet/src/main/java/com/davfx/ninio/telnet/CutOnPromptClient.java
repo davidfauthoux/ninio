@@ -1,6 +1,5 @@
 package com.davfx.ninio.telnet;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.concurrent.Executor;
@@ -9,11 +8,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
@@ -81,7 +78,6 @@ public final class CutOnPromptClient implements Connector {
 			Write write(String command, String prompt, Receive callback);
 		}
 		void connected(Write write);
-		void disconnected();
 	}
 	
 	public static interface Builder extends NinioBuilder<Disconnectable> {
@@ -216,21 +212,7 @@ public final class CutOnPromptClient implements Connector {
 							h.connected(write);
 						}
 					}
-				}).receiving(cuttingReceiver).closing(new Closing() {
-					@Override
-					public void closed() {
-						if (h != null) {
-							h.disconnected();
-						}
-					}
-				}).failing(new Failing() {
-					@Override
-					public void failed(IOException e) {
-						if (h != null) {
-							h.disconnected();
-						}
-					}
-				}).create(queue);
+				}).receiving(cuttingReceiver).create(queue);
 			}
 		});
 	}

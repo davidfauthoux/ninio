@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -16,7 +15,6 @@ import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.EchoReceiver;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Listening;
-import com.davfx.ninio.core.LockClosing;
 import com.davfx.ninio.core.LockFailing;
 import com.davfx.ninio.core.LockReceiver;
 import com.davfx.ninio.core.Ninio;
@@ -26,23 +24,11 @@ import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.core.WaitConnecting;
 import com.davfx.ninio.core.WaitListenConnecting;
-import com.davfx.ninio.http.HttpClient;
-import com.davfx.ninio.http.HttpContentReceiver;
-import com.davfx.ninio.http.HttpListening;
-import com.davfx.ninio.http.HttpListeningHandler;
-import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.WebsocketHttpContentReceiver;
-import com.davfx.ninio.http.WebsocketSocket;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class WebsocketClientServerTest {
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
 	
 	@Test
 	public void test() throws Exception {
@@ -54,7 +40,9 @@ public class WebsocketClientServerTest {
 
 		int port = 8080;
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
+			Wait waitForServerClosing = new Wait();
 			try (Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
+					.closing(new WaitClosing(waitForServerClosing))
 					.failing(new LockFailing(lock))
 					.connecting(new WaitListenConnecting(wait))
 					.listening(HttpListening.builder().with(new SerialExecutor(WebsocketClientServerTest.class)).with(new HttpListeningHandler() {
@@ -95,9 +83,11 @@ public class WebsocketClientServerTest {
 
 				try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					
+					Wait waitForClientClosing = new Wait();
 					try (Connector client = ninio.create(WebsocketSocket.builder().with(httpClient).to(new Address(Address.LOCALHOST, port))
 						.failing(new LockFailing(lock))
-						.closing(new LockClosing(lock))
+						.closing(new WaitClosing(waitForClientClosing))
+						//.closing(new LockClosing(lock))
 						.receiving(new LockReceiver(lock))
 						.connecting(new WaitConnecting(waitClientConnecting)))) {
 
@@ -107,10 +97,12 @@ public class WebsocketClientServerTest {
 						waitServerConnecting.waitFor();
 						Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 					}
+					waitForClientClosing.waitFor();
 
 					waitServerClosing.waitFor();
 				}
 			}
+			waitForServerClosing.waitFor();
 		}
 	}
 

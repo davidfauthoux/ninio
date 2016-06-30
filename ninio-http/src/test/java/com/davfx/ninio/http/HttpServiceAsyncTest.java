@@ -1,7 +1,6 @@
 package com.davfx.ninio.http;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Disconnectable;
@@ -13,11 +12,6 @@ import com.davfx.ninio.http.service.annotations.Route;
 import com.davfx.ninio.http.service.controllers.Jsonp;
 
 public class HttpServiceAsyncTest {
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
 	
 	@Path("/get")
 	public static final class TestGetWithQueryParameterController implements HttpController {

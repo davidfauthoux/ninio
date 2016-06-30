@@ -6,7 +6,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,21 +26,14 @@ import com.davfx.ninio.http.HttpListeningHandler;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.WebsocketHttpContentReceiver;
-import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyConnectorProvider;
-import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
+import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 
 public class WebsocketSocketTest {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(WebsocketSocketTest.class);
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
 	
 	@Test
 	public void testSocket() throws Exception {
@@ -116,9 +108,8 @@ public class WebsocketSocketTest {
 				try {
 					final int proxyPort = 8081;
 	
-					final Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), null));
-					try {
-				
+					Wait waitForProxyServerClosing = new Wait();
+					try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(waitForProxyServerClosing)))) {
 						final ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)));
 						try {
 							final Connector client = ninio.create(proxyClient.websocket().route("/ws").to(new Address(Address.LOCALHOST, port))
@@ -166,9 +157,8 @@ public class WebsocketSocketTest {
 						} finally {
 							proxyClient.close();
 						}
-					} finally {
-						proxyServer.close();
 					}
+					waitForProxyServerClosing.waitFor();
 				} finally {
 					websocketServer.close();
 				}

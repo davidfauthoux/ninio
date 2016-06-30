@@ -46,7 +46,14 @@ public final class ProxyServer implements Listening {
 				final Trust trust = new Trust();
 				final Executor executor = new SerialExecutor(ProxyServer.class);
 				final HttpClient httpClient = HttpClient.builder().with(executor).create(queue);
-				final Disconnectable server = TcpSocketServer.builder().bind(address).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
+				final Disconnectable server = TcpSocketServer.builder().bind(address).closing(listening).listening(ProxyServer.builder().with(executor).listening(new ProxyListening() {
+					@Override
+					public void closed() {
+						if (listening == null) {
+							return;
+						}
+						listening.closed();
+					}
 					@Override
 					public ConfigurableNinioBuilder<Connector, ?> create(Address address, String header) {
 						Header h = Header.of(header);
@@ -100,6 +107,10 @@ public final class ProxyServer implements Listening {
 		return new Builder() {
 			private Executor executor = null;
 			private ProxyListening listening = new ProxyListening() {
+				@Override
+				public void closed() {
+				}
+				
 				@Override
 				public ConfigurableNinioBuilder<Connector, ?> create(Address address, String header) {
 					return new ConfigurableNinioBuilder<Connector, Void>() {
