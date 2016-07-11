@@ -93,15 +93,16 @@ public final class UdpSocket implements Connector {
 	}
 
 	private final Queue queue;
-	
+	private final Closing closing;
 	private DatagramChannel currentChannel = null;
 	private SelectionKey currentSelectionKey = null;
 
 	private final Deque<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	public UdpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
+	public UdpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
 		this.queue = queue;
+		this.closing = closing;
 
 		queue.execute(new Runnable() {
 			@Override
@@ -140,9 +141,6 @@ public final class UdpSocket implements Connector {
 										disconnect(channel, selectionKey);
 										currentChannel = null;
 										currentSelectionKey = null;
-										if (closing != null) {
-											closing.closed();
-										}
 										return;
 									}
 
@@ -163,9 +161,6 @@ public final class UdpSocket implements Connector {
 											} catch (IOException e) {
 												LOGGER.trace("Connection failed", e);
 												disconnect(channel, selectionKey);
-												if (closing != null) {
-													closing.closed();
-												}
 												return;
 											}
 										} else {
@@ -258,6 +253,10 @@ public final class UdpSocket implements Connector {
 		}
 		if (selectionKey != null) {
 			selectionKey.cancel();
+		}
+
+		if (closing != null) {
+			closing.closed();
 		}
 	}
 

@@ -28,6 +28,7 @@ public final class TcpSocketServer implements Disconnectable {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
 
+		Builder closing(Closing closing);
 		Builder failing(Failing failing);
 		Builder connecting(ListenConnecting connecting);
 		Builder listening(Listening listening);
@@ -40,6 +41,7 @@ public final class TcpSocketServer implements Disconnectable {
 			private ListenConnecting connecting = null;
 			private Listening listening = null;
 			private Failing failing = null;
+			private Closing closing = null;
 			
 			private Address bindAddress = null;
 			
@@ -52,6 +54,12 @@ public final class TcpSocketServer implements Disconnectable {
 			@Override
 			public Builder listening(Listening listening) {
 				this.listening = listening;
+				return this;
+			}
+			
+			@Override
+			public Builder closing(Closing closing) {
+				this.closing = closing;
 				return this;
 			}
 			
@@ -78,7 +86,7 @@ public final class TcpSocketServer implements Disconnectable {
 				if (bindAddress == null) {
 					throw new NullPointerException("bindAddress");
 				}
-				return new TcpSocketServer(queue, byteBufferAllocator, bindAddress, connecting, listening, failing);
+				return new TcpSocketServer(queue, byteBufferAllocator, bindAddress, connecting, listening, failing, closing);
 			}
 		};
 	}
@@ -86,7 +94,7 @@ public final class TcpSocketServer implements Disconnectable {
 	private final Set<SocketChannel> outboundChannels = new HashSet<>();
 	
 	private final Queue queue;
-
+	private final Closing closing;
 	private ServerSocketChannel currentChannel = null;
 	private SelectionKey currentAcceptSelectionKey = null;
 
@@ -104,8 +112,9 @@ public final class TcpSocketServer implements Disconnectable {
 		});
 	}
 	
-	private TcpSocketServer(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final ListenConnecting connecting, final Listening listening, final Failing failing) {
+	private TcpSocketServer(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final ListenConnecting connecting, final Listening listening, final Failing failing, Closing closing) {
 		this.queue = queue;
+		this.closing = closing;
 		
 		queue.execute(new Runnable() {
 			@Override
@@ -148,7 +157,7 @@ public final class TcpSocketServer implements Disconnectable {
 									final InnerSocketContext context = new InnerSocketContext();
 									
 									final Connector innerConnector = new Connector() {
-										private void disconnect(SocketChannel channel, SelectionKey selectionKey) {
+										private void disconnect(SocketChannel channel, SelectionKey selectionKey, Closing closing) {
 											remove.run();
 
 											try {
@@ -162,6 +171,10 @@ public final class TcpSocketServer implements Disconnectable {
 											if (selectionKey != null) {
 												selectionKey.cancel();
 											}
+
+											if (closing != null) {
+												closing.closed();
+											}
 										}
 
 										@Override
@@ -170,7 +183,7 @@ public final class TcpSocketServer implements Disconnectable {
 												@Override
 												public void run() {
 													if (context.currentChannel != null) {
-														disconnect(context.currentChannel, context.currentSelectionKey);
+														disconnect(context.currentChannel, context.currentSelectionKey, context.closing);
 													}
 													context.currentChannel = null;
 													context.currentSelectionKey = null;
@@ -242,10 +255,15 @@ public final class TcpSocketServer implements Disconnectable {
 											if (selectionKey != null) {
 												selectionKey.cancel();
 											}
+
+											if (closing != null) {
+												closing.closed();
+											}
 										}
 
 										@Override
 										public void run() {
+											context.closing = closing;
 											try {
 												final SocketChannel channel = outboundChannel;
 												context.currentChannel = channel;
@@ -269,9 +287,6 @@ public final class TcpSocketServer implements Disconnectable {
 																		disconnect(channel, selectionKey);
 																		context.currentChannel = null;
 																		context.currentSelectionKey = null;
-																		if (closing != null) {
-																			closing.closed();
-																		}
 																		return;
 																	}
 																} catch (IOException e) {
@@ -279,9 +294,6 @@ public final class TcpSocketServer implements Disconnectable {
 																	disconnect(channel, selectionKey);
 																	context.currentChannel = null;
 																	context.currentSelectionKey = null;
-																	if (closing != null) {
-																		closing.closed();
-																	}
 																	return;
 																}
 																
@@ -304,9 +316,6 @@ public final class TcpSocketServer implements Disconnectable {
 																		disconnect(channel, selectionKey);
 																		currentChannel = null;
 																		context.currentSelectionKey = null;
-																		if (closing != null) {
-																			closing.closed();
-																		}
 																		return;
 																	}
 																	
@@ -408,6 +417,10 @@ public final class TcpSocketServer implements Disconnectable {
 		if (acceptSelectionKey != null) {
 			acceptSelectionKey.cancel();
 		}
+		
+		if (closing != null) {
+			closing.closed();
+		}
 	}
 
 	@Override
@@ -434,6 +447,7 @@ public final class TcpSocketServer implements Disconnectable {
 	}
 	
 	private static final class InnerSocketContext {
+		public Closing closing = null;
 		public SocketChannel currentChannel = null;
 		public SelectionKey currentSelectionKey = null;
 

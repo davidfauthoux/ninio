@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -22,11 +21,6 @@ public class TcpdumpTest {
 		ConfigUtils.override("com.davfx.ninio.core.tcpdump.mode = hex"); // raw not working on Mac OS X
 	}
 	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
-	
 	@Test
 	public void testDatagram() throws Exception {
 		Lock<ByteBuffer, IOException> lock = new Lock<>();
@@ -35,9 +29,11 @@ public class TcpdumpTest {
 			int port = 8080;
 	
 			Wait wait = new Wait();
+			Wait waitForServerClosing = new Wait();
+			Wait waitForClientClosing = new Wait();
 			try (Connector server = ninio.create(TcpdumpSocket.builder().on("lo0").rule("dst port " + port).bind(new Address(Address.ANY, port))
-				.failing(new LockFailing(lock))
-				.closing(new LockClosing(lock))
+				.closing(new WaitClosing(waitForServerClosing)).failing(new LockFailing(lock))
+				//.closing(new LockClosing(lock))
 				.receiving(new EchoReceiver())
 				.connecting(new WaitConnecting(wait)))) {
 				
@@ -46,14 +42,16 @@ public class TcpdumpTest {
 				Thread.sleep(100);
 				
 				try (Connector client = ninio.create(UdpSocket.builder()
-					.failing(new LockFailing(lock))
-					.closing(new LockClosing(lock))
+					.closing(new WaitClosing(waitForClientClosing)).failing(new LockFailing(lock))
+					//.closing(new LockClosing(lock))
 					.receiving(new LockReceiver(lock)))) {
 
 					client.send(new Address(Address.LOCALHOST, port), ByteBufferUtils.toByteBuffer("test"));
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 				}
+				waitForClientClosing.waitFor();
 			}
+			waitForServerClosing.waitFor();
 		}
 	}
 	

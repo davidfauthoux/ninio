@@ -16,7 +16,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.Receiver;
 
-public final class PingClient implements Disconnectable, AutoCloseable {
+public final class PingClient implements Disconnectable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingClient.class);
 	

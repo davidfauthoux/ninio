@@ -25,20 +25,21 @@ import com.typesafe.config.ConfigException;
 
 public final class TcpdumpSocket implements Connector {
 	
-	public static interface Builder extends NinioBuilder<Connector> {
+	public static interface Builder extends ConfigurableNinioBuilder<Connector, Builder> {
 		Builder on(String interfaceId);
 		Builder rule(String rule);
 		Builder bind(Address bindAddress);
-		Builder failing(Failing failing);
-		Builder closing(Closing closing);
-		Builder connecting(Connecting connecting);
-		Builder receiving(Receiver receiver);
 	}
+
+	private static final Config CONFIG = ConfigUtils.load(TcpdumpSocket.class);
+
+	private static final String TCPDUMP_DEFAULT_INTERFACE_ID = CONFIG.getString("tcpdump.interface");
+	private static final String TCPDUMP_DEFAULT_RULE = CONFIG.getString("tcpdump.rule");
 
 	public static Builder builder() {
 		return new Builder() {
-			private String interfaceId = null;
-			private String rule = null;
+			private String interfaceId = TCPDUMP_DEFAULT_INTERFACE_ID;
+			private String rule = TCPDUMP_DEFAULT_RULE;
 
 			private Address bindAddress = null;
 
@@ -72,6 +73,11 @@ public final class TcpdumpSocket implements Connector {
 			}
 			
 			@Override
+			public Builder buffering(Buffering buffering) {
+				return this;
+			}
+			
+			@Override
 			public Builder on(String interfaceId) {
 				this.interfaceId = interfaceId;
 				return this;
@@ -100,8 +106,6 @@ public final class TcpdumpSocket implements Connector {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSocket.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(TcpdumpSocket.class);
-
 	private static final boolean RAW;
 	static {
 		String mode = CONFIG.getString("tcpdump.mode");

@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -12,25 +11,16 @@ import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.ConfigurableNinioBuilder;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.LockClosing;
 import com.davfx.ninio.core.LockFailing;
 import com.davfx.ninio.core.LockReceiver;
 import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.core.WaitConnecting;
-import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyConnectorProvider;
-import com.davfx.ninio.proxy.ProxyListening;
-import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 
 public class EchoTest {
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
 	
 	@Test
 	public void testSocket() throws Exception {
@@ -39,7 +29,12 @@ public class EchoTest {
 		try (Ninio ninio = Ninio.create()) {
 			int proxyPort = 8081;
 
+			final Wait waitForServerClosing = new Wait();
 			try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new ProxyListening() {
+				@Override
+				public void closed() {
+					waitForServerClosing.run();
+				}
 				@Override
 				public ConfigurableNinioBuilder<Connector, ?> create(Address address, String header) {
 					if (header.equals("_")) {
@@ -52,11 +47,13 @@ public class EchoTest {
 				int port = 8080;
 				
 				Wait clientWait = new Wait();
-		
+				final Wait waitForClientClosing = new Wait();
+
 				try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
-					try (Connector client = ninio.create(proxyClient.factory().header("_").with(new Address(Address.LOCALHOST, port))
+					try (Connector client = ninio.create(proxyClient.factory().header(new Header("_")).with(new Address(Address.LOCALHOST, port))
 						.failing(new LockFailing(lock))
-						.closing(new LockClosing(lock))
+						.closing(new WaitClosing(waitForClientClosing))
+						//.closing(new LockClosing(lock))
 						.receiving(new LockReceiver(lock))
 						.connecting(new WaitConnecting(clientWait))
 					)) {
@@ -65,7 +62,9 @@ public class EchoTest {
 						Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test");
 					}
 				}
+				waitForClientClosing.waitFor();
 			}
+			waitForServerClosing.waitFor();
 		}
 	}
 	

@@ -36,28 +36,26 @@ final class InternalQueue implements Queue, AutoCloseable {
 			public void run() {
 				while (true) {
 					try {
-						if (selector.isOpen()) {
+						try {
 							selector.select();
-							if (selector.isOpen()) {
-								Set<SelectionKey> s;
+						} catch (ClosedSelectorException ce) {
+							return;
+						}
+						Set<SelectionKey> s;
+						try {
+							s = selector.selectedKeys();
+						} catch (ClosedSelectorException ce) {
+							s = null;
+						}
+						if (s != null) {
+							for (SelectionKey key : s) {
 								try {
-									s = selector.selectedKeys();
-								} catch (ClosedSelectorException ce) {
-									s = null;
-								}
-								if (s != null) {
-									for (SelectionKey key : s) {
-										try {
-											((SelectionKeyVisitor) key.attachment()).visit(key);
-										} catch (Throwable e) {
-											LOGGER.error("Error in event handling", e);
-										}
-									}
-									s.clear();
+									((SelectionKeyVisitor) key.attachment()).visit(key);
+								} catch (Throwable e) {
+									LOGGER.error("Error in event handling", e);
 								}
 							}
-						} else {
-							return;
+							s.clear();
 						}
 					} catch (Throwable e) {
 						LOGGER.error("Error in selector ", e);

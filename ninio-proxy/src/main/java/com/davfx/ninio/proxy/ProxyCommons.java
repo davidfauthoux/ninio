@@ -19,6 +19,7 @@ interface ProxyCommons {
 		public static final String TCP = CONFIG.getString("tcp");
 		public static final String SSL = CONFIG.getString("ssl");
 		public static final String UDP = CONFIG.getString("udp");
+		public static final String TCPDUMP = CONFIG.getString("tcpdump");
 		public static final String RAW = CONFIG.getString("raw");
 		public static final String WEBSOCKET = CONFIG.getString("websocket");
 		public static final String HTTP = CONFIG.getString("http");

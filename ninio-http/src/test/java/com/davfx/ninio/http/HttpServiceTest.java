@@ -4,7 +4,6 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Disconnectable;
@@ -24,11 +23,6 @@ import com.davfx.ninio.http.service.annotations.Route;
 import com.google.common.base.Charsets;
 
 public class HttpServiceTest {
-	
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
 	
 	@Path("/get")
 	public static final class TestGetWithQueryParameterController implements HttpController {

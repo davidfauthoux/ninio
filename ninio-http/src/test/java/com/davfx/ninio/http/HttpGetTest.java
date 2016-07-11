@@ -5,7 +5,6 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -19,8 +18,10 @@ import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
+import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
+import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 
@@ -28,11 +29,6 @@ public class HttpGetTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpGetTest.class);
 
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
-	
 	private static final int LIMIT = 2;
 	
 	private static Lock<Object, IOException> getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {
@@ -106,7 +102,8 @@ public class HttpGetTest {
 	}
 	
 	private static Disconnectable server(Ninio ninio, int port, final String suffix) {
-		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
+		final Wait waitForClosing = new Wait();
+		final Disconnectable tcp = ninio.create(TcpSocketServer.builder().closing(new WaitClosing(waitForClosing)).bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
 			@Override
 			public ConnectionHandler create() {
 				return new ConnectionHandler() {
@@ -141,7 +138,13 @@ public class HttpGetTest {
 				};
 			}
 		}).build()));
-		return tcp;
+		return new Disconnectable() {
+			@Override
+			public void close() {
+				tcp.close();
+				waitForClosing.waitFor();
+			}
+		};
 	}
 	private static Disconnectable server(Ninio ninio, int port) {
 		return server(ninio, port, "");

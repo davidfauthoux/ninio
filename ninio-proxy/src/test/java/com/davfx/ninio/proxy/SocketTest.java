@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
@@ -23,6 +22,7 @@ import com.davfx.ninio.core.LockReceiver;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.core.WaitConnecting;
 import com.davfx.ninio.core.WaitListenConnecting;
 import com.davfx.ninio.util.Lock;
@@ -31,11 +31,6 @@ import com.google.common.base.Charsets;
 
 public class SocketTest {
 
-	@After
-	public void waitALittleBit() throws Exception {
-		Thread.sleep(100);
-	}
-	
 	@Test
 	public void testSocket() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
@@ -43,14 +38,17 @@ public class SocketTest {
 		try (Ninio ninio = Ninio.create()) {
 			int proxyPort = 8081;
 
-			try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), null))) {
+			Wait waitForProxyServerClosing = new Wait();
+			try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(waitForProxyServerClosing)))) {
 				
 				int port = 8080;
 		
 				final Wait serverWait = new Wait();
 				final Wait clientServerWait = new Wait();
 				final Wait clientClientWait = new Wait();
+				final Wait waitForServerClosing = new Wait();
 				try (Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
+					.closing(new WaitClosing(waitForServerClosing))
 					.failing(new LockFailing(lock))
 					.connecting(new WaitListenConnecting(serverWait))
 					.listening(new Listening() {
@@ -81,10 +79,12 @@ public class SocketTest {
 					}))) {
 					serverWait.waitFor();
 	
-					try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)));) {
+					final Wait waitForClientClosing = new Wait();
+					try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 						try (Connector client = ninio.create(proxyClient.tcp().to(new Address(Address.LOCALHOST, port))
 							.failing(new LockFailing(lock))
-							.closing(new LockClosing(lock))
+							.closing(new WaitClosing(waitForClientClosing))
+							//.closing(new LockClosing(lock))
 							.receiving(new LockReceiver(lock))
 							.connecting(new WaitConnecting(clientClientWait))
 						)) {
@@ -92,9 +92,12 @@ public class SocketTest {
 		
 							Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 						}
+						waitForClientClosing.waitFor();
 					}
 				}
+				waitForServerClosing.waitFor();
 			}
+			waitForProxyServerClosing.waitFor();
 		}
 	}
 	
