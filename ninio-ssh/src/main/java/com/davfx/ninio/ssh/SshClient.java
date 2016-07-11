@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -91,6 +92,7 @@ public final class SshClient implements Connector {
 			private Receiver receiver = null;
 			private Closing closing = null;
 			private Failing failing = null;
+			private Buffering buffering = null;
 			private Connecting connecting = null;
 			private TcpSocket.Builder builder = TcpSocket.builder();
 			
@@ -157,6 +159,12 @@ public final class SshClient implements Connector {
 			}
 			
 			@Override
+			public Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public Builder receiving(Receiver receiver) {
 				this.receiver = receiver;
 				return this;
@@ -192,7 +200,7 @@ public final class SshClient implements Connector {
 					throw new NullPointerException("executor");
 				}
 				
-				return new SshClient(queue, builder, byteBufferAllocator, bindAddress, connectAddress, login, password, publicKey, exec, receiver, closing, failing, connecting, executor);
+				return new SshClient(queue, builder, byteBufferAllocator, bindAddress, connectAddress, login, password, publicKey, exec, receiver, closing, failing, buffering, connecting, executor);
 			}
 		};
 	}
@@ -212,7 +220,7 @@ public final class SshClient implements Connector {
 
 	private Connector rawConnector;
 	
-	private SshClient(final Queue queue, final TcpSocket.Builder builder, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final String finalLogin, final String finalPassword, final SshPublicKey finalPublicKey, final String finalExec, final Receiver r, final Closing c, final Failing clientFailing, final Connecting clientConnecting, final Executor e) {
+	private SshClient(final Queue queue, final TcpSocket.Builder builder, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final String finalLogin, final String finalPassword, final SshPublicKey finalPublicKey, final String finalExec, final Receiver r, final Closing c, final Failing clientFailing, final Buffering clientBuffering, final Connecting clientConnecting, final Executor e) {
 		this.e = e;
 		
 		e.execute(new Runnable() {
@@ -676,6 +684,7 @@ public final class SshClient implements Connector {
 		
 				Connector builtConnector = builder
 						.failing(clientFailing)
+						.buffering(clientBuffering)
 						.connecting(null) // Cleared to be consistent with other handlers set
 						.closing(readingSshHeaderCloseableByteBufferHandler)
 						.receiving(readingSshHeaderCloseableByteBufferHandler)

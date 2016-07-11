@@ -53,6 +53,10 @@ public class SecureSocketTest {
 							public Receiver receiver() {
 								return new EchoReceiver();
 							}
+							@Override
+							public Buffering buffering() {
+								return null;
+							}
 						};
 					}
 				}).build()))) {

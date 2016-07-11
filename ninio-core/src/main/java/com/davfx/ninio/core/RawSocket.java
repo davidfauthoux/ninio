@@ -68,6 +68,11 @@ public final class RawSocket implements Connector {
 				this.receiver = receiver;
 				return this;
 			}
+			
+			@Override
+			public Builder buffering(Buffering buffering) {
+				return this;
+			}
 
 			@Override
 			public Builder bind(Address bindAddress) {

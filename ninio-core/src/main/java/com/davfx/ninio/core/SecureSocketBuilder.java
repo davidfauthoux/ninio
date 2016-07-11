@@ -15,6 +15,7 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	private Closing closing = null;
 	private Failing failing = null;
 	private Receiver receiver = null;
+	private Buffering buffering = null;
 	
 	private final TcpSocket.Builder wrappee;
 
@@ -57,6 +58,12 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	}
 	
 	@Override
+	public TcpSocket.Builder buffering(Buffering buffering) {
+		this.buffering = buffering;
+		return this;
+	}
+	
+	@Override
 	public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 		this.byteBufferAllocator = byteBufferAllocator;
 		return this;
@@ -82,6 +89,7 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 		sslManager.closing = closing;
 		sslManager.failing = failing;
 		sslManager.receiver = receiver;
+		sslManager.buffering = buffering;
 
 		executor.execute(new Runnable() {
 			@Override

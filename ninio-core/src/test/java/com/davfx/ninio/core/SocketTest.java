@@ -47,6 +47,10 @@ public class SocketTest {
 							public Receiver receiver() {
 								return new EchoReceiver();
 							}
+							@Override
+							public Buffering buffering() {
+								return null;
+							}
 						};
 					}
 				}))) {

@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -91,6 +92,10 @@ public class TelnetTest {
 						}
 						@Override
 						public Closing closing() {
+							return null;
+						}
+						@Override
+						public Buffering buffering() {
 							return null;
 						}
 					};

@@ -8,6 +8,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -26,13 +27,6 @@ import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.core.WaitConnecting;
 import com.davfx.ninio.core.WaitListenConnecting;
-import com.davfx.ninio.http.HttpClient;
-import com.davfx.ninio.http.HttpContentReceiver;
-import com.davfx.ninio.http.HttpListening;
-import com.davfx.ninio.http.HttpListeningHandler;
-import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.WebsocketHttpContentReceiver;
-import com.davfx.ninio.http.WebsocketSocket;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -79,6 +73,10 @@ public class WebsocketClientServerTest {
 										public Receiver receiver() {
 											return new EchoReceiver();
 										}
+										@Override
+										public Buffering buffering() {
+											return null;
+										}
 									};
 								}
 							});
@@ -86,6 +84,9 @@ public class WebsocketClientServerTest {
 						@Override
 						public void closed() {
 							waitServerClosing.run();
+						}
+						@Override
+						public void buffering(long size) {
 						}
 					};
 				}

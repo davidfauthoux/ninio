@@ -25,9 +25,6 @@ import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.HttpListeningHandler;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyConnectorProvider;
-import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -76,6 +73,9 @@ public class HttpSocketTest {
 						}
 						@Override
 						public void closed() {
+						}
+						@Override
+						public void buffering(long size) {
 						}
 					};
 				}

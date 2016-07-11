@@ -225,6 +225,7 @@ public final class TcpSocketServer implements Disconnectable {
 									final Closing closing = connection.closing();
 									final Failing failing = connection.failing();
 									final Receiver receiver = connection.receiver();
+									final Buffering buffering = connection.buffering();
 
 									queue.execute(new Runnable() {
 										private void disconnect(SocketChannel channel, SelectionKey selectionKey) {
@@ -307,6 +308,10 @@ public final class TcpSocketServer implements Disconnectable {
 																			closing.closed();
 																		}
 																		return;
+																	}
+																	
+																	if (buffering != null) {
+																		buffering.buffering(context.toWriteLength);
 																	}
 																	
 																	if (b.hasRemaining()) {

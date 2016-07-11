@@ -197,6 +197,9 @@ public class PerfVersusJettyTest {
 						@Override
 						public void closed() {
 						}
+						@Override
+						public void buffering(long size) {
+						}
 					};
 				}
 			}).build()));

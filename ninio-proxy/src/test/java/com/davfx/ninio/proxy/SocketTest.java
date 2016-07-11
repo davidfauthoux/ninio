@@ -8,6 +8,7 @@ import org.junit.After;
 import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -24,9 +25,6 @@ import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.WaitConnecting;
 import com.davfx.ninio.core.WaitListenConnecting;
-import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyConnectorProvider;
-import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
@@ -73,6 +71,10 @@ public class SocketTest {
 								@Override
 								public Receiver receiver() {
 									return new EchoReceiver();
+								}
+								@Override
+								public Buffering buffering() {
+									return null;
 								}
 							};
 						}

@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
@@ -19,12 +20,6 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.http.HttpContentReceiver;
-import com.davfx.ninio.http.HttpListening;
-import com.davfx.ninio.http.HttpListeningHandler;
-import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.WebsocketHttpContentReceiver;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.io.Files;
@@ -87,6 +82,10 @@ public class WebsocketTest {
 												}
 											};
 										}
+										@Override
+										public Buffering buffering() {
+											return null;
+										}
 									};
 								}
 							});
@@ -101,6 +100,9 @@ public class WebsocketTest {
 					}
 					@Override
 					public void closed() {
+					}
+					@Override
+					public void buffering(long size) {
 					}
 				};
 			}

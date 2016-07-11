@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -26,10 +27,6 @@ public final class HttpSocket implements Connector {
 		Builder to(Address connectAddress);
 		Builder with(HttpClient httpClient);
 		Builder route(String path);
-		Builder failing(Failing failing);
-		Builder closing(Closing closing);
-		Builder connecting(Connecting connecting);
-		Builder receiving(Receiver receiver);
 	}
 
 	public static Builder builder() {
@@ -43,6 +40,7 @@ public final class HttpSocket implements Connector {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			private Buffering buffering = null;
 			
 			@Override
 			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
@@ -78,6 +76,12 @@ public final class HttpSocket implements Connector {
 			}
 			
 			@Override
+			public Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public Builder to(Address connectAddress) {
 				this.connectAddress = connectAddress;
 				return this;
@@ -100,14 +104,14 @@ public final class HttpSocket implements Connector {
 				if (httpClient == null) {
 					throw new NullPointerException("httpClient");
 				}
-				return new HttpSocket(httpClient, path, connectAddress, connecting, closing, failing, receiver);
+				return new HttpSocket(httpClient, path, connectAddress, connecting, closing, failing, receiver, buffering);
 			}
 		};
 	}
 
 	private final HttpContentSender sender;
 	
-	private HttpSocket(HttpClient httpClient, String path, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private HttpSocket(HttpClient httpClient, String path, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
 		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()
 			// GZIP deflate cannot stream/flush
 			.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)
@@ -121,6 +125,7 @@ public final class HttpSocket implements Connector {
 		
 		sender = httpClient.request()
 			.failing(failing)
+			.buffering(buffering)
 			.receiving(new HttpReceiver() {
 				@Override
 				public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {

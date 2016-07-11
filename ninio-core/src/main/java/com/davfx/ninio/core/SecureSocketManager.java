@@ -12,7 +12,7 @@ import javax.net.ssl.SSLEngineResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class SecureSocketManager implements Connector, Connecting, Closing, Failing, Receiver {
+final class SecureSocketManager implements Connector, Connecting, Closing, Failing, Receiver, Buffering {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SecureSocketManager.class);
 
 	public static final int REQUIRED_BUFFER_SIZE = 17 * 1024;
@@ -28,6 +28,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 	public Closing closing = null;
 	public Failing failing = null;
 	public Receiver receiver = null;
+	public Buffering buffering = null;
 	
 	private Deque<ByteBuffer> sent = new LinkedList<ByteBuffer>();
 	private Deque<ByteBuffer> received = new LinkedList<ByteBuffer>();
@@ -306,5 +307,17 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			}
 		});
 		return this;
+	}
+	
+	@Override
+	public void buffering(final long size) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				if (buffering != null) {
+					buffering.buffering(size);
+				}
+			}
+		});
 	}
 }

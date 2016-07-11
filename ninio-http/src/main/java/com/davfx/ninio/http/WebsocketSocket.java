@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -29,10 +30,6 @@ public final class WebsocketSocket implements Connector {
 		Builder to(Address connectAddress);
 		Builder with(HttpClient httpClient);
 		Builder route(String path);
-		Builder failing(Failing failing);
-		Builder closing(Closing closing);
-		Builder connecting(Connecting connecting);
-		Builder receiving(Receiver receiver);
 	}
 
 	public static Builder builder() {
@@ -46,7 +43,7 @@ public final class WebsocketSocket implements Connector {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
-			
+			private Buffering buffering = null;
 			
 			@Override
 			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
@@ -83,6 +80,12 @@ public final class WebsocketSocket implements Connector {
 			}
 			
 			@Override
+			public Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public Builder to(Address connectAddress) {
 				this.connectAddress = connectAddress;
 				return this;
@@ -105,7 +108,7 @@ public final class WebsocketSocket implements Connector {
 				if (httpClient == null) {
 					throw new NullPointerException("httpClient");
 				}
-				return new WebsocketSocket(httpClient, path, connectAddress, connecting, closing, failing, receiver);
+				return new WebsocketSocket(httpClient, path, connectAddress, connecting, closing, failing, receiver, buffering);
 			}
 		};
 	}
@@ -114,7 +117,7 @@ public final class WebsocketSocket implements Connector {
 	
 	private final HttpContentSender sender;
 	
-	private WebsocketSocket(HttpClient httpClient, String path, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	private WebsocketSocket(HttpClient httpClient, String path, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
 		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.GET, path, ImmutableMultimap.<String, String>builder()
 			.put("Sec-WebSocket-Key", BaseEncoding.base64().encode(String.valueOf(RANDOM.nextLong()).getBytes(Charsets.UTF_8)))
 			.put("Sec-WebSocket-Version", "13")
@@ -129,6 +132,7 @@ public final class WebsocketSocket implements Connector {
 		
 		sender = httpClient.request()
 			.failing(failing)
+			.buffering(buffering)
 			.receiving(new HttpReceiver() {
 				private boolean opcodeRead = false;
 				private int currentOpcode;

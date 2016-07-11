@@ -3,6 +3,7 @@ package com.davfx.ninio.telnet;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -61,6 +62,7 @@ public final class TelnetClient {
 			private Receiver receiver = null;
 			private Closing closing = null;
 			private Failing failing = null;
+			private Buffering buffering = null;
 			private Connecting connecting = null;
 			private TcpSocket.Builder builder = TcpSocket.builder();
 			
@@ -99,6 +101,12 @@ public final class TelnetClient {
 			}
 			
 			@Override
+			public Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public Builder receiving(Receiver receiver) {
 				this.receiver = receiver;
 				return this;
@@ -123,6 +131,7 @@ public final class TelnetClient {
 
 				return builder
 						.failing(failing)
+						.buffering(buffering)
 						.connecting(connecting)
 						.closing(closing)
 						.receiving(new Receiver() {

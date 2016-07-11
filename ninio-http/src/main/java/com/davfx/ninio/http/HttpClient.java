@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
@@ -222,12 +223,18 @@ public final class HttpClient implements Disconnectable {
 	public HttpRequestBuilder request() {
 		return new HttpRequestBuilder() {
 			private HttpReceiver receiver = null;
+			private Buffering buffering = null;
 			private Failing failing = null;
 			private int maxRedirections = DEFAULT_MAX_REDIRECTIONS;
 
 			@Override
 			public HttpRequestBuilder receiving(HttpReceiver receiver) {
 				this.receiver = receiver;
+				return this;
+			}
+			@Override
+			public HttpRequestBuilder buffering(Buffering buffering) {
+				this.buffering = buffering;
 				return this;
 			}
 			@Override
@@ -244,6 +251,7 @@ public final class HttpClient implements Disconnectable {
 			@Override
 			public HttpContentSender build(final HttpRequest request) {
 				final HttpReceiver r = receiver;
+				final Buffering b = buffering;
 				final Failing f = failing;
 				final int thisMaxRedirections = maxRedirections;
 				
@@ -264,7 +272,7 @@ public final class HttpClient implements Disconnectable {
 					}
 					
 					private void prepare(HttpRequest request) {
-						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, f);
+						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, b, f);
 						
 						final Failing abruptlyClosingFailing = new Failing() {
 							@Override

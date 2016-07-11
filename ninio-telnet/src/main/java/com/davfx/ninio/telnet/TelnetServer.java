@@ -3,6 +3,7 @@ package com.davfx.ninio.telnet;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
@@ -89,6 +90,7 @@ public final class TelnetServer {
 						final Closing connectionClosing = c.closing();
 						final Connecting connectionConnecting = c.connecting();
 						final Failing connectionFailing = c.failing();
+						final Buffering connectionBuffering = c.buffering();
 						return new Listening.Connection() {
 							@Override
 							public Receiver receiver() {
@@ -111,6 +113,10 @@ public final class TelnetServer {
 							@Override
 							public Closing closing() {
 								return connectionClosing;
+							}
+							@Override
+							public Buffering buffering() {
+								return connectionBuffering;
 							}
 						};
 					}

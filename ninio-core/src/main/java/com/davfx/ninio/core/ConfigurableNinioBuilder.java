@@ -5,4 +5,5 @@ public interface ConfigurableNinioBuilder<T, Builder> extends NinioBuilder<T> {
 	Builder closing(Closing closing);
 	Builder connecting(Connecting connecting);
 	Builder receiving(Receiver receiver);
+	Builder buffering(Buffering buffering);
 }

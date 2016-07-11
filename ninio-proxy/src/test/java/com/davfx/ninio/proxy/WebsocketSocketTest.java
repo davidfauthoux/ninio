@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
@@ -27,9 +28,6 @@ import com.davfx.ninio.http.HttpListeningHandler;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.WebsocketHttpContentReceiver;
-import com.davfx.ninio.proxy.ProxyClient;
-import com.davfx.ninio.proxy.ProxyConnectorProvider;
-import com.davfx.ninio.proxy.ProxyServer;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
@@ -99,6 +97,10 @@ public class WebsocketSocketTest {
 														}
 													};
 												}
+												@Override
+												public Buffering buffering() {
+													return null;
+												}
 											};
 										}
 									});
@@ -109,6 +111,9 @@ public class WebsocketSocketTest {
 							}
 							@Override
 							public void closed() {
+							}
+							@Override
+							public void buffering(long size) {
 							}
 						};
 					}

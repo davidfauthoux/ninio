@@ -6,7 +6,10 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -42,26 +45,29 @@ public final class HttpService implements HttpListeningHandler {
 	private static final Config CONFIG = ConfigUtils.load(HttpListening.class);
 	private static final int DEFAULT_THREADS = CONFIG.getInt("service.threads");
 	private static final int STREAMING_BUFFER_SIZE = CONFIG.getBytes("service.stream.buffer").intValue();
-	private static final double STREAMING_EPSILON = ConfigUtils.getDuration(CONFIG, "service.stream.epsilon");
 	
 	public static interface Builder {
+		/*%%
 		interface HandlerBuilder {
 			HandlerBuilder limit(double streamingRate);
 		}
+		*/
 
 		Builder threading(int threads);
-		HandlerBuilder register(HttpServiceHandler handler);
+		Builder register(HttpServiceHandler handler);
 		HttpService build();
 	}
 
+	/*%%
 	private static final class HandlerElement {
 		public HttpServiceHandler handler;
 		public double streamingRate = Double.NaN;
 	}
+	*/
 
 	public static Builder builder() {
 		return new Builder() {
-			private final ImmutableList.Builder<HandlerElement> handlers = ImmutableList.builder();
+			private final ImmutableList.Builder<HttpServiceHandler> handlers = ImmutableList.builder();
 			private int threads = DEFAULT_THREADS;
 			
 			@Override
@@ -71,10 +77,11 @@ public final class HttpService implements HttpListeningHandler {
 			}
 			
 			@Override
-			public HandlerBuilder register(HttpServiceHandler handler) {
-				final HandlerElement h = new HandlerElement();
-				h.handler = handler;
-				handlers.add(h);
+			public Builder register(HttpServiceHandler handler) {
+				//%% final HandlerElement h = new HandlerElement();
+				//%% h.handler = handler;
+				handlers.add(handler);
+				/*%%
 				return new HandlerBuilder() {
 					@Override
 					public HandlerBuilder limit(double streamingRate) {
@@ -82,6 +89,8 @@ public final class HttpService implements HttpListeningHandler {
 						return this;
 					}
 				};
+				*/
+				return this;
 			}
 			
 			@Override
@@ -93,9 +102,9 @@ public final class HttpService implements HttpListeningHandler {
 	
 	private final Executor[] executors;
 	private final AtomicInteger loop = new AtomicInteger(0);
-	private final ImmutableList<HandlerElement> handlers;
+	private final ImmutableList<HttpServiceHandler> handlers;
 	
-	private HttpService(int threads, ImmutableList<HandlerElement> handlers) {
+	private HttpService(int threads, ImmutableList<HttpServiceHandler> handlers) {
 		this.handlers = handlers;
 		executors = new Executor[threads];
 		for (int i = 0; i < executors.length; i++) {
@@ -104,24 +113,95 @@ public final class HttpService implements HttpListeningHandler {
 	}
 	
 	private void execute(Runnable r) {
-		executors[Math.abs(loop.getAndIncrement()) % executors.length].execute(r);;
+		executors[Math.abs(loop.getAndIncrement()) % executors.length].execute(r);
+	}
+	
+	private static final class StreamTask {
+		public final InputStream stream;
+		public final HttpContentSender sender;
+		
+		public StreamTask(InputStream stream, HttpContentSender sender) {
+			this.stream = stream;
+			this.sender = sender;
+		}
+
+		public boolean run() {
+			byte[] b = new byte[STREAMING_BUFFER_SIZE];
+			int l;
+			try {
+				l = stream.read(b);
+			} catch (IOException ee) {
+				LOGGER.error("Could not read stream", ee);
+				try {
+					stream.close();
+				} catch (IOException ce) {
+				}
+				sender.cancel();
+				return false;
+			}
+			if (l <= 0) {
+				try {
+					stream.close();
+				} catch (IOException ce) {
+				}
+				sender.finish();
+				return false;
+			} else {
+				sender.send(ByteBuffer.wrap(b, 0, l));
+				return true;
+			}
+
+		}
 	}
 	
 	@Override
 	public HttpListeningHandler.ConnectionHandler create() {
 		return new HttpListeningHandler.ConnectionHandler() {
+			private final Object lock = new Object();
+			private boolean closed = false;
+			private final Set<StreamTask> registeredTasks = new HashSet<>();
+			private long currentBuffering = 0L;
+			
 			@Override
 			public void closed() {
+				synchronized (lock) {
+					for (StreamTask t : registeredTasks) {
+						try {
+							t.stream.close();
+						} catch (IOException ce) {
+						}
+					}
+					registeredTasks.clear();
+				}
+			}
+			
+			@Override
+			public void buffering(long size) {
+				synchronized (lock) {
+					currentBuffering = size;
+					
+					if (currentBuffering == 0L) {
+						Iterator<StreamTask> i = registeredTasks.iterator();
+						while (i.hasNext()) {
+							StreamTask t = i.next();
+							if (!t.run()) {
+								i.remove();
+								continue;
+							}
+							break;
+							// Only one task is executed, it'll write to the stream, and so this buffering() method will be called again
+						}
+					}
+				}
 			}
 			
 			@Override
 			public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
 				return new HttpContentReceiver() {
 					
-					private final Object lock = new Object();
 					private final ByteBufferHandlerInputStream post = new ByteBufferHandlerInputStream();
 					private HttpController.Http http = null;
-					private double streamingRate = Double.NaN;
+					//%% private double streamingRate = Double.NaN;
 					
 					{
 						execute(new Runnable() {
@@ -129,9 +209,9 @@ public final class HttpService implements HttpListeningHandler {
 							public void run() {
 								HttpController.Http r = null;
 								
-								for (HandlerElement h : handlers) {
+								for (HttpServiceHandler h : handlers) {
 									try {
-										r = h.handler.handle(new HttpServiceRequest(request), new HttpPost() {
+										r = h.handle(new HttpServiceRequest(request), new HttpPost() {
 											private String string = null;
 											private ImmutableMultimap<String, Optional<String>> parameters = null;
 											
@@ -179,7 +259,7 @@ public final class HttpService implements HttpListeningHandler {
 										});
 										
 										if (r != null) {
-											streamingRate = h.streamingRate;
+											//%% streamingRate = h.streamingRate;
 											break;
 										}
 									} catch (Exception e) {
@@ -197,6 +277,15 @@ public final class HttpService implements HttpListeningHandler {
 								}
 
 								synchronized (lock) {
+									if (closed) {
+										if (r.stream != null) {
+											try {
+												r.stream.close();
+											} catch (IOException ce) {
+											}
+										}
+										return;
+									}
 									http = r;
 									lock.notifyAll();
 								}
@@ -217,6 +306,9 @@ public final class HttpService implements HttpListeningHandler {
 							public void run() {
 								synchronized (lock) {
 									while (http == null) {
+										if (closed) {
+											return;
+										}
 										try {
 											lock.wait();
 										} catch (InterruptedException ie) {
@@ -330,45 +422,21 @@ public final class HttpService implements HttpListeningHandler {
 
 									if (http.stream == null) {
 										if (http.content != null) {
-											//TODO For big content, use streamingRate
+											//TODO For big content, use new InputStream(http.content)
 											sender.send(ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)));
 										}
 										sender.finish();
 									} else {
-										try {
-											try {
-												double timeToWait = 0d;
-												double timeWaited = 0d;
-												
-												while (true) {
-													byte[] b = new byte[STREAMING_BUFFER_SIZE];
-													int l = http.stream.read(b);
-													if (l <= 0) {
-														break;
-													}
-													
-													if (!Double.isNaN(streamingRate)) {
-														double t = l / streamingRate;
-														timeToWait += t;
-														
-														double delta = timeToWait - timeWaited;
-														if (delta >= STREAMING_EPSILON) {
-															long deltaMs = (long) Math.floor(delta * 1000d);
-															Thread.sleep(deltaMs);
-															timeWaited += deltaMs / 1000d;
-														}
-													}
-													
-													sender.send(ByteBuffer.wrap(b, 0, l));
+										synchronized (lock) {
+											StreamTask task = new StreamTask(http.stream, sender);
+											
+											if (currentBuffering == 0L) {
+												if (task.run()) {
+													registeredTasks.add(task);
 												}
-												
-												sender.finish();
-											} finally {
-												http.stream.close();
+											} else {
+												registeredTasks.add(task);
 											}
-										} catch (Exception e) {
-											LOGGER.error("Internal server error", e);
-											sender.cancel();
 										}
 									}
 								}

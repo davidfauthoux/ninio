@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
 
@@ -18,13 +19,14 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	private final int levelOfRedirect;
 	private final HttpRequest request;
 	private final HttpReceiver receiver;
+	private final Buffering buffering;
 	private final Failing failing;
 	
-	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver receiver, Failing failing) {
-		this(client, maxRedirections, 0, request, receiver, failing);
+	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver receiver, Buffering buffering, Failing failing) {
+		this(client, maxRedirections, 0, request, receiver, buffering, failing);
 	}
 	
-	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver receiver, Failing failing) {
+	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver receiver, Buffering buffering, Failing failing) {
 		if (receiver == null) {
 			throw new NullPointerException();
 		}
@@ -33,6 +35,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 		this.levelOfRedirect = levelOfRedirect;
 		this.request = request;
 		this.receiver = receiver;
+		this.buffering = buffering;
 		this.failing = failing;
 	}
 
@@ -91,7 +94,8 @@ final class RedirectHttpReceiver implements HttpReceiver {
 				
 				client.request()
 					.failing(failing)
-					.receiving(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, receiver, failing))
+					.buffering(buffering)
+					.receiving(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, receiver, buffering, failing))
 					.build(newRequest).finish();
 				
 				return new HttpContentReceiver() {

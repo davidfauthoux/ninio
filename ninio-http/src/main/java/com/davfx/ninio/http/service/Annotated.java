@@ -165,7 +165,7 @@ public final class Annotated {
 			private final List<HttpController> registerControllers = new LinkedList<>();
 			
 			@Override
-			public HandlerBuilder register(HttpServiceHandler handler) {
+			public HttpService.Builder register(HttpServiceHandler handler) {
 				return wrappee.register(handler);
 			}
 			

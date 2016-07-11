@@ -6,6 +6,7 @@ public interface Listening {
 		Closing closing();
 		Connecting connecting();
 		Receiver receiver();
+		Buffering buffering();
 	}
 
 	Connection connecting(Address from, Connector connector);

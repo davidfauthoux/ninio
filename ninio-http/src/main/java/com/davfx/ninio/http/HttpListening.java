@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
@@ -103,6 +104,10 @@ public final class HttpListening implements Listening {
 					return null;
 				}
 				@Override
+				public Buffering buffering() {
+					return null;
+				}
+				@Override
 				public Failing failing() {
 					return null;
 				}
@@ -148,6 +153,11 @@ public final class HttpListening implements Listening {
 				return connectionHandler;
 			}
 
+			@Override
+			public Buffering buffering() {
+				return connectionHandler;
+			}
+			
 			@Override
 			public Receiver receiver() {
 				return new Receiver() {

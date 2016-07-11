@@ -28,6 +28,10 @@ public final class SecureSocketServerBuilder {
 				public Closing closing() {
 					return null;
 				}
+				@Override
+				public Buffering buffering() {
+					return null;
+				}
 			};
 		}
 	};
@@ -74,6 +78,7 @@ public final class SecureSocketServerBuilder {
 						sslManager.closing = connection.closing();
 						sslManager.failing = connection.failing();
 						sslManager.receiver = connection.receiver();
+						sslManager.buffering = connection.buffering();
 					}
 				});
 				
@@ -92,6 +97,10 @@ public final class SecureSocketServerBuilder {
 					}
 					@Override
 					public Closing closing() {
+						return sslManager;
+					}
+					@Override
+					public Buffering buffering() {
 						return sslManager;
 					}
 				};

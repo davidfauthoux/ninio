@@ -3,6 +3,7 @@ package com.davfx.ninio.proxy;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.ConfigurableNinioBuilder;
 import com.davfx.ninio.core.Connecting;
@@ -31,6 +32,11 @@ public final class EchoNinioSocketBuilder implements ConfigurableNinioBuilder<Co
 	@Override
 	public Void receiving(Receiver receiver) {
 		this.receiver = receiver;
+		return null;
+	}
+	
+	@Override
+	public Void buffering(Buffering buffering) {
 		return null;
 	}
 	

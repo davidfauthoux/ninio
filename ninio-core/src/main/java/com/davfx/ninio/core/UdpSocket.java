@@ -36,6 +36,7 @@ public final class UdpSocket implements Connector {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			private Buffering buffering;
 			
 			@Override
 			public Builder closing(Closing closing) {
@@ -62,6 +63,12 @@ public final class UdpSocket implements Connector {
 			}
 			
 			@Override
+			public Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public Builder with(ByteBufferAllocator byteBufferAllocator) {
 				this.byteBufferAllocator = byteBufferAllocator;
 				return this;
@@ -75,7 +82,7 @@ public final class UdpSocket implements Connector {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return new UdpSocket(queue, byteBufferAllocator, bindAddress, connecting, closing, failing, receiver);
+				return new UdpSocket(queue, byteBufferAllocator, bindAddress, connecting, closing, failing, receiver, buffering);
 			}
 		};
 	}
@@ -93,7 +100,7 @@ public final class UdpSocket implements Connector {
 	private final Deque<AddressedByteBuffer> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
-	public UdpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
+	public UdpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
 		this.queue = queue;
 
 		queue.execute(new Runnable() {
@@ -184,6 +191,11 @@ public final class UdpSocket implements Connector {
 													b.buffer.position(b.buffer.position() + b.buffer.remaining());
 												}
 											}
+											
+											if (buffering != null) {
+												buffering.buffering(toWriteLength);
+											}
+											
 										}
 										
 										if (b.buffer.hasRemaining()) {

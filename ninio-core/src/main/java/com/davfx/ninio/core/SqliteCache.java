@@ -52,6 +52,7 @@ public final class SqliteCache {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			private Buffering buffering = null;
 			
 			@Override
 			public Builder<T> closing(Closing closing) {
@@ -74,6 +75,12 @@ public final class SqliteCache {
 			@Override
 			public Builder<T> receiving(Receiver receiver) {
 				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public Builder<T> buffering(Buffering buffering) {
+				this.buffering = buffering;
 				return this;
 			}
 			
@@ -115,6 +122,7 @@ public final class SqliteCache {
 				builder.closing(closing);
 				builder.connecting(connecting);
 				builder.failing(failing);
+				builder.buffering(buffering);
 				return new InnerConnector<>(queue, database, expiration, interpreter, receiver, builder);
 			}
 		};

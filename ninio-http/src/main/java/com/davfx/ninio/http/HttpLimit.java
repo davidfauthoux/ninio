@@ -3,6 +3,7 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Limit;
@@ -14,6 +15,7 @@ public final class HttpLimit {
 	public static HttpRequestBuilder wrap(final Limit l, final HttpRequestBuilder wrappee) {
 		return new HttpRequestBuilder() {
 			private HttpReceiver receiver = null;
+			private Buffering buffering = null;
 			private Failing failing = null;
 			
 			@Override
@@ -35,6 +37,12 @@ public final class HttpLimit {
 			}
 			
 			@Override
+			public HttpRequestBuilder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public HttpContentSender build(HttpRequest request) {
 				final Failing f = failing;
 				final HttpReceiver r = receiver;
@@ -50,6 +58,8 @@ public final class HttpLimit {
 						}
 					}
 				});
+				
+				wrappee.buffering(buffering);
 				
 				wrappee.receiving(new HttpReceiver() {
 					@Override

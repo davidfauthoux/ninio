@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.Executor;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecting;
@@ -119,12 +120,15 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		public int connectionId;
 		public final Failing failing;
 		public final Receiver receiver;
+		@SuppressWarnings("unused") // Unused for now
+		public final Buffering buffering;
 		public final Closing closing;
 		public final Connecting connecting;
 		
-		public InnerConnection(Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
+		public InnerConnection(Failing failing, Receiver receiver, Buffering buffering, Closing closing, Connecting connecting) {
 			this.failing = failing;
 			this.receiver = receiver;
+			this.buffering = buffering;
 			this.closing = closing;
 			this.connecting = connecting;
 		}
@@ -161,7 +165,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
-			
+			private Buffering buffering = null;
+
 			@Override
 			public WithHeaderSocketBuilder closing(Closing closing) {
 				this.closing = closing;
@@ -187,6 +192,12 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
+			public WithHeaderSocketBuilder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public WithHeaderSocketBuilder header(String header) {
 				this.header = header;
 				return this;
@@ -203,7 +214,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 				if (header == null) {
 					throw new NullPointerException("header");
 				}
-				return createConnector(header, address, failing, receiver, closing, connecting);
+				return createConnector(header, address, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
@@ -217,6 +228,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			private Buffering buffering = null;
 			
 			@Override
 			public TcpSocket.Builder closing(Closing closing) {
@@ -243,6 +255,12 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 
 			@Override
+			public TcpSocket.Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 				return this;
 			}
@@ -260,7 +278,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue ignoredQueue) {
-				return createConnector(ProxyCommons.Types.TCP, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.TCP, connectAddress, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
@@ -274,6 +292,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			private Buffering buffering = null;
 			
 			@Override
 			public TcpSocket.Builder closing(Closing closing) {
@@ -300,6 +319,12 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 
 			@Override
+			public TcpSocket.Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 				return this;
 			}
@@ -317,7 +342,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue ignoredQueue) {
-				return createConnector(ProxyCommons.Types.SSL, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.SSL, connectAddress, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
@@ -329,6 +354,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
+			private Buffering buffering = null;
 			
 			@Override
 			public UdpSocket.Builder closing(Closing closing) {
@@ -355,6 +381,12 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
+			public UdpSocket.Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public UdpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 				return this;
 			}
@@ -366,7 +398,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.UDP, null, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.UDP, null, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
@@ -381,7 +413,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
-			
+			private Buffering buffering = null;
+
 			@Override
 			public RawSocket.Builder family(ProtocolFamily family) {
 				this.family = family;
@@ -418,13 +451,19 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			}
 			
 			@Override
+			public RawSocket.Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
+				return this;
+			}
+			
+			@Override
 			public RawSocket.Builder bind(Address bindAddress) {
 				return this;
 			}
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.RAW + String.valueOf((family == StandardProtocolFamily.INET) ? '4' : '6') + String.valueOf(protocol), null, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.RAW + String.valueOf((family == StandardProtocolFamily.INET) ? '4' : '6') + String.valueOf(protocol), null, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
@@ -440,7 +479,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
-			
+			private Buffering buffering = null;
+
 			@Override
 			public WebsocketSocket.Builder closing(Closing closing) {
 				this.closing = closing;
@@ -462,6 +502,12 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			@Override
 			public WebsocketSocket.Builder receiving(Receiver receiver) {
 				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public WebsocketSocket.Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
 				return this;
 			}
 			
@@ -494,7 +540,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.WEBSOCKET + path, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.WEBSOCKET + path, connectAddress, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
@@ -510,7 +556,8 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			private Closing closing = null;
 			private Failing failing = null;
 			private Receiver receiver = null;
-			
+			private Buffering buffering = null;
+
 			@Override
 			public HttpSocket.Builder closing(Closing closing) {
 				this.closing = closing;
@@ -532,6 +579,12 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			@Override
 			public HttpSocket.Builder receiving(Receiver receiver) {
 				this.receiver = receiver;
+				return this;
+			}
+			
+			@Override
+			public HttpSocket.Builder buffering(Buffering buffering) {
+				this.buffering = buffering;
 				return this;
 			}
 			
@@ -564,13 +617,13 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connector create(Queue queue) {
-				return createConnector(ProxyCommons.Types.HTTP + path, connectAddress, failing, receiver, closing, connecting);
+				return createConnector(ProxyCommons.Types.HTTP + path, connectAddress, failing, receiver, buffering, closing, connecting);
 			}
 		};
 	}
 	
-	private Connector createConnector(final String header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
-		return new InnerConnector(header, connectAddress, failing, receiver, closing, connecting);
+	private Connector createConnector(final String header, final Address connectAddress, Failing failing, Receiver receiver, Buffering buffering, Closing closing, Connecting connecting) {
+		return new InnerConnector(header, connectAddress, failing, receiver, buffering, closing, connecting);
 	}
 	
 	private final class InnerConnector implements Connector {
@@ -578,11 +631,11 @@ public final class ProxyClient implements ProxyConnectorProvider {
 		private final Address connectAddress;
 		private final InnerConnection innerConnection;
 		
-		public InnerConnector(String header, final Address connectAddress, Failing failing, Receiver receiver, Closing closing, Connecting connecting) {
+		public InnerConnector(String header, final Address connectAddress, Failing failing, Receiver receiver, Buffering buffering, Closing closing, Connecting connecting) {
 			this.header = header;
 			this.connectAddress = connectAddress;
 			
-			innerConnection = new InnerConnection(failing, receiver, closing, connecting);
+			innerConnection = new InnerConnection(failing, receiver, buffering, closing, connecting);
 
 			proxyExecutor.execute(new Runnable() {
 				@Override

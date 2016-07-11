@@ -19,21 +19,6 @@ import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.http.HttpClient;
-import com.davfx.ninio.http.HttpContentReceiver;
-import com.davfx.ninio.http.HttpContentSender;
-import com.davfx.ninio.http.HttpHeaderKey;
-import com.davfx.ninio.http.HttpHeaderValue;
-import com.davfx.ninio.http.HttpLimit;
-import com.davfx.ninio.http.HttpListening;
-import com.davfx.ninio.http.HttpListeningHandler;
-import com.davfx.ninio.http.HttpMessage;
-import com.davfx.ninio.http.HttpMethod;
-import com.davfx.ninio.http.HttpReceiver;
-import com.davfx.ninio.http.HttpRequest;
-import com.davfx.ninio.http.HttpResponse;
-import com.davfx.ninio.http.HttpStatus;
-import com.davfx.ninio.http.HttpTimeout;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
@@ -149,6 +134,9 @@ public class HttpGetTest {
 					}
 					@Override
 					public void closed() {
+					}
+					@Override
+					public void buffering(long size) {
 					}
 				};
 			}

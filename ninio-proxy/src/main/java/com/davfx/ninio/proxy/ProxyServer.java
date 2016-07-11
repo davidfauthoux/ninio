@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.ConfigurableNinioBuilder;
 import com.davfx.ninio.core.Connecting;
@@ -126,6 +127,10 @@ public final class ProxyServer implements Listening {
 								}
 							};
 						}
+						@Override
+						public Void buffering(Buffering buffering) {
+							return null;
+						}
 					};
 				}
 			};
@@ -174,6 +179,10 @@ public final class ProxyServer implements Listening {
 		final Map<Integer, Connector> connections = new HashMap<>();
 
 		return new Listening.Connection() {
+			@Override
+			public Buffering buffering() {
+				return null;
+			}
 			
 			@Override
 			public Receiver receiver() {

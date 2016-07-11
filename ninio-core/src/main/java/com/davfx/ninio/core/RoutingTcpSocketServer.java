@@ -104,6 +104,11 @@ public final class RoutingTcpSocketServer {
 									}
 								};
 							}
+							
+							@Override
+							public Buffering buffering() {
+								return null;
+							}
 						};
 					}
 				}).create(queue);
