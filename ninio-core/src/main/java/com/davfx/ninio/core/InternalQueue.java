@@ -45,7 +45,7 @@ final class InternalQueue implements Queue, AutoCloseable {
 						try {
 							s = selector.selectedKeys();
 						} catch (ClosedSelectorException ce) {
-							s = null;
+							return;
 						}
 						if (s != null) {
 							for (SelectionKey key : s) {
