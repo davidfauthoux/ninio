@@ -2,8 +2,10 @@ package com.davfx.ninio.http;
 
 import java.nio.ByteBuffer;
 
+import com.davfx.ninio.core.Connecter;
+
 public interface HttpContentSender {
-	HttpContentSender send(ByteBuffer buffer);
-	void finish();
+	void send(ByteBuffer buffer, Connecter.Connecting.Callback callback);
+	void finish(HttpReceiver callback);
 	void cancel();
 }

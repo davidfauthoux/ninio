@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-public final class TcpSocket implements Connector {
+public final class TcpSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocket.class);
 
@@ -22,7 +22,7 @@ public final class TcpSocket implements Connector {
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "socket.timeout");
 
-	public static interface Builder extends ConfigurableNinioBuilder<Connector, Builder> {
+	public static interface Builder extends NinioBuilder<TcpSocket> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
 		Builder to(Address connectAddress);
@@ -34,42 +34,6 @@ public final class TcpSocket implements Connector {
 			
 			private Address bindAddress = null;
 			private Address connectAddress = null;
-			
-			private Connecting connecting = null;
-			private Closing closing = null;
-			private Failing failing = null;
-			private Receiver receiver = null;
-			private Buffering buffering = null;
-			
-			@Override
-			public Builder closing(Closing closing) {
-				this.closing = closing;
-				return this;
-			}
-		
-			@Override
-			public Builder connecting(Connecting connecting) {
-				this.connecting = connecting;
-				return this;
-			}
-			
-			@Override
-			public Builder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public Builder receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
-			@Override
-			public Builder buffering(Buffering buffering) {
-				this.buffering = buffering;
-				return this;
-			}
 			
 			@Override
 			public Builder with(ByteBufferAllocator byteBufferAllocator) {
@@ -90,26 +54,44 @@ public final class TcpSocket implements Connector {
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
-				return new TcpSocket(queue, byteBufferAllocator, bindAddress, connectAddress, connecting, closing, failing, receiver, buffering);
+			public TcpSocket create(Queue queue) {
+				return new TcpSocket(queue, byteBufferAllocator, bindAddress, connectAddress);
 			}
 		};
 	}
 	
+	private static final class ToWrite {
+		public final ByteBuffer buffer;
+		public final Connecter.Connecting.Callback callback;
+		public ToWrite(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+			this.buffer = buffer;
+			this.callback = callback;
+		}
+	}
+	
 	private final Queue queue;
-	private final Closing closing;
+	private final ByteBufferAllocator byteBufferAllocator;
+	private final Address bindAddress;
+	private final Address connectAddress;
 	
 	private SocketChannel currentChannel = null;
 	private SelectionKey currentInboundKey = null;
 	private SelectionKey currentSelectionKey = null;
 
-	private final Deque<ByteBuffer> toWriteQueue = new LinkedList<>();
+	private final Deque<ToWrite> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
+	
+	private boolean closed = false;
 
-	private TcpSocket(final Queue queue, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final Connecting connecting, Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
+	private TcpSocket(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress, Address connectAddress) {
 		this.queue = queue;
-		this.closing = closing;
-
+		this.byteBufferAllocator = byteBufferAllocator;
+		this.bindAddress = bindAddress;
+		this.connectAddress = connectAddress;
+	}
+	
+	@Override
+	public Connecting connect(final Callback callback) {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -125,6 +107,11 @@ public final class TcpSocket implements Connector {
 						inboundKey.attach(new SelectionKeyVisitor() {
 							@Override
 							public void visit(SelectionKey key) {
+								if (closed) {
+									disconnect(channel, inboundKey, null, callback);
+									return;
+								}
+								
 								if (!key.isConnectable()) {
 									return;
 								}
@@ -145,7 +132,7 @@ public final class TcpSocket implements Connector {
 												final ByteBuffer readBuffer = byteBufferAllocator.allocate();
 												try {
 													if (channel.read(readBuffer) < 0) {
-														disconnect(channel, inboundKey, selectionKey);
+														disconnect(channel, inboundKey, selectionKey, callback);
 														currentChannel = null;
 														currentInboundKey = null;
 														currentSelectionKey = null;
@@ -153,45 +140,34 @@ public final class TcpSocket implements Connector {
 													}
 												} catch (IOException e) {
 													LOGGER.trace("Connection failed", e);
-													disconnect(channel, inboundKey, selectionKey);
-													currentChannel = null;
-													currentInboundKey = null;
-													currentSelectionKey = null;
+													disconnect(channel, inboundKey, selectionKey, callback);
 													return;
 												}
 
 												readBuffer.flip();
-												if (receiver != null) {
-													receiver.received(TcpSocket.this, null, readBuffer);
-												}
+												callback.received(null, readBuffer);
 											} else if (key.isWritable()) {
 												while (true) {
-													ByteBuffer b = toWriteQueue.peek();
-													if (b == null) {
+													ToWrite toWrite = toWriteQueue.peek();
+													if (toWrite == null) {
 														break;
 													}
-													long before = b.remaining();
+													long before = toWrite.buffer.remaining();
 													try {
-														LOGGER.trace("Actual write buffer: {} bytes", b.remaining());
-														channel.write(b);
-														toWriteLength -= before - b.remaining();
+														LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
+														channel.write(toWrite.buffer);
+														toWriteLength -= before - toWrite.buffer.remaining();
 													} catch (IOException e) {
 														LOGGER.trace("Connection failed", e);
-														disconnect(channel, inboundKey, selectionKey);
-														currentChannel = null;
-														currentInboundKey = null;
-														currentSelectionKey = null;
+														disconnect(channel, inboundKey, selectionKey, callback);
 														return;
 													}
 													
-													if (buffering != null) {
-														buffering.buffering(toWriteLength);
-													}
-													
-													if (b.hasRemaining()) {
+													if (toWrite.buffer.hasRemaining()) {
 														return;
 													}
 													
+													toWrite.callback.sent();
 													toWriteQueue.remove();
 												}
 												if (!channel.isOpen()) {
@@ -210,19 +186,12 @@ public final class TcpSocket implements Connector {
 										selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 									}
 		
-									if (connecting != null) {
-										connecting.connected(TcpSocket.this, connectAddress);
-									}
+									callback.connected(null);
 									
 								} catch (final IOException e) {
 									LOGGER.trace("Connection failed", e);
-									disconnect(channel, inboundKey, null);
-									currentChannel = null;
-									currentInboundKey = null;
-									currentSelectionKey = null;
-									if (failing != null) {
-										failing.failed(e);
-									}
+									disconnect(channel, inboundKey, null, callback);
+									callback.failed(e);
 								}
 							}
 						});
@@ -235,7 +204,7 @@ public final class TcpSocket implements Connector {
 								}
 								channel.socket().bind(a);
 							} catch (IOException e) {
-								disconnect(channel, inboundKey, null);
+								disconnect(channel, inboundKey, null, null);
 								throw new IOException("Could not bind to: " + bindAddress, e);
 							}
 						}
@@ -248,32 +217,87 @@ public final class TcpSocket implements Connector {
 							LOGGER.trace("Connecting to: {}", a);
 							channel.connect(a);
 						} catch (IOException e) {
-							disconnect(channel, inboundKey, null);
+							disconnect(channel, inboundKey, null, null);
 							throw new IOException("Could not connect to: " + connectAddress, e);
 						}
 					} catch (IOException e) {
-						disconnect(channel, null, null);
+						disconnect(channel, null, null, null);
 						throw e;
 					}
 		
-				} catch (final IOException e) {
-					if (failing != null) {
-						failing.failed(e);
-					}
+				} catch (IOException ee) {
+					callback.failed(ee);
 					return;
 				}
 			}
 		});
+		
+		return new Connecting() {
+			@Override
+			public void close() {
+				queue.execute(new Runnable() {
+					@Override
+					public void run() {
+						disconnect(currentChannel, currentInboundKey, currentSelectionKey, callback);
+					}
+				});
+			}
+			
+			@Override
+			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
+				queue.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (closed) {
+							callback.failed(new IOException("Closed"));
+							return;
+						}
+
+						if (address != null) {
+							LOGGER.warn("Ignored send address: {}", address);
+						}
+						
+						if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+							LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
+							callback.failed(new IOException("Packet dropped"));
+							return;
+						}
+						
+						toWriteQueue.add(new ToWrite(buffer, callback));
+						toWriteLength += buffer.remaining();
+						LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
+						
+						SocketChannel channel = currentChannel;
+						SelectionKey selectionKey = currentSelectionKey;
+						if (channel == null) {
+							return;
+						}
+						if (selectionKey == null) {
+							return;
+						}
+						if (!channel.isOpen()) {
+							return;
+						}
+						if (!selectionKey.isValid()) {
+							return;
+						}
+						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
+					}
+				});
+			}
+		};
 	}
 
-	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey) {
-		try {
-			channel.socket().close();
-		} catch (IOException e) {
-		}
-		try {
-			channel.close();
-		} catch (IOException e) {
+	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey, Connecter.Callback callback) {
+		if (channel != null) {
+			try {
+				channel.socket().close();
+			} catch (IOException e) {
+			}
+			try {
+				channel.close();
+			} catch (IOException e) {
+			}
 		}
 		if (inboundKey != null) {
 			inboundKey.cancel();
@@ -282,63 +306,19 @@ public final class TcpSocket implements Connector {
 			selectionKey.cancel();
 		}
 
-		if (closing != null) {
-			closing.closed();
+		IOException e = new IOException("Closed");
+		for (ToWrite toWrite : toWriteQueue) {
+			toWrite.callback.failed(e);
+		}
+
+		currentChannel = null;
+		currentInboundKey = null;
+		currentSelectionKey = null;
+		closed = true;
+
+		if (callback != null) {
+			callback.closed();
 		}
 	}
 
-	@Override
-	public void close() {
-		queue.execute(new Runnable() {
-			@Override
-			public void run() {
-				if (currentChannel != null) {
-					disconnect(currentChannel, currentInboundKey, currentSelectionKey);
-				}
-				currentChannel = null;
-				currentInboundKey = null;
-				currentSelectionKey = null;
-			}
-		});
-		//%% queue.waitFor();
-	}
-	
-	@Override
-	public Connector send(final Address address, final ByteBuffer buffer) {
-		queue.execute(new Runnable() {
-			@Override
-			public void run() {
-				if (address != null) {
-					LOGGER.warn("Ignored send address: {}", address);
-				}
-				
-				if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-					LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
-					return;
-				}
-				
-				toWriteQueue.add(buffer);
-				toWriteLength += buffer.remaining();
-				LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
-				
-				SocketChannel channel = currentChannel;
-				SelectionKey selectionKey = currentSelectionKey;
-				if (channel == null) {
-					return;
-				}
-				if (selectionKey == null) {
-					return;
-				}
-				if (!channel.isOpen()) {
-					return;
-				}
-				if (!selectionKey.isValid()) {
-					return;
-				}
-				selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-			}
-		});
-		
-		return this;
-	}
 }

@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.Closing;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
@@ -22,6 +23,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.Connecter.Connecting.Callback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
@@ -94,14 +96,14 @@ public final class HttpClient implements Disconnectable {
 	}
 
 	private static final class ReusableConnector {
-		public Connector connector;
+		public Connecter.Connecting connecting;
 		public final Address address;
 		public final boolean secure;
 
 		public boolean reusable = true;
 
-		private ClosingFailingReceiver receiver = null;
-		private final Deque<ClosingFailingReceiver> nextReceivers = new LinkedList<>();
+		private Connecter.Callback receiver = null;
+		private final Deque<Connecter.Callback> nextReceivers = new LinkedList<>();
 		
 		public ReusableConnector(Address address, boolean secure) {
 			this.address = address;
@@ -112,17 +114,6 @@ public final class HttpClient implements Disconnectable {
 			factory.receiving(new Receiver() {
 				@Override
 				public void received(Connector conn, Address address, final ByteBuffer buffer) {
-					executor.execute(new Runnable() {
-						@Override
-						public void run() {
-							while (buffer.hasRemaining()) {
-								if (receiver == null) {
-									break;
-								}
-								receiver.received(null, null, buffer);
-							}
-						}
-					});
 				}
 			});
 			
@@ -142,7 +133,40 @@ public final class HttpClient implements Disconnectable {
 				}
 			});
 
-			connector = factory.create(queue);
+			connecting = factory.create(queue).connect(new Connecter.Callback() {
+				@Override
+				public void received(Address address, final ByteBuffer buffer) {
+					executor.execute(new Runnable() {
+						@Override
+						public void run() {
+							while (buffer.hasRemaining()) {
+								if (receiver == null) {
+									break;
+								}
+								receiver.received(null, buffer);
+							}
+						}
+					});
+				}
+				
+				@Override
+				public void failed(IOException ioe) {
+					// TODO Auto-generated method stub
+					
+				}
+				
+				@Override
+				public void connected() {
+					// TODO Auto-generated method stub
+					
+				}
+				
+				@Override
+				public void closed() {
+					// TODO Auto-generated method stub
+					
+				}
+			});
 		}
 		
 		public void fail(IOException ioe) {
@@ -260,7 +284,6 @@ public final class HttpClient implements Disconnectable {
 					private HttpContentSender sender = null;
 
 					private long id = -1L;
-					private ReusableConnector reusableConnector;
 					private HttpVersion requestVersion;
 					private Multimap<String, String> completedHeaders;
 					
@@ -271,7 +294,148 @@ public final class HttpClient implements Disconnectable {
 						reusableConnectors.remove(id);
 					}
 					
-					private void prepare(HttpRequest request) {
+					private void sendRequest() {
+						sender = new HttpContentSender() {
+							@Override
+							public void send(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+								reusableConnector.connecting.send(null, buffer, callback);
+							}
+
+							@Override
+							public void finish(HttpReceiver callback) {
+								reusableConnector.reusable = true;
+							}
+		
+							@Override
+							public void cancel() {
+								abruptlyClose(new IOException("Canceled"));
+							}
+						};
+						
+						requestVersion = HttpVersion.HTTP11;
+						
+						completedHeaders = ArrayListMultimap.create(request.headers);
+						if (emptyBody && ((request.method  == HttpMethod.POST) || (request.method  == HttpMethod.PUT))) {
+							completedHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
+							String portSuffix;
+							if ((request.secure && (request.address.port != HttpSpecification.DEFAULT_SECURE_PORT))
+							|| (!request.secure && (request.address.port != HttpSpecification.DEFAULT_PORT))) {
+								portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.port);
+							} else {
+								portSuffix = "";
+							}
+							completedHeaders.put(HttpHeaderKey.HOST, request.address.host + portSuffix);
+						}
+						
+						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
+						boolean automaticallySetGzipChunked = headerKeepAlive && (request.method == HttpMethod.POST);
+						for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
+							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
+								headerKeepAlive = false;
+							} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
+								headerKeepAlive = true;
+							} else {
+								automaticallySetGzipChunked = false;
+							}
+						}
+						final boolean requestKeepAlive = headerKeepAlive;
+
+						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
+							completedHeaders.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
+						}
+						
+						if (automaticallySetGzipChunked && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING) && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH)) { // Content-Length MUST refer to the compressed data length, which the user is not aware of, thus we CANNOT compress if the user specifies a Content-Length
+							completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
+						}
+						if (automaticallySetGzipChunked && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
+							completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
+						}
+
+						if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
+							completedHeaders.put(HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.USER_AGENT)) {
+							completedHeaders.put(HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
+						}
+						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT)) {
+							completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
+						}
+
+						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
+							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
+								LOGGER.trace("Request is chunked");
+								sender = new ChunkedWriter(sender);
+							}
+							break;
+						}
+		
+						for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
+							try {
+								long headerContentLength = Long.parseLong(contentLengthValue);
+								LOGGER.trace("Request content length: {}", headerContentLength);
+								sender = new ContentLengthWriter(headerContentLength, sender);
+							} catch (NumberFormatException e) {
+								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
+							}
+							break;
+						}
+						
+						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
+							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
+								LOGGER.trace("Request is gzip");
+								sender = new GzipWriter(sender);
+							}
+							break;
+						}
+						
+						if (id >= 0L) {
+							throw new IllegalStateException("Could not be created twice");
+						}
+						
+						ReusableConnector reusableConnector = null;
+
+						if (requestKeepAlive) {
+							LOGGER.trace("Connections = {}", reusableConnectors);
+							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
+								long reusedId = e.getKey();
+								ReusableConnector reusedConnector = e.getValue();
+								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address) && (reusedConnector.secure == request.secure)) {
+									id = reusedId;
+	
+									LOGGER.trace("Recycling connection (id = {})", id);
+									
+									reusableConnector = reusedConnector;
+									reusableConnector.reusable = false;
+									break;
+								} else if (!reusedConnector.reusable) {
+									LOGGER.trace("Connection not reusable (id = {})", reusedId);
+								}
+							}
+						}
+
+						if (reusableConnector == null) {
+							id = nextReusableConnectorId;
+							nextReusableConnectorId++;
+	
+							LOGGER.trace("Creating a new connection (id = {})", id);
+	
+							reusableConnector = new ReusableConnector(request.address, request.secure);
+							reusableConnectors.put(id, reusableConnector);
+							reusableConnector.launch(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, new Runnable() {
+								@Override
+								public void run() {
+									LOGGER.trace("Connection removed (id = {})", id);
+									abruptlyClose(new IOException("Connection closed"));
+								}
+							});
+	
+							reusableConnector.reusable = false;
+						}
+						
+						//
+						
 						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, b, f);
 						
 						final Failing abruptlyClosingFailing = new Failing() {
@@ -479,7 +643,7 @@ public final class HttpClient implements Disconnectable {
 						
 						LOGGER.trace("Sending request: {} (complete headers = {})", request, completedHeaders);
 						
-						reusableConnector.connector.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()));
+						reusableConnector.connecting.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()));
 
 						for (Map.Entry<String, String> h : completedHeaders.entries()) {
 							String k = h.getKey();
@@ -490,149 +654,8 @@ public final class HttpClient implements Disconnectable {
 						reusableConnector.connector.send(null, emptyLineByteBuffer.duplicate());
 					}
 					
-					private void sendRequest() {
-						sender = new HttpContentSender() {
-							@Override
-							public HttpContentSender send(ByteBuffer buffer) {
-								reusableConnector.connector.send(null, buffer);
-								return this;
-							}
-							
-							@Override
-							public void finish() {
-								reusableConnector.reusable = true;
-							}
-		
-							@Override
-							public void cancel() {
-								abruptlyClose(new IOException("Canceled"));
-							}
-						};
-						
-						requestVersion = HttpVersion.HTTP11;
-						
-						completedHeaders = ArrayListMultimap.create(request.headers);
-						if (emptyBody && ((request.method  == HttpMethod.POST) || (request.method  == HttpMethod.PUT))) {
-							completedHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
-							String portSuffix;
-							if ((request.secure && (request.address.port != HttpSpecification.DEFAULT_SECURE_PORT))
-							|| (!request.secure && (request.address.port != HttpSpecification.DEFAULT_PORT))) {
-								portSuffix = String.valueOf(HttpSpecification.PORT_SEPARATOR) + String.valueOf(request.address.port);
-							} else {
-								portSuffix = "";
-							}
-							completedHeaders.put(HttpHeaderKey.HOST, request.address.host + portSuffix);
-						}
-						
-						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-						boolean automaticallySetGzipChunked = headerKeepAlive && (request.method == HttpMethod.POST);
-						for (String connectionValue : completedHeaders.get(HttpHeaderKey.CONNECTION)) {
-							if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
-								headerKeepAlive = false;
-							} else if (connectionValue.equalsIgnoreCase(HttpHeaderValue.KEEP_ALIVE)) {
-								headerKeepAlive = true;
-							} else {
-								automaticallySetGzipChunked = false;
-							}
-						}
-						final boolean requestKeepAlive = headerKeepAlive;
-
-						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT_ENCODING)) {
-							completedHeaders.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.GZIP);
-						}
-						
-						if (automaticallySetGzipChunked && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_ENCODING) && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH)) { // Content-Length MUST refer to the compressed data length, which the user is not aware of, thus we CANNOT compress if the user specifies a Content-Length
-							completedHeaders.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP);
-						}
-						if (automaticallySetGzipChunked && !completedHeaders.containsKey(HttpHeaderKey.CONTENT_LENGTH) && !completedHeaders.containsKey(HttpHeaderKey.TRANSFER_ENCODING)) {
-							completedHeaders.put(HttpHeaderKey.TRANSFER_ENCODING, HttpHeaderValue.CHUNKED);
-						}
-
-						if (!completedHeaders.containsKey(HttpHeaderKey.CONNECTION)) {
-							completedHeaders.put(HttpHeaderKey.CONNECTION, HttpHeaderValue.KEEP_ALIVE);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.USER_AGENT)) {
-							completedHeaders.put(HttpHeaderKey.USER_AGENT, DEFAULT_USER_AGENT);
-						}
-						if (!completedHeaders.containsKey(HttpHeaderKey.ACCEPT)) {
-							completedHeaders.put(HttpHeaderKey.ACCEPT, DEFAULT_ACCEPT);
-						}
-
-						for (String transferEncodingValue : completedHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
-							if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-								LOGGER.trace("Request is chunked");
-								sender = new ChunkedWriter(sender);
-							}
-							break;
-						}
-		
-						for (String contentLengthValue : completedHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
-							try {
-								long headerContentLength = Long.parseLong(contentLengthValue);
-								LOGGER.trace("Request content length: {}", headerContentLength);
-								sender = new ContentLengthWriter(headerContentLength, sender);
-							} catch (NumberFormatException e) {
-								LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
-							}
-							break;
-						}
-						
-						for (String contentEncodingValue : completedHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
-							if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-								LOGGER.trace("Request is gzip");
-								sender = new GzipWriter(sender);
-							}
-							break;
-						}
-						
-						if (id >= 0L) {
-							throw new IllegalStateException("Could not be created twice");
-						}
-						
-						if (requestKeepAlive) {
-							LOGGER.trace("Connections = {}", reusableConnectors);
-							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
-								long reusedId = e.getKey();
-								ReusableConnector reusedConnector = e.getValue();
-								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address) && (reusedConnector.secure == request.secure)) {
-									id = reusedId;
-	
-									LOGGER.trace("Recycling connection (id = {})", id);
-									
-									reusableConnector = reusedConnector;
-
-									reusableConnector.reusable = false;
-									prepare(request);
-									return;
-								} else if (!reusedConnector.reusable) {
-									LOGGER.trace("Connection not reusable (id = {})", reusedId);
-								}
-							}
-						}
-
-						id = nextReusableConnectorId;
-						nextReusableConnectorId++;
-
-						LOGGER.trace("Creating a new connection (id = {})", id);
-
-						reusableConnector = new ReusableConnector(request.address, request.secure);
-						reusableConnectors.put(id, reusableConnector);
-						reusableConnector.launch(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, new Runnable() {
-							@Override
-							public void run() {
-								LOGGER.trace("Connection removed (id = {})", id);
-								abruptlyClose(new IOException("Connection closed"));
-							}
-						});
-
-						reusableConnector.reusable = false;
-						prepare(request);
-					}
-					
 					@Override
-					public HttpContentSender send(final ByteBuffer buffer) {
+					public void send(final ByteBuffer buffer, final Connecter.Connecting.Callback callback) {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -642,14 +665,13 @@ public final class HttpClient implements Disconnectable {
 									sendRequest();
 								}
 								
-								sender.send(buffer);
+								sender.send(buffer, callback);
 							}
 						});
-						return this;
 					}
-					
+
 					@Override
-					public void finish() {
+					public void finish(final HttpReceiver callback) {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -657,7 +679,7 @@ public final class HttpClient implements Disconnectable {
 									sendRequest();
 								}
 								
-								sender.finish();
+								sender.finish(callback);
 							}
 						});
 					}

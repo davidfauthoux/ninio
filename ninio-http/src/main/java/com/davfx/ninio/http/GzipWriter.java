@@ -5,6 +5,8 @@ import java.nio.ByteOrder;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
+import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -51,43 +53,56 @@ final class GzipWriter implements HttpContentSender {
 	}
 
 	@Override
-	public HttpContentSender send(ByteBuffer buffer) {
+	public void send(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
+
 		deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 		crc.update(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 		buffer.position(buffer.limit());
-		write();
-		return this;
+		write(callback);
 	}
 
 	@Override
-	public void finish() {
+	public void finish(HttpReceiver callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
+
 		finished = true;
 		deflater.finish();
-		write();
-		wrappee.send(buildGzipFooter());
-		wrappee.finish();
+		write(new NopConnecterConnectingCallback());
+		wrappee.send(buildGzipFooter(), new NopConnecterConnectingCallback());
+		wrappee.finish(callback);
 	}
 
-	private void write() {
+	private void write(final Connecter.Connecting.Callback callback) {
+		ByteBuffer toSend = null;
+		
 		if (!gzipHeaderWritten) {
-			wrappee.send(buildGzipHeaders());
+			toSend = buildGzipHeaders();
 			gzipHeaderWritten = true;
 		}
+		
 		while (true) { // !deflater.needsInput()) {
 			ByteBuffer deflated = ByteBuffer.allocate(BUFFER_SIZE);
 			int c = deflater.deflate(deflated.array(), deflated.arrayOffset() + deflated.position(), deflated.remaining()); //, Deflater.SYNC_FLUSH); //TODO No SYNC_FLUSH when HttpSocket not used
 			if (c <= 0) {
 				break;
 			}
+			
+			if (toSend != null) {
+				wrappee.send(toSend, new NopConnecterConnectingCallback());
+			}
+			
 			deflated.position(deflated.position() + c);
 			deflated.flip();
-			wrappee.send(deflated);
+			toSend = deflated;
+		}
+		
+		if (toSend != null) {
+			wrappee.send(toSend, callback);
 		}
 	}
 	

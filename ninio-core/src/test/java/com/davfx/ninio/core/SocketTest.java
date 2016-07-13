@@ -18,58 +18,81 @@ public class SocketTest {
 		try (Ninio ninio = Ninio.create()) {
 			int port = 8080;
 	
-			Wait wait = new Wait();
-			Wait waitForServerClosing = new Wait();
-			Wait waitForClientClosing = new Wait();
-			final Wait waitServerConnecting = new Wait();
-			final Wait waitServerClosing = new Wait();
-			final Wait waitClientConnecting = new Wait();
-			try (Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-				.closing(new WaitClosing(waitForServerClosing)).failing(new LockFailing(lock))
-				.connecting(new WaitListenConnecting(wait))
-				.listening(new Listening() {
+			Wait serverWaitConnecting = new Wait();
+			Wait serverWaitClosing = new Wait();
+			final Wait serverWaitClientConnecting = new Wait();
+			final Wait serverWaitClientClosing = new Wait();
+			try (Listener.Listening server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))).listen(
+				new WaitConnectedListenerCallback(serverWaitConnecting,
+				new WaitClosedListenerCallback(serverWaitClosing,
+				new LockFailedListenerCallback(lock,
+				new Listener.Callback() {
 					@Override
-					public Connection connecting(Address from, Connector connector) {
-						return new Connection() {
-							public Failing failing() {
-								return new LockFailing(lock);
-							}
-							public Connecting connecting() {
-								return new WaitConnecting(waitServerConnecting);
-							}
-							public Closing closing() {
-								return new WaitClosing(waitServerClosing);
-							}
-							public Receiver receiver() {
-								return new EchoReceiver();
+					public void failed(IOException ioe) {
+					}
+					@Override
+					public void connected() {
+					}
+					@Override
+					public void closed() {
+					}
+					
+					@Override
+					public Connecting connecting() {
+						return new Connecting() {
+							private Connecter.Connecting connecting;
+							
+							@Override
+							public void connecting(Address from, Connecter.Connecting connecting) {
+								this.connecting = connecting;
 							}
 							@Override
-							public Buffering buffering() {
-								return null;
+							public void received(Address address, ByteBuffer buffer) {
+								connecting.send(null, buffer, new NopConnecterConnectingCallback());
+							}
+							
+							@Override
+							public void failed(IOException ioe) {
+								lock.fail(ioe);
+							}
+							@Override
+							public void connected(Address address) {
+								serverWaitClientConnecting.run();
+							}
+							@Override
+							public void closed() {
+								serverWaitClientClosing.run();
 							}
 						};
 					}
-				}))) {
+				}))))) {
 
-				wait.waitFor();
+				serverWaitConnecting.waitFor();
 
-				try (Connector client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port))
-					.closing(new WaitClosing(waitForClientClosing)).failing(new LockFailing(lock))
-					//.closing(new LockClosing(lock))
-					.receiving(new LockReceiver(lock))
-					.connecting(new WaitConnecting(waitClientConnecting)))) {
+				Wait clientWaitConnecting = new Wait();
+				Wait clientWaitClosing = new Wait();
+				Wait clientWaitSent = new Wait();
 
-					client.send(null, ByteBufferUtils.toByteBuffer("test"));
-
-					waitClientConnecting.waitFor();
-					waitServerConnecting.waitFor();
+				try (Connecter.Connecting client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port))).connect(
+						new WaitConnectedConnecterCallback(clientWaitConnecting, 
+						new WaitClosedConnecterCallback(clientWaitClosing, 
+						new LockFailedConnecterCallback(lock, 
+						new LockReceivedConnecterCallback(lock,
+						new NopConnecterCallback())))))) {
+					client.send(null, ByteBufferUtils.toByteBuffer("test"),
+						new WaitSentConnecterConnectingCallback(clientWaitSent,
+						new LockFailedConnecterConnectingCallback(lock,
+						new NopConnecterConnectingCallback())));
+					
+					clientWaitConnecting.waitFor();
+					serverWaitClientConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 				}
 
-				waitForClientClosing.waitFor();
-				waitServerClosing.waitFor();
+				clientWaitClosing.waitFor();
+				serverWaitClientClosing.waitFor();
 			}
-			waitForServerClosing.waitFor();
+			serverWaitClosing.waitFor();
 		}
 	}
 	
@@ -78,66 +101,4 @@ public class SocketTest {
 	public void testSocketSameToCheckClose() throws Exception {
 		testSocket();
 	}
-	
-	@Test
-	public void testClose() throws Exception {
-		final Lock<ByteBuffer, IOException> lock = new Lock<>();
-		
-		try (Ninio ninio = Ninio.create()) {
-			int port = 8080;
-	
-			Wait wait = new Wait();
-			Wait waitForServerClosing = new Wait();
-			Wait waitForClientClosing = new Wait();
-			final Wait waitForClientClosingServerSide = new Wait();
-			final Wait waitClientConnecting = new Wait();
-			try (Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-				.closing(new WaitClosing(waitForServerClosing)).failing(new LockFailing(lock))
-				.connecting(new WaitListenConnecting(wait))
-				.listening(new Listening() {
-					@Override
-					public Connection connecting(Address from, Connector connector) {
-						return new Connection() {
-							public Failing failing() {
-								return new LockFailing(lock);
-							}
-							public Connecting connecting() {
-								return new Connecting() {
-									@Override
-									public void connected(Connector conn, Address address) {
-										conn.close();
-									}
-								};
-							}
-							public Closing closing() {
-								return new WaitClosing(waitForClientClosingServerSide);
-							}
-							public Receiver receiver() {
-								return null;
-							}
-							@Override
-							public Buffering buffering() {
-								return null;
-							}
-						};
-					}
-				}))) {
-
-				wait.waitFor();
-
-				try (Connector client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port))
-					.closing(new WaitClosing(waitForClientClosing)).failing(new LockFailing(lock))
-					//.closing(new LockClosing(lock))
-					.connecting(new WaitConnecting(waitClientConnecting)))) {
-
-					waitClientConnecting.waitFor();
-
-					waitForClientClosing.waitFor();
-					waitForClientClosingServerSide.waitFor();
-				}
-			}
-			waitForServerClosing.waitFor();
-		}
-	}
-	
 }

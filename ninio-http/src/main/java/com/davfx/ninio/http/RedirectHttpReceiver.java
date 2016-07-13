@@ -1,14 +1,12 @@
 package com.davfx.ninio.http;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
 
 final class RedirectHttpReceiver implements HttpReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedirectHttpReceiver.class);
@@ -18,29 +16,26 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	private final int maxRedirections;
 	private final int levelOfRedirect;
 	private final HttpRequest request;
-	private final HttpReceiver receiver;
-	private final Buffering buffering;
-	private final Failing failing;
+	private final HttpReceiver wrappee;
 	
-	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver receiver, Buffering buffering, Failing failing) {
-		this(client, maxRedirections, 0, request, receiver, buffering, failing);
+	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver wrappee) {
+		this(client, maxRedirections, 0, request, wrappee);
 	}
 	
-	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver receiver, Buffering buffering, Failing failing) {
-		if (receiver == null) {
-			throw new NullPointerException();
+	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver wrappee) {
+		if (wrappee == null) {
+			throw new NullPointerException("wrappee");
 		}
+		
 		this.client = client;
 		this.maxRedirections = maxRedirections;
 		this.levelOfRedirect = levelOfRedirect;
 		this.request = request;
-		this.receiver = receiver;
-		this.buffering = buffering;
-		this.failing = failing;
+		this.wrappee = wrappee;
 	}
 
 	@Override
-	public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+	public HttpContentReceiver received(HttpResponse response) {
 		if (levelOfRedirect < maxRedirections) {
 			String location = null;
 			for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
@@ -81,7 +76,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 								newPort = Integer.parseInt(portValue);
 							} catch (NumberFormatException e) {
 								LOGGER.debug("Bad location: {}", location);
-								return receiver.received(client, response);
+								return wrappee.received(response);
 							}
 						}
 						newAddress = new Address(l.substring(0, j), newPort);
@@ -92,11 +87,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 				
 				HttpRequest newRequest = new HttpRequest(newAddress, secure, request.method, newPath);
 				
-				client.request()
-					.failing(failing)
-					.buffering(buffering)
-					.receiving(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, receiver, buffering, failing))
-					.build(newRequest).finish();
+				client.request().build(newRequest).finish(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
 				
 				return new HttpContentReceiver() {
 					@Override
@@ -109,6 +100,11 @@ final class RedirectHttpReceiver implements HttpReceiver {
 			}
 		}
 		
-		return receiver.received(client, response);
+		return wrappee.received(response);
+	}
+	
+	@Override
+	public void failed(IOException ioe) {
+		wrappee.failed(ioe);
 	}
 }
