@@ -43,7 +43,7 @@ public class SocketTest {
 							private Connecter.Connecting connecting;
 							
 							@Override
-							public void connecting(Address from, Connecter.Connecting connecting) {
+							public void connecting(Connecter.Connecting connecting) {
 								this.connecting = connecting;
 							}
 							@Override

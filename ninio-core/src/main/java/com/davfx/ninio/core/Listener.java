@@ -11,10 +11,9 @@ public interface Listener {
 		void connected();
 		void failed(IOException ioe);
 		void closed();
-
 		
 		interface Connecting extends Connecter.Callback {
-			void connecting(Address from, Connecter.Connecting connecting);
+			void connecting(Connecter.Connecting connecting);
 		}
 		Connecting connecting();
 	}

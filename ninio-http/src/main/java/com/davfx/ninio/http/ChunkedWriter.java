@@ -33,7 +33,7 @@ final class ChunkedWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void finish(final HttpReceiver callback) {
+	public void finish() {
 		if (finished) {
 			throw new IllegalStateException();
 		}
@@ -42,7 +42,7 @@ final class ChunkedWriter implements HttpContentSender {
 		
 		wrappee.send(zeroByteBuffer.duplicate(), new NopConnecterConnectingCallback());
 		wrappee.send(emptyLineByteBuffer.duplicate(), new NopConnecterConnectingCallback());
-		wrappee.finish(callback);
+		wrappee.finish();
 	}
 	
 	@Override

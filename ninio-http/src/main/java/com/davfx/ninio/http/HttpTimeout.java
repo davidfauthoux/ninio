@@ -3,8 +3,7 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Connecter.Connecting.Callback;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Timeout;
 
@@ -14,16 +13,6 @@ public final class HttpTimeout {
 	
 	public static HttpRequestBuilder wrap(final Timeout t, final double timeout, final HttpRequestBuilder wrappee) {
 		return new HttpRequestBuilder() {
-			private HttpReceiver receiver = null;
-			private Buffering buffering = null;
-			private Failing failing = null;
-			
-			@Override
-			public HttpRequestBuilder receiving(HttpReceiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
 			@Override
 			public HttpRequestBuilder maxRedirections(int maxRedirections) {
 				wrappee.maxRedirections(maxRedirections);
@@ -31,89 +20,42 @@ public final class HttpTimeout {
 			}
 			
 			@Override
-			public HttpRequestBuilder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public HttpRequestBuilder buffering(Buffering buffering) {
-				this.buffering = buffering;
-				return this;
-			}
-			
-			@Override
-			public HttpContentSender build(HttpRequest request) {
-				final Failing f = failing;
-				final HttpReceiver r = receiver;
-
+			public HttpContentSender build(HttpRequest request, final HttpReceiver callback) {
 				final Timeout.Manager m = t.set(timeout);
 
-				wrappee.failing(new Failing() {
+				final HttpContentSender s = wrappee.build(request, new HttpReceiver() {
 					@Override
-					public void failed(IOException e) {
+					public void failed(IOException ioe) {
 						m.cancel();
-						if (f != null) {
-							f.failed(e);
-						}
+						callback.failed(ioe);
 					}
-				});
-				
-				wrappee.buffering(buffering);
-				
-				wrappee.receiving(new HttpReceiver() {
+					
 					@Override
-					public HttpContentReceiver received(final Disconnectable disconnectable, HttpResponse response) {
+					public HttpContentReceiver received(HttpResponse response) {
 						m.reset();
 						
-						if (r == null) {
-							return new HttpContentReceiver() {
-								@Override
-								public void received(ByteBuffer buffer) {
-									m.reset();
-								}
-								@Override
-								public void ended() {
-									m.cancel();
-								}
-							};
-						}
-						
-						final HttpContentReceiver rr = r.received(new Disconnectable() {
-							@Override
-							public void close() {
-								m.cancel();
-								disconnectable.close();
-							}
-						}, response);
+						final HttpContentReceiver r = callback.received(response);
 						
 						return new HttpContentReceiver() {
 							@Override
 							public void received(ByteBuffer buffer) {
 								m.reset();
-								if (rr != null) {
-									rr.received(buffer);
-								}
+								r.received(buffer);
 							}
 							@Override
 							public void ended() {
 								m.cancel();
-								if (rr != null) {
-									rr.ended();
-								}
+								r.ended();
 							}
 						};
 					}
 				});
-
-				final HttpContentSender rr = wrappee.build(request);
 				
 				return new HttpContentSender() {
 					@Override
-					public HttpContentSender send(ByteBuffer buffer) {
+					public void send(ByteBuffer buffer, Callback callback) {
 						m.reset();
-						rr.send(buffer);
-						return this;
+						s.send(buffer, callback);
 					}
 					
 					@Override
@@ -121,19 +63,17 @@ public final class HttpTimeout {
 						m.run(new Failing() {
 							@Override
 							public void failed(IOException e) {
-								rr.cancel();
-								if (f != null) {
-									f.failed(e);
-								}
+								s.cancel();
+								callback.failed(e);
 							}
 						});
-						rr.finish();
+						s.finish();
 					}
 					
 					@Override
 					public void cancel() {
 						m.cancel();
-						rr.cancel();
+						s.cancel();
 					}
 				};
 			}

@@ -65,7 +65,7 @@ final class GzipWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void finish(HttpReceiver callback) {
+	public void finish() {
 		if (finished) {
 			throw new IllegalStateException();
 		}
@@ -74,7 +74,7 @@ final class GzipWriter implements HttpContentSender {
 		deflater.finish();
 		write(new NopConnecterConnectingCallback());
 		wrappee.send(buildGzipFooter(), new NopConnecterConnectingCallback());
-		wrappee.finish(callback);
+		wrappee.finish();
 	}
 
 	private void write(final Connecter.Connecting.Callback callback) {

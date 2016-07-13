@@ -12,13 +12,13 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Limit;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -34,15 +34,13 @@ public class HttpGetTest {
 	private static Lock<Object, IOException> getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
 		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
-			.failing(new Failing() {
+			.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)), new HttpReceiver() {
 				@Override
-				public void failed(IOException e) {
-					lock.fail(e);
+				public void failed(IOException ioe) {
+					lock.fail(ioe);
 				}
-			})
-			.receiving(new HttpReceiver() {
 				@Override
-				public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+				public HttpContentReceiver received(HttpResponse response) {
 					return new HttpContentReceiver() {
 						private final InMemoryBuffers b = new InMemoryBuffers();
 						@Override
@@ -57,8 +55,7 @@ public class HttpGetTest {
 						}
 					};
 				}
-			})
-			.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE))).finish();
+			}).finish();
 		return lock;
 	}
 	
@@ -68,16 +65,14 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> postRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
-			.failing(new Failing() {
+		HttpContentSender s = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
+			.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)), new HttpReceiver() {
 				@Override
 				public void failed(IOException e) {
 					lock.fail(e);
 				}
-			})
-			.receiving(new HttpReceiver() {
 				@Override
-				public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+				public HttpContentReceiver received(HttpResponse response) {
 					return new HttpContentReceiver() {
 						private final InMemoryBuffers b = new InMemoryBuffers();
 						@Override
@@ -92,8 +87,9 @@ public class HttpGetTest {
 						}
 					};
 				}
-			})
-			.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE))).send(ByteBuffer.wrap(post.getBytes(Charsets.UTF_8))).finish();
+			});
+		s.send(ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+		s.finish();
 		return lock;
 	}
 	
@@ -103,41 +99,64 @@ public class HttpGetTest {
 	
 	private static Disconnectable server(Ninio ninio, int port, final String suffix) {
 		final Wait waitForClosing = new Wait();
-		final Disconnectable tcp = ninio.create(TcpSocketServer.builder().closing(new WaitClosing(waitForClosing)).bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
-			@Override
-			public ConnectionHandler create() {
-				return new ConnectionHandler() {
-					@Override
-					public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
-						LOGGER.debug("----> {}", request);
-						return new HttpContentReceiver() {
-							private final InMemoryBuffers post = new InMemoryBuffers();
-							@Override
-							public void received(ByteBuffer buffer) {
-								post.add(buffer);
-							}
-							@Override
-							public void ended() {
-								byte[] b;
-								if (request.method == HttpMethod.GET) {
-									b = (request.path + suffix).getBytes(Charsets.UTF_8);
-								} else {
-									b = (post.toString(Charsets.UTF_8) + suffix).getBytes(Charsets.UTF_8);
+		final Listener.Listening tcp = ninio.create(
+				TcpSocketServer.builder().bind(new Address(Address.ANY, port))
+			)
+			.listen(new Listener.Callback() {
+				@Override
+				public void failed(IOException ioe) {
+					LOGGER.error("Failed", ioe);
+				}
+				@Override
+				public void connected() {
+				}
+				@Override
+				public void closed() {
+					LOGGER.info("Closed");
+				}
+				
+				@Override
+				public Connecting connecting() {
+					return HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
+						
+						@Override
+						public void closed() {
+							waitForClosing.run();
+						}
+						
+						@Override
+						public void failed(IOException ioe) {
+							LOGGER.error("Failed", ioe);
+						}
+						
+						@Override
+						public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
+							LOGGER.debug("----> {}", request);
+							return new HttpContentReceiver() {
+								private final InMemoryBuffers post = new InMemoryBuffers();
+								@Override
+								public void received(ByteBuffer buffer) {
+									post.add(buffer);
 								}
-								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK));//, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(b.length))));
-								sender.send(ByteBuffer.wrap(b)).finish();
-							}
-						};
-					}
-					@Override
-					public void closed() {
-					}
-					@Override
-					public void buffering(long size) {
-					}
-				};
-			}
-		}).build()));
+								@Override
+								public void ended() {
+									byte[] b;
+									if (request.method == HttpMethod.GET) {
+										b = (request.path + suffix).getBytes(Charsets.UTF_8);
+									} else {
+										b = (post.toString(Charsets.UTF_8) + suffix).getBytes(Charsets.UTF_8);
+									}
+									HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK));//, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(b.length))));
+									sender.send(ByteBuffer.wrap(b), new NopConnecterConnectingCallback());
+									sender.finish();
+								}
+							};
+						}
+					})
+					
+					.build();
+				}
+			});
 		return new Disconnectable() {
 			@Override
 			public void close() {
@@ -161,16 +180,13 @@ public class HttpGetTest {
 				try (HttpClient client = ninio.create(HttpClient.builder().with(executor))) {
 					HttpTimeout.wrap(timeout, TIMEOUT, HttpLimit.wrap(limit, client.request()))
 					
-						.failing(new Failing() {
+						.build(HttpRequest.of("http://google.com"), new HttpReceiver() {
 							@Override
 							public void failed(IOException e) {
 								e.printStackTrace();
 							}
-						})
-					
-						.receiving(new HttpReceiver() {
 							@Override
-							public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+							public HttpContentReceiver received(HttpResponse response) {
 								System.out.println("Response = " + response);
 								return new HttpContentReceiver() {
 									private final InMemoryBuffers b = new InMemoryBuffers();
@@ -184,9 +200,7 @@ public class HttpGetTest {
 									}
 								};
 							}
-						})
-						
-						.build(HttpRequest.of("http://google.com")).finish();
+						}).finish();
 					
 					Thread.sleep(2000);
 				}
@@ -199,13 +213,10 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			Disconnectable tcp = server(ninio, port);
-			try {
+			try (Disconnectable tcp = server(ninio, port)) {
 				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
 				}
-			} finally {
-				tcp.close();
 			}
 		}
 	}
@@ -276,6 +287,7 @@ public class HttpGetTest {
 		}
 	}
 
+	@Ignore
 	@Test
 	public void testDoubleGetConnectionClosed() throws Exception {
 		int port = 8080;
@@ -434,16 +446,14 @@ public class HttpGetTest {
 				final String url = "http://" + Address.LOCALHOST + ":" + port + "/test0";
 				final Lock<Object, IOException> lock = new Lock<>();
 				HttpContentSender s = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
-					.failing(new Failing() {
+					.build(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()), new HttpReceiver() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.debug("FAILED", e);
 							lock.fail(e);
 						}
-					})
-					.receiving(new HttpReceiver() {
 						@Override
-						public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
+						public HttpContentReceiver received(HttpResponse response) {
 							return new HttpContentReceiver() {
 								private final InMemoryBuffers b = new InMemoryBuffers();
 								@Override
@@ -458,12 +468,11 @@ public class HttpGetTest {
 								}
 							};
 						}
-					})
-					.build(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()));
+					});
 				Thread.sleep(100);
 				byte[] post = "TEST0".getBytes(Charsets.UTF_8);
 				for (int i = 0; i < post.length; i++) {
-					s.send(ByteBuffer.wrap(post, i, 1));
+					s.send(ByteBuffer.wrap(post, i, 1), new NopConnecterConnectingCallback());
 					LOGGER.debug("WAITING");
 					Thread.sleep(20);
 				}

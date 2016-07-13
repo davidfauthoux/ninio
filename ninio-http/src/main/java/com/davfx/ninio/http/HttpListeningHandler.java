@@ -1,16 +1,14 @@
 package com.davfx.ninio.http;
 
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Closing;
+import java.io.IOException;
 
 public interface HttpListeningHandler {
-	interface ConnectionHandler extends Closing, Buffering {
-		interface ResponseHandler {
-			HttpContentSender send(HttpResponse response);
-		}
-		
-		HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler);
+	interface ResponseHandler {
+		HttpContentSender send(HttpResponse response);
 	}
 	
-	ConnectionHandler create();
+	HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler);
+
+	void closed();
+	void failed(IOException ioe);
 }

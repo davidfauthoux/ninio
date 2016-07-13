@@ -67,7 +67,7 @@ public final class TcpSocketServer implements Listener {
 		}
 	}
 
-	private final Set<SocketChannel> outboundChannels = new HashSet<>();
+	private final Set<InnerSocketContext> outboundChannels = new HashSet<>();
 	
 	private final Queue queue;
 	private final ByteBufferAllocator byteBufferAllocator;
@@ -117,21 +117,20 @@ public final class TcpSocketServer implements Listener {
 								try {
 									LOGGER.debug("-> Accepting client on: {}", bindAddress);
 									final SocketChannel outboundChannel = ssc.accept();
+
+									final Listener.Callback.Connecting connection = callback.connecting();
+									final InnerSocketContext context = new InnerSocketContext(outboundChannels, connection);
+									context.currentChannel = outboundChannel;
+
 									final Address clientAddress = new Address(outboundChannel.socket().getInetAddress().getHostAddress(), outboundChannel.socket().getPort());
 
-									outboundChannels.add(outboundChannel);
-									LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
-									
-									final InnerSocketContext context = new InnerSocketContext(outboundChannels);
-									final Listener.Callback.Connecting connection = callback.connecting();
-									
-									connection.connecting(clientAddress, new Connecter.Connecting() {
+									connection.connecting(new Connecter.Connecting() {
 										@Override
 										public void close() {
 											queue.execute(new Runnable() {
 												@Override
 												public void run() {
-													context.disconnect(context.currentChannel, context.currentSelectionKey, connection);
+													context.disconnectAndRemove();
 												}
 											});
 										}
@@ -184,31 +183,34 @@ public final class TcpSocketServer implements Listener {
 										@Override
 										public void run() {
 											try {
-												final SocketChannel channel = outboundChannel;
-												context.currentChannel = channel;
 												try {
-													// channel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
-													channel.configureBlocking(false);
+													// outboundChannel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
+													outboundChannel.configureBlocking(false);
 
-													final SelectionKey selectionKey = queue.register(channel);
+													final SelectionKey selectionKey = queue.register(outboundChannel);
 													context.currentSelectionKey = selectionKey;
 
 													selectionKey.attach(new SelectionKeyVisitor() {
 														@Override
 														public void visit(SelectionKey key) {
-															if (!channel.isOpen()) {
+															if (closed) {
+																context.disconnectAndRemove();
+																return;
+															}
+															
+															if (!outboundChannel.isOpen()) {
 																return;
 															}
 															if (key.isReadable()) {
 																final ByteBuffer readBuffer = byteBufferAllocator.allocate();
 																try {
-																	if (channel.read(readBuffer) < 0) {
-																		context.disconnect(channel, selectionKey, connection);
+																	if (outboundChannel.read(readBuffer) < 0) {
+																		context.disconnectAndRemove();
 																		return;
 																	}
 																} catch (IOException e) {
 																	LOGGER.trace("Connection failed", e);
-																	context.disconnect(channel, selectionKey, connection);
+																	context.disconnectAndRemove();
 																	return;
 																}
 																
@@ -222,11 +224,11 @@ public final class TcpSocketServer implements Listener {
 																	}
 																	long before = toWrite.buffer.remaining();
 																	try {
-																		channel.write(toWrite.buffer);
+																		outboundChannel.write(toWrite.buffer);
 																		context.toWriteLength -= before - toWrite.buffer.remaining();
 																	} catch (IOException e) {
 																		LOGGER.trace("Connection failed", e);
-																		context.disconnect(channel, selectionKey, connection);
+																		context.disconnectAndRemove();
 																		return;
 																	}
 																	
@@ -237,7 +239,7 @@ public final class TcpSocketServer implements Listener {
 																	toWrite.callback.sent();
 																	context.toWriteQueue.remove();
 																}
-																if (!channel.isOpen()) {
+																if (!outboundChannel.isOpen()) {
 																	return;
 																}
 																if (!selectionKey.isValid()) {
@@ -255,12 +257,12 @@ public final class TcpSocketServer implements Listener {
 
 												} catch (IOException e) {
 													LOGGER.trace("Connection failed", e);
-													context.disconnect(channel, null, connection);
+													context.disconnectAndRemove();
 													throw e;
 												}
 									
 											} catch (IOException e) {
-												context.disconnect(null, null, connection);
+												context.disconnectAndRemove();
 												connection.failed(e);
 												return;
 											}
@@ -310,15 +312,6 @@ public final class TcpSocketServer implements Listener {
 				queue.execute(new Runnable() {
 					@Override
 					public void run() {
-						
-						for (SocketChannel s : outboundChannels) {
-							try {
-								s.close();
-							} catch (IOException e) {
-							}
-						}
-						outboundChannels.clear();
-
 						disconnect(currentServerChannel, currentAcceptSelectionKey, callback);
 					}
 				});
@@ -327,6 +320,12 @@ public final class TcpSocketServer implements Listener {
 	}
 	
 	private void disconnect(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey, Listener.Callback callback) {
+		for (InnerSocketContext context : outboundChannels) {
+			LOGGER.debug("Closing outbound channel");
+			context.disconnect();
+		}
+		outboundChannels.clear();
+
 		try {
 			serverChannel.close();
 		} catch (IOException e) {
@@ -337,51 +336,67 @@ public final class TcpSocketServer implements Listener {
 		
 		currentServerChannel = null;
 		currentAcceptSelectionKey = null;
-		closed = true;
-
-		if (callback != null) {
-			callback.closed();
+		
+		if (!closed) {
+			closed = true;
+	
+			if (callback != null) {
+				callback.closed();
+			}
 		}
 	}
 
 	private static final class InnerSocketContext {
-		final Set<SocketChannel> outboundChannels;
+		final Set<InnerSocketContext> outboundChannels;
 		
 		SocketChannel currentChannel = null;
 		SelectionKey currentSelectionKey = null;
+		final Listener.Callback.Connecting connection;
 
 		final Deque<ToWrite> toWriteQueue = new LinkedList<>();
 		long toWriteLength = 0L;
 		
 		boolean closed = false;
 		
-		public InnerSocketContext(Set<SocketChannel> outboundChannels) {
+		public InnerSocketContext(Set<InnerSocketContext> outboundChannels, Listener.Callback.Connecting connection) {
 			this.outboundChannels = outboundChannels;
+			
+			this.connection = connection;
+
+			outboundChannels.add(this);
+			LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
 		}
 		
-		private void disconnect(SocketChannel channel, SelectionKey selectionKey, Connecter.Callback connection) {
-			outboundChannels.remove(channel);
+		void disconnectAndRemove() {
+			disconnect();
+			
+			outboundChannels.remove(this);
 			LOGGER.debug("<- Clients connected: {}", outboundChannels.size());
-
-			if (channel != null) {
+		}
+		
+		void disconnect() {
+			if (currentChannel != null) {
 				try {
-					channel.socket().close();
+					currentChannel.socket().close();
 				} catch (IOException e) {
 				}
 				try {
-					channel.close();
+					currentChannel.close();
 				} catch (IOException e) {
 				}
 			}
-			if (selectionKey != null) {
-				selectionKey.cancel();
+			if (currentSelectionKey != null) {
+				currentSelectionKey.cancel();
 			}
 
 			currentChannel = null;
 			currentSelectionKey = null;
-			closed = true;
 			
-			connection.closed();
+			if (!closed) {
+				closed = true;
+				
+				connection.closed();
+			}
 		}
 	}
 }

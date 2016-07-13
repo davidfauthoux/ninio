@@ -3,9 +3,7 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Connecter.Connecting.Callback;
 import com.davfx.ninio.core.Limit;
 
 public final class HttpLimit {
@@ -14,16 +12,6 @@ public final class HttpLimit {
 	
 	public static HttpRequestBuilder wrap(final Limit l, final HttpRequestBuilder wrappee) {
 		return new HttpRequestBuilder() {
-			private HttpReceiver receiver = null;
-			private Buffering buffering = null;
-			private Failing failing = null;
-			
-			@Override
-			public HttpRequestBuilder receiving(HttpReceiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
 			@Override
 			public HttpRequestBuilder maxRedirections(int maxRedirections) {
 				wrappee.maxRedirections(maxRedirections);
@@ -31,89 +19,43 @@ public final class HttpLimit {
 			}
 			
 			@Override
-			public HttpRequestBuilder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public HttpRequestBuilder buffering(Buffering buffering) {
-				this.buffering = buffering;
-				return this;
-			}
-			
-			@Override
-			public HttpContentSender build(HttpRequest request) {
-				final Failing f = failing;
-				final HttpReceiver r = receiver;
-
+			public HttpContentSender build(HttpRequest request, final HttpReceiver callback) {
 				final Limit.Manager m = l.inc();
 
-				wrappee.failing(new Failing() {
+				final HttpContentSender s = wrappee.build(request, new HttpReceiver() {
 					@Override
-					public void failed(IOException e) {
+					public void failed(IOException ioe) {
 						m.cancel();
-						if (f != null) {
-							f.failed(e);
-						}
+						callback.failed(ioe);
 					}
-				});
-				
-				wrappee.buffering(buffering);
-				
-				wrappee.receiving(new HttpReceiver() {
+					
 					@Override
-					public HttpContentReceiver received(final Disconnectable disconnectable, HttpResponse response) {
-						if (r == null) {
-							return new HttpContentReceiver() {
-								@Override
-								public void received(ByteBuffer buffer) {
-								}
-								@Override
-								public void ended() {
-									m.cancel();
-								}
-							};
-						}
-						
-						final HttpContentReceiver rr = r.received(new Disconnectable() {
-							@Override
-							public void close() {
-								m.cancel();
-								disconnectable.close();
-							}
-						}, response);
+					public HttpContentReceiver received(HttpResponse response) {
+						final HttpContentReceiver r = callback.received(response);
 						
 						return new HttpContentReceiver() {
 							@Override
 							public void received(ByteBuffer buffer) {
-								if (rr != null) {
-									rr.received(buffer);
-								}
+								r.received(buffer);
 							}
 							@Override
 							public void ended() {
 								m.cancel();
-								if (rr != null) {
-									rr.ended();
-								}
+								r.ended();
 							}
 						};
 					}
 				});
 
-				final HttpContentSender rr = wrappee.build(request);
-				
 				return new HttpContentSender() {
 					@Override
-					public HttpContentSender send(final ByteBuffer buffer) {
+					public void send(final ByteBuffer buffer, final Callback callback) {
 						m.add(new Runnable() {
 							@Override
 							public void run() {
-								rr.send(buffer);
+								s.send(buffer, callback);
 							}
 						});
-						return this;
 					}
 					
 					@Override
@@ -121,7 +63,7 @@ public final class HttpLimit {
 						m.add(new Runnable() {
 							@Override
 							public void run() {
-								rr.finish();
+								s.finish();
 							}
 						});
 					}
@@ -131,7 +73,7 @@ public final class HttpLimit {
 						m.add(new Runnable() {
 							@Override
 							public void run() {
-								rr.cancel();
+								s.cancel();
 							}
 						});
 						m.cancel();

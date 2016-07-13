@@ -3,12 +3,10 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Failing;
+final class ChunkedReader implements HttpContentReceiver {
 
-final class ChunkedReader implements HttpContentReceiver, Failing {
-
+	private final ReaderFailing failing;
 	private final HttpContentReceiver wrappee;
-	private final Failing failing;
 	
 	private final LineReader lineReader = new LineReader();
 	private boolean chunkHeaderRead = false;
@@ -17,7 +15,7 @@ final class ChunkedReader implements HttpContentReceiver, Failing {
 
 	private boolean ended = false;
 	
-	public ChunkedReader(Failing failing, HttpContentReceiver wrappee) {
+	public ChunkedReader(ReaderFailing failing, HttpContentReceiver wrappee) {
 		this.failing = failing;
 		this.wrappee = wrappee;
 	}
@@ -99,14 +97,5 @@ final class ChunkedReader implements HttpContentReceiver, Failing {
 		}
 		ended = true;
 		failing.failed(new IOException("Connection closed prematurely"));
-	}
-	
-	@Override
-	public void failed(IOException e) {
-		if (ended) {
-			throw new IllegalStateException();
-		}
-		ended = true;
-		failing.failed(e);
 	}
 }

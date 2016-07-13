@@ -12,18 +12,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecter;
-import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.TcpSocket;
-import com.davfx.ninio.core.Connecter.Connecting.Callback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
@@ -92,9 +86,6 @@ public final class HttpClient implements Disconnectable {
 	private final TcpSocket.Builder connectorFactory;
 	private final TcpSocket.Builder secureConnectorFactory;
 	
-	private interface ClosingFailingReceiver extends Closing, Failing, Receiver {
-	}
-
 	private static final class ReusableConnector {
 		public Connecter.Connecting connecting;
 		public final Address address;
@@ -111,28 +102,6 @@ public final class HttpClient implements Disconnectable {
 		}
 		
 		public void launch(final Executor executor, TcpSocket.Builder factory, Queue queue, final Runnable onClose) {
-			factory.receiving(new Receiver() {
-				@Override
-				public void received(Connector conn, Address address, final ByteBuffer buffer) {
-				}
-			});
-			
-			factory.closing(new Closing() {
-				@Override
-				public void closed() {
-					executor.execute(new Runnable() {
-						@Override
-						public void run() {
-							if (receiver != null) {
-								receiver.closed();
-							}
-
-							onClose.run();
-						}
-					});
-				}
-			});
-
 			connecting = factory.create(queue).connect(new Connecter.Callback() {
 				@Override
 				public void received(Address address, final ByteBuffer buffer) {
@@ -150,36 +119,50 @@ public final class HttpClient implements Disconnectable {
 				}
 				
 				@Override
-				public void failed(IOException ioe) {
-					// TODO Auto-generated method stub
-					
-				}
-				
-				@Override
-				public void connected() {
-					// TODO Auto-generated method stub
-					
+				public void connected(Address address) {
 				}
 				
 				@Override
 				public void closed() {
-					// TODO Auto-generated method stub
-					
+					executor.execute(new Runnable() {
+						@Override
+						public void run() {
+							if (receiver != null) {
+								receiver.closed();
+							}
+
+							onClose.run();
+						}
+					});
+				}
+
+				@Override
+				public void failed(final IOException ioe) {
+					executor.execute(new Runnable() {
+						@Override
+						public void run() {
+							if (receiver != null) {
+								receiver.failed(ioe);
+							}
+
+							onClose.run();
+						}
+					});
 				}
 			});
 		}
 		
-		public void fail(IOException ioe) {
+		public void failAllNext(IOException ioe) {
 			IOException e = new IOException("Error in pipeline", ioe);
-			for (ClosingFailingReceiver r : nextReceivers) {
+			for (Connecter.Callback r : nextReceivers) {
 				r.failed(e);
 			}
 			nextReceivers.clear();
 			receiver = null;
-			connector.close();
+			connecting.close();
 		}
 		
-		public void push(ClosingFailingReceiver receiver) {
+		public void push(Connecter.Callback receiver) {
 			if (this.receiver == null) {
 				this.receiver = receiver;
 			} else {
@@ -236,36 +219,17 @@ public final class HttpClient implements Disconnectable {
 			public void run() {
 				for (ReusableConnector connector : reusableConnectors.values()) {
 					LOGGER.trace("Closing underlying connection");
-					connector.connector.close();
+					connector.connecting.close();
 				}
 				reusableConnectors.clear();
 			}
 		});
-		//%% ExecutorUtils.waitFor(executor);
 	}
 
 	public HttpRequestBuilder request() {
 		return new HttpRequestBuilder() {
-			private HttpReceiver receiver = null;
-			private Buffering buffering = null;
-			private Failing failing = null;
 			private int maxRedirections = DEFAULT_MAX_REDIRECTIONS;
 
-			@Override
-			public HttpRequestBuilder receiving(HttpReceiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			@Override
-			public HttpRequestBuilder buffering(Buffering buffering) {
-				this.buffering = buffering;
-				return this;
-			}
-			@Override
-			public HttpRequestBuilder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
 			@Override
 			public HttpRequestBuilder maxRedirections(int maxRedirections) {
 				this.maxRedirections = maxRedirections;
@@ -273,10 +237,7 @@ public final class HttpClient implements Disconnectable {
 			}
 			
 			@Override
-			public HttpContentSender build(final HttpRequest request) {
-				final HttpReceiver r = receiver;
-				final Buffering b = buffering;
-				final Failing f = failing;
+			public HttpContentSender build(final HttpRequest request, final HttpReceiver callback) {
 				final int thisMaxRedirections = maxRedirections;
 				
 				return new HttpContentSender() {
@@ -287,13 +248,21 @@ public final class HttpClient implements Disconnectable {
 					private HttpVersion requestVersion;
 					private Multimap<String, String> completedHeaders;
 					
+					private ReusableConnector reusableConnector = null;
+
 					private void abruptlyClose(IOException ioe) {
 						LOGGER.trace("Abruptly closed ({})", ioe.getMessage());
 						
-						reusableConnector.fail(ioe);
+						reusableConnector.failAllNext(ioe);
 						reusableConnectors.remove(id);
 					}
 					
+					private void abruptlyCloseAndFail(IOException e) {
+						LOGGER.trace("Error", e);
+						abruptlyClose(e);
+						callback.failed(e);
+					}
+
 					private void sendRequest() {
 						sender = new HttpContentSender() {
 							@Override
@@ -302,13 +271,13 @@ public final class HttpClient implements Disconnectable {
 							}
 
 							@Override
-							public void finish(HttpReceiver callback) {
+							public void finish() {
 								reusableConnector.reusable = true;
 							}
 		
 							@Override
 							public void cancel() {
-								abruptlyClose(new IOException("Canceled"));
+								abruptlyCloseAndFail(new IOException("Canceled"));
 							}
 						};
 						
@@ -394,8 +363,6 @@ public final class HttpClient implements Disconnectable {
 							throw new IllegalStateException("Could not be created twice");
 						}
 						
-						ReusableConnector reusableConnector = null;
-
 						if (requestKeepAlive) {
 							LOGGER.trace("Connections = {}", reusableConnectors);
 							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
@@ -433,33 +400,12 @@ public final class HttpClient implements Disconnectable {
 	
 							reusableConnector.reusable = false;
 						}
-						
+	
 						//
 						
-						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, r, b, f);
+						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, callback);
 						
-						final Failing abruptlyClosingFailing = new Failing() {
-							@Override
-							public void failed(final IOException e) {
-								LOGGER.trace("Error", e);
-								abruptlyClose(e);
-								f.failed(e);
-							}
-						};
-						
-						final Disconnectable disconnectable = new Disconnectable() {
-							@Override
-							public void close() {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										abruptlyClose(new IOException("Disconnected"));
-									}
-								});
-							}
-						};
-						
-						reusableConnector.push(new ClosingFailingReceiver() {
+						reusableConnector.push(new Connecter.Callback() {
 							private final LineReader lineReader = new LineReader();
 							private boolean responseLineRead = false;
 							private boolean responseHeadersRead;
@@ -474,18 +420,18 @@ public final class HttpClient implements Disconnectable {
 							private HttpContentReceiver responseReceiver = new HttpContentReceiver() {
 								@Override
 								public void received(ByteBuffer buffer) {
-									abruptlyClosingFailing.failed(new IOException("Connection closed because should not received data"));
+									abruptlyCloseAndFail(new IOException("Connection closed because should not received data"));
 								}
 								@Override
 								public void ended() {
-									abruptlyClosingFailing.failed(new IOException("Connection closed without any response received"));
+									abruptlyCloseAndFail(new IOException("Connection closed without any response received"));
 								}
 							};
 							
 							private boolean addHeader(String headerLine) {
 								int i = headerLine.indexOf(HttpSpecification.HEADER_KEY_VALUE_SEPARATOR);
 								if (i < 0) {
-									abruptlyClosingFailing.failed(new IOException("Invalid header: " + headerLine));
+									abruptlyCloseAndFail(new IOException("Invalid header: " + headerLine));
 									return false;
 								}
 								String key = headerLine.substring(0, i);
@@ -501,17 +447,17 @@ public final class HttpClient implements Disconnectable {
 							private boolean parseResponseLine(String responseLine) {
 								int i = responseLine.indexOf(HttpSpecification.START_LINE_SEPARATOR);
 								if (i < 0) {
-									abruptlyClosingFailing.failed(new IOException("Invalid response: " + responseLine));
+									abruptlyCloseAndFail(new IOException("Invalid response: " + responseLine));
 									return false;
 								}
 								int j = responseLine.indexOf(HttpSpecification.START_LINE_SEPARATOR, i + 1);
 								if (j < 0) {
-									abruptlyClosingFailing.failed(new IOException("Invalid response: " + responseLine));
+									abruptlyCloseAndFail(new IOException("Invalid response: " + responseLine));
 									return false;
 								}
 								String version = responseLine.substring(0, i);
 								if (!version.startsWith(HttpSpecification.HTTP_VERSION_PREFIX)) {
-									abruptlyClosingFailing.failed(new IOException("Unsupported version: " + version));
+									abruptlyCloseAndFail(new IOException("Unsupported version: " + version));
 									return false;
 								}
 								version = version.substring(HttpSpecification.HTTP_VERSION_PREFIX.length());
@@ -520,18 +466,22 @@ public final class HttpClient implements Disconnectable {
 								} else if (version.equals(HttpVersion.HTTP11.toString())) {
 									responseVersion = HttpVersion.HTTP11;
 								} else {
-									abruptlyClosingFailing.failed(new IOException("Unsupported version: " + version));
+									abruptlyCloseAndFail(new IOException("Unsupported version: " + version));
 									return false;
 								}
 								String code = responseLine.substring(i + 1, j);
 								try {
 									responseCode = Integer.parseInt(code);
 								} catch (NumberFormatException e) {
-									abruptlyClosingFailing.failed(new IOException("Invalid status code: " + code));
+									abruptlyCloseAndFail(new IOException("Invalid status code: " + code));
 									return false;
 								}
 								responseReason = responseLine.substring(j + 1);
 								return true;
+							}
+							
+							@Override
+							public void connected(Address address) {
 							}
 							
 							@Override
@@ -543,11 +493,11 @@ public final class HttpClient implements Disconnectable {
 							
 							@Override
 							public void failed(IOException e) {
-								f.failed(e);
+								abruptlyCloseAndFail(e);
 							}
 							
 							@Override
-							public void received(Connector conn, Address address, ByteBuffer buffer) {
+							public void received(Address address, ByteBuffer buffer) {
 								while (!responseLineRead) {
 									String line = lineReader.handle(buffer);
 									if (line == null) {
@@ -570,7 +520,7 @@ public final class HttpClient implements Disconnectable {
 										LOGGER.trace("Header line empty");
 										responseHeadersRead = true;
 										
-										final HttpContentReceiver receiver = redirectingReceiver.received(disconnectable, new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(responseHeaders)));
+										final HttpContentReceiver receiver = redirectingReceiver.received(new HttpResponse(responseCode, responseReason, ImmutableMultimap.copyOf(responseHeaders)));
 										
 										responseReceiver = new HttpContentReceiver() {
 											@Override
@@ -605,9 +555,16 @@ public final class HttpClient implements Disconnectable {
 										}
 										LOGGER.trace("Keep alive = {}", responseKeepAlive);
 
+										ReaderFailing failing = new ReaderFailing() {
+											@Override
+											public void failed(IOException ioe) {
+												abruptlyCloseAndFail(ioe);
+											}
+										};
+										
 										for (String contentEncodingValue : responseHeaders.get(HttpHeaderKey.CONTENT_ENCODING)) {
 											if (contentEncodingValue.equalsIgnoreCase(HttpHeaderValue.GZIP)) {
-												responseReceiver = new GzipReader(abruptlyClosingFailing, responseReceiver);
+												responseReceiver = new GzipReader(failing, responseReceiver);
 											}
 											break;
 										}
@@ -615,7 +572,7 @@ public final class HttpClient implements Disconnectable {
 										for (String contentLengthValue : responseHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
 											try {
 												long responseContentLength = Long.parseLong(contentLengthValue);
-												responseReceiver = new ContentLengthReader(responseContentLength, abruptlyClosingFailing, responseReceiver);
+												responseReceiver = new ContentLengthReader(responseContentLength, failing, responseReceiver);
 											} catch (NumberFormatException e) {
 												LOGGER.error("Invalid Content-Length: {}", contentLengthValue);
 											}
@@ -624,7 +581,7 @@ public final class HttpClient implements Disconnectable {
 										
 										for (String transferEncodingValue : responseHeaders.get(HttpHeaderKey.TRANSFER_ENCODING)) {
 											if (transferEncodingValue.equalsIgnoreCase(HttpHeaderValue.CHUNKED)) {
-												responseReceiver = new ChunkedReader(abruptlyClosingFailing, responseReceiver);
+												responseReceiver = new ChunkedReader(failing, responseReceiver);
 											}
 											break;
 										}
@@ -643,15 +600,25 @@ public final class HttpClient implements Disconnectable {
 						
 						LOGGER.trace("Sending request: {} (complete headers = {})", request, completedHeaders);
 						
-						reusableConnector.connecting.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()));
+						Connecter.Connecting.Callback sendCallback = new Connecter.Connecting.Callback() {
+							@Override
+							public void sent() {
+							}
+							@Override
+							public void failed(IOException ioe) {
+								abruptlyCloseAndFail(ioe);
+							}
+						};
+						
+						reusableConnector.connecting.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()), sendCallback);
 
 						for (Map.Entry<String, String> h : completedHeaders.entries()) {
 							String k = h.getKey();
 							String v = h.getValue();
-							reusableConnector.connector.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v));
+							reusableConnector.connecting.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v), sendCallback);
 						}
 						
-						reusableConnector.connector.send(null, emptyLineByteBuffer.duplicate());
+						reusableConnector.connecting.send(null, emptyLineByteBuffer.duplicate(), sendCallback);
 					}
 					
 					@Override
@@ -671,7 +638,7 @@ public final class HttpClient implements Disconnectable {
 					}
 
 					@Override
-					public void finish(final HttpReceiver callback) {
+					public void finish() {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -679,7 +646,7 @@ public final class HttpClient implements Disconnectable {
 									sendRequest();
 								}
 								
-								sender.finish(callback);
+								sender.finish();
 							}
 						});
 					}

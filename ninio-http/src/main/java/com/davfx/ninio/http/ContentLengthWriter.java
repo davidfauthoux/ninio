@@ -33,13 +33,13 @@ final class ContentLengthWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void finish(HttpReceiver callback) {
+	public void finish() {
 		if (finished) {
 			throw new IllegalStateException();
 		}
 
 		finished = true;
-		wrappee.finish(callback);
+		wrappee.finish();
 	}
 	
 	@Override

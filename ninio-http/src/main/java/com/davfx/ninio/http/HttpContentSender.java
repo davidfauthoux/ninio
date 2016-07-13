@@ -6,6 +6,6 @@ import com.davfx.ninio.core.Connecter;
 
 public interface HttpContentSender {
 	void send(ByteBuffer buffer, Connecter.Connecting.Callback callback);
-	void finish(HttpReceiver callback);
+	void finish();
 	void cancel();
 }

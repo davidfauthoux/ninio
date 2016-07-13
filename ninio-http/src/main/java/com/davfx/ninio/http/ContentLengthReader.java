@@ -3,19 +3,17 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Failing;
+final class ContentLengthReader implements HttpContentReceiver {
 
-final class ContentLengthReader implements HttpContentReceiver, Failing {
-
+	private final ReaderFailing failing;
 	private final HttpContentReceiver wrappee;
-	private final Failing failing;
 	
 	private final long contentLength;
 	private long countRead = 0L;
 
 	private boolean ended = false;
 	
-	public ContentLengthReader(long contentLength, Failing failing, HttpContentReceiver wrappee) {
+	public ContentLengthReader(long contentLength, ReaderFailing failing, HttpContentReceiver wrappee) {
 		this.failing = failing;
 		this.wrappee = wrappee;
 		this.contentLength = contentLength;
@@ -53,14 +51,5 @@ final class ContentLengthReader implements HttpContentReceiver, Failing {
 		}
 		ended = true;
 		failing.failed(new IOException("Connection closed prematurely"));
-	}
-	
-	@Override
-	public void failed(IOException e) {
-		if (ended) {
-			throw new IllegalStateException();
-		}
-		ended = true;
-		failing.failed(e);
 	}
 }

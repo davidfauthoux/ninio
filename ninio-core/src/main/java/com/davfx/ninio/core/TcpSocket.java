@@ -124,6 +124,11 @@ public final class TcpSocket implements Connecter {
 									selectionKey.attach(new SelectionKeyVisitor() {
 										@Override
 										public void visit(SelectionKey key) {
+											if (closed) {
+												disconnect(channel, inboundKey, null, callback);
+												return;
+											}
+											
 											if (!channel.isOpen()) {
 												return;
 											}
@@ -314,10 +319,13 @@ public final class TcpSocket implements Connecter {
 		currentChannel = null;
 		currentInboundKey = null;
 		currentSelectionKey = null;
-		closed = true;
-
-		if (callback != null) {
-			callback.closed();
+		
+		if (!closed) {
+			closed = true;
+	
+			if (callback != null) {
+				callback.closed();
+			}
 		}
 	}
 
