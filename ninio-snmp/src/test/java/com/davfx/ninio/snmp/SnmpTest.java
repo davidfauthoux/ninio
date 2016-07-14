@@ -12,13 +12,10 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
-import com.davfx.ninio.core.LockFailing;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.SqliteCache;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.UdpSocket;
-import com.davfx.ninio.core.WaitClosing;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -39,11 +36,37 @@ public class SnmpTest {
 			map.put(new Oid("1.1.3.2"), "val1.1.3.2");
 			
 			int port = 8080;
-			Disconnectable snmpServer = ninio.create(SnmpServer.builder()
-					.bind(new Address(Address.LOCALHOST, port))
-					.handle(new FromMapSnmpServerHandler(map)));
-			try {
-				try (SnmpClient snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)))) {
+			final Wait waitServer = new Wait();
+			try (Disconnectable snmpServer = ninio.create(SnmpServer.builder().with(UdpSocket.builder().bind(new Address(Address.LOCALHOST, port)))
+					.handle(new FromMapSnmpServerHandler(map, new SnmpServerHandler() {
+						@Override
+						public void from(Oid oid, Callback callback) {
+						}
+						@Override
+						public void failed(IOException ioe) {
+						}
+						@Override
+						public void connected(Address address) {
+						}
+						@Override
+						public void closed() {
+							waitServer.run();
+						}
+					})))) {
+				final Wait waitClient = new Wait();
+				try (SnmpConnecter.Connecting snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))
+						.connect(new SnmpConnecter.Callback() {
+							@Override
+							public void failed(IOException ioe) {
+							}
+							@Override
+							public void connected(Address address) {
+							}
+							@Override
+							public void closed() {
+								waitClient.run();
+							}
+						})) {
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
@@ -51,29 +74,32 @@ public class SnmpTest {
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.4")).toString()).isEqualTo("[]");
 				}
-			} finally {
-				snmpServer.close();
+				waitClient.waitFor();
 			}
+			waitServer.waitFor();
 		}
 	}
 	
-	private static List<SnmpResult> get(SnmpClient snmpClient, Address a, Oid oid) throws IOException {
+	private static List<SnmpResult> get(SnmpConnecter.Connecting snmpClient, Address a, Oid oid) throws IOException {
 		final Lock<List<SnmpResult>, IOException> lock = new Lock<>();
-		snmpClient
-			.request()
-			.receiving(new SnmpReceiver() {
-				private final List<SnmpResult> r = new LinkedList<>();
-				@Override
-				public void received(SnmpResult result) {
-					r.add(result);
-				}
-				@Override
-				public void finished() {
-					lock.set(r);
-				}
-			})
-			.failing(new LockFailing(lock))
-			.get(a, "community", null, oid);
+		snmpClient.get(a, "community", null, oid, new SnmpConnecter.Connecting.Callback() {
+			private final List<SnmpResult> r = new LinkedList<>();
+			
+			@Override
+			public void received(SnmpResult result) {
+				r.add(result);
+			}
+			
+			@Override
+			public void finished() {
+				lock.set(r);
+			}
+			
+			@Override
+			public void failed(IOException ioe) {
+				lock.fail(ioe);
+			}
+		});
 		return lock.waitFor();
 	}
 
@@ -83,16 +109,31 @@ public class SnmpTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			int port = 8080;
 			final Lock<String, IOException> lock = new Lock<>();
-			try (SnmpClient snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)))) {
-				SnmpTimeout.wrap(timeout, 0.5d, snmpClient
-					.request())
-					.failing(new Failing() {
+			try (SnmpConnecter.Connecting snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))
+					.connect(new SnmpConnecter.Callback() {
 						@Override
-						public void failed(IOException e) {
-							lock.set(e.getMessage());
+						public void failed(IOException ioe) {
 						}
-					})
-					.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"));
+						@Override
+						public void connected(Address address) {
+						}
+						@Override
+						public void closed() {
+						}
+					})) {
+				SnmpTimeout.wrap(timeout, 0.5d, snmpClient)
+						.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"), new SnmpConnecter.Connecting.Callback() {
+							@Override
+							public void received(SnmpResult result) {
+							}
+							@Override
+							public void finished() {
+							}
+							@Override
+							public void failed(IOException ioe) {
+								lock.set(ioe.getMessage());
+							}
+						});
 
 				Assertions.assertThat(lock.waitFor()).isEqualTo("Timeout");
 			}
@@ -110,37 +151,70 @@ public class SnmpTest {
 			map.put(new Oid("1.1.3.1"), "val1.1.3.1");
 			map.put(new Oid("1.1.3.2"), "val1.1.3.2");
 
-			final SnmpServerHandler handler = new FromMapSnmpServerHandler(map);
+			final SnmpServerHandler handler = new FromMapSnmpServerHandler(map, new SnmpServerHandler() {
+				@Override
+				public void from(Oid oid, Callback callback) {
+				}
+				@Override
+				public void failed(IOException ioe) {
+				}
+				@Override
+				public void connected(Address address) {
+				}
+				@Override
+				public void closed() {
+				}
+			});
 			
 			int port = 8080;
-			Disconnectable snmpServer = ninio.create(SnmpServer.builder()
-					.bind(new Address(Address.LOCALHOST, port))
-					.handle(new SnmpServerHandler() {
-						private int n = 0;
-						private Thread thread = null;
-						@Override
-						public void from(Oid oid, final Callback callback) {
-							if (thread == null) {
-								thread = Thread.currentThread();
-							} else {
-								if (thread != Thread.currentThread()) {
-									throw new RuntimeException();
-								}
+			final Wait waitServer = new Wait();
+			try (Disconnectable snmpServer = ninio.create(SnmpServer.builder().with(UdpSocket.builder().bind(new Address(Address.LOCALHOST, port)))
+				.handle(new SnmpServerHandler() {
+					private int n = 0;
+					private Thread thread = null;
+					@Override
+					public void from(Oid oid, final Callback callback) {
+						if (thread == null) {
+							thread = Thread.currentThread();
+						} else {
+							if (thread != Thread.currentThread()) {
+								throw new RuntimeException();
 							}
-
-							final int k = n;
-							LOGGER.debug("******* {} {}", oid, k);
-							n++;
-							handler.from(oid, new Callback() {
-								@Override
-								public boolean handle(SnmpResult result) {
-									return callback.handle(new SnmpResult(result.oid, result.value + "/" + k));
-								}
-							});
 						}
-					}));
-			try {
-				try (SnmpClient snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)).with(SqliteCache.<Integer>builder().using(new SnmpSqliteCacheInterpreter())))) {
+						
+						final int k = n;
+						LOGGER.debug("******* {} {}", oid, k);
+						n++;
+						handler.from(oid, new Callback() {
+							@Override
+							public boolean handle(SnmpResult result) {
+								return callback.handle(new SnmpResult(result.oid, result.value + "/" + k));
+							}
+						});
+					}
+					@Override
+					public void closed() {
+						waitServer.run();
+					}
+					@Override
+					public void connected(Address address) {
+					}
+					@Override
+					public void failed(IOException ioe) {
+					}
+				}))) {
+				try (SnmpConnecter.Connecting snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)).with(SqliteCache.<Integer>builder().using(new SnmpSqliteCacheInterpreter())))
+					.connect(new SnmpConnecter.Callback() {
+						@Override
+						public void failed(IOException ioe) {
+						}
+						@Override
+						public void connected(Address address) {
+						}
+						@Override
+						public void closed() {
+						}
+					})) {
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/0]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/0]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/2, 1.1.1.1:val1.1.1.1/2, 1.1.1.2:val1.1.1.2/2, 1.1.2:val1.1.2/2, 1.1.3.1:val1.1.3.1/2, 1.1.3.2:val1.1.3.2/2]");
@@ -151,9 +225,8 @@ public class SnmpTest {
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/6, 1.1.3.2:val1.1.3.2/6]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.4")).toString()).isEqualTo("[]");
 				}
-			} finally {
-				snmpServer.close();
 			}
+			waitServer.waitFor();
 		}
 	}
 	
@@ -168,12 +241,24 @@ public class SnmpTest {
 			map.put(new Oid("1.1.3.1"), "val1.1.3.1");
 			map.put(new Oid("1.1.3.2"), "val1.1.3.2");
 
-			final SnmpServerHandler handler = new FromMapSnmpServerHandler(map);
+			final SnmpServerHandler handler = new FromMapSnmpServerHandler(map, new SnmpServerHandler() {
+				@Override
+				public void from(Oid oid, Callback callback) {
+				}
+				@Override
+				public void failed(IOException ioe) {
+				}
+				@Override
+				public void connected(Address address) {
+				}
+				@Override
+				public void closed() {
+				}
+			});
 			
 			int port = 8080;
-			Wait waitServer = new Wait();
-			try (Disconnectable snmpServer = ninio.create(SnmpServer.builder().with(UdpSocket.builder().closing(new WaitClosing(waitServer)))
-					.bind(new Address(Address.LOCALHOST, port))
+			final Wait waitServer = new Wait();
+			try (Disconnectable snmpServer = ninio.create(SnmpServer.builder().with(UdpSocket.builder().bind(new Address(Address.LOCALHOST, port)))
 					.handle(new SnmpServerHandler() {
 						private int n = 0;
 						private Thread thread = null;
@@ -197,9 +282,31 @@ public class SnmpTest {
 								}
 							});
 						}
+						@Override
+						public void closed() {
+							waitServer.run();
+						}
+						@Override
+						public void connected(Address address) {
+						}
+						@Override
+						public void failed(IOException ioe) {
+						}
 					}))) {
-				Wait waitClient = new Wait();
-				try (SnmpClient snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder().closing(new WaitClosing(waitClient))).with(new SerialExecutor(SnmpTest.class)))) {
+				final Wait waitClient = new Wait();
+				try (SnmpConnecter.Connecting snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))
+						.connect(new SnmpConnecter.Callback() {
+							@Override
+							public void failed(IOException ioe) {
+							}
+							@Override
+							public void connected(Address address) {
+							}
+							@Override
+							public void closed() {
+								waitClient.run();
+							}
+						})) {
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/0]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/1]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/3, 1.1.1.1:val1.1.1.1/3, 1.1.1.2:val1.1.1.2/3, 1.1.2:val1.1.2/3, 1.1.3.1:val1.1.3.1/3, 1.1.3.2:val1.1.3.2/3]");

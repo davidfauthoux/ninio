@@ -24,7 +24,7 @@ public final class TcpSocketServer implements Listener {
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "socket.timeout");
 
-	public static interface Builder extends NinioBuilder<TcpSocketServer> {
+	public static interface Builder extends NinioBuilder<Listener> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
 	}

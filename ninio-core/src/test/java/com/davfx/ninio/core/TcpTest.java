@@ -9,10 +9,10 @@ import org.junit.Test;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 
-public class SocketTest {
+public class TcpTest {
 
 	@Test
-	public void testSocket() throws Exception {
+	public void test() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
 		try (Ninio ninio = Ninio.create()) {
@@ -96,9 +96,8 @@ public class SocketTest {
 		}
 	}
 	
-	// This test is exactly the same as above, but it is used to check a new SocketReady can be open another time, maybe in the same JVM
 	@Test
-	public void testSocketSameToCheckClose() throws Exception {
-		testSocket();
+	public void testSameToCheckClose() throws Exception {
+		test();
 	}
 }

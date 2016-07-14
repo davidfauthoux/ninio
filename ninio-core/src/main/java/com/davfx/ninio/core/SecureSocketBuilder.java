@@ -11,18 +11,12 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	
 	private Address connectAddress = null;
 	
-	private Connecting connecting = null;
-	private Closing closing = null;
-	private Failing failing = null;
-	private Receiver receiver = null;
-	private Buffering buffering = null;
-	
 	private final TcpSocket.Builder wrappee;
 
 	public SecureSocketBuilder(TcpSocket.Builder wrappee) {
 		this.wrappee = wrappee;
 	}
-	
+
 	public SecureSocketBuilder trust(Trust trust) {
 		this.trust = trust;
 		return this;
@@ -34,78 +28,49 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 	}
 	
 	@Override
-	public TcpSocket.Builder closing(Closing closing) {
-		this.closing = closing;
-		return this;
-	}
-
-	@Override
-	public TcpSocket.Builder connecting(Connecting connecting) {
-		this.connecting = connecting;
-		return this;
-	}
-	
-	@Override
-	public TcpSocket.Builder failing(Failing failing) {
-		this.failing = failing;
-		return this;
-	}
-	
-	@Override
-	public TcpSocket.Builder receiving(Receiver receiver) {
-		this.receiver = receiver;
-		return this;
-	}
-	
-	@Override
-	public TcpSocket.Builder buffering(Buffering buffering) {
-		this.buffering = buffering;
-		return this;
-	}
-	
-	@Override
-	public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
+	public SecureSocketBuilder with(ByteBufferAllocator byteBufferAllocator) {
 		this.byteBufferAllocator = byteBufferAllocator;
 		return this;
 	}
 	
 	@Override
-	public TcpSocket.Builder bind(Address bindAddress) {
+	public SecureSocketBuilder bind(Address bindAddress) {
 		this.bindAddress = bindAddress;
 		return this;
 	}
 
 	@Override
-	public TcpSocket.Builder to(Address connectAddress) {
+	public SecureSocketBuilder to(Address connectAddress) {
 		this.connectAddress = connectAddress;
 		return this;
 	}
 	
 	@Override
-	public Connector create(final Queue queue) {
+	public Connecter create(final Queue queue) {
+		final Connecter connecter = wrappee
+			.with(byteBufferAllocator)
+			.bind(bindAddress)
+			.to(connectAddress)
+			.create(queue);
+		
 		final SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
 		sslManager.connectAddress = connectAddress;
-		sslManager.connecting = connecting;
-		sslManager.closing = closing;
-		sslManager.failing = failing;
-		sslManager.receiver = receiver;
-		sslManager.buffering = buffering;
 
-		executor.execute(new Runnable() {
+		final Executor thisExecutor = executor;
+
+		return new Connecter() {
 			@Override
-			public void run() {
-				sslManager.connector = wrappee
-					.with(byteBufferAllocator)
-					.connecting(sslManager)
-					.receiving(sslManager)
-					.closing(sslManager)
-					.failing(sslManager)
-					.bind(bindAddress)
-					.to(connectAddress)
-					.create(queue);
-			}
-		});
+			public Connecting connect(final Callback callback) {
+				thisExecutor.execute(new Runnable() {
+					@Override
+					public void run() {
+						sslManager.callback = callback;
+						sslManager.connecting = connecter.connect(sslManager);
+					}
+				});
 
-		return sslManager;
+				return sslManager;
+			}
+		};
 	}
 }

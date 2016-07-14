@@ -12,7 +12,7 @@ import javax.net.ssl.SSLEngineResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class SecureSocketManager implements Connector, Connecting, Closing, Failing, Receiver, Buffering {
+final class SecureSocketManager implements Connecter.Connecting, Connecter.Callback {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SecureSocketManager.class);
 
 	public static final int REQUIRED_BUFFER_SIZE = 17 * 1024;
@@ -22,18 +22,25 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 	private final Executor executor;
 	private final ByteBufferAllocator byteBufferAllocator;
 	
-	public Connector connector = null;
+	public Connecter.Connecting connecting = null;
+	public Connecter.Callback callback = null;
 	public Address connectAddress;
-	public Connecting connecting = null;
-	public Closing closing = null;
-	public Failing failing = null;
-	public Receiver receiver = null;
-	public Buffering buffering = null;
 	
-	private Deque<ByteBuffer> sent = new LinkedList<ByteBuffer>();
-	private Deque<ByteBuffer> received = new LinkedList<ByteBuffer>();
+	private static final class ToWrite {
+		public final ByteBuffer buffer;
+		public final Connecter.Connecting.Callback callback;
+		public ToWrite(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+			this.buffer = buffer;
+			this.callback = callback;
+		}
+	}
+	
+	private Deque<ToWrite> sent = new LinkedList<>();
+	private Deque<ByteBuffer> received = new LinkedList<>();
 
 	private SSLEngine engine = null;
+	
+	private boolean closed = false;
 	
 	public SecureSocketManager(Trust trust, boolean clientMode, Executor executor, ByteBufferAllocator byteBufferAllocator) {
 		if (executor == null) {
@@ -48,6 +55,16 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		this.byteBufferAllocator = byteBufferAllocator;
 	}
 	
+	private void fail(IOException ioe) {
+		LOGGER.error("SSL error", ioe);
+		doClose();
+		
+		if (!closed) {
+			closed = true;
+			callback.failed(ioe);
+		}
+	}
+	
 	private boolean continueSend(boolean force) {
 		if (sent == null) {
 			return false;
@@ -56,15 +73,16 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			if (!force) {
 				return false;
 			}
-			sent.addFirst(ByteBuffer.allocate(0));
+			sent.addFirst(new ToWrite(ByteBuffer.allocate(0), new NopConnecterConnectingCallback()));
 		}
 		
-		ByteBuffer b = sent.getFirst();
+		ToWrite toWrite = sent.getFirst();
 		ByteBuffer wrapBuffer = byteBufferAllocator.allocate();
+		Connecter.Connecting.Callback sendCallback = null;
 		try {
-			SSLEngineResult r = engine.wrap(b, wrapBuffer);
-			if (!b.hasRemaining()) {
-				sent.removeFirst();
+			SSLEngineResult r = engine.wrap(toWrite.buffer, wrapBuffer);
+			if (!toWrite.buffer.hasRemaining()) {
+				sendCallback = toWrite.callback;
 			}
 
 			if (r.getStatus() == SSLEngineResult.Status.BUFFER_OVERFLOW) {
@@ -75,18 +93,23 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				throw new IOException("Buffer underflow should not happen");
 			}
 		} catch (IOException e) {
-			LOGGER.error("SSL error", e);
-			doClose(true);
-			if (failing != null) {
-				failing.failed(e);
-			}
+			fail(e);
 			return false;
 		}
-		
+
+		if (sendCallback == null) {
+			sendCallback = new NopConnecterConnectingCallback();
+		} else {
+			sent.removeFirst();
+		}
+			
 		wrapBuffer.flip();
 		if (wrapBuffer.hasRemaining()) {
-			connector.send(null, wrapBuffer);
+			if (!closed) {
+				connecting.send(null, wrapBuffer, sendCallback);
+			}
 		}
+		
 		return true;
 	}
 	
@@ -131,25 +154,21 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				}
 			}
 		} catch (IOException e) {
-			LOGGER.error("SSL error", e);
-			doClose(true);
-			if (failing != null) {
-				failing.failed(e);
-			}
+			fail(e);
 			return false;
 		}
 		
 		unwrapBuffer.flip();
 		if (unwrapBuffer.hasRemaining()) {
-			if (receiver != null) {
-				receiver.received(this, null, unwrapBuffer);
+			if (!closed) {
+				callback.received(null, unwrapBuffer);
 			}
 		}
 		return !underflow;
 	}
 	
 	private void doContinue() {
-		if ((connector == null) || (connectAddress == null)) {
+		if (closed || (connecting == null) || (callback == null) || (connectAddress == null)) {
 			return;
 		}
 		if (sent == null) {
@@ -165,15 +184,10 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 				engine.beginHandshake();
 			} catch (IOException e) {
 				LOGGER.error("Could not begin handshake", e);
-				doClose(true);
-				if (failing != null) {
-					failing.failed(e);
-				}
+				fail(e);
 				return;
 			}
-			if (connecting != null) {
-				connecting.connected(this, connectAddress);
-			}
+			callback.connected(connectAddress);
 		}
 		
 		if (engine == null) {
@@ -181,6 +195,7 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		}
 		
 		while (true) {
+			// LOGGER.trace("Current handshake status: {}", engine.getHandshakeStatus());
 			switch (engine.getHandshakeStatus()) {
 			case NEED_TASK:
 			    while (true) {
@@ -212,7 +227,14 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		}
 	}
 	
-	private void doClose(boolean closeConnector) {
+	private void doClose() {
+		if (sent != null) {
+			IOException e = new IOException("SSL engine failed");
+			for (ToWrite toWrite : sent) {
+				toWrite.callback.failed(e);
+			}
+		}
+
 		sent = null;
 		received = null;
 		
@@ -222,18 +244,19 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			} catch (IOException e) {
 			}
 			engine.closeOutbound();
+			engine = null;
 		}
 
-		if (closeConnector && (connector != null)) {
-			connector.close();
-			connector = null;
+		if (connecting != null) {
+			connecting.close();
+			connecting = null;
 		}
 	}
 
 	//
 	
 	@Override
-	public void received(Connector conn, Address address, final ByteBuffer buffer) {
+	public void received(Address address, final ByteBuffer buffer) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -245,34 +268,34 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 			}
 		});
 	}
+	
 	@Override
 	public void closed() {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				doClose(false);
-				
-				if (closing != null) {
-					closing.closed();
+				doClose();
+
+				if (!closed) {
+					closed = true;
+					callback.closed();
 				}
 			}
 		});
 	}
+	
 	@Override
 	public void failed(final IOException e) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				doClose(false);
-				
-				if (failing != null) {
-					failing.failed(e);
-				}
+				fail(e);
 			}
 		});
 	}
+	
 	@Override
-	public void connected(Connector conn, Address address) {
+	public void connected(Address address) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -288,35 +311,22 @@ final class SecureSocketManager implements Connector, Connecting, Closing, Faili
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				doClose(true);
+				doClose();
 			}
 		});
-		//%% ExecutorUtils.waitFor(executor);
 	}
+	
 	@Override
-	public Connector send(Address address, final ByteBuffer buffer) {
+	public void send(Address address, final ByteBuffer buffer, final Callback callback) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
 				if (sent == null) {
 					return;
 				}
-				sent.addLast(buffer);
+				sent.addLast(new ToWrite(buffer, callback));
 				doContinue();
 				return;
-			}
-		});
-		return this;
-	}
-	
-	@Override
-	public void buffering(final long size) {
-		executor.execute(new Runnable() {
-			@Override
-			public void run() {
-				if (buffering != null) {
-					buffering.buffering(size);
-				}
 			}
 		});
 	}

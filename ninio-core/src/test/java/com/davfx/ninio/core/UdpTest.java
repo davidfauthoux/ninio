@@ -12,12 +12,12 @@ import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Mutable;
 import com.davfx.ninio.util.Wait;
 
-public class DatagramTest {
+public class UdpTest {
 
-	private static final Logger LOGGER = LoggerFactory.getLogger(DatagramTest.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(UdpTest.class);
 	
 	@Test
-	public void testDatagram() throws Exception {
+	public void test() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
 		try (Ninio ninio = Ninio.create()) {
@@ -76,10 +76,9 @@ public class DatagramTest {
 		}
 	}
 	
-	// This test is exactly the same as above, but it is used to check a new DatagramReady can be open another time, maybe in the same JVM
 	@Test
-	public void testDatagramSameToCheckClose() throws Exception {
-		testDatagram();
+	public void testSameToCheckClose() throws Exception {
+		test();
 	}
 	
 }

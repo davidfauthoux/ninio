@@ -9,11 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.NinioBuilder;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.UdpSocket;
 
 // Syntax: snmp[bulk]walk -v2c -c<anything> -On <ip>:6161 <oid>
@@ -24,7 +24,6 @@ public final class SnmpServer implements Disconnectable {
 	
 	public static interface Builder extends NinioBuilder<Disconnectable> {
 		Builder with(UdpSocket.Builder connectorFactory);
-		Builder bind(Address bindAddress);
 
 		Builder handle(SnmpServerHandler handler);
 	}
@@ -35,20 +34,12 @@ public final class SnmpServer implements Disconnectable {
 			
 			private SnmpServerHandler handler = null;
 			
-			private Address bindAddress = null;
-			
 			@Override
 			public Builder handle(SnmpServerHandler handler) {
 				this.handler = handler;
 				return this;
 			}
 			
-			@Override
-			public Builder bind(Address bindAddress) {
-				this.bindAddress = bindAddress;
-				return this;
-			}
-
 			@Override
 			public Builder with(UdpSocket.Builder connectorFactory) {
 				this.connectorFactory = connectorFactory;
@@ -57,17 +48,32 @@ public final class SnmpServer implements Disconnectable {
 
 			@Override
 			public Disconnectable create(Queue queue) {
-				return new SnmpServer(queue, bindAddress, connectorFactory, handler);
+				return new SnmpServer(connectorFactory.create(queue), handler);
 			}
 		};
 	}
 
-	private final Connector connector;
+	private final Connecter.Connecting connector;
 
-	private SnmpServer(Queue queue, final Address bindAddress, UdpSocket.Builder connectorFactory, final SnmpServerHandler handler) {
-		connector = connectorFactory.receiving(new Receiver() {
+	private SnmpServer(Connecter connecter, final SnmpServerHandler handler) {
+		connector = connecter.connect(new Connecter.Callback() {
 			@Override
-			public void received(Connector conn, Address address, ByteBuffer buffer) {
+			public void connected(Address address) {
+				handler.connected(address);
+			}
+			
+			@Override
+			public void closed() {
+				handler.closed();
+			}
+			
+			@Override
+			public void failed(IOException ioe) {
+				handler.failed(ioe);
+			}
+			
+			@Override
+			public void received(Address address, ByteBuffer buffer) {
 				int requestId;
 				String community;
 				final int bulkLength;
@@ -126,12 +132,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GET {}: None", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
+						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
 						return;
 					}
 
 					LOGGER.trace("GET {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next));
+					connector.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
 					return;
 				}
 				
@@ -157,12 +163,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETNEXT {}: No next", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
+						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
 						return;
 					}
 
 					LOGGER.trace("GETNEXT {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next));
+					connector.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
 					return;
 				}
 				
@@ -188,16 +194,16 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETBULK {}: No next", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null));
+						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
 						return;
 					}
 
 					LOGGER.trace("GETBULK {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next));
+					connector.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
 					return;
 				}
 			}
-		}).bind(bindAddress).create(queue);
+		});
 	}
 
 	private static BerPacket ber(String s) {

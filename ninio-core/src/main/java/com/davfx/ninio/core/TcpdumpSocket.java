@@ -25,7 +25,7 @@ import com.typesafe.config.ConfigException;
 
 public final class TcpdumpSocket implements Connecter {
 	
-	public static interface Builder extends NinioBuilder<TcpdumpSocket> {
+	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder on(String interfaceId);
 		Builder rule(String rule);
 		Builder bind(Address bindAddress);

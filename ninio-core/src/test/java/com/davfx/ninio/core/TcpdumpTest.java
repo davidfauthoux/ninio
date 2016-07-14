@@ -4,61 +4,89 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Ignore;
 import org.junit.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.Mutable;
 import com.davfx.ninio.util.Wait;
 
 // Mac OS X:
 // sudo chmod go=r /dev/bpf*
 
-@Ignore
 public class TcpdumpTest {
+
+	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpTest.class);
 	
 	static {
 		ConfigUtils.override("com.davfx.ninio.core.tcpdump.mode = hex"); // raw not working on Mac OS X
 	}
 	
 	@Test
-	public void testDatagram() throws Exception {
+	public void test() throws Exception {
 		Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
 		try (Ninio ninio = Ninio.create()) {
 			int port = 8080;
-	
-			Wait wait = new Wait();
-			Wait waitForServerClosing = new Wait();
-			Wait waitForClientClosing = new Wait();
-			try (Connector server = ninio.create(TcpdumpSocket.builder().on("lo0").rule("dst port " + port).bind(new Address(Address.ANY, port))
-				.closing(new WaitClosing(waitForServerClosing)).failing(new LockFailing(lock))
-				//.closing(new LockClosing(lock))
-				.receiving(new EchoReceiver())
-				.connecting(new WaitConnecting(wait)))) {
-				
-				wait.waitFor();
-				
-				Thread.sleep(100);
-				
-				try (Connector client = ninio.create(UdpSocket.builder()
-					.closing(new WaitClosing(waitForClientClosing)).failing(new LockFailing(lock))
-					//.closing(new LockClosing(lock))
-					.receiving(new LockReceiver(lock)))) {
+			Wait serverWaitConnecting = new Wait();
+			Wait serverWaitClosing = new Wait();
+			final Mutable<Connecter.Connecting> serverConnecting = new Mutable<>(null);
+			try (Connecter.Connecting server = ninio.create(TcpdumpSocket.builder().on("lo0").rule("dst port " + port).bind(new Address(Address.ANY, port))).connect(
+				new WaitConnectedConnecterCallback(serverWaitConnecting,
+				new WaitClosedConnecterCallback(serverWaitClosing,
+				new LockFailedConnecterCallback(lock,
+				new Connecter.Callback() {
+					@Override
+					public void failed(IOException ioe) {
+					}
+					@Override
+					public void connected(Address address) {
+					}
+					@Override
+					public void closed() {
+					}
+					
+					@Override
+					public void received(Address address, ByteBuffer buffer) {
+						LOGGER.debug("Received: {}", ByteBufferUtils.toString(buffer));
+						serverConnecting.value.send(address, buffer, new NopConnecterConnectingCallback());
+					}
+				}))))) {
 
-					client.send(new Address(Address.LOCALHOST, port), ByteBufferUtils.toByteBuffer("test"));
+				serverConnecting.value = server;
+				serverWaitConnecting.waitFor();
+				Thread.sleep(100); // Using tcpdump needs to wait a little bit for the process to start 
+
+				Wait clientWaitConnecting = new Wait();
+				Wait clientWaitClosing = new Wait();
+				Wait clientWaitSent = new Wait();
+
+				try (Connecter.Connecting client = ninio.create(UdpSocket.builder()).connect(
+						new WaitConnectedConnecterCallback(clientWaitConnecting, 
+						new WaitClosedConnecterCallback(clientWaitClosing, 
+						new LockFailedConnecterCallback(lock, 
+						new LockReceivedConnecterCallback(lock,
+						new NopConnecterCallback())))))) {
+					client.send(new Address(Address.LOCALHOST, port), ByteBufferUtils.toByteBuffer("test"),
+						new WaitSentConnecterConnectingCallback(clientWaitSent,
+						new LockFailedConnecterConnectingCallback(lock,
+						new NopConnecterConnectingCallback())));
+					
+					clientWaitConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 				}
-				waitForClientClosing.waitFor();
+
+				clientWaitClosing.waitFor();
 			}
-			waitForServerClosing.waitFor();
+			serverWaitClosing.waitFor();
 		}
 	}
 	
-	// This test is exactly the same as above, but it is used to check a new DatagramReady can be open another time, maybe in the same JVM
 	@Test
-	public void testDatagramSameToCheckClose() throws Exception {
-		testDatagram();
+	public void testSameToCheckClose() throws Exception {
+		test();
 	}
 
 }

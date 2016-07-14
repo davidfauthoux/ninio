@@ -23,66 +23,20 @@ public final class SqliteCache {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(SqliteCache.class);
 
-	public static interface Builder<T> extends ConfigurableNinioBuilder<Connector, Builder<T>> {
+	public static interface Builder<T> extends NinioBuilder<Connecter> {
 		Builder<T> database(File database);
 		Builder<T> expiration(double expiration);
 		Builder<T> using(Interpreter<T> interpreter);
-		Builder<T> on(ConfigurableNinioBuilder<Connector, ?> builder);
+		Builder<T> on(NinioBuilder<Connecter> builder);
 	}
 
 	public static <T> Builder<T> builder() {
 		return new Builder<T>() {
-			private ConfigurableNinioBuilder<Connector, ?> builder = UdpSocket.builder();
+			private NinioBuilder<Connecter> builder = UdpSocket.builder();
 			
 			private double expiration = 0d;
 			private Interpreter<T> interpreter = null;
-			private File database;
-			{
-				try {
-					database = File.createTempFile(SqliteCache.class.getName(), null);
-				} catch (IOException ioe) {
-					database = null;
-				}
-				if (database != null) {
-					database.deleteOnExit();
-				}
-			}
-			
-			private Connecting connecting = null;
-			private Closing closing = null;
-			private Failing failing = null;
-			private Receiver receiver = null;
-			private Buffering buffering = null;
-			
-			@Override
-			public Builder<T> closing(Closing closing) {
-				this.closing = closing;
-				return this;
-			}
-		
-			@Override
-			public Builder<T> connecting(Connecting connecting) {
-				this.connecting = connecting;
-				return this;
-			}
-			
-			@Override
-			public Builder<T> failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public Builder<T> receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
-			@Override
-			public Builder<T> buffering(Buffering buffering) {
-				this.buffering = buffering;
-				return this;
-			}
+			private File database = null;
 			
 			@Override
 			public Builder<T> using(Interpreter<T> interpreter) {
@@ -91,7 +45,7 @@ public final class SqliteCache {
 			}
 			
 			@Override
-			public Builder<T> on(ConfigurableNinioBuilder<Connector, ?> builder) {
+			public Builder<T> on(NinioBuilder<Connecter> builder) {
 				this.builder = builder;
 				return this;
 			}
@@ -108,41 +62,58 @@ public final class SqliteCache {
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
+			public Connecter create(Queue queue) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
 				if (interpreter == null) {
 					throw new NullPointerException("interpreter");
 				}
-				if (database == null) {
-					throw new NullPointerException("database");
-				}
 				
-				builder.closing(closing);
-				builder.connecting(connecting);
-				builder.failing(failing);
-				builder.buffering(buffering);
-				return new InnerConnector<>(queue, database, expiration, interpreter, receiver, builder);
+				return new InnerConnecter<>(database, expiration, interpreter, builder.create(queue));
 			}
 		};
 	}
 	
-	private static final class InnerConnector<T> implements Connector {
-		private final File databaseFile;
-		private final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress;
-		private final Receiver r;
-		private final Interpreter<T> i;
-		private final Connector c;
-		private final Connection sqlConnection;
+	private static final class InnerConnecter<T> implements Connecter {
+		private final File database;
+		private final Connecter wrappee;
+		private final Interpreter<T> interpreter;
 		private final double expiration;
 		
-		public InnerConnector(Queue queue, File database, double expiration, Interpreter<T> interpreter, Receiver receiver, ConfigurableNinioBuilder<Connector, ?> builder) {
+		public InnerConnecter(File database, double expiration, Interpreter<T> interpreter, Connecter wrappee) {
+			this.database = database;
 			this.expiration = expiration;
-			
-			databaseFile = database;
+			this.interpreter = interpreter;
+			this.wrappee = wrappee;
+		}
+		
+		@Override
+		public Connecting connect(final Callback callback) {
+			final File databaseFile;
+			if (database == null) {
+				try {
+					databaseFile = File.createTempFile(SqliteCache.class.getName(), null);
+					databaseFile.deleteOnExit();
+				} catch (IOException ioe) {
+					callback.failed(new IOException("Error", ioe));
+					return new Connecting() {
+						@Override
+						public void close() {
+						}
+						@Override
+						public void send(Address address, ByteBuffer buffer, Callback callback) {
+							callback.failed(new IOException("Failed to be created"));
+						}
+					};
+				}
+			} else {
+				databaseFile = database;
+			}
+
 			databaseFile.delete();
 
+			final Connection sqlConnection;
 			try {
 				sqlConnection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getCanonicalPath());
 				try {
@@ -154,17 +125,24 @@ public final class SqliteCache {
 					throw see;
 				}
 			} catch (SQLException | IOException e) {
-				throw new RuntimeException("Could not connect to sqlite database", e);
+				callback.failed(new IOException("Error", e));
+				return new Connecting() {
+					@Override
+					public void close() {
+					}
+					@Override
+					public void send(Address address, ByteBuffer buffer, Callback callback) {
+						callback.failed(new IOException("Failed to be created"));
+					}
+				};
 			}
 
-			cacheByDestinationAddress = cacheMapExpiringAfterAccess(expiration);
-			r = receiver;
-			i = interpreter;
+			final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress = cacheMapExpiringAfterAccess(expiration);
 
-			builder.receiving(new Receiver() {
+			final Connecter.Connecting connecting = wrappee.connect(new Callback() {
 				@Override
-				public void received(Connector conn, Address address, ByteBuffer sourceBuffer) {
-					T sub = i.handleResponse(sourceBuffer.duplicate());
+				public void received(Address address, ByteBuffer sourceBuffer) {
+					T sub = interpreter.handleResponse(sourceBuffer.duplicate());
 					if (sub == null) {
 						LOGGER.trace("Invalid response (address = {})", address);
 						return;
@@ -198,11 +176,9 @@ public final class SqliteCache {
 					}
 
 					for (T s : to) {
-						ByteBuffer b = i.transform(sourceBuffer.duplicate(), s);
+						ByteBuffer b = interpreter.transform(sourceBuffer.duplicate(), s);
 						if (b != null) {
-							if (r != null) {
-								r.received(InnerConnector.this, address, b);
-							}
+							callback.received(address, b);
 						}
 					}
 
@@ -222,87 +198,112 @@ public final class SqliteCache {
 						LOGGER.error("SQL error", se);
 					}
 				}
+				
+				@Override
+				public void connected(Address address) {
+					callback.connected(address);
+				}
+				
+				@Override
+				public void failed(IOException ioe) {
+					try {
+						sqlConnection.close();
+					} catch (SQLException e) {
+					}
+					databaseFile.delete();
+
+					callback.failed(ioe);
+				}
+				
+				@Override
+				public void closed() {
+					try {
+						sqlConnection.close();
+					} catch (SQLException e) {
+					}
+					databaseFile.delete();
+
+					callback.closed();
+				}
 			});
+
+			return new Connecting() {
+				@Override
+				public void send(Address address, ByteBuffer sourceBuffer, Callback sendCallback) {
+					double now = DateUtils.now();
+					
+					Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
+					if (context == null) {
+						LOGGER.trace("Invalid request (address = {})", address);
+						return;
+					}
+
+					boolean send;
+					synchronized (cacheByDestinationAddress) {
+						CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
+						if (cache == null) {
+							LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
+							cache = new CacheByAddress<T>(expiration);
+							cacheByDestinationAddress.put(address, cache);
+						}
 			
-			c = builder.create(queue);
-		}
-
-		@Override
-		public void close() {
-			c.close();
-			try {
-				sqlConnection.close();
-			} catch (SQLException e) {
-			}
-			databaseFile.delete();
-		}
-		
-		@Override
-		public Connector send(Address address, ByteBuffer sourceBuffer) {
-			double now = DateUtils.now();
+						Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
+						if (subs == null) {
+							subs = cacheMapExpiringAfterWrite(expiration);
+							cache.requestsByKey.put(context.key, subs);
 			
-			Context<T> context = i.handleRequest(sourceBuffer.duplicate());
-			if (context == null) {
-				LOGGER.trace("Invalid request (address = {})", address);
-				return this;
-			}
+							subs.put(context.sub, now);
+							cache.subToKey.put(context.sub, context.key);
 
-			boolean send;
-			synchronized (cacheByDestinationAddress) {
-				CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
-				if (cache == null) {
-					LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
-					cache = new CacheByAddress<T>(expiration);
-					cacheByDestinationAddress.put(address, cache);
-				}
-	
-				Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
-				if (subs == null) {
-					subs = cacheMapExpiringAfterWrite(expiration);
-					cache.requestsByKey.put(context.key, subs);
-	
-					subs.put(context.sub, now);
-					cache.subToKey.put(context.sub, context.key);
+							send = true;
+							LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
+						} else {
+							subs.put(context.sub, now);
+							cache.subToKey.put(context.sub, context.key);
 
-					send = true;
-					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
-				} else {
-					subs.put(context.sub, now);
-					cache.subToKey.put(context.sub, context.key);
-
-					send = false;
-					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
-				}
-			}
-
-			if (send) {
-				c.send(address, sourceBuffer);
-			} else {
-				try {
-					try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `packet` FROM `data` WHERE `address`= ? AND `key` = ?")) {
-						int k = 1;
-						s.setString(k++, address.toString());
-						s.setString(k++, context.key);
-						ResultSet rs = s.executeQuery();
-						while (rs.next()) {
-							ByteBuffer bb = ByteBuffer.wrap(rs.getBytes("packet"));
-							
-							LOGGER.trace("Response exists (address = {}, key = {}, sub = {})", address, context.key, context.sub);
-							
-							if (r != null) {
-								r.received(this, address, i.transform(bb, context.sub));
-							}
-							return this;
+							send = false;
+							LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
 						}
 					}
-				} catch (SQLException se) {
-					LOGGER.error("SQL error", se);
-				}
 
-				LOGGER.error("Response does not exist (address = {}, key = {}, sub = {})", address, context.key, context.sub);
-			}
-			
-			return this;
+					if (send) {
+						connecting.send(address, sourceBuffer, sendCallback);
+					} else {
+						sendCallback.sent();
+						try {
+							try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `packet` FROM `data` WHERE `address`= ? AND `key` = ?")) {
+								int k = 1;
+								s.setString(k++, address.toString());
+								s.setString(k++, context.key);
+								ResultSet rs = s.executeQuery();
+								while (rs.next()) {
+									ByteBuffer bb = ByteBuffer.wrap(rs.getBytes("packet"));
+									
+									LOGGER.trace("Response exists (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+									
+									callback.received(address, interpreter.transform(bb, context.sub));
+									return;
+								}
+							}
+						} catch (SQLException se) {
+							LOGGER.error("SQL error", se);
+						}
+
+						LOGGER.error("Response does not exist (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+					}
+					
+				}
+				
+				@Override
+				public void close() {
+					connecting.close();
+					try {
+						sqlConnection.close();
+					} catch (SQLException e) {
+					}
+					databaseFile.delete();
+				}
+			};
 		}
 	}
 	

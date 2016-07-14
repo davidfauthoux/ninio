@@ -1,109 +1,140 @@
 package com.davfx.ninio.core;
 
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 
-public final class SecureSocketServerBuilder {
+public final class SecureSocketServerBuilder implements TcpSocketServer.Builder {
 	private Trust trust = new Trust();
 	private Executor executor = null;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator(SecureSocketManager.REQUIRED_BUFFER_SIZE);
 
-	private Listening listening = new Listening() {
-		@Override
-		public Connection connecting(Address from, Connector connector) {
-			connector.close();
-			return new Listening.Connection() {
-				@Override
-				public Receiver receiver() {
-					return null;
-				}
-				@Override
-				public Failing failing() {
-					return null;
-				}
-				@Override
-				public Connecting connecting() {
-					return null;
-				}
-				@Override
-				public Closing closing() {
-					return null;
-				}
-				@Override
-				public Buffering buffering() {
-					return null;
-				}
-			};
-		}
-	};
+	private Address bindAddress = null;
+	
+	private final TcpSocketServer.Builder wrappee;
 
-	public SecureSocketServerBuilder() {
+	public SecureSocketServerBuilder(TcpSocketServer.Builder wrappee) {
+		this.wrappee = wrappee;
 	}
 	
 	public SecureSocketServerBuilder trust(Trust trust) {
 		this.trust = trust;
 		return this;
 	}
+	
 	public SecureSocketServerBuilder with(Executor executor) {
 		this.executor = executor;
 		return this;
 	}
+
+	// Used for the SSL engine AND the underlying TcpSocketServer.Builder
+	@Override
 	public SecureSocketServerBuilder with(ByteBufferAllocator byteBufferAllocator) {
 		this.byteBufferAllocator = byteBufferAllocator;
 		return this;
 	}
-	
-	public SecureSocketServerBuilder listening(Listening listening) {
-		this.listening = listening;
+
+	@Override
+	public SecureSocketServerBuilder bind(Address bindAddress) {
+		this.bindAddress = bindAddress;
 		return this;
 	}
-	
-	public Listening build() {
+
+	@Override
+	public Listener create(Queue queue) {
 		final Trust thisTrust = trust;
 		final Executor thisExecutor = executor;
 		final ByteBufferAllocator thisByteBufferAllocator = byteBufferAllocator;
-		final Listening thisListening = listening;
-		return new Listening() {
+		final Listener listener = wrappee.with(byteBufferAllocator).bind(bindAddress).create(queue);
+		
+		return new Listener() {
 			@Override
-			public Listening.Connection connecting(final Address from, Connector connector) {
-				final SecureSocketManager sslManager = new SecureSocketManager(thisTrust, false, thisExecutor, thisByteBufferAllocator);
-				sslManager.connectAddress = from;
-				sslManager.connector = connector;
+			public Listening listen(final Callback callback) {
+				return listener.listen(new Listener.Callback() {
+					
+					@Override
+					public void failed(IOException ioe) {
+						callback.failed(ioe);
+					}
+					
+					@Override
+					public void connected() {
+						callback.connected();
+					}
+					
+					@Override
+					public void closed() {
+						callback.closed();
+					}
 
-				thisExecutor.execute(new Runnable() {
-					@Override
-					public void run() {
-						Listening.Connection connection = thisListening.connecting(from, sslManager);
-
-						sslManager.connecting = connection.connecting();
-						sslManager.closing = connection.closing();
-						sslManager.failing = connection.failing();
-						sslManager.receiver = connection.receiver();
-						sslManager.buffering = connection.buffering();
-					}
-				});
-				
-				return new Listening.Connection() {
-					@Override
-					public Receiver receiver() {
-						return sslManager;
-					}
-					@Override
-					public Failing failing() {
-						return sslManager;
-					}
 					@Override
 					public Connecting connecting() {
-						return sslManager;
+						final SecureSocketManager sslManager = new SecureSocketManager(thisTrust, false, thisExecutor, thisByteBufferAllocator);
+
+						final Connecting callbackConnecting = callback.connecting();
+						
+						sslManager.callback = new Connecter.Callback() {
+							@Override
+							public void received(Address address, ByteBuffer buffer) {
+								callbackConnecting.received(address, buffer);
+							}
+							
+							@Override
+							public void failed(IOException ioe) {
+								callbackConnecting.failed(ioe);
+							}
+							
+							@Override
+							public void connected(Address address) {
+								callbackConnecting.connected(address);
+							}
+							
+							@Override
+							public void closed() {
+								callbackConnecting.closed();
+							}
+						};
+						
+						return new Connecting() {
+							@Override
+							public void connecting(Connecter.Connecting connecting) {
+								callbackConnecting.connecting(new Connecter.Connecting() {
+									@Override
+									public void send(Address address, ByteBuffer buffer, Callback callback) {
+										sslManager.send(address, buffer, callback);
+									}
+									
+									@Override
+									public void close() {
+										sslManager.close();
+									}
+								});
+
+								sslManager.connecting = connecting;
+							}
+
+							@Override
+							public void connected(Address address) {
+								sslManager.connectAddress = address;
+							}
+							
+							@Override
+							public void received(Address address, ByteBuffer buffer) {
+								sslManager.received(address, buffer);
+							}
+							
+							@Override
+							public void failed(IOException ioe) {
+								sslManager.failed(ioe);
+							}
+							
+							@Override
+							public void closed() {
+								sslManager.closed();
+							}
+						};
 					}
-					@Override
-					public Closing closing() {
-						return sslManager;
-					}
-					@Override
-					public Buffering buffering() {
-						return sslManager;
-					}
-				};
+				});
 			}
 		};
 	}
