@@ -14,7 +14,6 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.SqliteCache;
-import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
@@ -106,10 +105,10 @@ public class SnmpTest {
 	
 	@Test
 	public void testTimeout() throws Exception {
-		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
+		try (Ninio ninio = Ninio.create()) {
 			int port = 8080;
 			final Lock<String, IOException> lock = new Lock<>();
-			try (SnmpConnecter.Connecting snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))
+			try (SnmpConnecter.Connecting snmpClient = SnmpTimeout.wrap(0.5d, ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))
 					.connect(new SnmpConnecter.Callback() {
 						@Override
 						public void failed(IOException ioe) {
@@ -120,9 +119,9 @@ public class SnmpTest {
 						@Override
 						public void closed() {
 						}
-					})) {
-				SnmpTimeout.wrap(timeout, 0.5d, snmpClient)
-						.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"), new SnmpConnecter.Connecting.Callback() {
+					}))) {
+				
+				snmpClient.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"), new SnmpConnecter.Connecting.Callback() {
 							@Override
 							public void received(SnmpResult result) {
 							}

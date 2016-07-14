@@ -9,11 +9,13 @@ public final class SnmpTimeout {
 	private SnmpTimeout() {
 	}
 	
-	public static SnmpConnecter.Connecting wrap(final Timeout t, final double timeout, final SnmpConnecter.Connecting wrappee) {
+	public static SnmpConnecter.Connecting wrap(final double timeout, final SnmpConnecter.Connecting wrappee) {
+		final Timeout t = new Timeout();
 		return new SnmpConnecter.Connecting() {
 			@Override
 			public void close() {
-				wrappee.close(); // Does not close the timeout managers because it would be to complicated (specific executor or synchronization issues)
+				t.close();
+				wrappee.close();
 			}
 			
 			@Override
