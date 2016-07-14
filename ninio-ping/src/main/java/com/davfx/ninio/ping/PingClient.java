@@ -1,5 +1,6 @@
 package com.davfx.ninio.ping;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
@@ -9,21 +10,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.NinioBuilder;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
-import com.davfx.ninio.core.Receiver;
 
-public final class PingClient implements Disconnectable {
+public final class PingClient implements PingConnecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingClient.class);
 	
 	private static final int ICMP_PROTOCOL = 1;
 	private static final long ID_LIMIT = 1L << 32;
 	
-	public static interface Builder extends NinioBuilder<PingClient> {
+	public static interface Builder extends NinioBuilder<PingConnecter> {
 		Builder with(Executor executor);
 		Builder with(RawSocket.Builder connectorFactory);
 	}
@@ -50,21 +50,37 @@ public final class PingClient implements Disconnectable {
 				if (executor == null) {
 					throw new NullPointerException("executor");
 				}
-				return new PingClient(queue, executor, connectorFactory);
+				return new PingClient(executor, connectorFactory.protocol(ICMP_PROTOCOL).create(queue));
 			}
 		};
 	}
 	
 	private final Executor executor;
-	private final Connector connector;
-	private final Map<Long, PingReceiver> receivers = new HashMap<>();
+	private final Connecter connecter;
 	private long nextId = 0L;
-
-	public PingClient(Queue queue, final Executor executor, RawSocket.Builder connectorFactory) {
+	
+	//TODO gerer les multiples appels au callback (qd closed)
+	
+	public PingClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
-		connector = connectorFactory.receiving(new Receiver() {
+		this.connecter = connecter;
+	}
+	
+	private static void closeSendCallbacks(Map<Long, PingConnecter.Connecting.Callback> receivers) {
+		IOException e = new IOException("Closed");
+		for (PingConnecter.Connecting.Callback c : receivers.values()) {
+			c.failed(e);
+		}
+		receivers.clear();
+	}
+	
+	@Override
+	public PingConnecter.Connecting connect(final PingConnecter.Callback callback) {
+		final Map<Long, PingConnecter.Connecting.Callback> receivers = new HashMap<>();
+		
+		final Connecter.Connecting connecting = connecter.connect(new Connecter.Callback() {
 			@Override
-			public void received(Connector conn, Address address, final ByteBuffer buffer) {
+			public void received(Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -86,7 +102,7 @@ public final class PingClient implements Disconnectable {
 
 						double delta = (now - time) / 1_000_000_000d;
 						
-						PingReceiver r = receivers.remove(id);
+						PingConnecter.Connecting.Callback r = receivers.remove(id);
 						if (r == null) {
 							return;
 						}
@@ -94,29 +110,40 @@ public final class PingClient implements Disconnectable {
 					}
 				});
 			}
-		}).protocol(ICMP_PROTOCOL).create(queue);
-	}
-	
-	@Override
-	public void close() {
-		connector.close();
-	}
-
-	public PingRequestBuilder request() {
-		return new PingRequestBuilder() {
-			private PingReceiver receiver = null;
-
+			
 			@Override
-			public PingRequestBuilder receiving(PingReceiver receiver) {
-				this.receiver = receiver;
-				return this;
+			public void failed(IOException ioe) {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						closeSendCallbacks(receivers);
+					}
+				});
+				callback.failed(ioe);
 			}
+			
+			@Override
+			public void connected(Address address) {
+				callback.connected(address);
+			}
+			
+			@Override
+			public void closed() {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						closeSendCallbacks(receivers);
+					}
+				});
+				callback.closed();
+			}
+		});
 
+		return new Connecting() {
 			private long id = -1L;
 			
 			@Override
-			public PingRequest ping(final String host) {
-				final PingReceiver r = receiver;
+			public Cancelable ping(final String host, final Callback callback) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -126,7 +153,7 @@ public final class PingClient implements Disconnectable {
 							if (nextId == ID_LIMIT) {
 								nextId = 0L;
 							}
-							receivers.put(id, r);
+							receivers.put(id, callback);
 						}
 
 						byte[] sendData = new byte[16];
@@ -157,11 +184,11 @@ public final class PingClient implements Disconnectable {
 						b.position(endPosition);
 						b.flip();
 						
-						connector.send(new Address(host, 0), b);
+						connecting.send(new Address(host, 0), b, new NopConnecterConnectingCallback());
 					}
 				});
 				
-				return new PingRequest() {
+				return new Cancelable() {
 					@Override
 					public void cancel() {
 						executor.execute(new Runnable() {
@@ -175,6 +202,18 @@ public final class PingClient implements Disconnectable {
 						});
 					}
 				};
+			}
+			
+			@Override
+			public void close() {
+				connecting.close();
+
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						closeSendCallbacks(receivers);
+					}
+				});
 			}
 		};
 	}

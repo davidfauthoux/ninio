@@ -31,7 +31,7 @@ public final class SshClient implements Connecter {
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
 
 	public static interface Builder extends TcpSocket.Builder {
-		Builder with(TcpSocket.Builder builder);
+		Builder with(TcpSocket.Builder builder); //TODO rename "on" ?
 		Builder with(Executor executor);
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);

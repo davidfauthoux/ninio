@@ -45,7 +45,6 @@ public final class SnmpTimeout {
 					public void failed(IOException ioe) {
 						m.cancel();
 						receiver.failed(ioe);
-						
 					}
 				});
 				

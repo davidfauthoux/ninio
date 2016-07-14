@@ -2,13 +2,9 @@ package com.davfx.ninio.ping;
 
 import java.io.IOException;
 
-import com.davfx.ninio.core.LockFailing;
+import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.ping.PingClient;
-import com.davfx.ninio.ping.PingReceiver;
-import com.davfx.ninio.ping.PingTimeout;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 
@@ -23,13 +19,28 @@ public class PingTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<Double, IOException> lock = new Lock<>();
 			
-			try (PingClient client = ninio.create(PingClient.builder().with(RawSocket.builder().failing(new LockFailing(lock))).with(new SerialExecutor(PingTest.class)))) {
-				PingTimeout.wrap(timeout, 1d, client.request(), new LockFailing(lock)).receiving(new PingReceiver() {
+			try (PingConnecter.Connecting client = PingTimeout.wrap(1d, ninio.create(PingClient.builder().with(new SerialExecutor(PingTest.class))).connect(new PingConnecter.Callback() {
+				@Override
+				public void failed(IOException ioe) {
+					lock.fail(ioe);
+				}
+				@Override
+				public void connected(Address address) {
+				}
+				@Override
+				public void closed() {
+				}
+			}))) {
+				client.ping(pingHost, new PingConnecter.Connecting.Callback() {
 					@Override
 					public void received(double time) {
 						lock.set(time);
 					}
-				}).ping(pingHost);
+					@Override
+					public void failed(IOException ioe) {
+						lock.fail(ioe);
+					}
+				});
 				
 				System.out.println(lock.waitFor());
 			}

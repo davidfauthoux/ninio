@@ -1,45 +1,50 @@
 package com.davfx.ninio.ping;
 
-import com.davfx.ninio.core.Failing;
+import java.io.IOException;
+
 import com.davfx.ninio.core.Timeout;
 
 public final class PingTimeout {
 	private PingTimeout() {
 	}
 	
-	public static PingRequestBuilder wrap(final Timeout t, final double timeout, final PingRequestBuilder wrappee, final Failing failing) {
-		return new PingRequestBuilder() {
-			private PingReceiver receiver = null;
-			
+	public static PingConnecter.Connecting wrap(final double timeout, final PingConnecter.Connecting wrappee) {
+		final Timeout t = new Timeout();
+		return new PingConnecter.Connecting() {
 			@Override
-			public PingRequestBuilder receiving(PingReceiver receiver) {
-				this.receiver = receiver;
-				return this;
+			public void close() {
+				t.close();
+				wrappee.close();
 			}
 			
 			@Override
-			public PingRequest ping(String host) {
-				final PingReceiver r = receiver;
-
+			public Cancelable ping(String host, final Callback receiver) {
 				final Timeout.Manager m = t.set(timeout);
-				m.run(failing);
-
-				wrappee.receiving(new PingReceiver() {
+				m.run(new Runnable() {
 					@Override
-					public void received(double time) {
-						m.cancel();
-						if (r != null) {
-							r.received(time);
-						}
+					public void run() {
+						receiver.failed(new IOException("Timeout"));
 					}
 				});
 
-				wrappee.ping(host);
+				final Cancelable cancelable = wrappee.ping(host, new PingConnecter.Connecting.Callback() {
+					@Override
+					public void received(double time) {
+						m.cancel();
+						receiver.received(time);
+					}
+					@Override
+					public void failed(IOException ioe) {
+						m.cancel();
+						receiver.failed(ioe);
+					}
+				});
 				
-				return new PingRequest() {
+				return new Cancelable() {
 					@Override
 					public void cancel() {
 						m.cancel();
+						cancelable.cancel();
 					}
 				};
 			}
