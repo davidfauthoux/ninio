@@ -17,39 +17,57 @@ public class AsyncSocketTest {
 		
 		try (Ninio ninio = Ninio.create()) {
 			int port = 8080;
-	
-			Wait wait = new Wait();
-			final Wait waitClosing = new Wait();
-			final Wait waitServerConnecting = new Wait();
-			final Wait waitServerClosing = new Wait();
-			try (Disconnectable server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-				.closing(new WaitClosing(waitClosing)).failing(new LockFailing(lock))
-				.connecting(new WaitListenConnecting(wait))
-				.listening(new Listening() {
+
+			Wait serverWaitConnecting = new Wait();
+			Wait serverWaitClosing = new Wait();
+			final Wait serverWaitClientConnecting = new Wait();
+			final Wait serverWaitClientClosing = new Wait();
+			try (Listener.Listening server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))).listen(
+				new WaitConnectedListenerCallback(serverWaitConnecting,
+				new WaitClosedListenerCallback(serverWaitClosing,
+				new LockFailedListenerCallback(lock,
+				new Listener.Callback() {
 					@Override
-					public Connection connecting(Address from, Connector connector) {
-						return new Connection() {
-							public Failing failing() {
-								return new LockFailing(lock);
-							}
-							public Connecting connecting() {
-								return new WaitConnecting(waitServerConnecting);
-							}
-							public Closing closing() {
-								return new WaitClosing(waitServerClosing);
-							}
-							public Receiver receiver() {
-								return new EchoReceiver();
+					public void failed(IOException ioe) {
+					}
+					@Override
+					public void connected() {
+					}
+					@Override
+					public void closed() {
+					}
+					
+					@Override
+					public Connecting connecting() {
+						return new Connecting() {
+							private Connecter.Connecting connecting;
+							
+							@Override
+							public void connecting(Connecter.Connecting connecting) {
+								this.connecting = connecting;
 							}
 							@Override
-							public Buffering buffering() {
-								return null;
+							public void received(Address address, ByteBuffer buffer) {
+								connecting.send(null, buffer, new NopConnecterConnectingCallback());
+							}
+							
+							@Override
+							public void failed(IOException ioe) {
+								lock.fail(ioe);
+							}
+							@Override
+							public void connected(Address address) {
+								serverWaitClientConnecting.run();
+							}
+							@Override
+							public void closed() {
+								serverWaitClientClosing.run();
 							}
 						};
 					}
-				}))) {
+				}))))) {
 
-				wait.waitFor();
+				serverWaitConnecting.waitFor();
 
 				AsyncTcpSocket client = new AsyncTcpSocket(ninio);
 				try {
@@ -59,16 +77,15 @@ public class AsyncSocketTest {
 					
 					Future<ByteBuffer> f = client.read();
 
-					waitServerConnecting.waitFor();
+					serverWaitClientConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(f.get())).isEqualTo("test");
 				} finally {
 					client.close().get();
 				}
 
-				waitServerClosing.waitFor();
+				serverWaitClientClosing.waitFor();
 			}
-			
-			waitClosing.waitFor();
+			serverWaitClosing.waitFor();
 		}
 	}
 	

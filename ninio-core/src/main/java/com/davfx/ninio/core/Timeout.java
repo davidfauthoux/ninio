@@ -1,6 +1,5 @@
 package com.davfx.ninio.core;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -29,7 +28,7 @@ public final class Timeout implements AutoCloseable {
 		private final double timeout;
 		
 		public double time;
-		public Failing failing = null;
+		public Runnable failing = null;
 
 		public Task(double timeout) {
 			this.timeout = timeout;
@@ -86,7 +85,7 @@ public final class Timeout implements AutoCloseable {
 					Task task = i.next();
 					if (task.time <= now) {
 						if (task.failing != null) {
-							task.failing.failed(new IOException("Timeout"));
+							task.failing.run();
 						}
 						i.remove();
 					}
@@ -100,7 +99,7 @@ public final class Timeout implements AutoCloseable {
 	}
 	
 	public static interface Manager {
-		void run(Failing failing);
+		void run(Runnable failing);
 		void reset();
 		void cancel();
 	}
@@ -109,7 +108,7 @@ public final class Timeout implements AutoCloseable {
 		final Task task = new Task(timeout);
 		return new Manager() {
 			@Override
-			public void run(final Failing failing) {
+			public void run(final Runnable failing) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {

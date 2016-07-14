@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Connecter.Connecting.Callback;
-import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Timeout;
 
 public final class HttpTimeout {
@@ -60,11 +59,10 @@ public final class HttpTimeout {
 					
 					@Override
 					public void finish() {
-						m.run(new Failing() {
+						m.run(new Runnable() {
 							@Override
-							public void failed(IOException e) {
-								s.cancel();
-								callback.failed(e);
+							public void run() {
+								s.cancel(); // callback.failed will be called by underlying http client
 							}
 						});
 						s.finish();

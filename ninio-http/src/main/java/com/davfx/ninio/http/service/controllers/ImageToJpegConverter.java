@@ -17,7 +17,6 @@ import javax.imageio.ImageWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpContentReceiver;
@@ -51,9 +50,12 @@ public final class ImageToJpegConverter implements HttpController {
 		return Http.ok().async(new HttpAsync() {
 			@Override
 			public void produce(final HttpAsyncOutput output) {
-				client.request().receiving(new HttpReceiver() {
+				client.request().build(HttpRequest.of(url), new HttpReceiver() {
 					@Override
-					public HttpContentReceiver received(Disconnectable disconnectable, final HttpResponse response) {
+					public void failed(IOException ioe) {
+					}
+					@Override
+					public HttpContentReceiver received(final HttpResponse response) {
 						if (response.status != HttpStatus.OK) {
 							output.notFound().finish();
 							return null;
@@ -126,7 +128,7 @@ public final class ImageToJpegConverter implements HttpController {
 							}
 						};
 					}
-				}).build(HttpRequest.of(url)).finish();
+				}).finish();
 			}
 		});
 	}

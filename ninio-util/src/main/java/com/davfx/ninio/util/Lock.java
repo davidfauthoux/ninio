@@ -1,6 +1,12 @@
 package com.davfx.ninio.util;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public final class Lock<R, E extends Exception> {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(Lock.class);
+	
 	private boolean done = false;
 	private R result = null;
 	private E fail = null;
@@ -25,7 +31,7 @@ public final class Lock<R, E extends Exception> {
 	
 	public synchronized void set(R result) {
 		if (done) {
-			return;
+			LOGGER.warn("Set multiple times (current result = {}, overwritten result = {}, fail = {})", this.result, result, fail);
 		}
 		this.result = result;
 		done = true;
@@ -34,7 +40,7 @@ public final class Lock<R, E extends Exception> {
 	
 	public synchronized void fail(E fail) {
 		if (done) {
-			return;
+			LOGGER.warn("Failed multiple times (current fail = {}, overwritten fail = {}, result = {})", this.fail, fail, result);
 		}
 		this.fail = fail;
 		done = true;

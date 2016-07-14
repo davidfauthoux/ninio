@@ -326,9 +326,11 @@ public final class TcpSocketServer implements Listener {
 		}
 		outboundChannels.clear();
 
-		try {
-			serverChannel.close();
-		} catch (IOException e) {
+		if (serverChannel != null) {
+			try {
+				serverChannel.close();
+			} catch (IOException e) {
+			}
 		}
 		if (acceptSelectionKey != null) {
 			acceptSelectionKey.cancel();

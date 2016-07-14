@@ -249,6 +249,8 @@ public final class HttpClient implements Disconnectable {
 					private Multimap<String, String> completedHeaders;
 					
 					private ReusableConnector reusableConnector = null;
+					
+					private boolean closed = false;
 
 					private void abruptlyClose(IOException ioe) {
 						LOGGER.trace("Abruptly closed ({})", ioe.getMessage());
@@ -260,7 +262,11 @@ public final class HttpClient implements Disconnectable {
 					private void abruptlyCloseAndFail(IOException e) {
 						LOGGER.trace("Error", e);
 						abruptlyClose(e);
-						callback.failed(e);
+						
+						if (!closed) {
+							closed = true;
+							callback.failed(e);
+						}
 					}
 
 					private void sendRequest() {
@@ -403,7 +409,17 @@ public final class HttpClient implements Disconnectable {
 	
 						//
 						
-						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, callback);
+						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, new HttpReceiver() {
+							@Override
+							public HttpContentReceiver received(HttpResponse response) {
+								return callback.received(response);
+							}
+							
+							@Override
+							public void failed(IOException ioe) {
+								abruptlyCloseAndFail(ioe);
+							}
+						});
 						
 						reusableConnector.push(new Connecter.Callback() {
 							private final LineReader lineReader = new LineReader();
@@ -626,6 +642,11 @@ public final class HttpClient implements Disconnectable {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
+								if (closed) {
+									callback.failed(new IOException("Closed"));
+									return;
+								}
+								
 								emptyBody = false;
 								
 								if (sender == null) {
@@ -642,6 +663,10 @@ public final class HttpClient implements Disconnectable {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
+								if (closed) {
+									return;
+								}
+								
 								if (sender == null) {
 									sendRequest();
 								}
@@ -656,6 +681,10 @@ public final class HttpClient implements Disconnectable {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
+								if (closed) {
+									return;
+								}
+								
 								if (sender == null) {
 									return;
 								}

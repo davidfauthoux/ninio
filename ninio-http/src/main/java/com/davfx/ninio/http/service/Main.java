@@ -3,7 +3,7 @@ package com.davfx.ninio.http.service;
 import java.io.File;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.http.HttpListening;
@@ -22,11 +22,10 @@ public final class Main {
 		int port = config.getInt("port");
 		File dir = new File(config.getString("directory"));
 		try (Ninio ninio = Ninio.create()) {
-			try (Disconnectable tcp = ninio.create(TcpSocketServer.builder()
-					.bind(new Address(Address.ANY, port))
-					.listening(HttpListening.builder()
+			try (Listener.Listening tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))
+					.listen(HttpListening.builder()
 							.with(new SerialExecutor(Main.class))
-							.with(Annotated.builder(HttpService.builder()).register(new FileAssets(dir, "index.html")).build()).build()))) {
+							.with(Annotated.builder(HttpService.builder()).register(new FileAssets(dir, "index.html")).build()).build())) {
 				new Wait().waitFor();
 			}
 		}

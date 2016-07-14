@@ -102,25 +102,15 @@ public class HttpGetTest {
 		final Listener.Listening tcp = ninio.create(
 				TcpSocketServer.builder().bind(new Address(Address.ANY, port))
 			)
-			.listen(new Listener.Callback() {
-				@Override
-				public void failed(IOException ioe) {
-					LOGGER.error("Failed", ioe);
-				}
-				@Override
-				public void connected() {
-				}
-				@Override
-				public void closed() {
-					LOGGER.info("Closed");
-				}
-				
-				@Override
-				public Connecting connecting() {
-					return HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
+			.listen(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
 						
 						@Override
+						public void connected() {
+						}
+
+						@Override
 						public void closed() {
+							LOGGER.info("Closed");
 							waitForClosing.run();
 						}
 						
@@ -154,9 +144,8 @@ public class HttpGetTest {
 						}
 					})
 					
-					.build();
-				}
-			});
+					.build()
+				);
 		return new Disconnectable() {
 			@Override
 			public void close() {
@@ -287,7 +276,6 @@ public class HttpGetTest {
 		}
 	}
 
-	@Ignore
 	@Test
 	public void testDoubleGetConnectionClosed() throws Exception {
 		int port = 8080;

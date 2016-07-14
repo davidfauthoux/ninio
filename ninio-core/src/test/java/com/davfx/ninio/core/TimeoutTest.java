@@ -1,14 +1,9 @@
 package com.davfx.ninio.core;
 
-import java.io.IOException;
-
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.davfx.ninio.core.Failing;
-import com.davfx.ninio.core.Timeout;
 
 public class TimeoutTest {
 	
@@ -28,9 +23,9 @@ public class TimeoutTest {
 			};
 			
 			Timeout.Manager m = timeout.set(1d);
-			m.run(new Failing() {
+			m.run(new Runnable() {
 				@Override
-				public void failed(IOException e) {
+				public void run() {
 					synchronized (failed) {
 						failed[0] = true;
 					}

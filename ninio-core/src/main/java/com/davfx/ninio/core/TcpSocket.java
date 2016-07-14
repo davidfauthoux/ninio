@@ -134,17 +134,14 @@ public final class TcpSocket implements Connecter {
 											}
 											
 											if (key.isReadable()) {
-												final ByteBuffer readBuffer = byteBufferAllocator.allocate();
+												ByteBuffer readBuffer = byteBufferAllocator.allocate();
 												try {
 													if (channel.read(readBuffer) < 0) {
 														disconnect(channel, inboundKey, selectionKey, callback);
-														currentChannel = null;
-														currentInboundKey = null;
-														currentSelectionKey = null;
 														return;
 													}
 												} catch (IOException e) {
-													LOGGER.trace("Connection failed", e);
+													LOGGER.trace("Read failed", e);
 													disconnect(channel, inboundKey, selectionKey, callback);
 													return;
 												}
@@ -163,7 +160,7 @@ public final class TcpSocket implements Connecter {
 														channel.write(toWrite.buffer);
 														toWriteLength -= before - toWrite.buffer.remaining();
 													} catch (IOException e) {
-														LOGGER.trace("Connection failed", e);
+														LOGGER.trace("Write failed", e);
 														disconnect(channel, inboundKey, selectionKey, callback);
 														return;
 													}
@@ -193,7 +190,7 @@ public final class TcpSocket implements Connecter {
 		
 									callback.connected(null);
 									
-								} catch (final IOException e) {
+								} catch (IOException e) {
 									LOGGER.trace("Connection failed", e);
 									disconnect(channel, inboundKey, null, callback);
 									callback.failed(e);

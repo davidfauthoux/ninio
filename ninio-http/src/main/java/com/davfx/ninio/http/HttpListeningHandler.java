@@ -9,6 +9,7 @@ public interface HttpListeningHandler {
 	
 	HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler);
 
+	void connected();
 	void closed();
 	void failed(IOException ioe);
 }
