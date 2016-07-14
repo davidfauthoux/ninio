@@ -23,9 +23,9 @@ import com.google.common.base.Splitter;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
 
-public final class TcpdumpSocket implements Connector {
+public final class TcpdumpSocket implements Connecter {
 	
-	public static interface Builder extends ConfigurableNinioBuilder<Connector, Builder> {
+	public static interface Builder extends NinioBuilder<TcpdumpSocket> {
 		Builder on(String interfaceId);
 		Builder rule(String rule);
 		Builder bind(Address bindAddress);
@@ -43,40 +43,6 @@ public final class TcpdumpSocket implements Connector {
 
 			private Address bindAddress = null;
 
-			private Connecting connecting = null;
-			private Closing closing = null;
-			private Failing failing = null;
-			private Receiver receiver = null;
-			
-			@Override
-			public Builder closing(Closing closing) {
-				this.closing = closing;
-				return this;
-			}
-		
-			@Override
-			public Builder connecting(Connecting connecting) {
-				this.connecting = connecting;
-				return this;
-			}
-			
-			@Override
-			public Builder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public Builder receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
-			@Override
-			public Builder buffering(Buffering buffering) {
-				return this;
-			}
-			
 			@Override
 			public Builder on(String interfaceId) {
 				this.interfaceId = interfaceId;
@@ -95,11 +61,11 @@ public final class TcpdumpSocket implements Connector {
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
+			public TcpdumpSocket create(Queue queue) {
 				if (interfaceId == null) {
 					throw new NullPointerException("interfaceId");
 				}
-				return new TcpdumpSocket(interfaceId, rule, bindAddress, connecting, failing, closing, receiver);
+				return new TcpdumpSocket(interfaceId, rule, bindAddress);
 			}
 		};
 	}
@@ -127,52 +93,56 @@ public final class TcpdumpSocket implements Connector {
 		new ClassThreadFactory(TcpdumpSocket.class, name).newThread(runnable).start();
 	}
 	
-	private DatagramSocket socket = null;
-	private Process process = null;
+	private final String interfaceId;
+	private final String rule;
+	private final Address bindAddress;
 	
-	private TcpdumpSocket(String interfaceId, String rule, Address bindAddress, final Connecting connecting, final Failing failing, final Closing closing, final Receiver receiver) { //, final boolean promiscuous) {
-		DatagramSocket s;
+	private TcpdumpSocket(String interfaceId, String rule, Address bindAddress) { //, final boolean promiscuous) {
+		this.interfaceId = interfaceId;
+		this.rule = rule;
+		this.bindAddress = bindAddress;
+	}
+	
+	@Override
+	public Connecting connect(final Callback callback) {
+		final DatagramSocket socket;
 		try {
 			if (bindAddress == null) {
-				s = new DatagramSocket();
+				socket = new DatagramSocket();
 			} else {
 				InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 				if (a.isUnresolved()) {
 					throw new IOException("Unresolved address: " + bindAddress);
 				}
-				s = new DatagramSocket(a);
+				socket = new DatagramSocket(a);
 			}
 			try {
-				s.setReceiveBufferSize(READ_BUFFER_SIZE);
-				s.setSendBufferSize(WRITE_BUFFER_SIZE);
-				LOGGER.debug("Datagram socket created (bound to {}, port {}, receive buffer size = {}, send buffer size = {})", bindAddress, s.getLocalPort(), s.getReceiveBufferSize(), s.getSendBufferSize());
+				socket.setReceiveBufferSize(READ_BUFFER_SIZE);
+				socket.setSendBufferSize(WRITE_BUFFER_SIZE);
+				LOGGER.debug("Datagram socket created (bound to {}, port {}, receive buffer size = {}, send buffer size = {})", bindAddress, socket.getLocalPort(), socket.getReceiveBufferSize(), socket.getSendBufferSize());
 			} catch (IOException se) {
-				s.close();
+				socket.close();
 				throw se;
 			}
 		} catch (IOException ae) {
-			if (failing != null) {
-				failing.failed(new IOException("Could not create send socket", ae));
-			}
-			s = null;
+			callback.failed(new IOException("Could not create send socket", ae));
+			return new Connecting() {
+				@Override
+				public void close() {
+				}
+				@Override
+				public void send(Address address, ByteBuffer buffer, Callback callback) {
+					callback.failed(new IOException("Failed to be created"));
+				}
+			};
 		}
 		
-		if (s == null) {
-			socket = null;
-			process = null;
-			return;
-		}
-		
-		socket = s;
-
 		//
 		
 		Runnable connected = new Runnable() {
 			@Override
 			public void run() {
-				if (connecting != null) {
-					connecting.connected(TcpdumpSocket.this, null);
-				}
+				callback.connected(null);
 			}
 		};
 		
@@ -209,27 +179,25 @@ public final class TcpdumpSocket implements Connector {
 		
 		ProcessBuilder pb = new ProcessBuilder(toExec);
 		pb.directory(dir);
-		Process p;
+		final Process process;
 		try {
 			LOGGER.info("In: {}, executing: {}", dir.getCanonicalPath(), Joiner.on(' ').join(toExec));
-			p = pb.start();
+			process = pb.start();
 		} catch (IOException e) {
-			if (failing != null) {
-				failing.failed(new IOException("Could not run tcpdump", e));
-			}
-			p = null;
-		}
-		
-		if (p == null) {
 			socket.close();
-			socket = null;
-			process = null;
-			return;
+			callback.failed(new IOException("Could not create process", e));
+			return new Connecting() {
+				@Override
+				public void close() {
+				}
+				@Override
+				public void send(Address address, ByteBuffer buffer, Callback callback) {
+					callback.failed(new IOException("Failed to be created"));
+				}
+			};
 		}
 		
-		process = p;
-
-		final InputStream error = p.getErrorStream();
+		final InputStream error = process.getErrorStream();
 		execute("err", new Runnable() {
 			@Override
 			public void run() {
@@ -252,7 +220,7 @@ public final class TcpdumpSocket implements Connector {
 			}
 		});
 		
-		final InputStream input = p.getInputStream();
+		final InputStream input = process.getInputStream();
 		execute("in", new Runnable() {
 			@Override
 			public void run() {
@@ -261,9 +229,7 @@ public final class TcpdumpSocket implements Connector {
 						tcpdumpReader.read(input, new TcpdumpReader.Handler() {
 							@Override
 							public void handle(double timestamp, Address sourceAddress, Address destinationAddress, ByteBuffer buffer) {
-								if (receiver != null) {
-									receiver.received(TcpdumpSocket.this, sourceAddress, buffer);
-								}
+								callback.received(sourceAddress, buffer);
 							}
 						});
 					} finally {
@@ -297,41 +263,31 @@ public final class TcpdumpSocket implements Connector {
 				process.destroy();
 				
 				if (code != 0) {
-					if (failing != null) {
-						failing.failed(new IOException("Non zero return code from tcpdump: " + code));
-					}
+					callback.failed(new IOException("Non zero return code from tcpdump: " + code));
 				} else {
-					if (closing != null) {
-						closing.closed();
-					}
+					callback.closed();
 				}
 			}
 		});
-	}
-	
-	@Override
-	public void close() {
-		if (process != null) {
-			process.destroy();
-		}
-		if (socket != null) {
-			socket.close();
-		}
-	}
-	
-	@Override
-	public Connector send(Address address, ByteBuffer buffer) {
-		if (socket == null) {
-			return this;
-		}
 		
-		LOGGER.trace("Sending datagram to: {}", address);
-		try {
-			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByName(address.host), address.port);
-			socket.send(packet);
-		} catch (IOException ioe) {
-			LOGGER.trace("Error while sending datagram to: {}", address, ioe);
-		}
-		return this;
+		return new Connecter.Connecting() {
+			@Override
+			public void send(Address address, ByteBuffer buffer, Callback callback) {
+				LOGGER.trace("Sending datagram to: {}", address);
+				try {
+					DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByName(address.host), address.port);
+					socket.send(packet);
+					callback.sent();
+				} catch (IOException ioe) {
+					callback.failed(ioe);
+				}
+			}
+			
+			@Override
+			public void close() {
+				process.destroy();
+				socket.close();
+			}
+		};
 	}
 }

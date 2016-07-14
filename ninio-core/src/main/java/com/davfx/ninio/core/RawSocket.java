@@ -12,11 +12,11 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.util.SerialExecutor;
 
-public final class RawSocket implements Connector {
+public final class RawSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RawSocket.class);
 
-	public static interface Builder extends ConfigurableNinioBuilder<Connector, Builder> {
+	public static interface Builder extends NinioBuilder<RawSocket> {
 		Builder family(ProtocolFamily family);
 		Builder protocol(int protocol);
 		Builder bind(Address bindAddress);
@@ -28,11 +28,6 @@ public final class RawSocket implements Connector {
 			private int protocol = 0;
 			
 			private Address bindAddress = null;
-
-			private Connecting connecting = null;
-			private Closing closing = null;
-			private Failing failing = null;
-			private Receiver receiver = null;
 			
 			@Override
 			public Builder family(ProtocolFamily family) {
@@ -46,137 +41,118 @@ public final class RawSocket implements Connector {
 			}
 		
 			@Override
-			public Builder closing(Closing closing) {
-				this.closing = closing;
-				return this;
-			}
-		
-			@Override
-			public Builder connecting(Connecting connecting) {
-				this.connecting = connecting;
-				return this;
-			}
-			
-			@Override
-			public Builder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public Builder receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
-			@Override
-			public Builder buffering(Buffering buffering) {
-				return this;
-			}
-
-			@Override
 			public Builder bind(Address bindAddress) {
 				this.bindAddress = bindAddress;
 				return this;
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
-				return new RawSocket(family, protocol, bindAddress, connecting, closing, failing, receiver);
+			public RawSocket create(Queue queue) {
+				return new RawSocket(family, protocol, bindAddress);
 			}
 		};
 	}
 	
-	private final NativeRawSocket socket;
+	private final ProtocolFamily family;
+	private final int protocol;
+	private final Address bindAddress;
+	
 	private final Executor loop = new SerialExecutor(RawSocket.class);
 
-	private RawSocket(final ProtocolFamily family, int protocol, Address bindAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver) {
-		NativeRawSocket s;
+	private RawSocket(ProtocolFamily family, int protocol, Address bindAddress) {
+		this.family = family;
+		this.protocol = protocol;
+		this.bindAddress = bindAddress;
+	}
+	
+	@Override
+	public Connecting connect(final Callback callback) {
+		final NativeRawSocket socket;
 		try {
-			s = new NativeRawSocket((family == StandardProtocolFamily.INET) ? NativeRawSocket.PF_INET : NativeRawSocket.PF_INET6, protocol);
-		} catch (Exception e) {
-			if (failing != null) {
-				failing.failed(new IOException("Error", e));
-			}
-			s = null;
-		}
-		
-		socket = s;
-
-		if (socket != null) {
-		
-			if (bindAddress != null) {
-				try {
-					InetAddress a = InetAddress.getByName(bindAddress.host); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-					socket.bind(a);
-				} catch (Exception e) {
-					try {
-						socket.close();
-					} catch (Exception ee) {
-					}
-					if (failing != null) {
-						failing.failed( new IOException("Could not bind to: " + bindAddress, e));
-					}
-				}
-			}
-			
-			loop.execute(new Runnable() {
+			socket = new NativeRawSocket((family == StandardProtocolFamily.INET) ? NativeRawSocket.PF_INET : NativeRawSocket.PF_INET6, protocol);
+		} catch (Exception ee) {
+			callback.failed(new IOException("Error", ee));
+			return new Connecting() {
 				@Override
-				public void run() {
-					if (connecting != null) {
-						connecting.connected(RawSocket.this, null);
+				public void close() {
+				}
+				@Override
+				public void send(Address address, ByteBuffer buffer, Callback callback) {
+					callback.failed(new IOException("Failed to be created"));
+				}
+			};
+		}
+		
+		if (bindAddress != null) {
+			try {
+				InetAddress a = InetAddress.getByName(bindAddress.host); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
+				socket.bind(a);
+			} catch (Exception e) {
+				try {
+					socket.close();
+				} catch (Exception ee) {
+				}
+				callback.failed( new IOException("Could not bind to: " + bindAddress, e));
+				return new Connecting() {
+					@Override
+					public void close() {
 					}
-					
-					while (true) {
-						byte[] recvData = new byte[84];
-						byte[] srcAddress = new byte[(family == StandardProtocolFamily.INET) ? 4 : 16];
-						try {
-							int r = socket.read(recvData, 0, recvData.length, srcAddress);
-							String host = InetAddress.getByAddress(srcAddress).getHostAddress();
-							LOGGER.debug("Received raw packet: {} bytes from: {}", r, host);
-							if (receiver != null) {
-								ByteBuffer b = ByteBuffer.wrap(recvData, 0, r);
-								if (family == StandardProtocolFamily.INET) {
-									int headerLength = (b.get() & 0x0F) * 4;
-									b.position(headerLength);
-								}
-								receiver.received(RawSocket.this, new Address(host, 0), b);
-							}
-						} catch (Exception e) {
-							LOGGER.trace("Error, probably closed", e);
-							break;
+					@Override
+					public void send(Address address, ByteBuffer buffer, Callback callback) {
+						callback.failed(new IOException("Failed to bind"));
+					}
+				};
+			}
+		}
+		
+		loop.execute(new Runnable() {
+			@Override
+			public void run() {
+				callback.connected(null);
+				
+				while (true) {
+					byte[] recvData = new byte[84];
+					byte[] srcAddress = new byte[(family == StandardProtocolFamily.INET) ? 4 : 16];
+					try {
+						int r = socket.read(recvData, 0, recvData.length, srcAddress);
+						String host = InetAddress.getByAddress(srcAddress).getHostAddress();
+						LOGGER.debug("Received raw packet: {} bytes from: {}", r, host);
+
+						ByteBuffer b = ByteBuffer.wrap(recvData, 0, r);
+						if (family == StandardProtocolFamily.INET) {
+							int headerLength = (b.get() & 0x0F) * 4;
+							b.position(headerLength);
 						}
-					}
-					
-					if (closing != null) {
-						closing.closed();
+						callback.received(new Address(host, 0), b);
+					} catch (Exception e) {
+						LOGGER.trace("Error, probably closed", e);
+						break;
 					}
 				}
-			});
+				
+				callback.closed();
+			}
+		});
+		
+		return new Connecting() {
+			@Override
+			public void send(Address address, ByteBuffer buffer, Callback callback) {
+				try {
+					socket.write(InetAddress.getByName(address.host), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+					callback.sent();
+				} catch (Exception e) {
+					callback.failed(new IOException("Could not write", e));
+				}
+			}
 			
-		}
-	}
-	
-	@Override
-	public Connector send(Address address, ByteBuffer buffer) {
-		if (socket != null) {
-			try {
-				socket.write(InetAddress.getByName(address.host), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
-			} catch (Exception e) {
-				LOGGER.error("Error", e);
+			@Override
+			public void close() {
+				try {
+					socket.close();
+				} catch (IOException e) {
+					LOGGER.error("Could not close", e);
+				}
 			}
-		}
-		return this;
-	}
-	
-	@Override
-	public void close() {
-		if (socket != null) {
-			try {
-				socket.close();
-			} catch (IOException e) {
-				LOGGER.trace("Error", e);
-			}
-		}
+		};
 	}
 }
