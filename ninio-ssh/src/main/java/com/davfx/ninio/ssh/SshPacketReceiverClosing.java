@@ -1,30 +1,27 @@
 package com.davfx.ninio.ssh;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.Connecter;
 import com.google.common.primitives.Ints;
 
-final class SshPacketReceiverClosing implements Receiver, Closing {
+final class SshPacketReceiverClosing implements Connecter.Callback {
 	
 	private ByteBuffer buffer = null;
 	private ByteBuffer paddingBuffer = null;
 	private ByteBuffer lengthBuffer = ByteBuffer.allocate(Ints.BYTES);
 	private int state = 0;
 	private int length = -1;
-	private final Receiver wrappee;
-	private final Closing closing;
+	private final Connecter.Callback wrappee;
 	
-	public SshPacketReceiverClosing(Receiver wrappee, Closing closing) {
+	public SshPacketReceiverClosing(Connecter.Callback wrappee) {
 		this.wrappee = wrappee;
-		this.closing = closing;
 	}
 
 	@Override
-	public void received(Connector conn, Address address, ByteBuffer b) {
+	public void received(Address address, ByteBuffer b) {
 		while (b.hasRemaining()) {
 			if (state == 0) {
 				ByteBufferUtils.transfer(b, lengthBuffer);
@@ -61,15 +58,24 @@ final class SshPacketReceiverClosing implements Receiver, Closing {
 
 					ByteBuffer bb = buffer;
 					buffer = null;
-					wrappee.received(conn, address, bb);
+					wrappee.received(address, bb);
 				}
 			}
 		}
 	}
 	
-	
 	@Override
 	public void closed() {
-		closing.closed();
+		wrappee.closed();
+	}
+	
+	@Override
+	public void failed(IOException ioe) {
+		wrappee.failed(ioe);
+	}
+	
+	@Override
+	public void connected(Address address) {
+		wrappee.connected(address);
 	}
 }

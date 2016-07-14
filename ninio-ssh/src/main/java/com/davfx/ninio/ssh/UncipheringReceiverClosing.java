@@ -1,5 +1,6 @@
 package com.davfx.ninio.ssh;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -14,16 +15,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.Connecter;
 import com.google.common.primitives.Ints;
 
-final class UncipheringReceiverClosing implements Receiver, Closing {
+final class UncipheringReceiverClosing implements Connecter.Callback {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UncipheringReceiverClosing.class);
 
-	private final Receiver wrappee;
-	private final Closing closing;
+	private final Connecter.Callback wrappee;
 	private Cipher cipher = null;
 	private Mac mac = null;
 	private int sequence = 0;
@@ -38,9 +36,8 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 	private ByteBuffer macBuffer = null;
 	private int state = 0;
 
-	public UncipheringReceiverClosing(Receiver wrappee, Closing closing) {
+	public UncipheringReceiverClosing(Connecter.Callback wrappee) {
 		this.wrappee = wrappee;
-		this.closing = closing;
 	}
 
     /*
@@ -94,7 +91,7 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Connector conn, Address address, ByteBuffer b) {
+	public void received(Address address, ByteBuffer b) {
 		if ((cipher == null) || (mac == null)) {
 			int p = b.position();
 			while (b.hasRemaining()) {
@@ -114,7 +111,7 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 				}
 			}
 			b.position(p);
-			wrappee.received(conn, address, b);
+			wrappee.received(address, b);
 			return;
 		}
 
@@ -199,8 +196,8 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 						//%%% connector.close();
 						//%%% closing.closed();
 					} else {
-						wrappee.received(conn, address, fbb);
-						wrappee.received(conn, address, rbb);
+						wrappee.received(address, fbb);
+						wrappee.received(address, rbb);
 					}
 				}
 			}
@@ -209,6 +206,16 @@ final class UncipheringReceiverClosing implements Receiver, Closing {
 	
 	@Override
 	public void closed() {
-		closing.closed();
+		wrappee.closed();
+	}
+	
+	@Override
+	public void failed(IOException ioe) {
+		wrappee.failed(ioe);
+	}
+	
+	@Override
+	public void connected(Address address) {
+		wrappee.connected(address);
 	}
 }

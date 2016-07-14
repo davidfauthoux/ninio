@@ -11,17 +11,17 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connecter;
 import com.google.common.primitives.Ints;
 
-final class CipheringConnector implements Connector {
+final class CipheringConnector implements Connecter.Connecting {
 
-	private final Connector wrappee;
+	private final Connecter.Connecting wrappee;
 	private Cipher cipher = null;
 	private Mac mac = null;
 	private int sequence = 0;
 
-	public CipheringConnector(Connector wrappee) {
+	public CipheringConnector(Connecter.Connecting wrappee) {
 		this.wrappee = wrappee;
 	}
 
@@ -78,11 +78,11 @@ final class CipheringConnector implements Connector {
 	}
 
 	@Override
-	public Connector send(Address address, ByteBuffer buffer) {
+	public void send(Address address, ByteBuffer buffer, Callback callback) {
 		if ((cipher == null) || (mac == null)) {
 			sequence++;
-			wrappee.send(address, buffer);
-			return this;
+			wrappee.send(address, buffer, callback);
+			return;
 		}
 
 		ByteBuffer sequenceBuffer = ByteBuffer.allocate(Ints.BYTES);
@@ -114,7 +114,6 @@ final class CipheringConnector implements Connector {
 		b.put(calculatedMac);
 		b.flip();
 
-		wrappee.send(address, b);
-		return this;
+		wrappee.send(address, b, callback);
 	}
 }

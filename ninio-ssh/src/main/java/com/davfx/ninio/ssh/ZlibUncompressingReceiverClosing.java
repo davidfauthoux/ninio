@@ -1,5 +1,6 @@
 package com.davfx.ninio.ssh;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.zip.DataFormatException;
 import java.util.zip.Inflater;
@@ -8,13 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
+final class ZlibUncompressingReceiverClosing implements Connecter.Callback {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ZlibUncompressingReceiverClosing.class);
 	
@@ -23,12 +22,10 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 
 	private final Inflater inflater = new Inflater();
 	private boolean activated = false;
-	private final Receiver wrappee;
-	private final Closing closing;
+	private final Connecter.Callback wrappee;
 
-	public ZlibUncompressingReceiverClosing(Receiver wrappee, Closing closing) {
+	public ZlibUncompressingReceiverClosing(Connecter.Callback wrappee) {
 		this.wrappee = wrappee;
-		this.closing = closing;
 	}
 
 	public void init() {
@@ -36,9 +33,9 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 	}
 
 	@Override
-	public void received(Connector conn, Address address, ByteBuffer deflated) {
+	public void received(Address address, ByteBuffer deflated) {
 		if (!activated) {
-			wrappee.received(conn, address, deflated);
+			wrappee.received(address, deflated);
 			return;
 		}
 
@@ -61,13 +58,23 @@ final class ZlibUncompressingReceiverClosing implements Receiver, Closing {
 					return;
 				}
 				inflated.flip();
-				wrappee.received(conn, address, inflated);
+				wrappee.received(address, inflated);
 			}
 		}
 	}
 	
 	@Override
 	public void closed() {
-		closing.closed();
+		wrappee.closed();
+	}
+	
+	@Override
+	public void failed(IOException ioe) {
+		wrappee.failed(ioe);
+	}
+	
+	@Override
+	public void connected(Address address) {
+		wrappee.connected(address);
 	}
 }

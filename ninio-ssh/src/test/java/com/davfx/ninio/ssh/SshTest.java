@@ -9,15 +9,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.Receiver;
-import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.telnet.TelnetSpecification;
+import com.davfx.ninio.util.Mutable;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 
@@ -44,34 +41,37 @@ public class SshTest {
 		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));
 
 		try (Ninio ninio = Ninio.create()) {
-			try (Connector c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)).receiving(new Receiver() {
+			final Mutable<Connecter.Connecting> connecting = new Mutable<>();
+			try (Connecter.Connecting c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT))).connect(new Connecter.Callback() {
 				private int n = 0;
+				
 				@Override
-				public void received(Connector conn, Address address, ByteBuffer buffer) {
+				public void received(Address address, ByteBuffer buffer) {
 					LOGGER.debug("Received: {}", com.davfx.ninio.core.ByteBufferUtils.toString(buffer));
 					switch (n) {
 					case 0:
-						conn.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)));
+						connecting.value.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
 						break;
 					}
 					n++;
 				}
-			}).failing(new Failing() {
+				
 				@Override
-				public void failed(IOException e) {
-					LOGGER.error("Failed", e);
+				public void failed(IOException ioe) {
+					LOGGER.error("Failed", ioe);
 				}
-			}).closing(new Closing() {
+				
+				@Override
+				public void connected(Address address) {
+					LOGGER.debug("Connected");
+				}
+				
 				@Override
 				public void closed() {
 					LOGGER.debug("Closed");
 				}
-			}).connecting(new Connecting() {
-				@Override
-				public void connected(Connector connector, Address address) {
-					LOGGER.debug("Connected");
-				}
-			}).with(TcpSocket.builder()))) {
+			})) {
+				connecting.value = c;
 				Thread.sleep(60000);
 			}
 		}

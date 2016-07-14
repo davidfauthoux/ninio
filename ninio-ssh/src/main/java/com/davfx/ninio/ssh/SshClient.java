@@ -16,34 +16,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.DefaultByteBufferAllocator;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
 
-public final class SshClient implements Connector {
+public final class SshClient implements Connecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SshClient.class);
 
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
 
 	public static interface Builder extends TcpSocket.Builder {
 		Builder with(TcpSocket.Builder builder);
-		Builder failing(Failing failing);
-		Builder closing(Closing closing);
-		Builder connecting(Connecting connecting);
-		Builder receiving(Receiver receiver);
 		Builder with(Executor executor);
-		Builder to(Address connectAddress);
-		Builder with(ByteBufferAllocator byteBufferAllocator);
-		Builder bind(Address bindAddress);
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);
 		Builder exec(String exec);
@@ -89,11 +78,6 @@ public final class SshClient implements Connector {
 
 	public static Builder builder() {
 		return new Builder() {
-			private Receiver receiver = null;
-			private Closing closing = null;
-			private Failing failing = null;
-			private Buffering buffering = null;
-			private Connecting connecting = null;
 			private TcpSocket.Builder builder = TcpSocket.builder();
 			
 			private String login = null;
@@ -141,36 +125,6 @@ public final class SshClient implements Connector {
 			}
 			
 			@Override
-			public Builder closing(Closing closing) {
-				this.closing = closing;
-				return this;
-			}
-		
-			@Override
-			public Builder connecting(Connecting connecting) {
-				this.connecting = connecting;
-				return this;
-			}
-			
-			@Override
-			public Builder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public Builder buffering(Buffering buffering) {
-				this.buffering = buffering;
-				return this;
-			}
-			
-			@Override
-			public Builder receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-
-			@Override
 			public Builder with(Executor executor) {
 				this.executor = executor;
 				return this;
@@ -189,7 +143,7 @@ public final class SshClient implements Connector {
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
+			public Connecter create(Queue queue) {
 				if (login == null) {
 					throw new NullPointerException("login");
 				}
@@ -200,12 +154,17 @@ public final class SshClient implements Connector {
 					throw new NullPointerException("executor");
 				}
 				
-				return new SshClient(queue, builder, byteBufferAllocator, bindAddress, connectAddress, login, password, publicKey, exec, receiver, closing, failing, buffering, connecting, executor);
+				return new SshClient(builder.bind(bindAddress).to(connectAddress).with(byteBufferAllocator).create(queue), login, password, publicKey, exec, executor);
 			}
 		};
 	}
 	
-	private final Executor e;
+	private final Connecter connecter;
+	private final String login;
+	private final String password;
+	private final SshPublicKey publicKey;
+	private final String exec;
+	private final Executor executor;
 	
 	private String serverHeader;
 	private byte[] clientCookie;
@@ -218,14 +177,27 @@ public final class SshClient implements Connector {
 	private CipheringConnector cipheringCloseableByteBufferHandler;
 	private ZlibCompressingConnector compressingCloseableByteBufferHandler;
 
-	private Connector rawConnector;
+	private Connecter.Connecting connecting;
 	
-	private SshClient(final Queue queue, final TcpSocket.Builder builder, final ByteBufferAllocator byteBufferAllocator, final Address bindAddress, final Address connectAddress, final String finalLogin, final String finalPassword, final SshPublicKey finalPublicKey, final String finalExec, final Receiver r, final Closing c, final Failing clientFailing, final Buffering clientBuffering, final Connecting clientConnecting, final Executor e) {
-		this.e = e;
-		
-		e.execute(new Runnable() {
+	private SshClient(Connecter connecter, String finalLogin, String finalPassword, SshPublicKey finalPublicKey, String finalExec, Executor e) {
+		this.connecter = connecter;
+		this.login = finalLogin;
+		this.password = finalPassword;
+		this.publicKey = finalPublicKey;
+		this.exec = finalExec;
+		this.executor = e;
+	}
+	
+	//TODO proteger l'appel multiple au callback
+	//TODO abruptlyClose on error
+	
+	@Override
+	public Connecter.Connecting connect(final Connecter.Callback callback) {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				final Connecter.Connecting.Callback sendCallback = new NopConnecterConnectingCallback(); //TODO fail
+				
 				clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
 				clientExchange.add("ssh-rsa");
 				clientExchange.add("aes128-ctr,aes128-cbc,3des-ctr,3des-cbc,blowfish-cbc");
@@ -239,25 +211,7 @@ public final class SshClient implements Connector {
 		
 				final SecureRandom random = new SecureRandom();
 		
-				final Receiver rawReceiver = new Receiver() {
-					@Override
-					public void received(Connector conn, Address address, ByteBuffer buffer) {
-						if (r != null) {
-							r.received(conn, address, buffer);
-						}
-					}
-				};
-				
-				final Closing rawClosing = new Closing() {
-					@Override
-					public void closed() {
-						if (c != null) {
-							c.closed();
-						}
-					}
-				};
-				
-				Receiver sshReceiver = new Receiver() {
+				Connecter.Callback sshReceiver = new Connecter.Callback() {
 					private final DiffieHellmanGroupKeyExchange keyExchange = new DiffieHellmanGroupKeyExchange();
 					private boolean groupKeyExchange;
 					private byte[] K;
@@ -272,21 +226,21 @@ public final class SshClient implements Connector {
 					private long lengthToRead = 0L;
 					
 					@Override
-					public void received(Connector conn, final Address address, final ByteBuffer buffer) {
-						e.execute(new Runnable() {
+					public void received(final Address address, final ByteBuffer buffer) {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								while (lengthToRead > 0L) {
 									int l = buffer.remaining();
 									if (lengthToRead >= l) {
 										lengthToRead -= l;
-										rawReceiver.received(SshClient.this, address, buffer);
+										callback.received(address, buffer);
 										return;
 									}
 									ByteBuffer b = buffer.duplicate();
 									b.limit(b.position() + ((int) lengthToRead));
 									lengthToRead = 0L;
-									rawReceiver.received(SshClient.this, address, b);
+									callback.received(address, b);
 									buffer.position(buffer.position() + l);
 								}
 								
@@ -340,13 +294,13 @@ public final class SshClient implements Connector {
 											b.writeInt(DiffieHellmanGroupKeyExchange.GROUP_EXCHANGE_MIN);
 											b.writeInt(DiffieHellmanGroupKeyExchange.GROUP_EXCHANGE_PREFERRED);
 											b.writeInt(DiffieHellmanGroupKeyExchange.GROUP_EXCHANGE_MAX);
-											rawConnector.send(null, b.finish());
+											connecting.send(null, b.finish(), sendCallback);
 										} else {
 											keyExchange.init(p, g);
 		
 											SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEXDH_INIT);
 											b.writeMpInt(keyExchange.getE());
-											rawConnector.send(null, b.finish());
+											connecting.send(null, b.finish(), sendCallback);
 										}
 		
 									} else if (groupKeyExchange && (command == SSH_MSG_KEX_DH_GEX_GROUP)) {
@@ -356,7 +310,7 @@ public final class SshClient implements Connector {
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_KEX_DH_GEX_INIT);
 										b.writeMpInt(keyExchange.getE());
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 		
 									} else if ((groupKeyExchange && (command == SSH_MSG_KEX_DH_GEX_REPLY)) || (command == SSH_MSG_KEXDH_REPLY)) {
 										byte[] K_S = packet.readBlob();
@@ -441,7 +395,7 @@ public final class SshClient implements Connector {
 										sessionId = H;
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_NEWKEYS);
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 		
 									} else if (command == SSH_MSG_NEWKEYS) {
 										if (sessionId == null) {
@@ -461,13 +415,13 @@ public final class SshClient implements Connector {
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_SERVICE_REQUEST);
 										b.writeString("ssh-userauth");
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 									} else if (command == SSH_MSG_SERVICE_ACCEPT) {
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_USERAUTH_REQUEST);
-										b.writeString(finalLogin);
+										b.writeString(login);
 										b.writeString("ssh-connection");
 										b.writeString("none");
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 									} else if (command == SSH_MSG_USERAUTH_FAILURE) {
 										List<String> methods = Splitter.on(',').splitToList(packet.readString());
 										int partialSuccess = packet.readByte();
@@ -479,55 +433,55 @@ public final class SshClient implements Connector {
 										}
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_USERAUTH_REQUEST);
-										b.writeString(finalLogin);
+										b.writeString(login);
 										b.writeString("ssh-connection");
-										if (finalPassword != null) {
+										if (password != null) {
 											if (!methods.contains("password")) {
 												throw new IOException("Paswword authentication method not accepted by server, methods are: " + methods);
 											}
 											
 											b.writeString("password");
 											b.writeByte(0);
-											b.writeString(finalPassword);
-										} else if (finalPublicKey != null) {
+											b.writeString(password);
+										} else if (publicKey != null) {
 											if (!methods.contains("publickey")) {
 												throw new IOException("Public key authentication method not accepted by server, methods are: " + methods);
 											}
 											
 											b.writeString("publickey");
 											b.writeByte(0);
-											b.writeString(finalPublicKey.getAlgorithm());
-											b.writeBlob(finalPublicKey.getBlob());
+											b.writeString(publicKey.getAlgorithm());
+											b.writeBlob(publicKey.getBlob());
 										} else {
 											throw new IOException("No password/public key provided");
 										}
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 										passwordWritten = true;
 									} else if (command == SSH_MSG_USERAUTH_PK_OK) {
-										String alg = finalPublicKey.getAlgorithm();
+										String alg = publicKey.getAlgorithm();
 		
 										SshPacketBuilder toSign = new SshPacketBuilder();
 										toSign.writeBlob(sessionId);
 										toSign.writeByte(SSH_MSG_USERAUTH_REQUEST);
-										toSign.writeString(finalLogin);
+										toSign.writeString(login);
 										toSign.writeString("ssh-connection");
 										toSign.writeString("publickey");
 										toSign.writeByte(1);
 										toSign.writeString(alg);
-										toSign.writeBlob(finalPublicKey.getBlob());
+										toSign.writeBlob(publicKey.getBlob());
 		
-										ByteBuffer signature = finalPublicKey.sign(toSign.finish());
+										ByteBuffer signature = publicKey.sign(toSign.finish());
 		
 										SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_USERAUTH_REQUEST);
-										b.writeString(finalLogin);
+										b.writeString(login);
 										b.writeString("ssh-connection");
 										b.writeString("publickey");
 										b.writeByte(1);
 										b.writeString(alg);
-										b.writeBlob(finalPublicKey.getBlob());
+										b.writeBlob(publicKey.getBlob());
 										b.writeBlob(signature);
 										
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 										passwordWritten = true;
 									} else if (command == SSH_MSG_USERAUTH_SUCCESS) {
 										int channelId = 0;
@@ -548,9 +502,9 @@ public final class SshClient implements Connector {
 										b.writeInt(channelId);
 										b.writeInt(windowSize);
 										b.writeInt(maxPacketSize);
-										rawConnector.send(null, b.finish());
+										connecting.send(null, b.finish(), sendCallback);
 									} else if (command == SSH_MSG_CHANNEL_OPEN_CONFIRMATION) { // Without this command, the shell would have no prompt
-										if (finalExec == null) {
+										if (exec == null) {
 											int channelId = 0;
 											SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_REQUEST);
 											b.writeInt(channelId);
@@ -563,7 +517,7 @@ public final class SshClient implements Connector {
 											b.writeInt(480);
 											byte[] terminalModes = {};
 											b.writeBlob(terminalModes);
-											rawConnector.send(null, b.finish());
+											connecting.send(null, b.finish(), sendCallback);
 										} else {
 											if (!channelOpen) {
 												channelOpen = true;
@@ -572,10 +526,10 @@ public final class SshClient implements Connector {
 												b.writeInt(channelId);
 												b.writeString("exec");
 												b.writeByte(1); // With reply
-												b.writeString(finalExec);
-												rawConnector.send(null, b.finish());
+												b.writeString(exec);
+												connecting.send(null, b.finish(), sendCallback);
 											} else {
-												clientConnecting.connected(SshClient.this, connectAddress);
+												callback.connected(null);
 											}
 										}
 									} else if (command == SSH_MSG_CHANNEL_SUCCESS) {
@@ -586,9 +540,9 @@ public final class SshClient implements Connector {
 											b.writeInt(channelId);
 											b.writeString("shell");
 											b.writeByte(1); // With reply
-											rawConnector.send(null, b.finish());
+											connecting.send(null, b.finish(), sendCallback);
 										} else {
-											clientConnecting.connected(SshClient.this, connectAddress);
+											callback.connected(null);
 										}
 									} else if (command == SSH_MSG_CHANNEL_WINDOW_ADJUST) {
 										// Ignored
@@ -600,10 +554,10 @@ public final class SshClient implements Connector {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
-											rawReceiver.received(SshClient.this, null, b);
+											callback.received(null, b);
 										} else {
 											lengthToRead -= buffer.remaining();
-											rawReceiver.received(SshClient.this, null, buffer);
+											callback.received(null, buffer);
 										}
 									} else if (command == SSH_MSG_CHANNEL_EXTENDED_DATA) {
 										packet.readInt(); // Channel ID
@@ -615,10 +569,10 @@ public final class SshClient implements Connector {
 											ByteBuffer b = buffer.duplicate();
 											b.limit(b.position() + ((int) lengthToRead));
 											lengthToRead = 0L;
-											rawReceiver.received(SshClient.this, null, b);
+											callback.received(null, b);
 										} else {
 											lengthToRead -= buffer.remaining();
-											rawReceiver.received(SshClient.this, null, buffer);
+											callback.received(null, buffer);
 										}
 									} else if (command == SSH_MSG_CHANNEL_REQUEST) {
 										packet.readInt();
@@ -630,8 +584,8 @@ public final class SshClient implements Connector {
 									} else if (command == SSH_MSG_CHANNEL_EOF) {
 										// Ignored
 									} else if (command == SSH_MSG_CHANNEL_CLOSE) {
-										rawConnector.close();
-										rawClosing.closed();
+										connecting.close();
+										callback.closed();
 									} else if (command == SSH_MSG_DISCONNECT) {
 										packet.readInt();
 										String message = packet.readString();
@@ -643,22 +597,34 @@ public final class SshClient implements Connector {
 									}
 								} catch (Exception eee) {
 									LOGGER.error("Fatal error", eee);
-									rawConnector.close();
-									clientFailing.failed(new IOException("Fatal error", eee));
+									connecting.close();
+									callback.failed(new IOException("Fatal error", eee));
 								}
 							}
 						});
 					}
+					
+					@Override
+					public void closed() {
+						callback.closed();
+					}
+					@Override
+					public void failed(IOException ioe) {
+						callback.failed(ioe);
+					}
+					@Override
+					public void connected(Address address) {
+					}
 				};
 		
-				uncompressingCloseableByteBufferHandler = new ZlibUncompressingReceiverClosing(sshReceiver, rawClosing);
-				SshPacketReceiverClosing sshPacketInputHandler = new SshPacketReceiverClosing(uncompressingCloseableByteBufferHandler, uncompressingCloseableByteBufferHandler);
-				uncipheringCloseableByteBufferHandler = new UncipheringReceiverClosing(sshPacketInputHandler, sshPacketInputHandler);
+				uncompressingCloseableByteBufferHandler = new ZlibUncompressingReceiverClosing(sshReceiver);
+				SshPacketReceiverClosing sshPacketInputHandler = new SshPacketReceiverClosing(uncompressingCloseableByteBufferHandler);
+				uncipheringCloseableByteBufferHandler = new UncipheringReceiverClosing(sshPacketInputHandler);
 				
 				ReadingSshHeaderReceiverClosing readingSshHeaderCloseableByteBufferHandler = new ReadingSshHeaderReceiverClosing(new ReadingSshHeaderReceiverClosing.Handler() {
 					@Override
 					public void handle(final String header) {
-						e.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								serverHeader = header;
@@ -675,60 +641,51 @@ public final class SshClient implements Connector {
 								}
 								b.writeByte(0);
 								b.writeInt(0);
-								rawConnector.send(null, b.finish());
+								connecting.send(null, b.finish(), sendCallback);
 							}
 						});
 					}
-				}, uncipheringCloseableByteBufferHandler, uncipheringCloseableByteBufferHandler);
+				}, uncipheringCloseableByteBufferHandler);
 		
 		
-				Connector builtConnector = builder
-						.failing(clientFailing)
-						.buffering(clientBuffering)
-						.connecting(null) // Cleared to be consistent with other handlers set
-						.closing(readingSshHeaderCloseableByteBufferHandler)
-						.receiving(readingSshHeaderCloseableByteBufferHandler)
-						.to(connectAddress)
-						.bind(bindAddress)
-						.with(byteBufferAllocator)
-						.create(queue);
-				
+				final Connecter.Connecting builtConnector = connecter.connect(readingSshHeaderCloseableByteBufferHandler);
+
 				cipheringCloseableByteBufferHandler = new CipheringConnector(builtConnector);
 				SshPacketConnector sshPacketOuputHandler = new SshPacketConnector(cipheringCloseableByteBufferHandler);
 				compressingCloseableByteBufferHandler = new ZlibCompressingConnector(sshPacketOuputHandler);
-				rawConnector = compressingCloseableByteBufferHandler;
+				connecting = compressingCloseableByteBufferHandler;
 				
-				builtConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)));
+				builtConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)), sendCallback);
 			}
 		});
+		
+		return new Connecter.Connecting() {
+			@Override
+			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						int channelId = 0;
+						SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
+						b.writeInt(channelId);
+						b.writeBlob(buffer);
+						connecting.send(address, b.finish(), callback);
+					}
+				});
+			}
+			
+			@Override
+			public void close() {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						connecting.close();
+					}
+				});
+			}
+		};
 	}
 
-	@Override
-	public void close() {
-		e.execute(new Runnable() {
-			@Override
-			public void run() {
-				rawConnector.close();
-			}
-		});
-		//%% ExecutorUtils.waitFor(e);
-	}
-
-	@Override
-	public Connector send(final Address address, final ByteBuffer buffer) {
-		e.execute(new Runnable() {
-			@Override
-			public void run() {
-				int channelId = 0;
-				SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
-				b.writeInt(channelId);
-				b.writeBlob(buffer);
-				rawConnector.send(address, b.finish());
-			}
-		});
-		return this;
-	}
-	
 	private static String getEncryptionAlgorithm(String alg) {
 		String s = Splitter.on('-').splitToList(alg).get(0);
 		if (s.equals("aes128")) {
