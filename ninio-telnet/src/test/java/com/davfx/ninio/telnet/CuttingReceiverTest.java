@@ -1,5 +1,6 @@
 package com.davfx.ninio.telnet;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -10,18 +11,18 @@ import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferUtils;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.InMemoryBuffers;
-import com.davfx.ninio.core.Receiver;
 
 public class CuttingReceiverTest {
 
 	private List<String> test(List<String> content, String prompt) {
 		final List<String> result = new LinkedList<>();
-		CuttingReceiver c = new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(prompt), new Receiver() {
+		CuttingReceiver c = new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(prompt), new Connecter.Callback() {
 			private InMemoryBuffers buffers = new InMemoryBuffers();
+			
 			@Override
-			public void received(Connector conn, Address address, ByteBuffer buffer) {
+			public void received(Address address, ByteBuffer buffer) {
 				if (buffer == null) {
 					result.add(buffers.toString());
 					buffers = new InMemoryBuffers();
@@ -29,10 +30,22 @@ public class CuttingReceiverTest {
 					buffers.add(buffer);
 				}
 			}
+			
+			@Override
+			public void failed(IOException ioe) {
+			}
+			
+			@Override
+			public void connected(Address address) {
+			}
+			
+			@Override
+			public void closed() {
+			}
 		});
 		
 		for (String contentString : content) {
-			c.received(null, null, ByteBufferUtils.toByteBuffer(contentString));
+			c.received(null, ByteBufferUtils.toByteBuffer(contentString));
 		}
 		
 		return result;

@@ -1,17 +1,17 @@
 package com.davfx.ninio.telnet;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.Connecter;
 
-final class CuttingReceiver implements Receiver {
+final class CuttingReceiver implements Connecter.Callback {
 
-	private final Receiver wrappee;
+	private final Connecter.Callback wrappee;
 	
 	private final ByteBuffer prompt;
 	private ByteBuffer currentPrompt;
@@ -20,13 +20,13 @@ final class CuttingReceiver implements Receiver {
 	private final int limit;
 	private int count = 0;
 
-	public CuttingReceiver(int limit, ByteBuffer prompt, Receiver wrappee) {
+	public CuttingReceiver(int limit, ByteBuffer prompt, Connecter.Callback wrappee) {
 		this.limit = limit;
 		this.prompt = prompt;
 		this.wrappee = wrappee;
 		currentPrompt = prompt.duplicate();
 	}
-	public CuttingReceiver(int limit, Receiver wrappee) {
+	public CuttingReceiver(int limit, Connecter.Callback wrappee) {
 		this.limit = limit;
 		prompt = null;
 		this.wrappee = wrappee;
@@ -104,7 +104,20 @@ final class CuttingReceiver implements Receiver {
 	*/
 	
 	@Override
-	public void received(Connector conn, Address address, ByteBuffer buffer) {
+	public void closed() {
+		wrappee.closed();
+	}
+	@Override
+	public void connected(Address address) {
+		wrappee.connected(address);
+	}
+	@Override
+	public void failed(IOException ioe) {
+		wrappee.failed(ioe);
+	}
+	
+	@Override
+	public void received(Address address, ByteBuffer buffer) {
 		//%% LOGGER.debug("Received: ***{}***", encode(ByteBufferUtils.toString(buffer)));
 		while (true) {
 			if (currentPrompt == null) {
@@ -139,7 +152,7 @@ final class CuttingReceiver implements Receiver {
 				count += buffer.remaining();
 				if ((limit > 0) && (count >= limit)) {
 					for (ByteBuffer b : buffers) {
-						wrappee.received(conn, address, b);
+						wrappee.received(address, b);
 					}
 		
 					buffers.clear();
@@ -155,9 +168,9 @@ final class CuttingReceiver implements Receiver {
 			buffers.add(startBuffer);
 
 			for (ByteBuffer b : buffers) {
-				wrappee.received(conn, address, b);
+				wrappee.received(address, b);
 			}
-			wrappee.received(conn, address, null);
+			wrappee.received(address, null);
 
 			buffers.clear();
 			count = 0;

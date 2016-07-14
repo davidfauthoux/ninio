@@ -5,8 +5,8 @@ import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 
 final class TelnetReader {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TelnetReader.class);
@@ -43,7 +43,7 @@ final class TelnetReader {
 		return ByteBuffer.wrap(new byte[] { IAC, response, command });
 	}
 
-	public void handle(ByteBuffer buffer, Receiver wrappee, Connector back) {
+	public void handle(ByteBuffer buffer, Connecter.Callback wrappee, Connecter.Connecting back) {
 		if (closed) {
 			return;
 		}
@@ -95,12 +95,12 @@ final class TelnetReader {
 						readingCommand = State.SUBCOMMAND;
 					} else {
 						if (lastRequest == DO) {
-							back.send(null, write(WONT, b));
+							back.send(null, write(WONT, b), new NopConnecterConnectingCallback());
 						} else if (lastRequest == WILL) {
 							if (b == ECHO) {
-								back.send(null, write(DO, b));
+								back.send(null, write(DO, b), new NopConnecterConnectingCallback());
 							} else {
-								back.send(null, write(DONT, b));
+								back.send(null, write(DONT, b), new NopConnecterConnectingCallback());
 							}
 							/*
 							} else if (lastRequest == DONT) {
@@ -120,7 +120,7 @@ final class TelnetReader {
 		if (r.length() > 0) {
 			String s = r.toString();
 			// LOGGER.debug("Core received: /{}/", s);
-			wrappee.received(back, null, ByteBuffer.wrap(s.getBytes(TelnetSpecification.CHARSET)));
+			wrappee.received(null, ByteBuffer.wrap(s.getBytes(TelnetSpecification.CHARSET)));
 		}
 	}
 }

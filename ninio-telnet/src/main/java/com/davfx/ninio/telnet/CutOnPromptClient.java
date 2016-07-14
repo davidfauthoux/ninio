@@ -1,5 +1,6 @@
 package com.davfx.ninio.telnet;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
 import java.util.concurrent.Executor;
@@ -8,17 +9,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Charsets;
 
-public final class CutOnPromptClient implements Connector {
+public final class CutOnPromptClient implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CutOnPromptClient.class);
 	/*%%
@@ -72,7 +71,7 @@ public final class CutOnPromptClient implements Connector {
 	
 	public static interface Handler {
 		interface Receive {
-			void received(Write write, String result);
+			void received(String result);
 		}
 		interface Write extends Disconnectable {
 			Write write(String command, String prompt, Receive callback);
@@ -80,7 +79,7 @@ public final class CutOnPromptClient implements Connector {
 		void connected(Write write);
 	}
 	
-	public static interface Builder extends NinioBuilder<Disconnectable> {
+	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(TcpSocket.Builder builder);
 		Builder with(Handler handler);
 		Builder with(Executor executor);
@@ -135,63 +134,56 @@ public final class CutOnPromptClient implements Connector {
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
+			public Connecter create(Queue queue) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
 				if (executor == null) {
 					throw new NullPointerException("executor");
 				}
+				if (handler == null) {
+					throw new NullPointerException("handler");
+				}
 
-				return new CutOnPromptClient(queue, executor, builder, eol, charset, limit, handler);
+				return new CutOnPromptClient(builder.create(queue), executor, eol, charset, limit, handler);
 			}
 		};
 	}
 	
-	private Handler.Receive receiveCallback;
-	private Connector connector;
+	private Handler.Receive currentReceiveCallback;
+	private final Connecter connecter;
+	private Connecter.Connecting connecting;
 	private CuttingReceiver cuttingReceiver;
-	private final Executor e;
+	private final Executor executor;
+	private final Handler handler;
+	private final String endOfLine;
+	private final Charset charset;
+	private final int limit;
 
-	public CutOnPromptClient(final Queue queue, final Executor e, final TcpSocket.Builder builder, final String endOfLine, final Charset c, final int limit, final Handler h) {
-		this.e = e;
-		
-		e.execute(new Runnable() {
+	private CutOnPromptClient(Connecter connecter, Executor executor, String endOfLine, Charset charset, int limit, Handler handler) {
+		this.connecter = connecter;
+		this.executor = executor;
+		this.handler = handler;
+		this.endOfLine = endOfLine;
+		this.charset = charset;
+		this.limit = limit;
+	}
+	
+	@Override
+	public Connecter.Connecting connect(final Connecter.Callback callback) {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				final Handler.Write write = new Handler.Write() {
-					@Override
-					public void close() {
-						connector.close();
-					}
-					
-					@Override
-					public Handler.Write write(final String command, final String prompt, final Handler.Receive callback) {
-						e.execute(new Runnable() {
-							@Override
-							public void run() {
-								LOGGER.trace("Sending command: {}, with prompt: {}", command, prompt);
-								cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(c)));
-								receiveCallback = callback;
-								if (command != null) {
-									connector.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(c)));
-								}
-							}
-						});
-						return this;
-					}
-				};
-				
-				cuttingReceiver = new CuttingReceiver(limit, new Receiver() {
+				cuttingReceiver = new CuttingReceiver(limit, new Connecter.Callback() {
 					private InMemoryBuffers buffers = null;
 					@Override
-					public void received(Connector conn, Address address, final ByteBuffer buffer) {
-						e.execute(new Runnable() {
+					public void received(Address address, final ByteBuffer buffer) {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
-								if (receiveCallback != null) {
+								if (currentReceiveCallback != null) {
 									if (buffer == null) {
-										receiveCallback.received(write, buffers.toString(c));
+										currentReceiveCallback.received(buffers.toString(charset));
 										buffers = null;
 									} else {
 										if (buffers == null) {
@@ -203,38 +195,81 @@ public final class CutOnPromptClient implements Connector {
 							}
 						});
 					}
+					
+					@Override
+					public void closed() {
+						callback.closed();
+					}
+					@Override
+					public void failed(IOException ioe) {
+						callback.failed(ioe);
+					}
+					@Override
+					public void connected(Address address) {
+						handler.connected(new Handler.Write() {
+							@Override
+							public void close() {
+								executor.execute(new Runnable() {
+									@Override
+									public void run() {
+										connecting.close();
+									}
+								});
+							}
+							
+							@Override
+							public Handler.Write write(final String command, final String prompt, final Handler.Receive receiveCallback) {
+								executor.execute(new Runnable() {
+									@Override
+									public void run() {
+										LOGGER.trace("Sending command: {}, with prompt: {}", command, prompt);
+										cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(charset)));
+										currentReceiveCallback = receiveCallback;
+										if (command != null) {
+											connecting.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new Connecter.Connecting.Callback() {
+												@Override
+												public void sent() {
+												}
+												@Override
+												public void failed(IOException ioe) {
+													callback.failed(ioe);
+												}
+											});
+										}
+									}
+								});
+								return this;
+							}
+						});
+						
+						callback.connected(address);
+					}
 				});
 
-				connector = builder.connecting(new Connecting() {
+				connecting = connecter.connect(cuttingReceiver);
+			}
+		});
+		
+		return new Connecting() {
+			@Override
+			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
+				executor.execute(new Runnable() {
 					@Override
-					public void connected(Connector conn, Address address) {
-						if (h != null) {
-							h.connected(write);
-						}
+					public void run() {
+						connecting.send(address, buffer, callback);
 					}
-				}).receiving(cuttingReceiver).create(queue);
+				});
 			}
-		});
-	}
-	
-	@Override
-	public Connector send(final Address address, final ByteBuffer buffer) {
-		e.execute(new Runnable() {
+			
 			@Override
-			public void run() {
-				connector.send(address, buffer);
+			public void close() {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						connecting.close();
+					}
+				});
 			}
-		});
-		return this;
-	}
-	
-	@Override
-	public void close() {
-		e.execute(new Runnable() {
-			@Override
-			public void run() {
-				connector.close();
-			}
-		});
+		};
 	}
 }
