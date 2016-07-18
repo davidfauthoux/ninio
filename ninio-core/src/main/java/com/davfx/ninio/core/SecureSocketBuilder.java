@@ -55,10 +55,7 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 			.create(queue);
 		
 		final SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
-		sslManager.connectAddress = connectAddress;
-		sslManager.connecting = connecter;
-
-		final Executor thisExecutor = executor;
+		sslManager.prepare(connectAddress, connecter);
 
 		return new Connecter() {
 			@Override
@@ -72,14 +69,8 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 			}
 			
 			@Override
-			public void connect(final Connection callback) {
-				thisExecutor.execute(new Runnable() {
-					@Override
-					public void run() {
-						sslManager.callback = callback;
-					}
-				});
-
+			public void connect(Connection callback) {
+				sslManager.prepare(callback);
 				connecter.connect(sslManager);
 			}
 		};

@@ -289,6 +289,7 @@ public final class UdpSocket implements Connecter {
 		for (ToWrite toWrite : toWriteQueue) {
 			toWrite.callback.failed(e);
 		}
+		toWriteQueue.clear();
 
 		currentChannel = null;
 		currentSelectionKey = null;

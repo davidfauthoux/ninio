@@ -123,13 +123,12 @@ public final class TcpSocketServer implements Listener {
 									LOGGER.debug("-> Accepting client on: {}", bindAddress);
 									final SocketChannel outboundChannel = ssc.accept();
 
-									final Listener.ListenerConnecting connection = callback.connecting();
-									final InnerSocketContext context = new InnerSocketContext(outboundChannels, connection);
+									final InnerSocketContext context = new InnerSocketContext(outboundChannels);
 									context.currentChannel = outboundChannel;
 
 									final Address clientAddress = new Address(outboundChannel.socket().getInetAddress().getHostAddress(), outboundChannel.socket().getPort());
 
-									connection.connecting(new Connected() {
+									final Connection connection = callback.connecting(new Connected() {
 										@Override
 										public void close() {
 											queue.execute(new Runnable() {
@@ -188,6 +187,10 @@ public final class TcpSocketServer implements Listener {
 										@Override
 										public void run() {
 											try {
+												if (closed) {
+													throw new IOException("Closed");
+												}
+												
 												try {
 													// outboundChannel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
 													outboundChannel.configureBlocking(false);
@@ -272,6 +275,7 @@ public final class TcpSocketServer implements Listener {
 												return;
 											}
 
+											context.connection = connection;
 											connection.connected(clientAddress);
 										}
 									});
@@ -357,17 +361,15 @@ public final class TcpSocketServer implements Listener {
 		
 		SocketChannel currentChannel = null;
 		SelectionKey currentSelectionKey = null;
-		final Listener.ListenerConnecting connection;
+		Connection connection = null;
 
 		final Deque<ToWrite> toWriteQueue = new LinkedList<>();
 		long toWriteLength = 0L;
 		
 		boolean closed = false;
 		
-		public InnerSocketContext(Set<InnerSocketContext> outboundChannels, Listener.ListenerConnecting connection) {
+		public InnerSocketContext(Set<InnerSocketContext> outboundChannels) {
 			this.outboundChannels = outboundChannels;
-			
-			this.connection = connection;
 
 			outboundChannels.add(this);
 			LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
@@ -394,6 +396,12 @@ public final class TcpSocketServer implements Listener {
 			if (currentSelectionKey != null) {
 				currentSelectionKey.cancel();
 			}
+
+			IOException e = new IOException("Closed");
+			for (ToWrite toWrite : toWriteQueue) {
+				toWrite.callback.failed(e);
+			}
+			toWriteQueue.clear();
 
 			currentChannel = null;
 			currentSelectionKey = null;

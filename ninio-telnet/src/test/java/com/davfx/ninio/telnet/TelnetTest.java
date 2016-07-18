@@ -9,21 +9,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferUtils;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.InMemoryBuffers;
-import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.WaitClosing;
-import com.davfx.ninio.core.WaitConnecting;
-import com.davfx.ninio.telnet.CutOnPromptClient.Handler;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -54,94 +47,131 @@ public class TelnetTest {
 		
 		int port = 8080;
 		
+		final Lock<Void, IOException> lock = new Lock<>();
 		try (Ninio ninio = Ninio.create()) {
-			final Wait waitForServerListening = new Wait();
-			Wait waitForServerClosing = new Wait();
-			final Wait waitForClientConnectingServerSide = new Wait();
-			final Wait waitForClientClosingServerSide = new Wait();
-			try (Disconnectable ss = ninio.create(TelnetServer.builder().listening(new Listening() {
-				@Override
-				public Connection connecting(Address from, final Connector connector) {
-					waitForServerListening.run();
-					return new Listening.Connection() {
-						@Override
-						public Receiver receiver() {
-							return new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(TelnetSpecification.EOL), new Receiver() {
-								private InMemoryBuffers buffers = new InMemoryBuffers();
-								@Override
-								public void received(Connector conn, Address address, ByteBuffer buffer) {
-									if (buffer == null) {
-										String r = f.apply(buffers.toString());
-										buffers = new InMemoryBuffers();
-										if (r == null) {
-											conn.close();
-										} else {
-											conn.send(null, ByteBufferUtils.toByteBuffer(r + TelnetSpecification.EOL));
-										}
-									} else {
-										buffers.add(buffer);
-									}
-								}
-							});
-						}
-						@Override
-						public Failing failing() {
-							return null;
-						}
-						@Override
-						public Connecting connecting() {
-							return new WaitConnecting(waitForClientConnectingServerSide);
-						}
-						@Override
-						public Closing closing() {
-							return new WaitClosing(waitForClientClosingServerSide);
-						}
-						@Override
-						public Buffering buffering() {
-							return null;
-						}
-					};
-				}
-			}).with(TcpSocketServer.builder().closing(new WaitClosing(waitForServerClosing)).bind(new Address(Address.ANY, port))))) {
-				final Lock<String, IOException> lock0 = new Lock<>();
-				final Lock<String, IOException> lock1 = new Lock<>();
-				
-				Wait waitForClientClosing = new Wait();
-				try (Disconnectable c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class)).with(new Handler() {
+			final Wait serverWaitServerListening = new Wait();
+			final Wait serverWaitServerClosing = new Wait();
+			final Wait serverWaitClientConnecting = new Wait();
+			final Wait serverWaitClientClosing = new Wait();
+			try (Listener ss = ninio.create(TelnetServer.builder().with(TcpSocketServer.builder().bind(new Address(Address.ANY, port))))) {
+				ss.listen(new Listener.Callback() {
 					@Override
-					public void connected(Write write) {
-						write.write("Hello", TelnetSpecification.EOL, new Handler.Receive() {
+					public Connection connecting(final Connected connecting) {
+						return new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(TelnetSpecification.EOL), new Connection() {
+							private InMemoryBuffers buffers = new InMemoryBuffers();
 							@Override
-							public void received(Write write, String result) {
-								lock0.set(result);
-								LOGGER.debug("---------------> ***{}***", result);
-								write.write("Hello again", TelnetSpecification.EOL, new Handler.Receive() {
-									@Override
-									public void received(Write write, String result) {
-										LOGGER.debug("---------------> ***{}***", result);
-										lock1.set(result);
-										write.write("Bye", TelnetSpecification.EOL, new Handler.Receive() {
+							public void received(Address address, ByteBuffer buffer) {
+								if (buffer == null) {
+									String r = f.apply(buffers.toString());
+									buffers = new InMemoryBuffers();
+									if (r == null) {
+										connecting.close();
+									} else {
+										connecting.send(null, ByteBufferUtils.toByteBuffer(r + TelnetSpecification.EOL), new SendCallback() {
 											@Override
-											public void received(Write write, String result) {
-												LOGGER.debug("---------------> ***{}***", result);
+											public void failed(IOException e) {
+												lock.fail(e);
+											}
+											@Override
+											public void sent() {
 											}
 										});
 									}
-								});
+								} else {
+									buffers.add(buffer);
+								}
+							}
+							
+							@Override
+							public void closed() {
+								serverWaitClientClosing.run();
+							}
+							@Override
+							public void connected(Address address) {
+								serverWaitClientConnecting.run();
+							}
+							@Override
+							public void failed(IOException e) {
+								lock.fail(e);
 							}
 						});
 					}
-				}).with(TelnetClient.builder().closing(new WaitClosing(waitForClientClosing)).to(new Address(Address.LOCALHOST, port))))) {
-					waitForServerListening.waitFor();
-					waitForClientConnectingServerSide.waitFor();
+					
+					@Override
+					public void closed() {
+						serverWaitServerClosing.run();
+					}
+					@Override
+					public void connected(Address address) {
+						serverWaitServerListening.run();
+					}
+					@Override
+					public void failed(IOException e) {
+						lock.fail(e);
+					}
+				});
+			
+				serverWaitServerListening.waitFor();
+
+				final Lock<String, IOException> lock0 = new Lock<>();
+				final Lock<String, IOException> lock1 = new Lock<>();
+				
+				final Wait clientWaitClientConnecting = new Wait();
+				final Wait clientWaitClientClosing = new Wait();
+				try (CutOnPromptClient c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class))
+					.with(TelnetClient.builder().to(new Address(Address.LOCALHOST, port))))) {
+					c.connect(new CutOnPromptClient.Handler() {
+						@Override
+						public void connected(final Write write) {
+							write.write("Hello", TelnetSpecification.EOL, new CutOnPromptClient.Handler.Receive() {
+								@Override
+								public void received(String result) {
+									lock0.set(result);
+									LOGGER.debug("---------------> ***{}***", result);
+									write.write("Hello again", TelnetSpecification.EOL, new CutOnPromptClient.Handler.Receive() {
+										@Override
+										public void received(String result) {
+											LOGGER.debug("---------------> ***{}***", result);
+											lock1.set(result);
+											write.write("Bye", TelnetSpecification.EOL, new CutOnPromptClient.Handler.Receive() {
+												@Override
+												public void received(String result) {
+													LOGGER.debug("---------------> ***{}***", result);
+												}
+											});
+										}
+									});
+								}
+							});
+						}
+					
+						@Override
+						public void connected(Address address) {
+							clientWaitClientConnecting.run();
+						}
+						@Override
+						public void closed() {
+							clientWaitClientClosing.run();
+						}
+						@Override
+						public void failed(IOException e) {
+							lock.fail(e);
+						}
+					});
+					clientWaitClientConnecting.waitFor();
+					serverWaitClientConnecting.waitFor();
+					
 					Assertions.assertThat(lock0.waitFor()).isEqualTo("World!" + TelnetSpecification.EOL);
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("Did you say Hello again?" + TelnetSpecification.EOL);
-					waitForClientClosing.waitFor();
+					serverWaitClientClosing.waitFor(); // Closed with "Bye"
 				}
 				
-				waitForClientClosingServerSide.waitFor();
+				clientWaitClientClosing.waitFor();
 			}
-			waitForServerClosing.waitFor();
+			serverWaitServerClosing.waitFor();
+			
+			lock.set(null);
+			lock.waitFor();
 		}
 	}
 	

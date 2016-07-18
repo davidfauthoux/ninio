@@ -1,7 +1,6 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 
 public final class SecureSocketServerBuilder implements TcpSocketServer.Builder {
@@ -68,60 +67,11 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 					}
 
 					@Override
-					public Listener.ListenerConnecting connecting() {
-						final SecureSocketManager sslManager = new SecureSocketManager(thisTrust, false, thisExecutor, thisByteBufferAllocator);
-
-						final Listener.ListenerConnecting callbackConnecting = callback.connecting();
-						
-						sslManager.callback = new Connection() {
-							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								callbackConnecting.received(address, buffer);
-							}
-							
-							@Override
-							public void failed(IOException ioe) {
-								callbackConnecting.failed(ioe);
-							}
-							
-							@Override
-							public void connected(Address address) {
-								callbackConnecting.connected(address);
-							}
-							
-							@Override
-							public void closed() {
-								callbackConnecting.closed();
-							}
-						};
-
-						return new Listener.ListenerConnecting() {
-							@Override
-							public void connecting(Connected connecting) {
-								sslManager.connecting = connecting;
-								callbackConnecting.connecting(sslManager);
-							}
-
-							@Override
-							public void connected(Address address) {
-								sslManager.connectAddress = address;
-							}
-							
-							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								sslManager.received(address, buffer);
-							}
-							
-							@Override
-							public void failed(IOException ioe) {
-								sslManager.failed(ioe);
-							}
-							
-							@Override
-							public void closed() {
-								sslManager.closed();
-							}
-						};
+					public Connection connecting(Connected connecting) {
+						SecureSocketManager sslManager = new SecureSocketManager(thisTrust, false, thisExecutor, thisByteBufferAllocator);
+						sslManager.prepare(null, connecting);
+						sslManager.prepare(callback.connecting(sslManager));
+						return sslManager;
 					}
 				});
 			}

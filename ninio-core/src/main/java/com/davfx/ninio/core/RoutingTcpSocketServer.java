@@ -43,75 +43,87 @@ public final class RoutingTcpSocketServer {
 				}
 
 				final Supplier<TcpSocket.Builder> supplier = clientBuilderSupplier;
-				return serverBuilder.listening(new Listening() {
+				Listener listener = serverBuilder.create(queue);
+				listener.listen(new Listener.Callback() {
 					@Override
-					public Connection connecting(Address from, final Connector conn) {
-						TcpSocket.Builder builder = supplier.get();
+					public Connection connecting(final Connected connecting) {
+						final Connecter connecter = supplier.get().create(queue);
 						
-						builder.closing(new Closing() {
+						connecter.connect(new Connection() {
 							@Override
-							public void closed() {
-								conn.close();
-							}
-						});
-						builder.failing(new Failing() {
-							@Override
-							public void failed(IOException e) {
-								LOGGER.warn("Failed to route", e);
-								conn.close();
-							}
-						});
-						builder.receiving(new Receiver() {
-							@Override
-							public void received(Connector c, Address address, ByteBuffer buffer) {
-								conn.send(address, buffer);
-							}
-						});
-						
-						final Connector socket = builder.create(queue);
-						
-						return new Connection() {
-							@Override
-							public Connecting connecting() {
-								return null;
-							}
-
-							@Override
-							public Closing closing() {
-								return new Closing() {
-									@Override
-									public void closed() {
-										socket.close();
-									}
-								};
-							}
-							@Override
-							public Failing failing() {
-								return new Failing() {
-									@Override
-									public void failed(IOException e) {
-										socket.close();
-									}
-								};
-							}
-
-							@Override
-							public Receiver receiver() {
-								return new Receiver() {
-									@Override
-									public void received(Connector c, Address address, ByteBuffer buffer) {
-										socket.send(address, buffer);
-									}
-								};
+							public void connected(Address address) {
 							}
 							
 							@Override
-							public Buffering buffering() {
-								return null;
+							public void received(Address address, ByteBuffer buffer) {
+								connecting.send(address, buffer, new SendCallback() {
+									@Override
+									public void failed(IOException e) {
+										LOGGER.warn("Failed to route packet", e);
+										connecter.close();
+									}
+									@Override
+									public void sent() {
+									}
+								});
+							}
+							
+							@Override
+							public void closed() {
+								connecting.close();
+							}
+							
+							@Override
+							public void failed(IOException e) {
+								connecting.close();
+							}
+						});
+
+						return new Connection() {
+							@Override
+							public void connected(Address address) {
+							}
+							
+							@Override
+							public void received(Address address, ByteBuffer buffer) {
+								connecter.send(address, buffer, new SendCallback() {
+									@Override
+									public void failed(IOException e) {
+										LOGGER.warn("Failed to route packet", e);
+										connecter.close();
+									}
+									@Override
+									public void sent() {
+									}
+								});
+							}
+							
+							@Override
+							public void closed() {
+								connecter.close();
+							}
+							@Override
+							public void failed(IOException e) {
+								LOGGER.warn("Failed to route", e);
+								connecter.close();
 							}
 						};
 					}
-				}).create(queue);
+					
+					@Override
+					public void connected(Address address) {
+					}
+					
+					@Override
+					public void failed(IOException e) {
+						LOGGER.warn("Failed to listen", e);
+					}
+					
+					@Override
+					public void closed() {
+					}
+				});
+				return listener;
 			}
 		};
 	}

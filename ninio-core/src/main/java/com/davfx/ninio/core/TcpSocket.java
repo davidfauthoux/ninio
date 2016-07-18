@@ -320,6 +320,7 @@ public final class TcpSocket implements Connecter {
 		for (ToWrite toWrite : toWriteQueue) {
 			toWrite.callback.failed(e);
 		}
+		toWriteQueue.clear();
 
 		currentChannel = null;
 		currentInboundKey = null;

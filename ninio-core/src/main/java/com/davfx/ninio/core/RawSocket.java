@@ -249,17 +249,24 @@ public final class RawSocket implements Connecter {
 	public void close() {
 		try {
 			NativeRawSocket s;
+			Deque<ToWrite> q;
 			synchronized (lock) {
 				if (closed) {
 					return;
 				}
 				closed = true;
 				s = socket;
+				q = toWriteQueue;
 			}
 			
 			if (s != null) {
 				s.close();
 			}
+			IOException e = new IOException("Closed");
+			for (ToWrite toWrite : q) {
+				toWrite.callback.failed(e);
+			}
+			q.clear();
 		} catch (IOException e) {
 			LOGGER.error("Could not close", e);
 		}

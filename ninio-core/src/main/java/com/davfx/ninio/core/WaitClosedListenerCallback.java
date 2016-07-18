@@ -28,7 +28,7 @@ public final class WaitClosedListenerCallback implements Listener.Callback {
 		wrappee.failed(ioe);
 	}
 	@Override
-	public Listener.ListenerConnecting connecting() {
-		return wrappee.connecting();
+	public Connection connecting(Connected connecting) {
+		return wrappee.connecting(connecting);
 	}
 }

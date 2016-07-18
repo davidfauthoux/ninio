@@ -385,6 +385,7 @@ public final class TcpdumpSocket implements Connecter {
 	public void close() {
 		DatagramSocket s;
 		Process p;
+		Deque<ToWrite> q;
 		synchronized (lock) {
 			if (closed) {
 				return;
@@ -392,6 +393,7 @@ public final class TcpdumpSocket implements Connecter {
 			closed = true;
 			s = socket;
 			p = process;
+			q = toWriteQueue;
 		}
 		
 		if (s != null) {
@@ -400,5 +402,10 @@ public final class TcpdumpSocket implements Connecter {
 		if (p != null) {
 			p.destroy();
 		}
+		IOException e = new IOException("Closed");
+		for (ToWrite toWrite : q) {
+			toWrite.callback.failed(e);
+		}
+		q.clear();
 	}
 }

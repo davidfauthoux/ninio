@@ -9,9 +9,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
@@ -19,7 +22,7 @@ import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Charsets;
 
-public final class CutOnPromptClient implements Connecter {
+public final class CutOnPromptClient implements Disconnectable {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(CutOnPromptClient.class);
 	/*%%
@@ -71,19 +74,18 @@ public final class CutOnPromptClient implements Connecter {
 	private static final int DEFAULT_LIMIT = 100;
 	private static final String DEFAULT_EOL = TelnetSpecification.EOL;
 	
-	public static interface Handler {
+	public static interface Handler extends Closing, Failing, Connecting {
 		interface Receive {
 			void received(String result);
 		}
 		interface Write extends Disconnectable {
-			Write write(String command, String prompt, Receive callback);
+			void write(String command, String prompt, Receive callback);
 		}
 		void connected(Write write);
 	}
 	
-	public static interface Builder extends NinioBuilder<Connecter> {
+	public static interface Builder extends NinioBuilder<CutOnPromptClient> {
 		Builder with(TcpSocket.Builder builder);
-		Builder with(Handler handler);
 		Builder with(Executor executor);
 		Builder charset(Charset charset);
 		Builder limit(int limit);
@@ -92,7 +94,6 @@ public final class CutOnPromptClient implements Connecter {
 
 	public static Builder builder() {
 		return new Builder() {
-			private Handler handler = null;
 			private TcpSocket.Builder builder = TelnetClient.builder();
 			
 			private Executor executor = null;
@@ -100,12 +101,6 @@ public final class CutOnPromptClient implements Connecter {
 			private Charset charset = DEFAULT_CHARSET;
 			private int limit = DEFAULT_LIMIT;
 			private String eol = DEFAULT_EOL;
-			
-			@Override
-			public Builder with(Handler handler) {
-				this.handler = handler;
-				return this;
-			}
 			
 			@Override
 			public Builder with(Executor executor) {
@@ -136,18 +131,15 @@ public final class CutOnPromptClient implements Connecter {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public CutOnPromptClient create(Queue queue) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
 				if (executor == null) {
 					throw new NullPointerException("executor");
 				}
-				if (handler == null) {
-					throw new NullPointerException("handler");
-				}
 
-				return new CutOnPromptClient(builder.create(queue), executor, eol, charset, limit, handler);
+				return new CutOnPromptClient(builder.create(queue), executor, eol, charset, limit);
 			}
 		};
 	}
@@ -156,22 +148,19 @@ public final class CutOnPromptClient implements Connecter {
 	private final Connecter connecter;
 	private CuttingReceiver cuttingReceiver;
 	private final Executor executor;
-	private final Handler handler;
 	private final String endOfLine;
 	private final Charset charset;
 	private final int limit;
 
-	private CutOnPromptClient(Connecter connecter, Executor executor, String endOfLine, Charset charset, int limit, Handler handler) {
+	private CutOnPromptClient(Connecter connecter, Executor executor, String endOfLine, Charset charset, int limit) {
 		this.connecter = connecter;
 		this.executor = executor;
-		this.handler = handler;
 		this.endOfLine = endOfLine;
 		this.charset = charset;
 		this.limit = limit;
 	}
 	
-	@Override
-	public void connect(final Connection callback) {
+	public void connect(final Handler handler) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -199,11 +188,11 @@ public final class CutOnPromptClient implements Connecter {
 					
 					@Override
 					public void closed() {
-						callback.closed();
+						handler.closed();
 					}
 					@Override
 					public void failed(IOException ioe) {
-						callback.failed(ioe);
+						handler.failed(ioe);
 					}
 					@Override
 					public void connected(Address address) {
@@ -219,7 +208,7 @@ public final class CutOnPromptClient implements Connecter {
 							}
 							
 							@Override
-							public Handler.Write write(final String command, final String prompt, final Handler.Receive receiveCallback) {
+							public void write(final String command, final String prompt, final Handler.Receive receiveCallback) {
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
@@ -233,30 +222,21 @@ public final class CutOnPromptClient implements Connecter {
 												}
 												@Override
 												public void failed(IOException ioe) {
-													callback.failed(ioe);
+													connecter.close();
+													handler.failed(ioe);
 												}
 											});
 										}
 									}
 								});
-								return this;
 							}
 						});
 						
-						callback.connected(address);
+						handler.connected(address);
 					}
 				});
 
 				connecter.connect(cuttingReceiver);
-			}
-		});
-	}
-	
-	public void send(final Address address, final ByteBuffer buffer, final SendCallback callback) {
-		executor.execute(new Runnable() {
-			@Override
-			public void run() {
-				connecter.send(address, buffer, callback);
 			}
 		});
 	}

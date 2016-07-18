@@ -31,7 +31,7 @@ public final class Lock<R, E extends Exception> {
 	
 	public synchronized void set(R result) {
 		if (done) {
-			LOGGER.warn("Set multiple times (current result = {}, overwritten result = {}, fail = {})", this.result, result, fail);
+			LOGGER.warn("Set multiple times (current result = {}, overwritten result = {}, fail = {})", this.result, result, fail, null);
 		}
 		this.result = result;
 		done = true;
@@ -40,7 +40,7 @@ public final class Lock<R, E extends Exception> {
 	
 	public synchronized void fail(E fail) {
 		if (done) {
-			LOGGER.warn("Failed multiple times (current fail = {}, overwritten fail = {}, result = {})", this.fail, fail, result);
+			LOGGER.warn("Failed multiple times (current fail = {}, overwritten fail = {}, result = {})", this.fail, fail, result, null);
 		}
 		this.fail = fail;
 		done = true;

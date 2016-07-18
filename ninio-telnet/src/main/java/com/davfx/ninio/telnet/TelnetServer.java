@@ -1,19 +1,14 @@
 package com.davfx.ninio.telnet;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Listener;
-import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Receiver;
 import com.davfx.ninio.core.TcpSocketServer;
 
 public final class TelnetServer {
@@ -53,21 +48,13 @@ public final class TelnetServer {
 		}
 	}*/
 	
-	public static interface Builder extends NinioBuilder<Disconnectable> {
+	public static interface Builder extends NinioBuilder<Listener> {
 		Builder with(TcpSocketServer.Builder builder);
-		Builder listening(Listening listening);
 	}
 
 	public static Builder builder() {
 		return new Builder() {
-			private Listening listening = null;
 			private TcpSocketServer.Builder builder = null;
-			
-			@Override
-			public Builder listening(Listening listening) {
-				this.listening = listening;
-				return this;
-			}
 			
 			@Override
 			public Builder with(TcpSocketServer.Builder builder) {
@@ -76,54 +63,66 @@ public final class TelnetServer {
 			}
 
 			@Override
-			public Disconnectable create(Queue queue) {
+			public Listener create(Queue queue) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
 				
-				final Listening l = listening;
 				final TelnetReader telnetReader = new TelnetReader();
-				Listener listener = builder.create(queue);
-				listener.listen((l == null) ? null : new Listener.Callback() {
+				final Listener listener = builder.create(queue);
+				
+				return new Listener() {
 					@Override
-					public Listener.ListenerConnecting connecting() {
-						Listener.ListenerConnecting c = l.connecting(from, connector);
-						final Receiver connectionReceiver = c.receiver();
-						final Closing connectionClosing = c.closing();
-						final Connecting connectionConnecting = c.connecting();
-						final Failing connectionFailing = c.failing();
-						final Buffering connectionBuffering = c.buffering();
-						return new Listening.Connection() {
+					public void close() {
+						listener.close();
+					}
+					
+					@Override
+					public void listen(final Callback callback) {
+						listener.listen(new Listener.Callback() {
 							@Override
-							public Receiver receiver() {
-								return new Receiver() {
+							public Connection connecting(final Connected connected) {
+								final Connection c = callback.connecting(connected);
+								return new Connection() {
 									@Override
 									public void received(Address address, ByteBuffer buffer) {
-										telnetReader.handle(buffer, connectionReceiver, connector);
+										telnetReader.handle(buffer, c, connected);
+									}
+									
+									@Override
+									public void closed() {
+										c.closed();
+									}
+									
+									@Override
+									public void failed(IOException e) {
+										c.failed(e);
+									}
+									
+									@Override
+									public void connected(Address address) {
+										c.connected(address);
 									}
 								};
 							}
 							
 							@Override
-							public Failing failing() {
-								return connectionFailing;
+							public void closed() {
+								callback.closed();
 							}
+							
 							@Override
-							public Connecting connecting() {
-								return connectionConnecting;
+							public void failed(IOException e) {
+								callback.failed(e);
 							}
+							
 							@Override
-							public Closing closing() {
-								return connectionClosing;
+							public void connected(Address address) {
+								callback.connected(address);
 							}
-							@Override
-							public Buffering buffering() {
-								return connectionBuffering;
-							}
-						};
+						});
 					}
-				});
-				return listener;
+				};
 			}
 		};
 	}

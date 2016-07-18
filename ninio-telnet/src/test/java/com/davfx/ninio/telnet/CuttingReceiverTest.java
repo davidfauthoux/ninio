@@ -11,14 +11,14 @@ import org.junit.Test;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferUtils;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.InMemoryBuffers;
 
 public class CuttingReceiverTest {
 
 	private List<String> test(List<String> content, String prompt) {
 		final List<String> result = new LinkedList<>();
-		CuttingReceiver c = new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(prompt), new Connecter.Callback() {
+		CuttingReceiver c = new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(prompt), new Connection() {
 			private InMemoryBuffers buffers = new InMemoryBuffers();
 			
 			@Override

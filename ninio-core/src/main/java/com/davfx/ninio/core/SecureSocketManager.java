@@ -22,9 +22,9 @@ final class SecureSocketManager implements Connected, Connection {
 	private final Executor executor;
 	private final ByteBufferAllocator byteBufferAllocator;
 	
-	public Connected connecting = null;
-	public Connection callback = null;
-	public Address connectAddress;
+	private Connected connecting = null;
+	private Connection callback = null;
+	private Address connectAddress;
 	
 	private static final class ToWrite {
 		public final ByteBuffer buffer;
@@ -169,6 +169,7 @@ final class SecureSocketManager implements Connected, Connection {
 	
 	private void doContinue() {
 		if (closed || (connecting == null) || (callback == null) || (connectAddress == null)) {
+			// LOGGER.trace("Not prepared (clientMode = {})", clientMode);
 			return;
 		}
 		if (sent == null) {
@@ -195,7 +196,7 @@ final class SecureSocketManager implements Connected, Connection {
 		}
 		
 		while (true) {
-			// LOGGER.trace("Current handshake status: {}", engine.getHandshakeStatus());
+			// LOGGER.trace("Current handshake status: {} (clientMode = {})", engine.getHandshakeStatus(), clientMode);
 			switch (engine.getHandshakeStatus()) {
 			case NEED_TASK:
 			    while (true) {
@@ -295,10 +296,13 @@ final class SecureSocketManager implements Connected, Connection {
 	}
 	
 	@Override
-	public void connected(Address address) {
+	public void connected(final Address address) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				if (address != null) {
+					connectAddress = address;
+				}
 				doContinue();
 			}
 		});
@@ -326,7 +330,30 @@ final class SecureSocketManager implements Connected, Connection {
 				}
 				sent.addLast(new ToWrite(buffer, callback));
 				doContinue();
-				return;
+			}
+		});
+	}
+	
+	//
+	
+	public void prepare(final Address address, final Connected connecting) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				if (address != null) {
+					connectAddress = address;
+				}
+				SecureSocketManager.this.connecting = connecting;
+				doContinue();
+			}
+		});
+	}
+	public void prepare(final Connection callback) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				SecureSocketManager.this.callback = callback;
+				doContinue();
 			}
 		});
 	}

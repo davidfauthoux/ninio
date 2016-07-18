@@ -39,14 +39,8 @@ public class AsyncSocketTest {
 						}
 						
 						@Override
-						public Listener.ListenerConnecting connecting() {
-							return new Listener.ListenerConnecting() {
-								private Connected connecting;
-								
-								@Override
-								public void connecting(Connected connecting) {
-									this.connecting = connecting;
-								}
+						public Connection connecting(final Connected connecting) {
+							return new Connection() {
 								@Override
 								public void received(Address address, ByteBuffer buffer) {
 									connecting.send(null, buffer, new NopConnecterConnectingCallback());

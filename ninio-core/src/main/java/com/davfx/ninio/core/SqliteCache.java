@@ -3,7 +3,6 @@ package com.davfx.ninio.core;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -80,66 +79,66 @@ public final class SqliteCache {
 		private final Connecter wrappee;
 		private final Interpreter<T> interpreter;
 		private final double expiration;
-		
+		private final java.sql.Connection sqlConnection;
+		private final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress;
+		private Connection connectCallback = null;
+
 		public InnerConnecter(File database, double expiration, Interpreter<T> interpreter, Connecter wrappee) {
-			this.database = database;
 			this.expiration = expiration;
 			this.interpreter = interpreter;
 			this.wrappee = wrappee;
-		}
-		
-		@Override
-		public Connecting connect(final Callback callback) {
-			final File databaseFile;
+			
+			cacheByDestinationAddress = cacheMapExpiringAfterAccess(expiration);
+			
+			File databaseFile;
 			if (database == null) {
 				try {
 					databaseFile = File.createTempFile(SqliteCache.class.getName(), null);
 					databaseFile.deleteOnExit();
 				} catch (IOException ioe) {
-					callback.failed(new IOException("Error", ioe));
-					return new Connecting() {
-						@Override
-						public void close() {
-						}
-						@Override
-						public void send(Address address, ByteBuffer buffer, Callback callback) {
-							callback.failed(new IOException("Failed to be created"));
-						}
-					};
+					LOGGER.error("Database file error", ioe);
+					databaseFile = null;
 				}
 			} else {
 				databaseFile = database;
 			}
-
 			databaseFile.delete();
+			this.database = databaseFile;
 
-			final Connection sqlConnection;
+			java.sql.Connection c;
 			try {
-				sqlConnection = DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getCanonicalPath());
+				c = DriverManager.getConnection("jdbc:sqlite:" + databaseFile.getCanonicalPath());
 				try {
-					try (PreparedStatement s = sqlConnection.prepareStatement("CREATE TABLE `data` (`address` TEXT, `key` TEXT, `packet` BLOB, PRIMARY KEY (`address`, `key`))")) {
+					try (PreparedStatement s = c.prepareStatement("CREATE TABLE `data` (`address` TEXT, `key` TEXT, `packet` BLOB, PRIMARY KEY (`address`, `key`))")) {
 						s.executeUpdate();
 					}
 				} catch (SQLException see) {
-					sqlConnection.close();
+					c.close();
 					throw see;
 				}
 			} catch (SQLException | IOException e) {
-				callback.failed(new IOException("Error", e));
-				return new Connecting() {
-					@Override
-					public void close() {
-					}
-					@Override
-					public void send(Address address, ByteBuffer buffer, Callback callback) {
-						callback.failed(new IOException("Failed to be created"));
-					}
-				};
+				LOGGER.error("SQL error", e);
+				c = null;
+			}
+			sqlConnection = c;
+		}
+		
+		@Override
+		public void connect(final Connection callback) {
+			if (database == null) {
+				callback.failed(new IOException("Database file could not be created"));
+				return;
+			}
+			if (sqlConnection == null) {
+				callback.failed(new IOException("SQL connection could not be open"));
+				return;
+			}
+			
+			synchronized (cacheByDestinationAddress) {
+				connectCallback = callback;
 			}
 
-			final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress = cacheMapExpiringAfterAccess(expiration);
-
-			final Connecter.Connecting connecting = wrappee.connect(new Callback() {
+			wrappee.connect(new Connection() {
 				@Override
 				public void received(Address address, ByteBuffer sourceBuffer) {
 					T sub = interpreter.handleResponse(sourceBuffer.duplicate());
@@ -210,7 +209,7 @@ public final class SqliteCache {
 						sqlConnection.close();
 					} catch (SQLException e) {
 					}
-					databaseFile.delete();
+					database.delete();
 
 					callback.failed(ioe);
 				}
@@ -221,89 +220,101 @@ public final class SqliteCache {
 						sqlConnection.close();
 					} catch (SQLException e) {
 					}
-					databaseFile.delete();
+					database.delete();
 
 					callback.closed();
 				}
 			});
+		}
+		
+		@Override
+		public void send(Address address, ByteBuffer sourceBuffer, SendCallback sendCallback) {
+			if ((database == null) || (sqlConnection == null)) {
+				sendCallback.failed(new IOException("Could not be created"));
+				return;
+			}
 
-			return new Connecting() {
-				@Override
-				public void send(Address address, ByteBuffer sourceBuffer, Callback sendCallback) {
-					double now = DateUtils.now();
-					
-					Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
-					if (context == null) {
-						LOGGER.trace("Invalid request (address = {})", address);
-						return;
-					}
-
-					boolean send;
-					synchronized (cacheByDestinationAddress) {
-						CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
-						if (cache == null) {
-							LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
-							cache = new CacheByAddress<T>(expiration);
-							cacheByDestinationAddress.put(address, cache);
-						}
+			double now = DateUtils.now();
 			
-						Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
-						if (subs == null) {
-							subs = cacheMapExpiringAfterWrite(expiration);
-							cache.requestsByKey.put(context.key, subs);
-			
-							subs.put(context.sub, now);
-							cache.subToKey.put(context.sub, context.key);
+			Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
+			if (context == null) {
+				sendCallback.failed(new IOException("Invalid request: " + address));
+				return;
+			}
 
-							send = true;
-							LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
-						} else {
-							subs.put(context.sub, now);
-							cache.subToKey.put(context.sub, context.key);
-
-							send = false;
-							LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
-						}
-					}
-
-					if (send) {
-						connecting.send(address, sourceBuffer, sendCallback);
-					} else {
-						sendCallback.sent();
-						try {
-							try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `packet` FROM `data` WHERE `address`= ? AND `key` = ?")) {
-								int k = 1;
-								s.setString(k++, address.toString());
-								s.setString(k++, context.key);
-								ResultSet rs = s.executeQuery();
-								while (rs.next()) {
-									ByteBuffer bb = ByteBuffer.wrap(rs.getBytes("packet"));
-									
-									LOGGER.trace("Response exists (address = {}, key = {}, sub = {})", address, context.key, context.sub);
-									
-									callback.received(address, interpreter.transform(bb, context.sub));
-									return;
-								}
-							}
-						} catch (SQLException se) {
-							LOGGER.error("SQL error", se);
-						}
-
-						LOGGER.error("Response does not exist (address = {}, key = {}, sub = {})", address, context.key, context.sub);
-					}
-					
-				}
+			boolean send;
+			Connection callback;
+			synchronized (cacheByDestinationAddress) {
+				callback = connectCallback;
 				
-				@Override
-				public void close() {
-					connecting.close();
-					try {
-						sqlConnection.close();
-					} catch (SQLException e) {
-					}
-					databaseFile.delete();
+				CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
+				if (cache == null) {
+					LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
+					cache = new CacheByAddress<T>(expiration);
+					cacheByDestinationAddress.put(address, cache);
 				}
-			};
+	
+				Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
+				if (subs == null) {
+					subs = cacheMapExpiringAfterWrite(expiration);
+					cache.requestsByKey.put(context.key, subs);
+	
+					subs.put(context.sub, now);
+					cache.subToKey.put(context.sub, context.key);
+
+					send = true;
+					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
+				} else {
+					subs.put(context.sub, now);
+					cache.subToKey.put(context.sub, context.key);
+
+					send = false;
+					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
+				}
+			}
+
+			if (send) {
+				wrappee.send(address, sourceBuffer, sendCallback);
+			} else {
+				sendCallback.sent();
+				if (callback != null) {
+					try {
+						try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `packet` FROM `data` WHERE `address`= ? AND `key` = ?")) {
+							int k = 1;
+							s.setString(k++, address.toString());
+							s.setString(k++, context.key);
+							ResultSet rs = s.executeQuery();
+							while (rs.next()) {
+								ByteBuffer bb = ByteBuffer.wrap(rs.getBytes("packet"));
+								
+								LOGGER.trace("Response exists (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+								
+								callback.received(address, interpreter.transform(bb, context.sub));
+								return;
+							}
+						}
+					} catch (SQLException se) {
+						LOGGER.error("SQL error", se);
+					}
+				}
+
+				LOGGER.error("Response does not exist (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+			}
+			
+		}
+		
+		@Override
+		public void close() {
+			wrappee.close();
+			if (sqlConnection != null) {
+				try {
+					sqlConnection.close();
+				} catch (SQLException e) {
+				}
+			}
+			if (database != null) {
+				database.delete();
+			}
 		}
 	}
 	
