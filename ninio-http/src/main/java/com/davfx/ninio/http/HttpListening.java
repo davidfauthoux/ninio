@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
@@ -108,8 +109,8 @@ public final class HttpListening implements Listener.Callback {
 	}
 
 	@Override
-	public Listener.ListenerConnecting connecting() {
-		return new Listener.ListenerConnecting() {
+	public Connection connecting(final Connected connecting) {
+		return new Connection() {
 			@Override
 			public void closed() {
 				LOGGER.info("Service connection closed");
@@ -122,7 +123,6 @@ public final class HttpListening implements Listener.Callback {
 			}
 			
 			private Address from = null;
-			private Connected connecting = null;
 			
 			@Override
 			public void connected(Address address) {
@@ -537,11 +537,6 @@ public final class HttpListening implements Listener.Callback {
 						handler.received(buffer);
 					}
 				}
-			}
-
-			@Override
-			public void connecting(Connected connecting) {
-				this.connecting = connecting;
 			}
 		};
 	}

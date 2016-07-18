@@ -5,8 +5,6 @@ import java.net.InetAddress;
 import java.net.ProtocolFamily;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
-import java.util.Deque;
-import java.util.LinkedList;
 import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
@@ -18,7 +16,7 @@ public final class RawSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(RawSocket.class);
 
-	public static interface Builder extends NinioBuilder<RawSocket> {
+	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder family(ProtocolFamily family);
 		Builder protocol(int protocol);
 		Builder bind(Address bindAddress);
@@ -50,12 +48,10 @@ public final class RawSocket implements Connecter {
 			
 			@Override
 			public RawSocket create(Queue queue) {
-				return new RawSocket(queue, family, protocol, bindAddress);
+				return new RawSocket(family, protocol, bindAddress);
 			}
 		};
 	}
-	
-	private final Queue queue;
 	
 	private final ProtocolFamily family;
 	private final int protocol;
@@ -63,25 +59,10 @@ public final class RawSocket implements Connecter {
 	
 	private final Executor loop = new SerialExecutor(RawSocket.class);
 
-	private final Object lock = new Object();
 	private NativeRawSocket socket = null;
 	private boolean closed = false;
 
-	private static final class ToWrite {
-		public final Address address;
-		public final ByteBuffer buffer;
-		public final SendCallback callback;
-		public ToWrite(Address address, ByteBuffer buffer, SendCallback callback) {
-			this.address = address;
-			this.buffer = buffer;
-			this.callback = callback;
-		}
-	}
-
-	private final Deque<ToWrite> toWriteQueue = new LinkedList<>();
-
-	private RawSocket(Queue queue, ProtocolFamily family, int protocol, Address bindAddress) {
-		this.queue = queue;
+	private RawSocket(ProtocolFamily family, int protocol, Address bindAddress) {
 		this.family = family;
 		this.protocol = protocol;
 		this.bindAddress = bindAddress;
@@ -89,20 +70,22 @@ public final class RawSocket implements Connecter {
 	
 	@Override
 	public void connect(final Connection callback) {
+		if (socket != null) {
+			throw new IllegalStateException("connect() cannot be called twice");
+		}
+
+		if (closed) {
+			callback.failed(new IOException("Closed"));
+			return;
+		}
+		
 		final NativeRawSocket s;
 		try {
 			s = new NativeRawSocket((family == StandardProtocolFamily.INET) ? NativeRawSocket.PF_INET : NativeRawSocket.PF_INET6, protocol);
-		} catch (final Exception ee) {
-			synchronized (lock) {
-				closed = true;
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						callback.failed(new IOException("Failed to be created", ee));
-					}
-				});
-				return;
-			}
+		} catch (Exception ee) {
+			closed = true;
+			callback.failed(new IOException("Failed to be created", ee));
+			return;
 		}
 		
 		if (bindAddress != null) {
@@ -114,61 +97,18 @@ public final class RawSocket implements Connecter {
 					s.close();
 				} catch (Exception ce) {
 				}
-				synchronized (lock) {
-					closed = true;
-					queue.execute(new Runnable() {
-						@Override
-						public void run() {
-							callback.failed( new IOException("Could not bind to: " + bindAddress, ee));
-						}
-					});
-					return;
-				}
+				closed = true;
+				callback.failed( new IOException("Could not bind to: " + bindAddress, ee));
+				return;
 			}
 		}
 		
+		socket = s;
+
 		loop.execute(new Runnable() {
 			@Override
 			public void run() {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						callback.connected(null);
-					}
-				});
-				
-				Deque<ToWrite> q;
-				synchronized (lock) {
-					socket = s;
-					q = toWriteQueue;
-				}
-
-				for (final ToWrite toWrite : q) {
-					try {
-						while (toWrite.buffer.hasRemaining()) {
-							int r = s.write(InetAddress.getByName(toWrite.address.host), toWrite.buffer.array(), toWrite.buffer.arrayOffset() + toWrite.buffer.position(), toWrite.buffer.remaining());
-							if (r == 0) {
-								throw new IOException("Error writing to: " + toWrite.address.host);
-							}
-							toWrite.buffer.position(toWrite.buffer.position() + r);
-						}
-	
-						queue.execute(new Runnable() {
-							@Override
-							public void run() {
-								toWrite.callback.sent();
-							}
-						});
-					} catch (final Exception e) {
-						queue.execute(new Runnable() {
-							@Override
-							public void run() {
-								toWrite.callback.failed(new IOException("Could not write", e));
-							}
-						});
-					}
-				}
-				q.clear();
+				callback.connected(null);
 				
 				while (true) {
 					byte[] recvData = new byte[84];
@@ -184,89 +124,50 @@ public final class RawSocket implements Connecter {
 							b.position(headerLength);
 						}
 						
-						queue.execute(new Runnable() {
-							@Override
-							public void run() {
-								callback.received(new Address(host, 0), b);
-							}
-						});
+						callback.received(new Address(host, 0), b);
 					} catch (Exception e) {
 						LOGGER.trace("Error, probably closed", e);
 						break;
 					}
 				}
 				
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						callback.closed();
-					}
-				});
+				callback.closed();
 			}
 		});
 	}
 	
 	@Override
 	public void send(Address address, ByteBuffer buffer, final SendCallback callback) {
+		if (socket == null) {
+			throw new IllegalStateException("send() must be called after connect()");
+		}
 		try {
-			NativeRawSocket s;
-			synchronized (lock) {
-				if (closed) {
-					throw new IOException("Closed");
-				}
-				if (socket == null) {
-					toWriteQueue.addLast(new ToWrite(address, buffer, callback));
-					return;
-				}
-				s = socket;
-			}
 			
 			while (buffer.hasRemaining()) {
-				int r = s.write(InetAddress.getByName(address.host), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+				int r = socket.write(InetAddress.getByName(address.host), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 				if (r == 0) {
 					throw new IOException("Error writing to: " + address.host);
 				}
 				buffer.position(buffer.position() + r);
 			}
 
-			queue.execute(new Runnable() {
-				@Override
-				public void run() {
-					callback.sent();
-				}
-			});
-		} catch (final Exception e) {
-			queue.execute(new Runnable() {
-				@Override
-				public void run() {
-					callback.failed(new IOException("Could not write", e));
-				}
-			});
+			callback.sent();
+		} catch (Exception e) {
+			callback.failed(new IOException("Could not write", e));
 		}
 	}
 	
 	@Override
 	public void close() {
 		try {
-			NativeRawSocket s;
-			Deque<ToWrite> q;
-			synchronized (lock) {
-				if (closed) {
-					return;
-				}
-				closed = true;
-				s = socket;
-				q = toWriteQueue;
+			if (closed) {
+				return;
 			}
+			closed = true;
 			
-			if (s != null) {
-				s.close();
+			if (socket != null) {
+				socket.close();
 			}
-			IOException e = new IOException("Closed");
-			for (ToWrite toWrite : q) {
-				toWrite.callback.failed(e);
-			}
-			q.clear();
 		} catch (IOException e) {
 			LOGGER.error("Could not close", e);
 		}

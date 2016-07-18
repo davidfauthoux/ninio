@@ -17,35 +17,13 @@ public final class HttpLimit {
 				wrappee.maxRedirections(maxRedirections);
 				return this;
 			}
-			
-			@Override
-			public HttpContentSender build(HttpRequest request, final HttpReceiver callback) {
-				final Limit.Manager m = l.inc();
 
-				final HttpContentSender s = wrappee.build(request, new HttpReceiver() {
-					@Override
-					public void failed(IOException ioe) {
-						m.cancel();
-						callback.failed(ioe);
-					}
-					
-					@Override
-					public HttpContentReceiver received(HttpResponse response) {
-						final HttpContentReceiver r = callback.received(response);
-						
-						return new HttpContentReceiver() {
-							@Override
-							public void received(ByteBuffer buffer) {
-								r.received(buffer);
-							}
-							@Override
-							public void ended() {
-								m.cancel();
-								r.ended();
-							}
-						};
-					}
-				});
+			private Limit.Manager m;
+
+			@Override
+			public HttpContentSender build(HttpRequest request) {
+				m = l.inc();
+				final HttpContentSender s = wrappee.build(request);
 
 				return new HttpContentSender() {
 					@Override
@@ -79,6 +57,34 @@ public final class HttpLimit {
 						m.cancel();
 					}
 				};
+			}
+			
+			@Override
+			public void receive(final HttpReceiver callback) {
+				wrappee.receive(new HttpReceiver() {
+					@Override
+					public void failed(IOException ioe) {
+						m.cancel();
+						callback.failed(ioe);
+					}
+					
+					@Override
+					public HttpContentReceiver received(HttpResponse response) {
+						final HttpContentReceiver r = callback.received(response);
+						
+						return new HttpContentReceiver() {
+							@Override
+							public void received(ByteBuffer buffer) {
+								r.received(buffer);
+							}
+							@Override
+							public void ended() {
+								m.cancel();
+								r.ended();
+							}
+						};
+					}
+				});
 			}
 		};
 	}

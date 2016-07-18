@@ -86,7 +86,7 @@ public final class UdpSocket implements Connecter {
 			@Override
 			public void run() {
 				if (currentChannel != null) {
-					throw new IllegalStateException();
+					throw new IllegalStateException("connect() cannot be called twice");
 				}
 				if (currentSelectionKey != null) {
 					throw new IllegalStateException();

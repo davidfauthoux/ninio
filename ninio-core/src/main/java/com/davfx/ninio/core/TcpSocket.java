@@ -103,6 +103,9 @@ public final class TcpSocket implements Connecter {
 					if (closed) {
 						throw new IOException("Closed");
 					}
+					if (currentChannel != null) {
+						throw new IllegalStateException("connect() cannot be called twice");
+					}
 					
 					final SocketChannel channel = SocketChannel.open();
 					currentChannel = channel;

@@ -1,8 +1,10 @@
 package com.davfx.ninio.proxy;
 
+import java.io.IOException;
+
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ConfigurableNinioBuilder;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.util.Wait;
 
 public final class WaitProxyListening implements ProxyListening {
@@ -18,7 +20,13 @@ public final class WaitProxyListening implements ProxyListening {
 	}
 	
 	@Override
-	public ConfigurableNinioBuilder<Connector, ?> create(Address address, String header) {
+	public void connected(Address address) {
+	}
+	@Override
+	public void failed(IOException e) {
+	}
+	@Override
+	public NinioBuilder<Connecter> create(Address address, String header) {
 		return null;
 	}
 }

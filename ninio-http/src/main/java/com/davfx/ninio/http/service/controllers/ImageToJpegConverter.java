@@ -20,9 +20,11 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpContentReceiver;
+import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpReceiver;
 import com.davfx.ninio.http.HttpRequest;
+import com.davfx.ninio.http.HttpRequestBuilder;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.service.HttpController;
@@ -50,7 +52,9 @@ public final class ImageToJpegConverter implements HttpController {
 		return Http.ok().async(new HttpAsync() {
 			@Override
 			public void produce(final HttpAsyncOutput output) {
-				client.request().build(HttpRequest.of(url), new HttpReceiver() {
+				HttpRequestBuilder b = client.request();
+				HttpContentSender sender = b.build(HttpRequest.of(url));
+				b.receive(new HttpReceiver() {
 					@Override
 					public void failed(IOException ioe) {
 					}
@@ -128,7 +132,8 @@ public final class ImageToJpegConverter implements HttpController {
 							}
 						};
 					}
-				}).finish();
+				});
+				sender.finish();
 			}
 		});
 	}

@@ -7,19 +7,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
 import com.davfx.ninio.core.ByteBufferAllocator;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Queue;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.collect.ImmutableMultimap;
 
-public final class HttpSocket implements Connector {
+public final class HttpSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpSocket.class);
 
@@ -36,48 +32,12 @@ public final class HttpSocket implements Connector {
 			
 			private Address connectAddress = null;
 			
-			private Connecting connecting = null;
-			private Closing closing = null;
-			private Failing failing = null;
-			private Receiver receiver = null;
-			private Buffering buffering = null;
-			
 			@Override
 			public TcpSocket.Builder with(ByteBufferAllocator byteBufferAllocator) {
 				return this;
 			}
 			@Override
 			public TcpSocket.Builder bind(Address bindAddress) {
-				return this;
-			}
-			
-			@Override
-			public Builder closing(Closing closing) {
-				this.closing = closing;
-				return this;
-			}
-		
-			@Override
-			public Builder connecting(Connecting connecting) {
-				this.connecting = connecting;
-				return this;
-			}
-			
-			@Override
-			public Builder failing(Failing failing) {
-				this.failing = failing;
-				return this;
-			}
-			
-			@Override
-			public Builder receiving(Receiver receiver) {
-				this.receiver = receiver;
-				return this;
-			}
-			
-			@Override
-			public Builder buffering(Buffering buffering) {
-				this.buffering = buffering;
 				return this;
 			}
 			
@@ -100,18 +60,23 @@ public final class HttpSocket implements Connector {
 			}
 			
 			@Override
-			public Connector create(Queue queue) {
+			public Connecter create(Queue queue) {
 				if (httpClient == null) {
 					throw new NullPointerException("httpClient");
 				}
-				return new HttpSocket(httpClient, path, connectAddress, connecting, closing, failing, receiver, buffering);
+				return new HttpSocket(queue, httpClient, path, connectAddress);
 			}
 		};
 	}
 
+	private final Queue queue;
 	private final HttpContentSender sender;
+	private Connection connection = null;
+	private boolean closed = false;
 	
-	private HttpSocket(HttpClient httpClient, String path, final Address connectAddress, final Connecting connecting, final Closing closing, final Failing failing, final Receiver receiver, final Buffering buffering) {
+	private HttpSocket(final Queue queue, HttpClient httpClient, String path, final Address connectAddress) {
+		this.queue = queue;
+		
 		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()
 			// GZIP deflate cannot stream/flush
 			.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)
@@ -119,53 +84,132 @@ public final class HttpSocket implements Connector {
 			.build()
 		);
 
-		if (connecting != null) {
-			connecting.connected(this, connectAddress);
-		}
-		
-		sender = httpClient.request()
-			.failing(failing)
-			.buffering(buffering)
-			.receiving(new HttpReceiver() {
-				@Override
-				public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
-					if (response.status != 200) {
-						if (failing != null) {
-							failing.failed(new IOException("Could not connect to " + connectAddress + " [" + response.status + " " + response.reason + "]"));
+		HttpRequestBuilder b = httpClient.request();
+		sender = b.build(request);
+		b.receive(new HttpReceiver() {
+			@Override
+			public HttpContentReceiver received(final HttpResponse response) {
+				if (response.status != 200) {
+					queue.execute(new Runnable() {
+						@Override
+						public void run() {
+							if (closed) {
+								return;
+							}
+							if (connection != null) {
+								closed = true;
+								connection.failed(new IOException("[" + response.status + " " + response.reason + "]"));
+							}
 						}
-						return null;
+					});
+					return null;
+				}
+				
+				return new HttpContentReceiver() {
+					@Override
+					public void received(final ByteBuffer buffer) {
+						queue.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (closed) {
+									return;
+								}
+								if (connection != null) {
+									connection.received(null, buffer);
+								}
+							}
+						});
 					}
 					
-					return new HttpContentReceiver() {
-						@Override
-						public void received(ByteBuffer buffer) {
-							if (receiver != null) {
-								receiver.received(HttpSocket.this, null, buffer);
+					@Override
+					public void ended() {
+						LOGGER.debug("Connection abruptly closed by peer");
+						sender.cancel();
+						queue.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (closed) {
+									return;
+								}
+								if (connection != null) {
+									closed = true;
+									connection.closed();
+								}
 							}
+						});
+					}
+				};
+			}
+			
+			@Override
+			public void failed(final IOException ioe) {
+				queue.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (closed) {
+							return;
 						}
-						
-						@Override
-						public void ended() {
-							LOGGER.debug("Connection abruptly closed by peer");
-							sender.cancel();
-							if (closing != null) {
-								closing.closed();
-							}
+						if (connection != null) {
+							closed = true;
+							connection.failed(ioe);
 						}
-					};
-				}
-			})
-			.build(request);
+					}
+				});
+			}
+		});
 	}
 
 	@Override
 	public void close() {
 		sender.cancel();
+		queue.execute(new Runnable() {
+			@Override
+			public void run() {
+				closed = true;
+			}
+		});
 	}
 	
 	@Override
-	public Connector send(Address address, ByteBuffer buffer) {
-		sender.send(buffer);
-		return this;
+	public void send(Address address, ByteBuffer buffer, final SendCallback callback) {
+		sender.send(buffer, new SendCallback() {
+			@Override
+			public void failed(final IOException e) {
+				queue.execute(new Runnable() {
+					@Override
+					public void run() {
+						callback.failed(e);
+					}
+				});
+			}
+			
+			@Override
+			public void sent() {
+				queue.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (closed) {
+							return;
+						}
+						callback.sent();
+					}
+				});
+			}
+		});
+	}
+	
+	@Override
+	public void connect(final Connection callback) {
+		queue.execute(new Runnable() {
+			@Override
+			public void run() {
+				if (closed) {
+					callback.failed(new IOException("Closed"));
+				}
+				connection = callback;
+				callback.connected(null);
+			}
+		});
+		sender.finish(); //TODO check if finish can be called on http not-dying connection
 	}
 }

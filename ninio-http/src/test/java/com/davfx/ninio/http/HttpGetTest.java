@@ -33,8 +33,9 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
-			.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)), new HttpReceiver() {
+		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()));
+		HttpContentSender s = b.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)));
+		b.receive(new HttpReceiver() {
 				@Override
 				public void failed(IOException ioe) {
 					lock.fail(ioe);
@@ -55,7 +56,8 @@ public class HttpGetTest {
 						}
 					};
 				}
-			}).finish();
+			});
+		s.finish();
 		return lock;
 	}
 	
@@ -65,8 +67,9 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> postRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpContentSender s = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
-			.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)), new HttpReceiver() {
+		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()));
+		HttpContentSender s = b.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)));
+		b.receive(new HttpReceiver() {
 				@Override
 				public void failed(IOException e) {
 					lock.fail(e);
@@ -165,9 +168,9 @@ public class HttpGetTest {
 			Limit limit = new Limit(LIMIT);
 			try (Timeout timeout = new Timeout()) {
 				try (HttpClient client = ninio.create(HttpClient.builder().with(executor))) {
-					HttpTimeout.wrap(timeout, TIMEOUT, HttpLimit.wrap(limit, client.request()))
-					
-						.build(HttpRequest.of("http://google.com"), new HttpReceiver() {
+					HttpRequestBuilder b = HttpTimeout.wrap(timeout, TIMEOUT, HttpLimit.wrap(limit, client.request()));
+					HttpContentSender s = b.build(HttpRequest.of("http://google.com"));
+					b.receive(new HttpReceiver() {
 							@Override
 							public void failed(IOException e) {
 								e.printStackTrace();
@@ -187,7 +190,8 @@ public class HttpGetTest {
 									}
 								};
 							}
-						}).finish();
+						});
+					s.finish();
 					
 					Thread.sleep(2000);
 				}
@@ -431,8 +435,9 @@ public class HttpGetTest {
 				
 				final String url = "http://" + Address.LOCALHOST + ":" + port + "/test0";
 				final Lock<Object, IOException> lock = new Lock<>();
-				HttpContentSender s = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
-					.build(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()), new HttpReceiver() {
+				HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()));
+				HttpContentSender s = b.build(HttpRequest.of(url, HttpMethod.POST, ImmutableMultimap.<String, String>of()));
+				b.receive(new HttpReceiver() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.debug("FAILED", e);

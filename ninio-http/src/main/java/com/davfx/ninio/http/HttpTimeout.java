@@ -17,12 +17,43 @@ public final class HttpTimeout {
 				wrappee.maxRedirections(maxRedirections);
 				return this;
 			}
+
+			private Timeout.Manager m;
+
+			@Override
+			public HttpContentSender build(HttpRequest request) {
+				m = t.set(timeout);
+				final HttpContentSender s = wrappee.build(request);
+
+				return new HttpContentSender() {
+					@Override
+					public void send(ByteBuffer buffer, SendCallback callback) {
+						m.reset();
+						s.send(buffer, callback);
+					}
+					
+					@Override
+					public void finish() {
+						m.run(new Runnable() {
+							@Override
+							public void run() {
+								s.cancel(); // callback.failed will be called by underlying http client
+							}
+						});
+						s.finish();
+					}
+					
+					@Override
+					public void cancel() {
+						m.cancel();
+						s.cancel();
+					}
+				};
+			}
 			
 			@Override
-			public HttpContentSender build(HttpRequest request, final HttpReceiver callback) {
-				final Timeout.Manager m = t.set(timeout);
-
-				final HttpContentSender s = wrappee.build(request, new HttpReceiver() {
+			public void receive(final HttpReceiver callback) {
+				wrappee.receive(new HttpReceiver() {
 					@Override
 					public void failed(IOException ioe) {
 						m.cancel();
@@ -49,31 +80,6 @@ public final class HttpTimeout {
 						};
 					}
 				});
-				
-				return new HttpContentSender() {
-					@Override
-					public void send(ByteBuffer buffer, SendCallback callback) {
-						m.reset();
-						s.send(buffer, callback);
-					}
-					
-					@Override
-					public void finish() {
-						m.run(new Runnable() {
-							@Override
-							public void run() {
-								s.cancel(); // callback.failed will be called by underlying http client
-							}
-						});
-						s.finish();
-					}
-					
-					@Override
-					public void cancel() {
-						m.cancel();
-						s.cancel();
-					}
-				};
 			}
 		};
 	}

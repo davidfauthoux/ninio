@@ -11,7 +11,7 @@ import com.google.common.base.Supplier;
 public final class RoutingTcpSocketServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RoutingTcpSocketServer.class);
 
-	public static interface Builder extends NinioBuilder<Disconnectable> {
+	public static interface Builder extends NinioBuilder<Listener> {
 		Builder serve(TcpSocketServer.Builder serverBuilder);
 		Builder to(Supplier<TcpSocket.Builder> clientBuilderSupplier);
 	}
@@ -34,7 +34,7 @@ public final class RoutingTcpSocketServer {
 			}
 			
 			@Override
-			public Disconnectable create(final Queue queue) {
+			public Listener create(final Queue queue) {
 				if (serverBuilder == null) {
 					throw new NullPointerException("serverBuilder");
 				}
@@ -43,87 +43,98 @@ public final class RoutingTcpSocketServer {
 				}
 
 				final Supplier<TcpSocket.Builder> supplier = clientBuilderSupplier;
-				Listener listener = serverBuilder.create(queue);
-				listener.listen(new Listener.Callback() {
+				final Listener listener = serverBuilder.create(queue);
+
+				return new Listener() {
+					
 					@Override
-					public Connection connecting(final Connected connecting) {
-						final Connecter connecter = supplier.get().create(queue);
-						
-						connecter.connect(new Connection() {
+					public void close() {
+						listener.close();
+					}
+					
+					@Override
+					public void listen(Callback callback) {
+						listener.listen(new Listener.Callback() {
+							@Override
+							public Connection connecting(final Connected connecting) {
+								final Connecter connecter = supplier.get().create(queue);
+								
+								connecter.connect(new Connection() {
+									@Override
+									public void connected(Address address) {
+									}
+									
+									@Override
+									public void received(Address address, ByteBuffer buffer) {
+										connecting.send(address, buffer, new SendCallback() {
+											@Override
+											public void failed(IOException e) {
+												LOGGER.warn("Failed to route packet", e);
+												connecter.close();
+											}
+											@Override
+											public void sent() {
+											}
+										});
+									}
+									
+									@Override
+									public void closed() {
+										connecting.close();
+									}
+									
+									@Override
+									public void failed(IOException e) {
+										connecting.close();
+									}
+								});
+
+								return new Connection() {
+									@Override
+									public void connected(Address address) {
+									}
+									
+									@Override
+									public void received(Address address, ByteBuffer buffer) {
+										connecter.send(address, buffer, new SendCallback() {
+											@Override
+											public void failed(IOException e) {
+												LOGGER.warn("Failed to route packet", e);
+												connecter.close();
+											}
+											@Override
+											public void sent() {
+											}
+										});
+									}
+									
+									@Override
+									public void closed() {
+										connecter.close();
+									}
+									@Override
+									public void failed(IOException e) {
+										LOGGER.warn("Failed to route", e);
+										connecter.close();
+									}
+								};
+							}
+							
 							@Override
 							public void connected(Address address) {
 							}
 							
 							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								connecting.send(address, buffer, new SendCallback() {
-									@Override
-									public void failed(IOException e) {
-										LOGGER.warn("Failed to route packet", e);
-										connecter.close();
-									}
-									@Override
-									public void sent() {
-									}
-								});
+							public void failed(IOException e) {
+								LOGGER.warn("Failed to listen", e);
 							}
 							
 							@Override
 							public void closed() {
-								connecting.close();
-							}
-							
-							@Override
-							public void failed(IOException e) {
-								connecting.close();
 							}
 						});
-
-						return new Connection() {
-							@Override
-							public void connected(Address address) {
-							}
-							
-							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								connecter.send(address, buffer, new SendCallback() {
-									@Override
-									public void failed(IOException e) {
-										LOGGER.warn("Failed to route packet", e);
-										connecter.close();
-									}
-									@Override
-									public void sent() {
-									}
-								});
-							}
-							
-							@Override
-							public void closed() {
-								connecter.close();
-							}
-							@Override
-							public void failed(IOException e) {
-								LOGGER.warn("Failed to route", e);
-								connecter.close();
-							}
-						};
 					}
-					
-					@Override
-					public void connected(Address address) {
-					}
-					
-					@Override
-					public void failed(IOException e) {
-						LOGGER.warn("Failed to listen", e);
-					}
-					
-					@Override
-					public void closed() {
-					}
-				});
-				return listener;
+				};
 			}
 		};
 	}

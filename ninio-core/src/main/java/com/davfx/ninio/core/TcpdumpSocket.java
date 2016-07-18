@@ -10,7 +10,6 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -66,7 +65,7 @@ public final class TcpdumpSocket implements Connecter {
 				if (interfaceId == null) {
 					throw new NullPointerException("interfaceId");
 				}
-				return new TcpdumpSocket(queue, interfaceId, rule, bindAddress);
+				return new TcpdumpSocket(interfaceId, rule, bindAddress);
 			}
 		};
 	}
@@ -94,32 +93,15 @@ public final class TcpdumpSocket implements Connecter {
 		new ClassThreadFactory(TcpdumpSocket.class, name).newThread(runnable).start();
 	}
 	
-	private final Queue queue;
-	
 	private final String interfaceId;
 	private final String rule;
 	private final Address bindAddress;
 
-	private final Object lock = new Object();
 	private DatagramSocket socket = null;
 	private Process process = null;
 	private boolean closed = false;
 
-	private static final class ToWrite {
-		public final Address address;
-		public final ByteBuffer buffer;
-		public final SendCallback callback;
-		public ToWrite(Address address, ByteBuffer buffer, SendCallback callback) {
-			this.address = address;
-			this.buffer = buffer;
-			this.callback = callback;
-		}
-	}
-
-	private final Deque<ToWrite> toWriteQueue = new LinkedList<>();
-
-	private TcpdumpSocket(Queue queue, String interfaceId, String rule, Address bindAddress) { //, final boolean promiscuous) {
-		this.queue = queue;
+	private TcpdumpSocket(String interfaceId, String rule, Address bindAddress) { //, final boolean promiscuous) {
 		this.interfaceId = interfaceId;
 		this.rule = rule;
 		this.bindAddress = bindAddress;
@@ -127,6 +109,15 @@ public final class TcpdumpSocket implements Connecter {
 	
 	@Override
 	public void connect(final Connection callback) {
+		if (socket != null) {
+			throw new IllegalStateException("connect() cannot be called twice");
+		}
+
+		if (closed) {
+			callback.failed(new IOException("Closed"));
+			return;
+		}
+
 		final DatagramSocket s;
 		try {
 			if (bindAddress == null) {
@@ -146,17 +137,10 @@ public final class TcpdumpSocket implements Connecter {
 				s.close();
 				throw se;
 			}
-		} catch (final IOException ee) {
-			synchronized (lock) {
-				closed = true;
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						callback.failed(new IOException("Could not create send socket", ee));
-					}
-				});
-				return;
-			}
+		} catch (IOException ee) {
+			closed = true;
+			callback.failed(new IOException("Could not create send socket", ee));
+			return;
 		}
 		
 		//
@@ -198,66 +182,17 @@ public final class TcpdumpSocket implements Connecter {
 		try {
 			LOGGER.info("In: {}, executing: {}", dir.getCanonicalPath(), Joiner.on(' ').join(toExec));
 			p = pb.start();
-		} catch (final IOException ee) {
+		} catch (IOException ee) {
 			s.close();
-			synchronized (lock) {
-				closed = true;
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						callback.failed(new IOException("Could not create process", ee));
-					}
-				});
-				return;
-			}
+			closed = true;
+			callback.failed(new IOException("Could not create process", ee));
+			return;
 		}
 
-		Deque<ToWrite> q;
-		synchronized (lock) {
-			if (closed) {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						callback.failed(new IOException("Closed"));
-					}
-				});
-				return;
-			}
-			
-			socket = s;
-			process = p;
+		socket = s;
+		process = p;
 
-			queue.execute(new Runnable() {
-				@Override
-				public void run() {
-					callback.connected(null);
-				}
-			});
-			
-			q = toWriteQueue;
-		}
-		
-		for (final ToWrite toWrite : q) {
-			try {
-				DatagramPacket packet = new DatagramPacket(toWrite.buffer.array(), toWrite.buffer.arrayOffset() + toWrite.buffer.position(), toWrite.buffer.remaining(), InetAddress.getByName(toWrite.address.host), toWrite.address.port);
-				s.send(packet);
-
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						toWrite.callback.sent();
-					}
-				});
-			} catch (final Exception e) {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						toWrite.callback.failed(new IOException("Could not write", e));
-					}
-				});
-			}
-		}
-		q.clear();
+		callback.connected(null);
 		
 		final InputStream error = process.getErrorStream();
 		execute("err", new Runnable() {
@@ -326,20 +261,9 @@ public final class TcpdumpSocket implements Connecter {
 				s.close();
 				
 				if (code != 0) {
-					final int c = code;
-					queue.execute(new Runnable() {
-						@Override
-						public void run() {
-							callback.failed(new IOException("Non zero return code from tcpdump: " + c));
-						}
-					});
+					callback.failed(new IOException("Non zero return code from tcpdump: " + code));
 				} else {
-					queue.execute(new Runnable() {
-						@Override
-						public void run() {
-							callback.closed();
-						}
-					});
+					callback.closed();
 				}
 			}
 		});
@@ -347,65 +271,38 @@ public final class TcpdumpSocket implements Connecter {
 	
 	@Override
 	public void send(Address address, ByteBuffer buffer, final SendCallback callback) {
+		if (socket == null) {
+			throw new IllegalStateException("send() must be called after connect()");
+		}
+
 		LOGGER.trace("Sending datagram to: {}", address);
 
 		try {
-			DatagramSocket s;
-			synchronized (lock) {
-				if (closed) {
-					throw new IOException("Closed");
-				}
-				if (socket == null) {
-					toWriteQueue.addLast(new ToWrite(address, buffer, callback));
-					return;
-				}
-				s = socket;
+			if (closed) {
+				throw new IOException("Closed");
 			}
 
 			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByName(address.host), address.port);
-			s.send(packet);
+			socket.send(packet);
 
-			queue.execute(new Runnable() {
-				@Override
-				public void run() {
-					callback.sent();
-				}
-			});
-		} catch (final Exception e) {
-			queue.execute(new Runnable() {
-				@Override
-				public void run() {
-					callback.failed(new IOException("Could not write", e));
-				}
-			});
+			callback.sent();
+		} catch (Exception e) {
+			callback.failed(new IOException("Could not write", e));
 		}
 	}
 	
 	@Override
 	public void close() {
-		DatagramSocket s;
-		Process p;
-		Deque<ToWrite> q;
-		synchronized (lock) {
-			if (closed) {
-				return;
-			}
-			closed = true;
-			s = socket;
-			p = process;
-			q = toWriteQueue;
+		if (closed) {
+			return;
 		}
+		closed = true;
 		
-		if (s != null) {
-			s.close();
+		if (socket != null) {
+			socket.close();
 		}
-		if (p != null) {
-			p.destroy();
+		if (process != null) {
+			process.destroy();
 		}
-		IOException e = new IOException("Closed");
-		for (ToWrite toWrite : q) {
-			toWrite.callback.failed(e);
-		}
-		q.clear();
 	}
 }

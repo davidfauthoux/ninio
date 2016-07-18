@@ -22,10 +22,10 @@ public final class Main {
 		int port = config.getInt("port");
 		File dir = new File(config.getString("directory"));
 		try (Ninio ninio = Ninio.create()) {
-			try (Listener.Listening tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))
-					.listen(HttpListening.builder()
+			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
+				tcp.listen(HttpListening.builder()
 							.with(new SerialExecutor(Main.class))
-							.with(Annotated.builder(HttpService.builder()).register(new FileAssets(dir, "index.html")).build()).build())) {
+							.with(Annotated.builder(HttpService.builder()).register(new FileAssets(dir, "index.html")).build()).build());
 				new Wait().waitFor();
 			}
 		}

@@ -240,8 +240,14 @@ public final class HttpClient implements Disconnectable {
 				return this;
 			}
 			
+			private HttpReceiver callback = null;
+			
 			@Override
-			public HttpContentSender build(final HttpRequest request, final HttpReceiver callback) {
+			public HttpContentSender build(final HttpRequest request) {
+				if (callback != null) {
+					throw new IllegalStateException();
+				}
+				
 				final int thisMaxRedirections = maxRedirections;
 				
 				return new HttpContentSender() {
@@ -643,6 +649,10 @@ public final class HttpClient implements Disconnectable {
 					
 					@Override
 					public void send(final ByteBuffer buffer, final SendCallback callback) {
+						if (callback == null) {
+							throw new IllegalStateException();
+						}
+						
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -664,6 +674,10 @@ public final class HttpClient implements Disconnectable {
 
 					@Override
 					public void finish() {
+						if (callback == null) {
+							throw new IllegalStateException();
+						}
+						
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -682,6 +696,10 @@ public final class HttpClient implements Disconnectable {
 
 					@Override
 					public void cancel() {
+						if (callback == null) {
+							throw new IllegalStateException();
+						}
+						
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -698,6 +716,15 @@ public final class HttpClient implements Disconnectable {
 						});
 					}
 				};
+			}
+			
+			@Override
+			public void receive(final HttpReceiver c) {
+				if (callback != null) {
+					throw new IllegalStateException();
+				}
+				
+				callback = c;
 			}
 		};
 	}

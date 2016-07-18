@@ -12,13 +12,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.RoutingTcpSocketServer;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.WaitClosing;
-import com.davfx.ninio.core.WaitListenConnecting;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.Annotated.Builder;
 import com.davfx.ninio.http.service.HttpController;
@@ -64,15 +65,33 @@ class TestUtils {
 	}
 	
 	static Disconnectable server(Ninio ninio, int port, Visitor v) {
-		Annotated.Builder a = Annotated.builder(HttpService.builder());
+		LOGGER.debug("CREATING ON PORT: {}", port);
+		final Annotated.Builder a = Annotated.builder(HttpService.builder());
 		v.visit(a);
 
-		Wait wait = new Wait();
+		final Wait wait = new Wait();
 		final Wait waitForClosing = new Wait();
-		final Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-				.closing(new WaitClosing(waitForClosing))
-				.connecting(new WaitListenConnecting(wait)).listening(
-						HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
+		final Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
+		tcp.listen(new Listener.Callback() {
+			@Override
+			public void closed() {
+				waitForClosing.run();
+			}
+			
+			@Override
+			public void failed(IOException e) {
+			}
+			
+			@Override
+			public void connected(Address address) {
+				wait.run();
+			}
+			
+			@Override
+			public Connection connecting(Connected connecting) {
+				return HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build().connecting(connecting);
+			}
+		});
 		wait.waitFor();
 		return new Disconnectable() {
 			@Override
@@ -84,29 +103,75 @@ class TestUtils {
 	}
 
 	static Disconnectable routedServer(Ninio ninio, int routedPort, final int port, Visitor v) {
-		Annotated.Builder a = Annotated.builder(HttpService.builder());
+		LOGGER.debug("CREATING ROUTED ON PORTS: {} -> {}", routedPort, port);
+		final Annotated.Builder a = Annotated.builder(HttpService.builder());
 		v.visit(a);
 
-		Wait wait = new Wait();
-		final Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-				.connecting(new WaitListenConnecting(wait)).listening(
-						HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build()));
+		final Wait wait = new Wait();
+		final Wait waitForClosing = new Wait();
+		final Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
+		tcp.listen(new Listener.Callback() {
+			@Override
+			public void closed() {
+				waitForClosing.run();
+			}
+			
+			@Override
+			public void failed(IOException e) {
+			}
+			
+			@Override
+			public void connected(Address address) {
+				wait.run();
+			}
+			
+			@Override
+			public Connection connecting(Connected connecting) {
+				return HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build().connecting(connecting);
+			}
+		});
 		wait.waitFor();
 
-		Wait routedWait = new Wait();
-		final Disconnectable routedTcp = ninio.create(RoutingTcpSocketServer.builder().serve(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort))
-				.connecting(new WaitListenConnecting(routedWait))).to(new Supplier<TcpSocket.Builder>() {
-							@Override
-							public TcpSocket.Builder get() {
-								return TcpSocket.builder().to(new Address(Address.LOCALHOST, port));
-							}
-						}));
+		final Wait routedWait = new Wait();
+		final Wait routedWaitForClosing = new Wait();
+		final Listener routedTcp = ninio.create(/*TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)));*/
+			RoutingTcpSocketServer.builder().serve(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)))
+				.to(new Supplier<TcpSocket.Builder>() {
+					@Override
+					public TcpSocket.Builder get() {
+						return TcpSocket.builder().to(new Address(Address.LOCALHOST, port));
+					}
+				})
+		);
+		routedTcp.listen(new Listener.Callback() {
+			@Override
+			public void closed() {
+				routedWaitForClosing.run();
+			}
+			
+			@Override
+			public void failed(IOException e) {
+			}
+			
+			@Override
+			public void connected(Address address) {
+				routedWait.run();
+			}
+			
+			@Override
+			public Connection connecting(Connected connecting) {
+				return HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build().connecting(connecting);
+			}
+		});
 		routedWait.waitFor();
+
 		return new Disconnectable() {
 			@Override
 			public void close() {
-				routedTcp.close();				
-				tcp.close();				
+				routedTcp.close();	
+				tcp.close();
+				waitForClosing.waitFor();
+				routedWaitForClosing.waitFor();
 			}
 		};
 	}

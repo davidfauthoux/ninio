@@ -22,7 +22,6 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.ConfigUtils;
-import com.davfx.ninio.util.Mutable;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.typesafe.config.Config;
@@ -155,23 +154,20 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	@Override
-	public Cancelable get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid, final SnmpReceiver callback) {
-		final Mutable<Instance> instance = new Mutable<>();
+	public Cancelable get(final Address address, String community, final AuthRemoteSpecification authRemoteSpecification, Oid oid, SnmpReceiver callback) {
+		final Instance instance = new Instance(connecter, instanceMapper, callback, oid, address, community);
 
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 				if (authRemoteSpecification != null) {
-					authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
-					if (authRemoteEnginePendingRequestManager == null) {
-						authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-						authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+					instance.authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+					if (instance.authRemoteEnginePendingRequestManager == null) {
+						instance.authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+						authRemoteEngines.put(address, instance.authRemoteEnginePendingRequestManager);
 					}
-					authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecter);
+					instance.authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecter);
 				}
-				
-				instance.value = new Instance(connecter, instanceMapper, callback, oid, address, community, authRemoteEnginePendingRequestManager);
 			}
 		});
 		
@@ -181,7 +177,7 @@ public final class SnmpClient implements SnmpConnecter {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						instance.value.cancel();
+						instance.cancel();
 					}
 				});
 			}
@@ -406,9 +402,9 @@ public final class SnmpClient implements SnmpConnecter {
 
 		private final Address address;
 		private final String community;
-		private final AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
+		private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Oid requestOid, Address address, String community) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
@@ -419,7 +415,6 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			this.address = address;
 			this.community = community;
-			this.authRemoteEnginePendingRequestManager = authRemoteEnginePendingRequestManager;
 
 			instanceMapper.map(this);
 			shouldRepeatWhat = BerConstants.GET;

@@ -94,7 +94,10 @@ public final class TcpSocketServer implements Listener {
 					if (closed) {
 						throw new IOException("Closed");
 					}
-					
+					if (currentServerChannel != null) {
+						throw new IllegalStateException("listen() cannot be called twice");
+					}
+
 					final ServerSocketChannel serverChannel = ServerSocketChannel.open();
 					currentServerChannel = serverChannel;
 					try {
@@ -339,6 +342,7 @@ public final class TcpSocketServer implements Listener {
 				serverChannel.close();
 			} catch (IOException e) {
 			}
+			LOGGER.debug("Server channel closed, bindAddress = {}", bindAddress);
 		}
 		if (acceptSelectionKey != null) {
 			acceptSelectionKey.cancel();

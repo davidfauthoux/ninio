@@ -104,7 +104,6 @@ public class HttpSocketTest {
 		}
 	}
 	
-	// This test is exactly the same as above, but it is used to check a new SocketReady can be open another time, maybe in the same JVM
 	@Test
 	public void testSocketSameToCheckClose() throws Exception {
 		testSocket();

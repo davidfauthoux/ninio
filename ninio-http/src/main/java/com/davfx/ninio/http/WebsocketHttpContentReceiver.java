@@ -1,16 +1,17 @@
 package com.davfx.ninio.http;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Listening;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.hash.Hashing;
@@ -21,7 +22,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 
 	private final HttpContentReceiver receiver;
 
-	public WebsocketHttpContentReceiver(HttpRequest request, HttpListeningHandler.ConnectionHandler.ResponseHandler responseHandler, final boolean textResponses, Listening listening) {
+	public WebsocketHttpContentReceiver(HttpRequest request, HttpListeningHandler.ResponseHandler responseHandler, final boolean textResponses, Listener.Callback listening) {
 		String wsKey = null;
 		for (String v : request.headers.get("Sec-WebSocket-Key")) {
 			wsKey = v;
@@ -56,7 +57,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 
 		final HttpContentSender sender = responseHandler.send(response);
 
-		Connector innerConnector = new Connector() {
+		Connection connection = listening.connecting(new Connected() {
 			//%% private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
 			
 			@Override
@@ -67,7 +68,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 			}
 			
 			@Override
-			public Connector send(Address address, ByteBuffer buffer) {
+			public void send(Address address, ByteBuffer buffer, SendCallback callback) {
 				/*%%
 				deflater.reset();
 				deflater.setInput(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
@@ -90,18 +91,14 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 				}
 				*/
 				
-				sender.send(WebsocketUtils.headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()));
-				sender.send(buffer);
-				return this;
+				sender.send(WebsocketUtils.headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()), new NopConnecterConnectingCallback());
+				sender.send(buffer, callback);
 			}
-		};
+		});
 		
-		Listening.Connection connection = listening.connecting(request.address, innerConnector);
+		listening.connected(request.address);
 
-		Connecting connecting = connection.connecting();
-		receiver = new WebsocketFrameReader(innerConnector, connection.receiver(), connection.closing(), sender);
-
-		connecting.connected(innerConnector, request.address);
+		receiver = new WebsocketFrameReader(connection, sender);
 	}
 
 	@Override
@@ -119,8 +116,6 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 	}
 	
 	private static final class WebsocketFrameReader implements HttpContentReceiver {
-		private final Connector innerConnector;
-		
 		private boolean opcodeRead = false;
 		private int currentOpcode;
 		private boolean lenRead = false;
@@ -136,26 +131,33 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		
 		private long toPing = 0L;
 
-		private final Receiver receiver;
-		private final Closing closing;
+		private final Connection connection;
 		private final HttpContentSender sender;
 		
-		public WebsocketFrameReader(Connector innerConnector, Receiver receiver, Closing closing, HttpContentSender sender) {
-			this.innerConnector = innerConnector;
-			this.receiver = receiver;
-			this.closing = closing;
+		public WebsocketFrameReader(Connection connection, HttpContentSender sender) {
+			this.connection = connection;
 			this.sender = sender;
 		}
 		
 		@Override
 		public void received(ByteBuffer buffer) {
+			SendCallback sendCallback = new SendCallback() {
+				@Override
+				public void failed(IOException e) {
+					sender.cancel();
+				}
+				@Override
+				public void sent() {
+				}
+			};
+			
 			while (buffer.hasRemaining()) {
 				if (!opcodeRead && buffer.hasRemaining()) {
 					int v = buffer.get() & 0xFF;
 					if ((v & 0x80) != 0x80) {
 						LOGGER.error("Current implementation handles only FIN packets");
 						sender.cancel();
-						closing.closed();
+						connection.closed();
 						return;
 					}
 					currentOpcode = v & 0x0F;
@@ -252,21 +254,17 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 					if (opcode == 0x09) {
 						if (toPing == 0L) {
 							toPing = frameLength;
-							sender.send(WebsocketUtils.headerOf(0x0A, frameLength));
+							sender.send(WebsocketUtils.headerOf(0x0A, frameLength), sendCallback);
 						}
 
 						toPing -= partialBuffer.remaining();
-						sender.send(partialBuffer);
+						sender.send(partialBuffer, sendCallback);
 					} else if ((opcode == 0x01) || (opcode == 0x02)) {
-						if (receiver != null) {
-							receiver.received(innerConnector, null, partialBuffer);
-						}
+						connection.received(null, partialBuffer);
 					} else if (opcode == 0x08) {
 						LOGGER.trace("Connection requested by peer");
 						sender.cancel();
-						if (closing != null) {
-							closing.closed();
-						}
+						connection.closed();
 						break;
 					}
 				}

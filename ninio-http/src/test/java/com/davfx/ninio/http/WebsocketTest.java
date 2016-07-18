@@ -8,15 +8,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Buffering;
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
-import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.Receiver;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.util.SerialExecutor;
@@ -30,77 +27,67 @@ public class WebsocketTest {
 	private static Disconnectable server(Ninio ninio, int port) throws IOException {
 		final byte[] indexHtml= Files.toByteArray(new File("src/test/resources/files/ws.html"));
 		
-		Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)).listening(HttpListening.builder().with(new SerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
+		Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
+		tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
 			@Override
-			public ConnectionHandler create() {
-				return new ConnectionHandler() {
-					@Override
-					public HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler) {
-						LOGGER.debug("----> {}", request);
-						if (request.path.equals("/ws")) {
-							return new WebsocketHttpContentReceiver(request, responseHandler, false, new Listening() {
-								@Override
-								public Connection connecting(Address from, Connector connector) {
-									return new Connection() {
-										public Failing failing() {
-											return new Failing() {
-												@Override
-												public void failed(IOException e) {
-													LOGGER.warn("Socket failed <--", e);
-												}
-											};
-										}
-										public Connecting connecting() {
-											return new Connecting() {
-												@Override
-												public void connected(Connector connector, Address address) {
-													LOGGER.debug("Socket connected <--");
-												}
-											};
-										}
-										public Closing closing() {
-											return new Closing() {
-												@Override
-												public void closed() {
-													LOGGER.debug("Socket closed <--");
-												}
-											};
-										}
-										public Receiver receiver() {
-											return new Receiver() {
-												@Override
-												public void received(Connector connector, Address address, ByteBuffer buffer) {
-													String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
-													LOGGER.debug("Received {} <--: {}", address, s);
-													connector.send(null, ByteBuffer.wrap(("ECHO " + s).getBytes(Charsets.UTF_8)));
-												}
-											};
-										}
-										@Override
-										public Buffering buffering() {
-											return null;
-										}
-									};
-								}
-							});
-						} else if (request.path.equals("/")) {
-							responseHandler.send(HttpResponse.ok()).send(ByteBuffer.wrap(indexHtml)).finish();;
-							//responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(indexHtml.length)))).send(ByteBuffer.wrap(indexHtml)).finish();;
-							return null;
-						} else {
-							responseHandler.send(HttpResponse.notFound()).finish();
-							return null;
+			public HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler) {
+				LOGGER.debug("----> {}", request);
+				if (request.path.equals("/ws")) {
+					return new WebsocketHttpContentReceiver(request, responseHandler, false, new Listener.Callback() {
+						@Override
+						public void failed(IOException e) {
+							LOGGER.warn("Socket failed <--", e);
 						}
-					}
-					@Override
-					public void closed() {
-					}
-					@Override
-					public void buffering(long size) {
-					}
-				};
+						@Override
+						public void connected(Address address) {
+							LOGGER.debug("Socket connected <--");
+						}
+						@Override
+						public void closed() {
+							LOGGER.debug("Socket closed <--");
+						}
+						@Override
+						public Connection connecting(final Connected connecting) {
+							return new Connection() {
+								@Override
+								public void connected(Address address) {
+								}
+								@Override
+								public void received(Address address, ByteBuffer buffer) {
+									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
+									LOGGER.debug("Received {} <--: {}", address, s);
+									connecting.send(null, ByteBuffer.wrap(("ECHO " + s).getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+								}
+								@Override
+								public void closed() {
+								}
+								@Override
+								public void failed(IOException e) {
+								}
+							};
+						}
+					});
+				} else if (request.path.equals("/")) {
+					HttpContentSender s = responseHandler.send(HttpResponse.ok());
+					s.send(ByteBuffer.wrap(indexHtml), new NopConnecterConnectingCallback());
+					s.finish();
+					//responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(indexHtml.length)))).send(ByteBuffer.wrap(indexHtml)).finish();;
+					return null;
+				} else {
+					responseHandler.send(HttpResponse.notFound()).finish();
+					return null;
+				}
 			}
-		}).build()));
+			@Override
+			public void closed() {
+			}
+			@Override
+			public void connected() {
+			}
+			@Override
+			public void failed(IOException ioe) {
+			}
+		}).build());
 		return tcp;
 	}
 	

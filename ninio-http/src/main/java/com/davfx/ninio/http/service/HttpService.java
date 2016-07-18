@@ -13,8 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpHeaderKey;
@@ -363,7 +363,7 @@ public final class HttpService implements HttpListeningHandler {
 							} else {
 								final InputStream stream = http.stream;
 								
-								Connecter.Connecting.Callback sendCallback = new Connecter.Connecting.Callback() {
+								SendCallback sendCallback = new SendCallback() {
 									@Override
 									public void sent() {
 										byte[] b = new byte[STREAMING_BUFFER_SIZE];
