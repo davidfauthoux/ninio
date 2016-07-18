@@ -22,50 +22,51 @@ public class TcpTest {
 			Wait serverWaitClosing = new Wait();
 			final Wait serverWaitClientConnecting = new Wait();
 			final Wait serverWaitClientClosing = new Wait();
-			try (Listener.Listening server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))).listen(
-				new WaitConnectedListenerCallback(serverWaitConnecting,
-				new WaitClosedListenerCallback(serverWaitClosing,
-				new LockFailedListenerCallback(lock,
-				new Listener.Callback() {
-					@Override
-					public void failed(IOException ioe) {
-					}
-					@Override
-					public void connected() {
-					}
-					@Override
-					public void closed() {
-					}
-					
-					@Override
-					public Connecting connecting() {
-						return new Connecting() {
-							private Connecter.Connecting connecting;
-							
-							@Override
-							public void connecting(Connecter.Connecting connecting) {
-								this.connecting = connecting;
-							}
-							@Override
-							public void received(Address address, ByteBuffer buffer) {
-								connecting.send(null, buffer, new NopConnecterConnectingCallback());
-							}
-							
-							@Override
-							public void failed(IOException ioe) {
-								lock.fail(ioe);
-							}
-							@Override
-							public void connected(Address address) {
-								serverWaitClientConnecting.run();
-							}
-							@Override
-							public void closed() {
-								serverWaitClientClosing.run();
-							}
-						};
-					}
-				}))))) {
+			try (Listener server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
+				server.listen(
+					new WaitConnectedListenerCallback(serverWaitConnecting,
+					new WaitClosedListenerCallback(serverWaitClosing,
+					new LockFailedListenerCallback(lock,
+					new Listener.Callback() {
+						@Override
+						public void failed(IOException ioe) {
+						}
+						@Override
+						public void connected(Address address) {
+						}
+						@Override
+						public void closed() {
+						}
+						
+						@Override
+						public Listener.ListenerConnecting connecting() {
+							return new Listener.ListenerConnecting() {
+								private Connected connecting;
+								
+								@Override
+								public void connecting(Connected connecting) {
+									this.connecting = connecting;
+								}
+								@Override
+								public void received(Address address, ByteBuffer buffer) {
+									connecting.send(null, buffer, new NopConnecterConnectingCallback());
+								}
+								
+								@Override
+								public void failed(IOException ioe) {
+									lock.fail(ioe);
+								}
+								@Override
+								public void connected(Address address) {
+									serverWaitClientConnecting.run();
+								}
+								@Override
+								public void closed() {
+									serverWaitClientClosing.run();
+								}
+							};
+						}
+					}))));
 
 				serverWaitConnecting.waitFor();
 
@@ -73,12 +74,13 @@ public class TcpTest {
 				Wait clientWaitClosing = new Wait();
 				Wait clientWaitSent = new Wait();
 
-				try (Connecter.Connecting client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port))).connect(
+				try (Connecter client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))) {
+					client.connect(
 						new WaitConnectedConnecterCallback(clientWaitConnecting, 
 						new WaitClosedConnecterCallback(clientWaitClosing, 
 						new LockFailedConnecterCallback(lock, 
 						new LockReceivedConnecterCallback(lock,
-						new NopConnecterCallback())))))) {
+						new NopConnecterCallback())))));
 					client.send(null, ByteBufferUtils.toByteBuffer("test"),
 						new WaitSentConnecterConnectingCallback(clientWaitSent,
 						new LockFailedConnecterConnectingCallback(lock,

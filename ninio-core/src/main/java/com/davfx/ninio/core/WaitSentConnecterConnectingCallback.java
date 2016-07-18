@@ -4,11 +4,11 @@ import java.io.IOException;
 
 import com.davfx.ninio.util.Wait;
 
-public final class WaitSentConnecterConnectingCallback implements Connecter.Connecting.Callback {
+public final class WaitSentConnecterConnectingCallback implements SendCallback {
 	private final Wait wait;
-	private final Connecter.Connecting.Callback wrappee;
+	private final SendCallback wrappee;
 	
-	public WaitSentConnecterConnectingCallback(Wait wait, Connecter.Connecting.Callback wrappee) {
+	public WaitSentConnecterConnectingCallback(Wait wait, SendCallback wrappee) {
 		this.wait = wait;
 		this.wrappee = wrappee;
 	}

@@ -53,7 +53,7 @@ final class GzipWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+	public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
@@ -77,7 +77,7 @@ final class GzipWriter implements HttpContentSender {
 		wrappee.finish();
 	}
 
-	private void write(final Connecter.Connecting.Callback callback) {
+	private void write(final Connecter.SendCallback callback) {
 		ByteBuffer toSend = null;
 		
 		if (!gzipHeaderWritten) {

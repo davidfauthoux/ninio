@@ -43,7 +43,7 @@ final class TelnetReader {
 		return ByteBuffer.wrap(new byte[] { IAC, response, command });
 	}
 
-	public void handle(ByteBuffer buffer, Connecter.Callback wrappee, Connecter.Connecting back) {
+	public void handle(ByteBuffer buffer, Connecter.ConnectCallback wrappee, Connecter back) {
 		if (closed) {
 			return;
 		}

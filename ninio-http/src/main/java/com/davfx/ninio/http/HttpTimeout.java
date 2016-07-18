@@ -3,7 +3,7 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Connecter.Connecting.Callback;
+import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Timeout;
 
 public final class HttpTimeout {
@@ -52,7 +52,7 @@ public final class HttpTimeout {
 				
 				return new HttpContentSender() {
 					@Override
-					public void send(ByteBuffer buffer, Callback callback) {
+					public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
 						m.reset();
 						s.send(buffer, callback);
 					}

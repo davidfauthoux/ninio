@@ -5,11 +5,11 @@ import java.nio.ByteBuffer;
 
 import com.davfx.ninio.util.Wait;
 
-public final class WaitConnectedConnecterCallback implements Connecter.Callback {
+public final class WaitConnectedConnecterCallback implements Connection {
 	private final Wait wait;
-	private final Connecter.Callback wrappee;
+	private final Connection wrappee;
 	
-	public WaitConnectedConnecterCallback(Wait wait, Connecter.Callback wrappee) {
+	public WaitConnectedConnecterCallback(Wait wait, Connection wrappee) {
 		this.wait = wait;
 		this.wrappee = wrappee;
 	}

@@ -60,8 +60,8 @@ public final class TcpSocketServer implements Listener {
 	
 	private static final class ToWrite {
 		public final ByteBuffer buffer;
-		public final Connecter.Connecting.Callback callback;
-		public ToWrite(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+		public final SendCallback callback;
+		public ToWrite(ByteBuffer buffer, SendCallback callback) {
 			this.buffer = buffer;
 			this.callback = callback;
 		}
@@ -77,6 +77,7 @@ public final class TcpSocketServer implements Listener {
 	private SelectionKey currentAcceptSelectionKey = null;
 	
 	private boolean closed = false;
+	private Listener.Callback listenCallback = null;
 
 	private TcpSocketServer(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress) {
 		this.queue = queue;
@@ -85,11 +86,15 @@ public final class TcpSocketServer implements Listener {
 	}
 	
 	@Override
-	public Listener.Listening listen(final Listener.Callback callback) {
+	public void listen(final Listener.Callback callback) {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
 				try {
+					if (closed) {
+						throw new IOException("Closed");
+					}
+					
 					final ServerSocketChannel serverChannel = ServerSocketChannel.open();
 					currentServerChannel = serverChannel;
 					try {
@@ -118,13 +123,13 @@ public final class TcpSocketServer implements Listener {
 									LOGGER.debug("-> Accepting client on: {}", bindAddress);
 									final SocketChannel outboundChannel = ssc.accept();
 
-									final Listener.Callback.Connecting connection = callback.connecting();
+									final Listener.ListenerConnecting connection = callback.connecting();
 									final InnerSocketContext context = new InnerSocketContext(outboundChannels, connection);
 									context.currentChannel = outboundChannel;
 
 									final Address clientAddress = new Address(outboundChannel.socket().getInetAddress().getHostAddress(), outboundChannel.socket().getPort());
 
-									connection.connecting(new Connecter.Connecting() {
+									connection.connecting(new Connected() {
 										@Override
 										public void close() {
 											queue.execute(new Runnable() {
@@ -136,7 +141,7 @@ public final class TcpSocketServer implements Listener {
 										}
 										
 										@Override
-										public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
+										public void send(final Address address, final ByteBuffer buffer, final SendCallback callback) {
 											queue.execute(new Runnable() {
 												@Override
 												public void run() {
@@ -285,6 +290,7 @@ public final class TcpSocketServer implements Listener {
 							LOGGER.debug("-> Bound on: {}", a);
 							serverChannel.socket().bind(a);
 							acceptSelectionKey.interestOps(acceptSelectionKey.interestOps() | SelectionKey.OP_ACCEPT);
+							listenCallback = callback;
 						} catch (IOException e) {
 							disconnect(serverChannel, acceptSelectionKey, null);
 							throw new IOException("Could not bind to: " + bindAddress, e);
@@ -302,21 +308,19 @@ public final class TcpSocketServer implements Listener {
 					return;
 				}
 
-				callback.connected();
+				callback.connected(null);
 			}
 		});
-		
-		return new Listener.Listening() {
+	}
+	
+	@Override
+	public void close() {
+		queue.execute(new Runnable() {
 			@Override
-			public void close() {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						disconnect(currentServerChannel, currentAcceptSelectionKey, callback);
-					}
-				});
+			public void run() {
+				disconnect(currentServerChannel, currentAcceptSelectionKey, listenCallback);
 			}
-		};
+		});
 	}
 	
 	private void disconnect(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey, Listener.Callback callback) {
@@ -353,14 +357,14 @@ public final class TcpSocketServer implements Listener {
 		
 		SocketChannel currentChannel = null;
 		SelectionKey currentSelectionKey = null;
-		final Listener.Callback.Connecting connection;
+		final Listener.ListenerConnecting connection;
 
 		final Deque<ToWrite> toWriteQueue = new LinkedList<>();
 		long toWriteLength = 0L;
 		
 		boolean closed = false;
 		
-		public InnerSocketContext(Set<InnerSocketContext> outboundChannels, Listener.Callback.Connecting connection) {
+		public InnerSocketContext(Set<InnerSocketContext> outboundChannels, Listener.ListenerConnecting connection) {
 			this.outboundChannels = outboundChannels;
 			
 			this.connection = connection;

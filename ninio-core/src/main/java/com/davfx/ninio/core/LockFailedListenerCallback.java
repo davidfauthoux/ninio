@@ -14,8 +14,8 @@ public final class LockFailedListenerCallback implements Listener.Callback {
 	}
 	
 	@Override
-	public void connected() {
-		wrappee.connected();
+	public void connected(Address address) {
+		wrappee.connected(address);
 	}
 	
 	@Override
@@ -28,7 +28,7 @@ public final class LockFailedListenerCallback implements Listener.Callback {
 		wrappee.failed(ioe);
 	}
 	@Override
-	public Connecting connecting() {
+	public Listener.ListenerConnecting connecting() {
 		return wrappee.connecting();
 	}
 }

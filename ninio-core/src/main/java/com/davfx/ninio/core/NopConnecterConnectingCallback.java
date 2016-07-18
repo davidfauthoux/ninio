@@ -2,7 +2,7 @@ package com.davfx.ninio.core;
 
 import java.io.IOException;
 
-public final class NopConnecterConnectingCallback implements Connecter.Connecting.Callback {
+public final class NopConnecterConnectingCallback implements SendCallback {
 	public NopConnecterConnectingCallback() {
 	}
 	

@@ -87,14 +87,14 @@ public final class HttpClient implements Disconnectable {
 	private final TcpSocket.Builder secureConnectorFactory;
 	
 	private static final class ReusableConnector {
-		public Connecter.Connecting connecting;
+		public Connecter connecting;
 		public final Address address;
 		public final boolean secure;
 
 		public boolean reusable = true;
 
-		private Connecter.Callback receiver = null;
-		private final Deque<Connecter.Callback> nextReceivers = new LinkedList<>();
+		private Connecter.ConnectCallback receiver = null;
+		private final Deque<Connecter.ConnectCallback> nextReceivers = new LinkedList<>();
 		
 		public ReusableConnector(Address address, boolean secure) {
 			this.address = address;
@@ -102,7 +102,9 @@ public final class HttpClient implements Disconnectable {
 		}
 		
 		public void launch(final Executor executor, TcpSocket.Builder factory, Queue queue, final Runnable onClose) {
-			connecting = factory.create(queue).connect(new Connecter.Callback() {
+			connecting = factory.create(queue);
+			
+			connecting.connect(new Connecter.ConnectCallback() {
 				@Override
 				public void received(Address address, final ByteBuffer buffer) {
 					executor.execute(new Runnable() {
@@ -154,7 +156,7 @@ public final class HttpClient implements Disconnectable {
 		
 		public void failAllNext(IOException ioe) {
 			IOException e = new IOException("Error in pipeline", ioe);
-			for (Connecter.Callback r : nextReceivers) {
+			for (Connecter.ConnectCallback r : nextReceivers) {
 				r.failed(e);
 			}
 			nextReceivers.clear();
@@ -162,7 +164,7 @@ public final class HttpClient implements Disconnectable {
 			connecting.close();
 		}
 		
-		public void push(Connecter.Callback receiver) {
+		public void push(Connecter.ConnectCallback receiver) {
 			if (this.receiver == null) {
 				this.receiver = receiver;
 			} else {
@@ -272,7 +274,7 @@ public final class HttpClient implements Disconnectable {
 					private void sendRequest() {
 						sender = new HttpContentSender() {
 							@Override
-							public void send(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+							public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
 								reusableConnector.connecting.send(null, buffer, callback);
 							}
 
@@ -421,7 +423,7 @@ public final class HttpClient implements Disconnectable {
 							}
 						});
 						
-						reusableConnector.push(new Connecter.Callback() {
+						reusableConnector.push(new Connecter.ConnectCallback() {
 							private final LineReader lineReader = new LineReader();
 							private boolean responseLineRead = false;
 							private boolean responseHeadersRead;
@@ -616,7 +618,7 @@ public final class HttpClient implements Disconnectable {
 						
 						LOGGER.trace("Sending request: {} (complete headers = {})", request, completedHeaders);
 						
-						Connecter.Connecting.Callback sendCallback = new Connecter.Connecting.Callback() {
+						Connecter.SendCallback sendCallback = new Connecter.SendCallback() {
 							@Override
 							public void sent() {
 							}
@@ -638,7 +640,7 @@ public final class HttpClient implements Disconnectable {
 					}
 					
 					@Override
-					public void send(final ByteBuffer buffer, final Connecter.Connecting.Callback callback) {
+					public void send(final ByteBuffer buffer, final Connecter.SendCallback callback) {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {

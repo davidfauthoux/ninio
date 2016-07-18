@@ -55,6 +55,9 @@ public final class TcpSocket implements Connecter {
 			
 			@Override
 			public TcpSocket create(Queue queue) {
+				if (connectAddress == null) {
+					throw new NullPointerException("connectAddress");
+				}
 				return new TcpSocket(queue, byteBufferAllocator, bindAddress, connectAddress);
 			}
 		};
@@ -62,8 +65,8 @@ public final class TcpSocket implements Connecter {
 	
 	private static final class ToWrite {
 		public final ByteBuffer buffer;
-		public final Connecter.Connecting.Callback callback;
-		public ToWrite(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+		public final SendCallback callback;
+		public ToWrite(ByteBuffer buffer, SendCallback callback) {
 			this.buffer = buffer;
 			this.callback = callback;
 		}
@@ -81,6 +84,7 @@ public final class TcpSocket implements Connecter {
 	private final Deque<ToWrite> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 	
+	private Connection connectCallback = null;
 	private boolean closed = false;
 
 	private TcpSocket(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress, Address connectAddress) {
@@ -91,11 +95,15 @@ public final class TcpSocket implements Connecter {
 	}
 	
 	@Override
-	public Connecting connect(final Callback callback) {
+	public void connect(final Connection callback) {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
 				try {
+					if (closed) {
+						throw new IOException("Closed");
+					}
+					
 					final SocketChannel channel = SocketChannel.open();
 					currentChannel = channel;
 					try {
@@ -218,6 +226,7 @@ public final class TcpSocket implements Connecter {
 							}
 							LOGGER.trace("Connecting to: {}", a);
 							channel.connect(a);
+							connectCallback = callback;
 						} catch (IOException e) {
 							disconnect(channel, inboundKey, null, null);
 							throw new IOException("Could not connect to: " + connectAddress, e);
@@ -233,64 +242,62 @@ public final class TcpSocket implements Connecter {
 				}
 			}
 		});
+	}
 		
-		return new Connecting() {
+	@Override
+	public void close() {
+		queue.execute(new Runnable() {
 			@Override
-			public void close() {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						disconnect(currentChannel, currentInboundKey, currentSelectionKey, callback);
-					}
-				});
+			public void run() {
+				disconnect(currentChannel, currentInboundKey, currentSelectionKey, connectCallback);
 			}
-			
+		});
+	}
+	
+	@Override
+	public void send(final Address address, final ByteBuffer buffer, final SendCallback callback) {
+		queue.execute(new Runnable() {
 			@Override
-			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						if (closed) {
-							callback.failed(new IOException("Closed"));
-							return;
-						}
+			public void run() {
+				if (closed) {
+					callback.failed(new IOException("Closed"));
+					return;
+				}
 
-						if (address != null) {
-							LOGGER.warn("Ignored send address: {}", address);
-						}
-						
-						if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-							LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
-							callback.failed(new IOException("Packet dropped"));
-							return;
-						}
-						
-						toWriteQueue.add(new ToWrite(buffer, callback));
-						toWriteLength += buffer.remaining();
-						LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
-						
-						SocketChannel channel = currentChannel;
-						SelectionKey selectionKey = currentSelectionKey;
-						if (channel == null) {
-							return;
-						}
-						if (selectionKey == null) {
-							return;
-						}
-						if (!channel.isOpen()) {
-							return;
-						}
-						if (!selectionKey.isValid()) {
-							return;
-						}
-						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-					}
-				});
+				if (address != null) {
+					LOGGER.warn("Ignored send address: {}", address);
+				}
+				
+				if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+					LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
+					callback.failed(new IOException("Packet dropped"));
+					return;
+				}
+				
+				toWriteQueue.add(new ToWrite(buffer, callback));
+				toWriteLength += buffer.remaining();
+				LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
+				
+				SocketChannel channel = currentChannel;
+				SelectionKey selectionKey = currentSelectionKey;
+				if (channel == null) {
+					return;
+				}
+				if (selectionKey == null) {
+					return;
+				}
+				if (!channel.isOpen()) {
+					return;
+				}
+				if (!selectionKey.isValid()) {
+					return;
+				}
+				selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 			}
-		};
+		});
 	}
 
-	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey, Connecter.Callback callback) {
+	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey, Connection callback) {
 		if (channel != null) {
 			try {
 				channel.socket().close();

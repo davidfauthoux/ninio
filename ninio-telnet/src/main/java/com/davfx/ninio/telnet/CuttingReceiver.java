@@ -9,9 +9,9 @@ import java.util.List;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 
-final class CuttingReceiver implements Connecter.Callback {
+final class CuttingReceiver implements Connecter.ConnectCallback {
 
-	private final Connecter.Callback wrappee;
+	private final Connecter.ConnectCallback wrappee;
 	
 	private final ByteBuffer prompt;
 	private ByteBuffer currentPrompt;
@@ -20,13 +20,13 @@ final class CuttingReceiver implements Connecter.Callback {
 	private final int limit;
 	private int count = 0;
 
-	public CuttingReceiver(int limit, ByteBuffer prompt, Connecter.Callback wrappee) {
+	public CuttingReceiver(int limit, ByteBuffer prompt, Connecter.ConnectCallback wrappee) {
 		this.limit = limit;
 		this.prompt = prompt;
 		this.wrappee = wrappee;
 		currentPrompt = prompt.duplicate();
 	}
-	public CuttingReceiver(int limit, Connecter.Callback wrappee) {
+	public CuttingReceiver(int limit, Connecter.ConnectCallback wrappee) {
 		this.limit = limit;
 		prompt = null;
 		this.wrappee = wrappee;

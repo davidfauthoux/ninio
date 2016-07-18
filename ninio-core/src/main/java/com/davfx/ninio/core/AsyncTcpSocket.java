@@ -14,7 +14,7 @@ public final class AsyncTcpSocket {
 	private final Object lock = new Object();
 	private final Ninio ninio;
 	private final TcpSocket.Builder builder = TcpSocket.builder();
-	private Connecter.Connecting connector = null;
+	private Connecter connector = null;
 	private boolean connected = false;
 	private boolean closed = false;
 	private IOException error = null;
@@ -78,7 +78,7 @@ public final class AsyncTcpSocket {
 		}
 	}
 
-	private final class WriteFuture implements Future<Void>, Connecter.Connecting.Callback {
+	private final class WriteFuture implements Future<Void>, SendCallback {
 		private boolean sent = false;
 		private IOException ioe = null;
 
@@ -178,7 +178,13 @@ public final class AsyncTcpSocket {
 	public Future<Void> connect(Address address) {
 		builder.to(address);
 		
-		Connecter.Connecting c = ninio.create(builder).connect(new Connecter.Callback() {
+		Connecter c = ninio.create(builder);
+
+		synchronized (lock) {
+			connector = c;
+		}
+		
+		c.connect(new Connection() {
 			
 			@Override
 			public void received(Address address, ByteBuffer buffer) {
@@ -225,10 +231,6 @@ public final class AsyncTcpSocket {
 			}
 		});
 		
-		synchronized (lock) {
-			connector = c;
-		}
-		
 		return new ConnectedFuture();
 	}
 	
@@ -246,7 +248,7 @@ public final class AsyncTcpSocket {
 	}
 	
 	public Future<Void> write(ByteBuffer packet) {
-		Connecter.Connecting c;
+		Connected c;
 		synchronized (lock) {
 			c = connector;
 			if (error != null) {
@@ -262,12 +264,14 @@ public final class AsyncTcpSocket {
 	}
 	
 	public Future<Void> close() {
-		Connecter.Connecting c;
+		Connected c;
 		synchronized (lock) {
 			c = connector;
+			closed = true;
 			if (error != null) {
 				error = new IOException("Closed");
 			}
+			lock.notifyAll();
 		}
 		if (c == null) {
 			return new VoidFuture();

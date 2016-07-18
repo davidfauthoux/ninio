@@ -54,8 +54,8 @@ public final class UdpSocket implements Connecter {
 	private static final class ToWrite {
 		public final Address address;
 		public final ByteBuffer buffer;
-		public final Connecter.Connecting.Callback callback;
-		public ToWrite(Address address, ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+		public final SendCallback callback;
+		public ToWrite(Address address, ByteBuffer buffer, SendCallback callback) {
 			this.address = address;
 			this.buffer = buffer;
 			this.callback = callback;
@@ -71,6 +71,7 @@ public final class UdpSocket implements Connecter {
 	private final Deque<ToWrite> toWriteQueue = new LinkedList<>();
 	private long toWriteLength = 0L;
 
+	private Connection connectCallback = null;
 	private boolean closed = false;
 
 	public UdpSocket(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress) {
@@ -80,7 +81,7 @@ public final class UdpSocket implements Connecter {
 	}
 	
 	@Override
-	public Connecter.Connecting connect(final Connecter.Callback callback) {
+	public void connect(final Connection callback) {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -92,6 +93,10 @@ public final class UdpSocket implements Connecter {
 				}
 				
 				try {
+					if (closed) {
+						throw new IOException("Closed");
+					}
+					
 					final DatagramChannel channel = DatagramChannel.open();
 					currentChannel = channel;
 					try {
@@ -198,6 +203,7 @@ public final class UdpSocket implements Connecter {
 									throw new IOException("Unresolved address: " + bindAddress);
 								}
 								channel.socket().bind(a);
+								connectCallback = callback;
 							} catch (IOException e) {
 								disconnect(channel, selectionKey, callback);
 								throw new IOException("Could not bind to: " + bindAddress, e);
@@ -215,60 +221,58 @@ public final class UdpSocket implements Connecter {
 				callback.connected(null);
 			}
 		});
-		
-		return new Connecting() {
+	}	
+	
+	@Override
+	public void close() {
+		queue.execute(new Runnable() {
 			@Override
-			public void close() {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						disconnect(currentChannel, currentSelectionKey, callback);
-					}
-				});
+			public void run() {
+				disconnect(currentChannel, currentSelectionKey, connectCallback);
 			}
+		});
+	}
 
+	@Override
+	public void send(final Address address, final ByteBuffer buffer, final SendCallback callback) {
+		queue.execute(new Runnable() {
 			@Override
-			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
-				queue.execute(new Runnable() {
-					@Override
-					public void run() {
-						if (closed) {
-							callback.failed(new IOException("Closed"));
-							return;
-						}
+			public void run() {
+				if (closed) {
+					callback.failed(new IOException("Closed"));
+					return;
+				}
 
-						if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-							LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
-							callback.failed(new IOException("Packet dropped"));
-							return;
-						}
-						
-						toWriteQueue.add(new ToWrite(address, buffer, callback));
-						toWriteLength += buffer.remaining();
-						LOGGER.trace("Write buffer: {} bytes (to {}) (current size: {} bytes)", buffer.remaining(), address, toWriteLength);
-						
-						DatagramChannel channel = currentChannel;
-						SelectionKey selectionKey = currentSelectionKey;
-						if (channel == null) {
-							return;
-						}
-						if (selectionKey == null) {
-							return;
-						}
-						if (!channel.isOpen()) {
-							return;
-						}
-						if (!selectionKey.isValid()) {
-							return;
-						}
-						selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
-					}
-				});
+				if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+					LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
+					callback.failed(new IOException("Packet dropped"));
+					return;
+				}
+				
+				toWriteQueue.add(new ToWrite(address, buffer, callback));
+				toWriteLength += buffer.remaining();
+				LOGGER.trace("Write buffer: {} bytes (to {}) (current size: {} bytes)", buffer.remaining(), address, toWriteLength);
+				
+				DatagramChannel channel = currentChannel;
+				SelectionKey selectionKey = currentSelectionKey;
+				if (channel == null) {
+					return;
+				}
+				if (selectionKey == null) {
+					return;
+				}
+				if (!channel.isOpen()) {
+					return;
+				}
+				if (!selectionKey.isValid()) {
+					return;
+				}
+				selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 			}
-		};
+		});
 	}
 			
-	private void disconnect(DatagramChannel channel, SelectionKey selectionKey, Connecter.Callback callback) {
+	private void disconnect(DatagramChannel channel, SelectionKey selectionKey, Connection callback) {
 		if (channel != null) {
 			channel.socket().close();
 			try {

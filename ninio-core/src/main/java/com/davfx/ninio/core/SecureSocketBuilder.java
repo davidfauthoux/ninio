@@ -1,5 +1,6 @@
 package com.davfx.ninio.core;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.Executor;
 
 public final class SecureSocketBuilder implements TcpSocket.Builder {
@@ -55,21 +56,31 @@ public final class SecureSocketBuilder implements TcpSocket.Builder {
 		
 		final SecureSocketManager sslManager = new SecureSocketManager(trust, true, executor, byteBufferAllocator);
 		sslManager.connectAddress = connectAddress;
+		sslManager.connecting = connecter;
 
 		final Executor thisExecutor = executor;
 
 		return new Connecter() {
 			@Override
-			public Connecting connect(final Callback callback) {
+			public void close() {
+				sslManager.close();
+			}
+			
+			@Override
+			public void send(Address address, ByteBuffer buffer, SendCallback callback) {
+				sslManager.send(address, buffer, callback);
+			}
+			
+			@Override
+			public void connect(final Connection callback) {
 				thisExecutor.execute(new Runnable() {
 					@Override
 					public void run() {
 						sslManager.callback = callback;
-						sslManager.connecting = connecter.connect(sslManager);
 					}
 				});
 
-				return sslManager;
+				connecter.connect(sslManager);
 			}
 		};
 	}

@@ -16,10 +16,7 @@ final class HexTcpdumpReader implements TcpdumpReader {
 	
 	private static final int MAX_SIZE = 100 * 1024;
 	
-	private final Runnable connected;
-
-	public HexTcpdumpReader(Runnable connected) {
-		this.connected = connected;
+	public HexTcpdumpReader() {
 	}
 
 	@Override
@@ -35,8 +32,6 @@ final class HexTcpdumpReader implements TcpdumpReader {
 		int bytesIndex = 0;
 		double timestamp = 0d;
 		long lineCount = 0L;
-		
-		connected.run();
 		
 		while (true) {
 			LOGGER.trace("Reading hex line...");

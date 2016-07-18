@@ -14,9 +14,9 @@ public final class WaitConnectedListenerCallback implements Listener.Callback {
 	}
 	
 	@Override
-	public void connected() {
+	public void connected(Address address) {
 		wait.run();
-		wrappee.connected();
+		wrappee.connected(address);
 	}
 	
 	@Override
@@ -28,7 +28,7 @@ public final class WaitConnectedListenerCallback implements Listener.Callback {
 		wrappee.failed(ioe);
 	}
 	@Override
-	public Connecting connecting() {
+	public Listener.ListenerConnecting connecting() {
 		return wrappee.connecting();
 	}
 }

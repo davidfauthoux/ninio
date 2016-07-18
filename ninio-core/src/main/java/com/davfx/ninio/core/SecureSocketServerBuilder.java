@@ -49,8 +49,8 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 		
 		return new Listener() {
 			@Override
-			public Listening listen(final Callback callback) {
-				return listener.listen(new Listener.Callback() {
+			public void listen(final Callback callback) {
+				listener.listen(new Listener.Callback() {
 					
 					@Override
 					public void failed(IOException ioe) {
@@ -58,8 +58,8 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 					}
 					
 					@Override
-					public void connected() {
-						callback.connected();
+					public void connected(Address address) {
+						callback.connected(address);
 					}
 					
 					@Override
@@ -68,12 +68,12 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 					}
 
 					@Override
-					public Connecting connecting() {
+					public Listener.ListenerConnecting connecting() {
 						final SecureSocketManager sslManager = new SecureSocketManager(thisTrust, false, thisExecutor, thisByteBufferAllocator);
 
-						final Connecting callbackConnecting = callback.connecting();
+						final Listener.ListenerConnecting callbackConnecting = callback.connecting();
 						
-						sslManager.callback = new Connecter.Callback() {
+						sslManager.callback = new Connection() {
 							@Override
 							public void received(Address address, ByteBuffer buffer) {
 								callbackConnecting.received(address, buffer);
@@ -94,23 +94,12 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 								callbackConnecting.closed();
 							}
 						};
-						
-						return new Connecting() {
-							@Override
-							public void connecting(Connecter.Connecting connecting) {
-								callbackConnecting.connecting(new Connecter.Connecting() {
-									@Override
-									public void send(Address address, ByteBuffer buffer, Callback callback) {
-										sslManager.send(address, buffer, callback);
-									}
-									
-									@Override
-									public void close() {
-										sslManager.close();
-									}
-								});
 
+						return new Listener.ListenerConnecting() {
+							@Override
+							public void connecting(Connected connecting) {
 								sslManager.connecting = connecting;
+								callbackConnecting.connecting(sslManager);
 							}
 
 							@Override
@@ -135,6 +124,11 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 						};
 					}
 				});
+			}
+			
+			@Override
+			public void close() {
+				listener.close();
 			}
 		};
 	}

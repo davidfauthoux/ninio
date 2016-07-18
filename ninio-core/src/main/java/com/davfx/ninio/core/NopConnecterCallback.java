@@ -3,7 +3,7 @@ package com.davfx.ninio.core;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public final class NopConnecterCallback implements Connecter.Callback {
+public final class NopConnecterCallback implements Connection {
 	public NopConnecterCallback() {
 	}
 	

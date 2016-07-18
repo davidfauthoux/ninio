@@ -10,7 +10,7 @@ public final class WaitConnecting implements Connecting {
 	}
 	
 	@Override
-	public void connected(Connector connector, Address address) {
+	public void connected(Address address) {
 		wait.run();
 	}
 }

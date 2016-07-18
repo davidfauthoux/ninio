@@ -12,7 +12,7 @@ import javax.net.ssl.SSLEngineResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-final class SecureSocketManager implements Connecter.Connecting, Connecter.Callback {
+final class SecureSocketManager implements Connected, Connection {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SecureSocketManager.class);
 
 	public static final int REQUIRED_BUFFER_SIZE = 17 * 1024;
@@ -22,14 +22,14 @@ final class SecureSocketManager implements Connecter.Connecting, Connecter.Callb
 	private final Executor executor;
 	private final ByteBufferAllocator byteBufferAllocator;
 	
-	public Connecter.Connecting connecting = null;
-	public Connecter.Callback callback = null;
+	public Connected connecting = null;
+	public Connection callback = null;
 	public Address connectAddress;
 	
 	private static final class ToWrite {
 		public final ByteBuffer buffer;
-		public final Connecter.Connecting.Callback callback;
-		public ToWrite(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+		public final SendCallback callback;
+		public ToWrite(ByteBuffer buffer, SendCallback callback) {
 			this.buffer = buffer;
 			this.callback = callback;
 		}
@@ -78,7 +78,7 @@ final class SecureSocketManager implements Connecter.Connecting, Connecter.Callb
 		
 		ToWrite toWrite = sent.getFirst();
 		ByteBuffer wrapBuffer = byteBufferAllocator.allocate();
-		Connecter.Connecting.Callback sendCallback = null;
+		SendCallback sendCallback = null;
 		try {
 			SSLEngineResult r = engine.wrap(toWrite.buffer, wrapBuffer);
 			if (!toWrite.buffer.hasRemaining()) {
@@ -317,7 +317,7 @@ final class SecureSocketManager implements Connecter.Connecting, Connecter.Callb
 	}
 	
 	@Override
-	public void send(Address address, final ByteBuffer buffer, final Callback callback) {
+	public void send(Address address, final ByteBuffer buffer, final SendCallback callback) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {

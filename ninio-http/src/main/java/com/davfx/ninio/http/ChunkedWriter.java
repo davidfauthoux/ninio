@@ -18,7 +18,7 @@ final class ChunkedWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(final ByteBuffer buffer, final Connecter.Connecting.Callback callback) {
+	public void send(final ByteBuffer buffer, final Connecter.SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}

@@ -12,7 +12,7 @@ public final class LockReceiver implements Receiver {
 	}
 	
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer buffer) {
+	public void received(Address address, ByteBuffer buffer) {
 		lock.set(buffer);
 	}
 }

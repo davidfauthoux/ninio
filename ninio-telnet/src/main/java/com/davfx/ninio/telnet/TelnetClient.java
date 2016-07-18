@@ -2,7 +2,6 @@ package com.davfx.ninio.telnet;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executor;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
@@ -10,7 +9,6 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.DefaultByteBufferAllocator;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.TcpSocket;
-import com.davfx.ninio.util.Mutable;
 
 public final class TelnetClient {
 	/*%%
@@ -46,7 +44,6 @@ public final class TelnetClient {
 	
 	public static interface Builder extends TcpSocket.Builder {
 		Builder with(TcpSocket.Builder builder);
-		Builder with(Executor executor);
 	}
 
 	public static Builder builder() {
@@ -56,14 +53,6 @@ public final class TelnetClient {
 			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
 			private Address bindAddress = null;
 			private Address connectAddress = null;
-			
-			private Executor executor = null;
-
-			@Override
-			public Builder with(Executor executor) {
-				this.executor = executor;
-				return this;
-			}
 			
 			@Override
 			public Builder bind(Address bindAddress) {
@@ -91,21 +80,14 @@ public final class TelnetClient {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
-				
 				final Connecter connecter = builder.to(connectAddress).bind(bindAddress).with(byteBufferAllocator).create(queue);
-				final Executor thisExecutor = executor;
 
 				return new Connecter() {
 					@Override
-					public Connecter.Connecting connect(final Callback callback) {
+					public void connect(final ConnectCallback callback) {
 						final TelnetReader telnetReader = new TelnetReader();
 
-						final Mutable<Connecter.Connecting> connecting = new Mutable<>();
-						
-						final Connecter.Connecting c = connecter.connect(new Connecter.Callback() {
+						connecter.connect(new Connecter.ConnectCallback() {
 							@Override
 							public void closed() {
 								callback.closed();
@@ -121,38 +103,19 @@ public final class TelnetClient {
 							
 							@Override
 							public void received(Address address, ByteBuffer buffer) {
-								telnetReader.handle(buffer, callback, new Connecting() {
-									@Override
-									public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
-										thisExecutor.execute(new Runnable() {
-											@Override
-											public void run() {
-												connecting.value.send(address, buffer, callback);
-											}
-										});
-									}
-									
-									@Override
-									public void close() {
-										thisExecutor.execute(new Runnable() {
-											@Override
-											public void run() {
-												connecting.value.close();
-											}
-										});
-									}
-								});
+								telnetReader.handle(buffer, callback, connecter);
 							}
 						});
-						
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								connecting.value = c;
-							}
-						});
-						
-						return c;
+					}
+					
+					@Override
+					public void send(Address address, ByteBuffer buffer, SendCallback callback) {
+						connecter.send(address, buffer, callback);
+					}
+					
+					@Override
+					public void close() {
+						connecter.close();
 					}
 				};
 			}

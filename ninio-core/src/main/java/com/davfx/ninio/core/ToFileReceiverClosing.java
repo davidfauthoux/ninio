@@ -20,7 +20,7 @@ public final class ToFileReceiverClosing implements Receiver, Closing, Closeable
 	}
 	
 	@Override
-	public void received(Connector connector, Address address, ByteBuffer buffer) {
+	public void received(Address address, ByteBuffer buffer) {
 		try {
 			out.write(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 		} catch (IOException e) {

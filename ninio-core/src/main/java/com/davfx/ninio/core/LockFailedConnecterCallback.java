@@ -5,11 +5,11 @@ import java.nio.ByteBuffer;
 
 import com.davfx.ninio.util.Lock;
 
-public final class LockFailedConnecterCallback implements Connecter.Callback {
+public final class LockFailedConnecterCallback implements Connection {
 	private final Lock<?, IOException> lock;
-	private final Connecter.Callback wrappee;
+	private final Connection wrappee;
 	
-	public LockFailedConnecterCallback(Lock<?, IOException> lock, Connecter.Callback wrappee) {
+	public LockFailedConnecterCallback(Lock<?, IOException> lock, Connection wrappee) {
 		this.lock = lock;
 		this.wrappee = wrappee;
 	}

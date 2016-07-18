@@ -152,7 +152,6 @@ public final class CutOnPromptClient implements Connecter {
 	
 	private Handler.Receive currentReceiveCallback;
 	private final Connecter connecter;
-	private Connecter.Connecting connecting;
 	private CuttingReceiver cuttingReceiver;
 	private final Executor executor;
 	private final Handler handler;
@@ -170,11 +169,11 @@ public final class CutOnPromptClient implements Connecter {
 	}
 	
 	@Override
-	public Connecter.Connecting connect(final Connecter.Callback callback) {
+	public void connect(final Connecter.ConnectCallback callback) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				cuttingReceiver = new CuttingReceiver(limit, new Connecter.Callback() {
+				cuttingReceiver = new CuttingReceiver(limit, new Connecter.ConnectCallback() {
 					private InMemoryBuffers buffers = null;
 					@Override
 					public void received(Address address, final ByteBuffer buffer) {
@@ -212,7 +211,7 @@ public final class CutOnPromptClient implements Connecter {
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {
-										connecting.close();
+										connecter.close();
 									}
 								});
 							}
@@ -226,7 +225,7 @@ public final class CutOnPromptClient implements Connecter {
 										cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(charset)));
 										currentReceiveCallback = receiveCallback;
 										if (command != null) {
-											connecting.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new Connecter.Connecting.Callback() {
+											connecter.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new Connecter.SendCallback() {
 												@Override
 												public void sent() {
 												}
@@ -246,30 +245,27 @@ public final class CutOnPromptClient implements Connecter {
 					}
 				});
 
-				connecting = connecter.connect(cuttingReceiver);
+				connecter.connect(cuttingReceiver);
 			}
 		});
-		
-		return new Connecting() {
+	}
+	
+	public void send(final Address address, final ByteBuffer buffer, final SendCallback callback) {
+		executor.execute(new Runnable() {
 			@Override
-			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						connecting.send(address, buffer, callback);
-					}
-				});
+			public void run() {
+				connecter.send(address, buffer, callback);
 			}
-			
+		});
+	}
+	
+	@Override
+	public void close() {
+		executor.execute(new Runnable() {
 			@Override
-			public void close() {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						connecting.close();
-					}
-				});
+			public void run() {
+				connecter.close();
 			}
-		};
+		});
 	}
 }

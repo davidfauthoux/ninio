@@ -83,10 +83,8 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	@Override
-	public Connecting connect(final SnmpConnecter.Callback callback) {
-		final Mutable<Connecter.Connecting> thisConnecting = new Mutable<>();
-		
-		final Connecter.Connecting connecting = connecter.connect(new Connecter.Callback() {
+	public void connect(final SnmpConnecter.ConnectCallback callback) {
+		connecter.connect(new Connecter.ConnectCallback() {
 			@Override
 			public void received(final Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
@@ -128,8 +126,8 @@ public final class SnmpClient implements SnmpConnecter {
 								authRemoteEnginePendingRequestManager.reset();
 							}
 
-							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, thisConnecting.value);
-							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, thisConnecting.value);
+							authRemoteEnginePendingRequestManager.discoverIfNecessary(address, connecter);
+							authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connecter);
 						}
 						
 						instanceMapper.handle(instanceId, errorStatus, errorIndex, results);
@@ -152,61 +150,52 @@ public final class SnmpClient implements SnmpConnecter {
 				callback.closed();
 			}
 		});
-		
+	}
+	
+	@Override
+	public Cancelable get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid, final GetCallback callback) {
+		final Mutable<Instance> instance = new Mutable<>();
+
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				thisConnecting.value = connecting;
+				AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
+				if (authRemoteSpecification != null) {
+					authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+					if (authRemoteEnginePendingRequestManager == null) {
+						authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+						authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+					}
+					authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecter);
+				}
+				
+				instance.value = new Instance(connecter, instanceMapper, callback, oid, address, community, authRemoteEnginePendingRequestManager);
 			}
 		});
-
-		return new SnmpConnecter.Connecting() {
+		
+		return new Cancelable() {
 			@Override
-			public Cancelable get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid, final Callback callback) {
-				final Mutable<Instance> instance = new Mutable<>();
-
+			public void cancel() {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
-						if (authRemoteSpecification != null) {
-							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
-							if (authRemoteEnginePendingRequestManager == null) {
-								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
-							}
-							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecting);
-						}
-						
-						instance.value = new Instance(connecting, instanceMapper, callback, oid, address, community, authRemoteEnginePendingRequestManager);
+						instance.value.cancel();
 					}
 				});
-				
-				return new Cancelable() {
-					@Override
-					public void cancel() {
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								instance.value.cancel();
-							}
-						});
-					}
-				};
-			}
-			
-			@Override
-			public void close() {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						instanceMapper.close();
-					}
-				});
-				
-				connecting.close();
 			}
 		};
+	}
+	
+	@Override
+	public void close() {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				instanceMapper.close();
+			}
+		});
+		
+		connecter.close();
 	}
 	
 	private static final class AuthRemoteEnginePendingRequestManager {
@@ -216,9 +205,9 @@ public final class SnmpClient implements SnmpConnecter {
 			public final int request;
 			public final int instanceId;
 			public final Oid oid;
-			public final Connecter.Connecting.Callback sendCallback;
+			public final Connecter.SendCallback sendCallback;
 
-			public PendingRequest(int request, int instanceId, Oid oid, Connecter.Connecting.Callback sendCallback) {
+			public PendingRequest(int request, int instanceId, Oid oid, Connecter.SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
@@ -232,7 +221,7 @@ public final class SnmpClient implements SnmpConnecter {
 		public AuthRemoteEnginePendingRequestManager() {
 		}
 		
-		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, Connecter.Connecting connector) {
+		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, Connecter connector) {
 			if (engine == null) {
 				engine = new AuthRemoteEngine(authRemoteSpecification);
 				discoverIfNecessary(address, connector);
@@ -255,12 +244,12 @@ public final class SnmpClient implements SnmpConnecter {
 			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
 		}
 		
-		public void discoverIfNecessary(Address address, Connecter.Connecting connector) {
+		public void discoverIfNecessary(Address address, Connecter connector) {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
 				ByteBuffer b = builder.getBuffer();
 				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
-				connector.send(address, b, new Connecter.Connecting.Callback() {
+				connector.send(address, b, new Connecter.SendCallback() {
 					@Override
 					public void sent() {
 					}
@@ -280,7 +269,7 @@ public final class SnmpClient implements SnmpConnecter {
 			pendingRequests.add(r);
 		}
 		
-		public void sendPendingRequestsIfReady(Address address, Connecter.Connecting connector) {
+		public void sendPendingRequestsIfReady(Address address, Connecter connector) {
 			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
 				return;
 			}
@@ -402,10 +391,10 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	private static final class Instance {
-		private final Connecter.Connecting connector;
+		private final Connecter connector;
 		private final InstanceMapper instanceMapper;
 		
-		private SnmpConnecter.Connecting.Callback receiver;
+		private SnmpConnecter.GetCallback receiver;
 		
 		private final Oid initialRequestOid;
 		private Oid requestOid;
@@ -417,7 +406,7 @@ public final class SnmpClient implements SnmpConnecter {
 		private final String community;
 		private final AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
 
-		public Instance(Connecter.Connecting connector, InstanceMapper instanceMapper, SnmpConnecter.Connecting.Callback receiver, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, SnmpConnecter.GetCallback receiver, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
@@ -449,7 +438,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		private void write() {
-			Connecter.Connecting.Callback sendCallback = new Connecter.Connecting.Callback() {
+			Connecter.SendCallback sendCallback = new Connecter.SendCallback() {
 				@Override
 				public void sent() {
 				}

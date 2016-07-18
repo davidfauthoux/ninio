@@ -18,7 +18,7 @@ final class ContentLengthWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+	public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
