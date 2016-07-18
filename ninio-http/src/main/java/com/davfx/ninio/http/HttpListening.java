@@ -12,8 +12,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
@@ -92,7 +93,7 @@ public final class HttpListening implements Listener.Callback {
 	}
 
 	@Override
-	public void connected() {
+	public void connected(Address address) {
 		listeningHandler.connected(); // Called globally
 	}
 	
@@ -107,8 +108,8 @@ public final class HttpListening implements Listener.Callback {
 	}
 
 	@Override
-	public Connecting connecting() {
-		return new Listener.Callback.Connecting() {
+	public Listener.ListenerConnecting connecting() {
+		return new Listener.ListenerConnecting() {
 			@Override
 			public void closed() {
 				LOGGER.info("Service connection closed");
@@ -121,7 +122,7 @@ public final class HttpListening implements Listener.Callback {
 			}
 			
 			private Address from = null;
-			private Connecter.Connecting connecting = null;
+			private Connected connecting = null;
 			
 			@Override
 			public void connected(Address address) {
@@ -293,7 +294,7 @@ public final class HttpListening implements Listener.Callback {
 											
 											sender = new HttpContentSender() {
 												@Override
-												public void send(ByteBuffer buffer, Connecter.Connecting.Callback callback) {
+												public void send(ByteBuffer buffer, SendCallback callback) {
 													connecting.send(null, buffer, callback);
 												}
 												
@@ -373,7 +374,7 @@ public final class HttpListening implements Listener.Callback {
 												break;
 											}
 											
-											Connecter.Connecting.Callback sendCallback = new Connecter.Connecting.Callback() {
+											SendCallback sendCallback = new SendCallback() {
 												@Override
 												public void sent() {
 												}
@@ -411,7 +412,7 @@ public final class HttpListening implements Listener.Callback {
 										}
 										
 										@Override
-										public void send(final ByteBuffer buffer, final Connecter.Connecting.Callback callback) {
+										public void send(final ByteBuffer buffer, final SendCallback callback) {
 											executor.execute(new Runnable() {
 												@Override
 												public void run() {
@@ -539,7 +540,7 @@ public final class HttpListening implements Listener.Callback {
 			}
 
 			@Override
-			public void connecting(Connecter.Connecting connecting) {
+			public void connecting(Connected connecting) {
 				this.connecting = connecting;
 			}
 		};

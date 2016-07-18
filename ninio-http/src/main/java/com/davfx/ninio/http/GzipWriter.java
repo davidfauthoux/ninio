@@ -5,8 +5,8 @@ import java.nio.ByteOrder;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
-import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -53,7 +53,7 @@ final class GzipWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
+	public void send(ByteBuffer buffer, SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
@@ -77,7 +77,7 @@ final class GzipWriter implements HttpContentSender {
 		wrappee.finish();
 	}
 
-	private void write(final Connecter.SendCallback callback) {
+	private void write(final SendCallback callback) {
 		ByteBuffer toSend = null;
 		
 		if (!gzipHeaderWritten) {

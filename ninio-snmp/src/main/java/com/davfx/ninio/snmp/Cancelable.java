@@ -1,5 +1,5 @@
 package com.davfx.ninio.snmp;
 
-public interface SnmpRequest {
+public interface Cancelable {
 	void cancel();
 }

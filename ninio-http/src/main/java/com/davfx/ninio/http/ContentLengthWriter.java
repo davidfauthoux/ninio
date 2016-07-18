@@ -2,7 +2,7 @@ package com.davfx.ninio.http;
 
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.SendCallback;
 
 final class ContentLengthWriter implements HttpContentSender {
 	private final HttpContentSender wrappee;
@@ -18,7 +18,7 @@ final class ContentLengthWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
+	public void send(ByteBuffer buffer, SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}

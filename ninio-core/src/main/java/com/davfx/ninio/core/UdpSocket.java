@@ -203,12 +203,13 @@ public final class UdpSocket implements Connecter {
 									throw new IOException("Unresolved address: " + bindAddress);
 								}
 								channel.socket().bind(a);
-								connectCallback = callback;
 							} catch (IOException e) {
 								disconnect(channel, selectionKey, callback);
 								throw new IOException("Could not bind to: " + bindAddress, e);
 							}
 						}
+
+						connectCallback = callback;
 					} catch (IOException e) {
 						disconnect(channel, null, callback);
 						throw e;

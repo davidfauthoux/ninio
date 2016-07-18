@@ -6,8 +6,10 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.DefaultByteBufferAllocator;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 
 public final class TelnetClient {
@@ -84,10 +86,10 @@ public final class TelnetClient {
 
 				return new Connecter() {
 					@Override
-					public void connect(final ConnectCallback callback) {
+					public void connect(final Connection callback) {
 						final TelnetReader telnetReader = new TelnetReader();
 
-						connecter.connect(new Connecter.ConnectCallback() {
+						connecter.connect(new Connection() {
 							@Override
 							public void closed() {
 								callback.closed();

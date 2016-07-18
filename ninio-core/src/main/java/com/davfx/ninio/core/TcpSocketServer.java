@@ -290,12 +290,12 @@ public final class TcpSocketServer implements Listener {
 							LOGGER.debug("-> Bound on: {}", a);
 							serverChannel.socket().bind(a);
 							acceptSelectionKey.interestOps(acceptSelectionKey.interestOps() | SelectionKey.OP_ACCEPT);
-							listenCallback = callback;
 						} catch (IOException e) {
 							disconnect(serverChannel, acceptSelectionKey, null);
 							throw new IOException("Could not bind to: " + bindAddress, e);
 						}
 
+						listenCallback = callback;
 					} catch (IOException e) {
 						disconnect(serverChannel, null, null);
 						LOGGER.error("Error while creating server socket on: {}", bindAddress, e);

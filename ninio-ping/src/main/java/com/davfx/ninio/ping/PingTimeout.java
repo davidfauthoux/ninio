@@ -8,9 +8,9 @@ public final class PingTimeout {
 	private PingTimeout() {
 	}
 	
-	public static PingConnecter.Connecting wrap(final double timeout, final PingConnecter.Connecting wrappee) {
+	public static PingConnecter wrap(final double timeout, final PingConnecter wrappee) {
 		final Timeout t = new Timeout();
-		return new PingConnecter.Connecting() {
+		return new PingConnecter() {
 			@Override
 			public void close() {
 				t.close();
@@ -18,7 +18,12 @@ public final class PingTimeout {
 			}
 			
 			@Override
-			public Cancelable ping(String host, final Callback receiver) {
+			public void connect(PingConnection callback) {
+				wrappee.connect(callback);
+			}
+			
+			@Override
+			public Cancelable ping(String host, final PingReceiver receiver) {
 				final Timeout.Manager m = t.set(timeout);
 				m.run(new Runnable() {
 					@Override
@@ -27,7 +32,7 @@ public final class PingTimeout {
 					}
 				});
 
-				final Cancelable cancelable = wrappee.ping(host, new PingConnecter.Connecting.Callback() {
+				final Cancelable cancelable = wrappee.ping(host, new PingReceiver() {
 					@Override
 					public void received(double time) {
 						m.cancel();

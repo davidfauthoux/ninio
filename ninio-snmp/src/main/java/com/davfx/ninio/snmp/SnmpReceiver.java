@@ -1,9 +1,8 @@
 package com.davfx.ninio.snmp;
 
-import java.io.IOException;
+import com.davfx.ninio.core.Failing;
 
-public interface SnmpReceiver {
+public interface SnmpReceiver extends Failing {
 	void received(SnmpResult result);
 	void finished();
-	void failed(IOException ioe);
 }

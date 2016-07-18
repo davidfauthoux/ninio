@@ -3,8 +3,8 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Limit;
+import com.davfx.ninio.core.SendCallback;
 
 public final class HttpLimit {
 	private HttpLimit() {
@@ -49,7 +49,7 @@ public final class HttpLimit {
 
 				return new HttpContentSender() {
 					@Override
-					public void send(final ByteBuffer buffer, final Connecter.SendCallback callback) {
+					public void send(final ByteBuffer buffer, final SendCallback callback) {
 						m.add(new Runnable() {
 							@Override
 							public void run() {

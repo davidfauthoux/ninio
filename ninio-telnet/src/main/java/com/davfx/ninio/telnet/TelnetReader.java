@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
 
 final class TelnetReader {
@@ -43,7 +44,7 @@ final class TelnetReader {
 		return ByteBuffer.wrap(new byte[] { IAC, response, command });
 	}
 
-	public void handle(ByteBuffer buffer, Connecter.ConnectCallback wrappee, Connecter back) {
+	public void handle(ByteBuffer buffer, Connection wrappee, Connecter back) {
 		if (closed) {
 			return;
 		}

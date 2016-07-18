@@ -226,11 +226,12 @@ public final class TcpSocket implements Connecter {
 							}
 							LOGGER.trace("Connecting to: {}", a);
 							channel.connect(a);
-							connectCallback = callback;
 						} catch (IOException e) {
 							disconnect(channel, inboundKey, null, null);
 							throw new IOException("Could not connect to: " + connectAddress, e);
 						}
+
+						connectCallback = callback;
 					} catch (IOException e) {
 						disconnect(channel, null, null, null);
 						throw e;

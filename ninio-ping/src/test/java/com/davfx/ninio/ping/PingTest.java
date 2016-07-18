@@ -19,19 +19,20 @@ public class PingTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<Double, IOException> lock = new Lock<>();
 			
-			try (PingConnecter.Connecting client = PingTimeout.wrap(1d, ninio.create(PingClient.builder().with(new SerialExecutor(PingTest.class))).connect(new PingConnecter.Callback() {
-				@Override
-				public void failed(IOException ioe) {
-					lock.fail(ioe);
-				}
-				@Override
-				public void connected(Address address) {
-				}
-				@Override
-				public void closed() {
-				}
-			}))) {
-				client.ping(pingHost, new PingConnecter.Connecting.Callback() {
+			try (PingConnecter client = PingTimeout.wrap(1d, ninio.create(PingClient.builder().with(new SerialExecutor(PingTest.class))))) {
+				client.connect(new PingConnection() {
+					@Override
+					public void failed(IOException ioe) {
+						lock.fail(ioe);
+					}
+					@Override
+					public void connected(Address address) {
+					}
+					@Override
+					public void closed() {
+					}
+				});
+				client.ping(pingHost, new PingReceiver() {
 					@Override
 					public void received(double time) {
 						lock.set(time);

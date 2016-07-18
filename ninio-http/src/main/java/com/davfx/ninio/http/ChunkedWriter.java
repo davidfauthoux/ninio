@@ -2,8 +2,8 @@ package com.davfx.ninio.http;
 
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.SendCallback;
 
 final class ChunkedWriter implements HttpContentSender {
 	private final HttpContentSender wrappee;
@@ -18,7 +18,7 @@ final class ChunkedWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(final ByteBuffer buffer, final Connecter.SendCallback callback) {
+	public void send(final ByteBuffer buffer, final SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}

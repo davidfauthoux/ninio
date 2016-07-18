@@ -19,12 +19,12 @@ public final class SnmpTimeout {
 			}
 			
 			@Override
-			public void connect(ConnectCallback callback) {
+			public void connect(SnmpConnection callback) {
 				wrappee.connect(callback);
 			}
 			
 			@Override
-			public Cancelable get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid, final GetCallback receiver) {
+			public Cancelable get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid, final SnmpReceiver receiver) {
 				final Timeout.Manager m = t.set(timeout);
 				m.run(new Runnable() {
 					@Override
@@ -33,7 +33,7 @@ public final class SnmpTimeout {
 					}
 				});
 
-				final Cancelable cancelable = wrappee.get(address, community, authRemoteSpecification, oid, new SnmpConnecter.GetCallback() {
+				final Cancelable cancelable = wrappee.get(address, community, authRemoteSpecification, oid, new SnmpReceiver() {
 					@Override
 					public void received(SnmpResult result) {
 						m.reset();

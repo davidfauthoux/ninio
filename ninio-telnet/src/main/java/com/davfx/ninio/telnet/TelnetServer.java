@@ -9,6 +9,7 @@ import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connector;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
@@ -82,10 +83,11 @@ public final class TelnetServer {
 				
 				final Listening l = listening;
 				final TelnetReader telnetReader = new TelnetReader();
-				return builder.listening((l == null) ? null : new Listening() {
+				Listener listener = builder.create(queue);
+				listener.listen((l == null) ? null : new Listener.Callback() {
 					@Override
-					public Connection connecting(Address from, final Connector connector) {
-						Connection c = l.connecting(from, connector);
+					public Listener.ListenerConnecting connecting() {
+						Listener.ListenerConnecting c = l.connecting(from, connector);
 						final Receiver connectionReceiver = c.receiver();
 						final Closing connectionClosing = c.closing();
 						final Connecting connectionConnecting = c.connecting();
@@ -96,7 +98,7 @@ public final class TelnetServer {
 							public Receiver receiver() {
 								return new Receiver() {
 									@Override
-									public void received(Connector conn, Address address, ByteBuffer buffer) {
+									public void received(Address address, ByteBuffer buffer) {
 										telnetReader.handle(buffer, connectionReceiver, connector);
 									}
 								};
@@ -120,7 +122,8 @@ public final class TelnetServer {
 							}
 						};
 					}
-				}).create(queue);
+				});
+				return listener;
 			}
 		};
 	}

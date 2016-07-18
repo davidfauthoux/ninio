@@ -69,7 +69,7 @@ public class UdpTest {
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 				}
 
-				clientWaitClosing.waitFor();
+				//clientWaitClosing.waitFor();
 			}
 			serverWaitClosing.waitFor();
 		}

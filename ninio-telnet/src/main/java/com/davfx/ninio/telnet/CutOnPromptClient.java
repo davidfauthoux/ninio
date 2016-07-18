@@ -10,10 +10,12 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Charsets;
 
@@ -169,11 +171,11 @@ public final class CutOnPromptClient implements Connecter {
 	}
 	
 	@Override
-	public void connect(final Connecter.ConnectCallback callback) {
+	public void connect(final Connection callback) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				cuttingReceiver = new CuttingReceiver(limit, new Connecter.ConnectCallback() {
+				cuttingReceiver = new CuttingReceiver(limit, new Connection() {
 					private InMemoryBuffers buffers = null;
 					@Override
 					public void received(Address address, final ByteBuffer buffer) {
@@ -225,7 +227,7 @@ public final class CutOnPromptClient implements Connecter {
 										cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(charset)));
 										currentReceiveCallback = receiveCallback;
 										if (command != null) {
-											connecter.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new Connecter.SendCallback() {
+											connecter.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new SendCallback() {
 												@Override
 												public void sent() {
 												}

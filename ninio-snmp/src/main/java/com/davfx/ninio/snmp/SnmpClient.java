@@ -16,8 +16,10 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.Mutable;
@@ -83,8 +85,8 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	@Override
-	public void connect(final SnmpConnecter.ConnectCallback callback) {
-		connecter.connect(new Connecter.ConnectCallback() {
+	public void connect(final SnmpConnection callback) {
+		connecter.connect(new Connection() {
 			@Override
 			public void received(final Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
@@ -153,7 +155,7 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	@Override
-	public Cancelable get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid, final GetCallback callback) {
+	public Cancelable get(final Address address, final String community, final AuthRemoteSpecification authRemoteSpecification, final Oid oid, final SnmpReceiver callback) {
 		final Mutable<Instance> instance = new Mutable<>();
 
 		executor.execute(new Runnable() {
@@ -205,9 +207,9 @@ public final class SnmpClient implements SnmpConnecter {
 			public final int request;
 			public final int instanceId;
 			public final Oid oid;
-			public final Connecter.SendCallback sendCallback;
+			public final SendCallback sendCallback;
 
-			public PendingRequest(int request, int instanceId, Oid oid, Connecter.SendCallback sendCallback) {
+			public PendingRequest(int request, int instanceId, Oid oid, SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
@@ -249,7 +251,7 @@ public final class SnmpClient implements SnmpConnecter {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
 				ByteBuffer b = builder.getBuffer();
 				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
-				connector.send(address, b, new Connecter.SendCallback() {
+				connector.send(address, b, new SendCallback() {
 					@Override
 					public void sent() {
 					}
@@ -394,7 +396,7 @@ public final class SnmpClient implements SnmpConnecter {
 		private final Connecter connector;
 		private final InstanceMapper instanceMapper;
 		
-		private SnmpConnecter.GetCallback receiver;
+		private SnmpReceiver receiver;
 		
 		private final Oid initialRequestOid;
 		private Oid requestOid;
@@ -406,7 +408,7 @@ public final class SnmpClient implements SnmpConnecter {
 		private final String community;
 		private final AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, SnmpConnecter.GetCallback receiver, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Oid requestOid, Address address, String community, AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
@@ -438,7 +440,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		private void write() {
-			Connecter.SendCallback sendCallback = new Connecter.SendCallback() {
+			SendCallback sendCallback = new SendCallback() {
 				@Override
 				public void sent() {
 				}

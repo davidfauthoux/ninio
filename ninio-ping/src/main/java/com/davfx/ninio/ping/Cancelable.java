@@ -1,5 +1,5 @@
 package com.davfx.ninio.ping;
 
-public interface PingRequest {
+public interface Cancelable {
 	void cancel();
 }

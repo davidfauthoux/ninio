@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
@@ -53,10 +54,12 @@ public final class SnmpServer implements Disconnectable {
 		};
 	}
 
-	private final Connecter.Connecting connector;
-
-	private SnmpServer(Connecter connecter, final SnmpServerHandler handler) {
-		connector = connecter.connect(new Connecter.Callback() {
+	private final Connecter connecter;
+	
+	private SnmpServer(final Connecter connecter, final SnmpServerHandler handler) {
+		this.connecter = connecter;
+		
+		connecter.connect(new Connection() {
 			@Override
 			public void connected(Address address) {
 				handler.connected(address);
@@ -132,12 +135,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GET {}: None", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
+						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
 						return;
 					}
 
 					LOGGER.trace("GET {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
+					connecter.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
 					return;
 				}
 				
@@ -163,12 +166,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETNEXT {}: No next", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
+						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
 						return;
 					}
 
 					LOGGER.trace("GETNEXT {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
+					connecter.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
 					return;
 				}
 				
@@ -194,12 +197,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETBULK {}: No next", oid);
-						connector.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
+						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
 						return;
 					}
 
 					LOGGER.trace("GETBULK {}: {}", oid, next);
-					connector.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
+					connecter.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
 					return;
 				}
 			}
@@ -237,7 +240,7 @@ public final class SnmpServer implements Disconnectable {
 
 	@Override
 	public void close() {
-		connector.close();
+		connecter.close();
 	}
 	
 }

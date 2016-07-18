@@ -1,5 +1,7 @@
 package com.davfx.ninio.ping;
 
-public interface PingReceiver {
+import com.davfx.ninio.core.Failing;
+
+public interface PingReceiver extends Failing {
 	void received(double time);
 }

@@ -13,10 +13,12 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SecureSocketBuilder;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
@@ -93,8 +95,8 @@ public final class HttpClient implements Disconnectable {
 
 		public boolean reusable = true;
 
-		private Connecter.ConnectCallback receiver = null;
-		private final Deque<Connecter.ConnectCallback> nextReceivers = new LinkedList<>();
+		private Connection receiver = null;
+		private final Deque<Connection> nextReceivers = new LinkedList<>();
 		
 		public ReusableConnector(Address address, boolean secure) {
 			this.address = address;
@@ -104,7 +106,7 @@ public final class HttpClient implements Disconnectable {
 		public void launch(final Executor executor, TcpSocket.Builder factory, Queue queue, final Runnable onClose) {
 			connecting = factory.create(queue);
 			
-			connecting.connect(new Connecter.ConnectCallback() {
+			connecting.connect(new Connection() {
 				@Override
 				public void received(Address address, final ByteBuffer buffer) {
 					executor.execute(new Runnable() {
@@ -156,7 +158,7 @@ public final class HttpClient implements Disconnectable {
 		
 		public void failAllNext(IOException ioe) {
 			IOException e = new IOException("Error in pipeline", ioe);
-			for (Connecter.ConnectCallback r : nextReceivers) {
+			for (Connection r : nextReceivers) {
 				r.failed(e);
 			}
 			nextReceivers.clear();
@@ -164,7 +166,7 @@ public final class HttpClient implements Disconnectable {
 			connecting.close();
 		}
 		
-		public void push(Connecter.ConnectCallback receiver) {
+		public void push(Connection receiver) {
 			if (this.receiver == null) {
 				this.receiver = receiver;
 			} else {
@@ -274,7 +276,7 @@ public final class HttpClient implements Disconnectable {
 					private void sendRequest() {
 						sender = new HttpContentSender() {
 							@Override
-							public void send(ByteBuffer buffer, Connecter.SendCallback callback) {
+							public void send(ByteBuffer buffer, SendCallback callback) {
 								reusableConnector.connecting.send(null, buffer, callback);
 							}
 
@@ -423,7 +425,7 @@ public final class HttpClient implements Disconnectable {
 							}
 						});
 						
-						reusableConnector.push(new Connecter.ConnectCallback() {
+						reusableConnector.push(new Connection() {
 							private final LineReader lineReader = new LineReader();
 							private boolean responseLineRead = false;
 							private boolean responseHeadersRead;
@@ -618,7 +620,7 @@ public final class HttpClient implements Disconnectable {
 						
 						LOGGER.trace("Sending request: {} (complete headers = {})", request, completedHeaders);
 						
-						Connecter.SendCallback sendCallback = new Connecter.SendCallback() {
+						SendCallback sendCallback = new SendCallback() {
 							@Override
 							public void sent() {
 							}
@@ -640,7 +642,7 @@ public final class HttpClient implements Disconnectable {
 					}
 					
 					@Override
-					public void send(final ByteBuffer buffer, final Connecter.SendCallback callback) {
+					public void send(final ByteBuffer buffer, final SendCallback callback) {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {

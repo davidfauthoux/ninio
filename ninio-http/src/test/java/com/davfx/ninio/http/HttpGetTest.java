@@ -99,10 +99,8 @@ public class HttpGetTest {
 	
 	private static Disconnectable server(Ninio ninio, int port, final String suffix) {
 		final Wait waitForClosing = new Wait();
-		final Listener.Listening tcp = ninio.create(
-				TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-			)
-			.listen(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
+		final Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
+		tcp.listen(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
 						
 						@Override
 						public void connected() {

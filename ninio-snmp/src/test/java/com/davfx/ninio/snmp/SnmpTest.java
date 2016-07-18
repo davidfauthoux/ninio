@@ -54,7 +54,7 @@ public class SnmpTest {
 					})))) {
 				final Wait waitClient = new Wait();
 				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))) {
-					snmpClient.connect(new SnmpConnecter.ConnectCallback() {
+					snmpClient.connect(new SnmpConnection() {
 							@Override
 							public void failed(IOException ioe) {
 							}
@@ -81,7 +81,7 @@ public class SnmpTest {
 	
 	private static List<SnmpResult> get(SnmpConnecter snmpClient, Address a, Oid oid) throws IOException {
 		final Lock<List<SnmpResult>, IOException> lock = new Lock<>();
-		snmpClient.get(a, "community", null, oid, new SnmpConnecter.GetCallback() {
+		snmpClient.get(a, "community", null, oid, new SnmpReceiver() {
 			private final List<SnmpResult> r = new LinkedList<>();
 			
 			@Override
@@ -109,7 +109,7 @@ public class SnmpTest {
 			int port = 8080;
 			final Lock<String, IOException> lock = new Lock<>();
 			try (SnmpConnecter snmpClient = SnmpTimeout.wrap(0.5d, ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class))))) {
-				snmpClient.connect(new SnmpConnecter.ConnectCallback() {
+				snmpClient.connect(new SnmpConnection() {
 						@Override
 						public void failed(IOException ioe) {
 						}
@@ -121,7 +121,7 @@ public class SnmpTest {
 						}
 					});
 				
-				snmpClient.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"), new SnmpConnecter.GetCallback() {
+				snmpClient.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"), new SnmpReceiver() {
 							@Override
 							public void received(SnmpResult result) {
 							}
@@ -203,7 +203,7 @@ public class SnmpTest {
 					}
 				}))) {
 				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)).with(SqliteCache.<Integer>builder().using(new SnmpSqliteCacheInterpreter())))) {
-					snmpClient.connect(new SnmpConnecter.ConnectCallback() {
+					snmpClient.connect(new SnmpConnection() {
 						@Override
 						public void failed(IOException ioe) {
 						}
@@ -294,7 +294,7 @@ public class SnmpTest {
 					}))) {
 				final Wait waitClient = new Wait();
 				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTest.class)))) {
-					snmpClient.connect(new SnmpConnecter.ConnectCallback() {
+					snmpClient.connect(new SnmpConnection() {
 							@Override
 							public void failed(IOException ioe) {
 							}

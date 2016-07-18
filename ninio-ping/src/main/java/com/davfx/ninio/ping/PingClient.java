@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Queue;
@@ -58,7 +59,9 @@ public final class PingClient implements PingConnecter {
 	private final Executor executor;
 	private final Connecter connecter;
 	private long nextId = 0L;
-	
+
+	private final Map<Long, PingReceiver> receivers = new HashMap<>();
+
 	//TODO gerer les multiples appels au callback (qd closed)
 	
 	public PingClient(Executor executor, Connecter connecter) {
@@ -66,19 +69,17 @@ public final class PingClient implements PingConnecter {
 		this.connecter = connecter;
 	}
 	
-	private static void closeSendCallbacks(Map<Long, PingConnecter.Connecting.Callback> receivers) {
+	private static void closeSendCallbacks(Map<Long, PingReceiver> receivers) {
 		IOException e = new IOException("Closed");
-		for (PingConnecter.Connecting.Callback c : receivers.values()) {
+		for (PingReceiver c : receivers.values()) {
 			c.failed(e);
 		}
 		receivers.clear();
 	}
 	
 	@Override
-	public PingConnecter.Connecting connect(final PingConnecter.Callback callback) {
-		final Map<Long, PingConnecter.Connecting.Callback> receivers = new HashMap<>();
-		
-		final Connecter.Connecting connecting = connecter.connect(new Connecter.Callback() {
+	public void connect(final PingConnection callback) {
+		connecter.connect(new Connection() {
 			@Override
 			public void received(Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
@@ -102,7 +103,7 @@ public final class PingClient implements PingConnecter {
 
 						double delta = (now - time) / 1_000_000_000d;
 						
-						PingConnecter.Connecting.Callback r = receivers.remove(id);
+						PingReceiver r = receivers.remove(id);
 						if (r == null) {
 							return;
 						}
@@ -138,83 +139,85 @@ public final class PingClient implements PingConnecter {
 				callback.closed();
 			}
 		});
-
-		return new Connecting() {
-			private long id = -1L;
-			
+	}
+	
+	private static final class IdManager {
+		long id = -1L;
+	}
+	
+	@Override
+	public Cancelable ping(final String host, final PingReceiver callback) {
+		final IdManager idManager = new IdManager();
+		
+		executor.execute(new Runnable() {
 			@Override
-			public Cancelable ping(final String host, final Callback callback) {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						if (id < 0L) {
-							id = nextId;
-							nextId++;
-							if (nextId == ID_LIMIT) {
-								nextId = 0L;
-							}
-							receivers.put(id, callback);
-						}
-
-						byte[] sendData = new byte[16];
-
-						ByteBuffer b = ByteBuffer.wrap(sendData);
-						b.put((byte) 8); // requestType (Echo)
-						b.put((byte) 0); // code
-						int checksumPosition = b.position();
-						b.putShort((short) 0); // checksum
-						b.putShort((short) ((id >>> 16) & 0xFFFF)); // identifier
-						b.putShort((short) (id & 0xFFFF)); // sequence
-						long nt = System.nanoTime();
-						b.putLong(nt);
-						int endPosition = b.position();
-
-						b.position(0);
-						int checksum = 0;
-						while (b.position() < endPosition) {
-							checksum += b.getShort() & 0xFFFF;
-						}
-					    while((checksum & 0xFFFF0000) != 0) {
-					    	checksum = (checksum & 0xFFFF) + (checksum >>> 16);
-					    }
-
-					    checksum = (~checksum & 0xffff);
-						b.position(checksumPosition);
-						b.putShort((short) (checksum & 0xFFFF));
-						b.position(endPosition);
-						b.flip();
-						
-						connecting.send(new Address(host, 0), b, new NopConnecterConnectingCallback());
+			public void run() {
+				if (idManager.id < 0L) {
+					idManager.id = nextId;
+					nextId++;
+					if (nextId == ID_LIMIT) {
+						nextId = 0L;
 					}
-				});
+					receivers.put(idManager.id, callback);
+				}
+
+				byte[] sendData = new byte[16];
+
+				ByteBuffer b = ByteBuffer.wrap(sendData);
+				b.put((byte) 8); // requestType (Echo)
+				b.put((byte) 0); // code
+				int checksumPosition = b.position();
+				b.putShort((short) 0); // checksum
+				b.putShort((short) ((idManager.id >>> 16) & 0xFFFF)); // identifier
+				b.putShort((short) (idManager.id & 0xFFFF)); // sequence
+				long nt = System.nanoTime();
+				b.putLong(nt);
+				int endPosition = b.position();
+
+				b.position(0);
+				int checksum = 0;
+				while (b.position() < endPosition) {
+					checksum += b.getShort() & 0xFFFF;
+				}
+			    while((checksum & 0xFFFF0000) != 0) {
+			    	checksum = (checksum & 0xFFFF) + (checksum >>> 16);
+			    }
+
+			    checksum = (~checksum & 0xffff);
+				b.position(checksumPosition);
+				b.putShort((short) (checksum & 0xFFFF));
+				b.position(endPosition);
+				b.flip();
 				
-				return new Cancelable() {
-					@Override
-					public void cancel() {
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								if (id < 0L) {
-									return;
-								}
-								receivers.remove(id);
-							}
-						});
-					}
-				};
+				connecter.send(new Address(host, 0), b, new NopConnecterConnectingCallback());
 			}
-			
+		});
+		
+		return new Cancelable() {
 			@Override
-			public void close() {
-				connecting.close();
-
+			public void cancel() {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						closeSendCallbacks(receivers);
+						if (idManager.id < 0L) {
+							return;
+						}
+						receivers.remove(idManager.id);
 					}
 				});
 			}
 		};
+	}
+	
+	@Override
+	public void close() {
+		connecter.close();
+
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				closeSendCallbacks(receivers);
+			}
+		});
 	}
 }
