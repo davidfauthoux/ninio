@@ -326,13 +326,6 @@ public final class WebsocketSocket implements Connecter {
 	public void close() {
 		LOGGER.trace("Close requested");
 		sender.send(WebsocketUtils.headerOf(0x08, 0L), new NopConnecterConnectingCallback());
-
-		queue.execute(new Runnable() {
-			@Override
-			public void run() {
-				closed = true;
-			}
-		});
 	}
 	
 	@Override
@@ -371,11 +364,12 @@ public final class WebsocketSocket implements Connecter {
 			public void run() {
 				if (closed) {
 					callback.failed(new IOException("Closed"));
+					return;
 				}
 				connection = callback;
 				callback.connected(null);
 			}
 		});
-		sender.finish(); //TODO check if working with websocket
+		sender.send(ByteBuffer.allocate(0), new NopConnecterConnectingCallback());
 	}
 }

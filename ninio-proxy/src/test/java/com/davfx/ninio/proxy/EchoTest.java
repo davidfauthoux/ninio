@@ -21,7 +21,7 @@ import com.google.common.base.Charsets;
 public class EchoTest {
 	
 	@Test
-	public void testSocket() throws Exception {
+	public void test() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
 		try (Ninio ninio = Ninio.create()) {
@@ -96,8 +96,8 @@ public class EchoTest {
 	}
 	
 	@Test
-	public void testSocketSameToCheckClose() throws Exception {
-		testSocket();
+	public void testSameToCheckClose() throws Exception {
+		test();
 	}
 	
 }

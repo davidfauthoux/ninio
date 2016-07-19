@@ -10,6 +10,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -162,12 +163,6 @@ public final class HttpSocket implements Connecter {
 	@Override
 	public void close() {
 		sender.cancel();
-		queue.execute(new Runnable() {
-			@Override
-			public void run() {
-				closed = true;
-			}
-		});
 	}
 	
 	@Override
@@ -205,11 +200,12 @@ public final class HttpSocket implements Connecter {
 			public void run() {
 				if (closed) {
 					callback.failed(new IOException("Closed"));
+					return;
 				}
 				connection = callback;
 				callback.connected(null);
 			}
 		});
-		sender.finish(); //TODO check if finish can be called on http not-dying connection
+		sender.send(ByteBuffer.allocate(0), new NopConnecterConnectingCallback());
 	}
 }
