@@ -241,16 +241,17 @@ public final class HttpClient implements Disconnectable {
 			}
 			
 			private HttpReceiver callback = null;
+			private HttpContentSender contentSender;
 			
 			@Override
-			public HttpContentSender build(final HttpRequest request) {
+			public HttpRequestBuilderHttpContentSender build(final HttpRequest request) {
 				if (callback != null) {
 					throw new IllegalStateException();
 				}
 				
 				final int thisMaxRedirections = maxRedirections;
 				
-				return new HttpContentSender() {
+				contentSender = new HttpContentSender() {
 					private boolean emptyBody = true;
 					private HttpContentSender sender = null;
 
@@ -282,8 +283,9 @@ public final class HttpClient implements Disconnectable {
 					private void sendRequest() {
 						sender = new HttpContentSender() {
 							@Override
-							public void send(ByteBuffer buffer, SendCallback callback) {
+							public HttpContentSender send(ByteBuffer buffer, SendCallback callback) {
 								reusableConnector.connecting.send(null, buffer, callback);
+								return this;
 							}
 
 							@Override
@@ -648,7 +650,7 @@ public final class HttpClient implements Disconnectable {
 					}
 					
 					@Override
-					public void send(final ByteBuffer buffer, final SendCallback callback) {
+					public HttpContentSender send(final ByteBuffer buffer, final SendCallback sendCallback) {
 						if (callback == null) {
 							throw new IllegalStateException();
 						}
@@ -667,9 +669,10 @@ public final class HttpClient implements Disconnectable {
 									sendRequest();
 								}
 								
-								sender.send(buffer, callback);
+								sender.send(buffer, sendCallback);
 							}
 						});
+						return this;
 					}
 
 					@Override
@@ -716,15 +719,21 @@ public final class HttpClient implements Disconnectable {
 						});
 					}
 				};
+
+				return new HttpRequestBuilderHttpContentSenderImpl(this, contentSender);
 			}
 			
 			@Override
-			public void receive(final HttpReceiver c) {
+			public HttpContentSender receive(final HttpReceiver c) {
+				if (contentSender == null) {
+					throw new IllegalStateException();
+				}
 				if (callback != null) {
 					throw new IllegalStateException();
 				}
 				
 				callback = c;
+				return contentSender;
 			}
 		};
 	}

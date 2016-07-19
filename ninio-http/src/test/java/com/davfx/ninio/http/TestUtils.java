@@ -16,9 +16,8 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.RoutingTcpSocketServer;
-import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.Annotated.Builder;
@@ -27,7 +26,6 @@ import com.davfx.ninio.http.service.HttpService;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
-import com.google.common.base.Supplier;
 
 class TestUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TestUtils.class);
@@ -72,7 +70,7 @@ class TestUtils {
 		final Wait wait = new Wait();
 		final Wait waitForClosing = new Wait();
 		final Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
-		tcp.listen(new Listener.Callback() {
+		tcp.listen(new Listening() {
 			@Override
 			public void closed() {
 				waitForClosing.run();
@@ -110,7 +108,7 @@ class TestUtils {
 		final Wait wait = new Wait();
 		final Wait waitForClosing = new Wait();
 		final Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
-		tcp.listen(new Listener.Callback() {
+		tcp.listen(new Listening() {
 			@Override
 			public void closed() {
 				waitForClosing.run();
@@ -143,7 +141,7 @@ class TestUtils {
 					}
 				})
 		);*/
-		routedTcp.listen(new Listener.Callback() {
+		routedTcp.listen(new Listening() {
 			@Override
 			public void closed() {
 				routedWaitForClosing.run();

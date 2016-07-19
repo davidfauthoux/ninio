@@ -13,19 +13,19 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
-import com.davfx.ninio.core.LockFailedConnecterCallback;
-import com.davfx.ninio.core.LockFailedConnecterConnectingCallback;
-import com.davfx.ninio.core.LockFailedListenerCallback;
-import com.davfx.ninio.core.LockReceivedConnecterCallback;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.LockFailedConnection;
+import com.davfx.ninio.core.LockListening;
+import com.davfx.ninio.core.LockReceivedConnection;
+import com.davfx.ninio.core.LockSendCallback;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterCallback;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.WaitClosedConnecterCallback;
-import com.davfx.ninio.core.WaitClosedListenerCallback;
-import com.davfx.ninio.core.WaitConnectedConnecterCallback;
-import com.davfx.ninio.core.WaitConnectedListenerCallback;
-import com.davfx.ninio.core.WaitSentConnecterConnectingCallback;
+import com.davfx.ninio.core.WaitClosedConnection;
+import com.davfx.ninio.core.WaitClosedListening;
+import com.davfx.ninio.core.WaitConnectedConnection;
+import com.davfx.ninio.core.WaitConnectedListening;
+import com.davfx.ninio.core.WaitSentSendCallback;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 
@@ -44,10 +44,10 @@ public class SocketTest {
 			final Wait serverWaitClientClosing = new Wait();
 			try (Listener server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				server.listen(
-					new WaitConnectedListenerCallback(serverWaitConnecting,
-					new WaitClosedListenerCallback(serverWaitClosing,
-					new LockFailedListenerCallback(lock,
-					new Listener.Callback() {
+					new WaitConnectedListening(serverWaitConnecting,
+					new WaitClosedListening(serverWaitClosing,
+					new LockListening(lock,
+					new Listening() {
 						@Override
 						public void failed(IOException ioe) {
 						}
@@ -63,7 +63,7 @@ public class SocketTest {
 							return new Connection() {
 								@Override
 								public void received(Address address, ByteBuffer buffer) {
-									connecting.send(null, buffer, new NopConnecterConnectingCallback());
+									connecting.send(null, buffer, new Nop());
 								}
 								
 								@Override
@@ -93,18 +93,18 @@ public class SocketTest {
 				Wait clientWaitSent = new Wait();
 
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
-					try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 						try (Connecter client = ninio.create(proxyClient.tcp().to(new Address(Address.LOCALHOST, port)))) {
 							client.connect(
-								new WaitConnectedConnecterCallback(clientWaitConnecting, 
-								new WaitClosedConnecterCallback(clientWaitClosing, 
-								new LockFailedConnecterCallback(lock, 
-								new LockReceivedConnecterCallback(lock,
-								new NopConnecterCallback())))));
+								new WaitConnectedConnection(clientWaitConnecting, 
+								new WaitClosedConnection(clientWaitClosing, 
+								new LockFailedConnection(lock, 
+								new LockReceivedConnection(lock,
+								new Nop())))));
 							client.send(null, ByteBufferUtils.toByteBuffer("test"),
-								new WaitSentConnecterConnectingCallback(clientWaitSent,
-								new LockFailedConnecterConnectingCallback(lock,
-								new NopConnecterConnectingCallback())));
+								new WaitSentSendCallback(clientWaitSent,
+								new LockSendCallback(lock,
+								new Nop())));
 							
 							clientWaitConnecting.waitFor();
 							serverWaitClientConnecting.waitFor();

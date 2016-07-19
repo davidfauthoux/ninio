@@ -7,6 +7,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.TcpSocketServer;
@@ -78,8 +79,8 @@ public final class TelnetServer {
 					}
 					
 					@Override
-					public void listen(final Callback callback) {
-						listener.listen(new Listener.Callback() {
+					public void listen(final Listening callback) {
+						listener.listen(new Listening() {
 							@Override
 							public Connection connecting(final Connected connected) {
 								final Connection c = callback.connecting(connected);

@@ -8,7 +8,7 @@ import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.WebsocketSocket;
 
-public interface ProxyConnectorProvider extends Disconnectable {
+public interface ProxyProvider extends Disconnectable {
 	TcpSocket.Builder tcp();
 	UdpSocket.Builder udp();
 	TcpdumpSocket.Builder tcpdump();

@@ -7,7 +7,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connection;
 import com.google.common.primitives.Ints;
 
-final class SshPacketReceiverClosing implements Connection {
+final class SshPacketConnection implements Connection {
 	
 	private ByteBuffer buffer = null;
 	private ByteBuffer paddingBuffer = null;
@@ -16,7 +16,7 @@ final class SshPacketReceiverClosing implements Connection {
 	private int length = -1;
 	private final Connection wrappee;
 	
-	public SshPacketReceiverClosing(Connection wrappee) {
+	public SshPacketConnection(Connection wrappee) {
 		this.wrappee = wrappee;
 	}
 

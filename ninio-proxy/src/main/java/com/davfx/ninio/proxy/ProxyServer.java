@@ -17,6 +17,7 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
@@ -34,7 +35,7 @@ import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
-public final class ProxyServer implements Listener.Callback {
+public final class ProxyServer implements Listening {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ProxyServer.class);
 
@@ -67,7 +68,7 @@ public final class ProxyServer implements Listener.Callback {
 					
 					@Override
 					public NinioBuilder<Connecter> create(Address address, String header) {
-						Header h = Header.of(header);
+						ProxyHeader h = ProxyHeader.of(header);
 						
 						if (h.type.equals(ProxyCommons.Types.TCP)) {
 							return TcpSocket.builder().to(address);

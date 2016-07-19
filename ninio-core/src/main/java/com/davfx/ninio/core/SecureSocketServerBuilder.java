@@ -48,8 +48,8 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 		
 		return new Listener() {
 			@Override
-			public void listen(final Callback callback) {
-				listener.listen(new Listener.Callback() {
+			public void listen(final Listening callback) {
+				listener.listen(new Listening() {
 					
 					@Override
 					public void failed(IOException ioe) {

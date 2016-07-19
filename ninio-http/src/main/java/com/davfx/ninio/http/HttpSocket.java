@@ -10,7 +10,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -206,6 +206,6 @@ public final class HttpSocket implements Connecter {
 				callback.connected(null);
 			}
 		});
-		sender.send(ByteBuffer.allocate(0), new NopConnecterConnectingCallback());
+		sender.send(ByteBuffer.allocate(0), new Nop());
 	}
 }

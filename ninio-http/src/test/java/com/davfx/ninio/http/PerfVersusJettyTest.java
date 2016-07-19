@@ -26,7 +26,7 @@ import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.http.service.Annotated;
@@ -170,7 +170,7 @@ public class PerfVersusJettyTest {
 			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)));
 			server.listen(HttpListening.builder().with(new SerialExecutor(NinioServer1.class)).with(new HttpListeningHandler() {
 				@Override
-				public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
+				public HttpContentReceiver handle(final HttpRequest request, final HttpResponseSender responseHandler) {
 					return new HttpContentReceiver() {
 						@Override
 						public void received(ByteBuffer buffer) {
@@ -185,13 +185,13 @@ public class PerfVersusJettyTest {
 									HttpHeaderKey.CONTENT_LENGTH, String.valueOf(m.remaining())
 								)));
 							
-							sender.send(m, new NopConnecterConnectingCallback());
+							sender.send(m, new Nop());
 							sender.finish();
 						}
 					};
 				}
 				@Override
-				public void connected() {
+				public void connected(Address address) {
 				}
 				@Override
 				public void failed(IOException ioe) {

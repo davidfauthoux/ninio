@@ -5,20 +5,20 @@ import java.util.zip.Deflater;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-final class ZlibCompressingConnector implements Connected {
-	private static final Config CONFIG = ConfigUtils.load(ZlibCompressingConnector.class);
+final class ZlibCompressingConnected implements Connected {
+	private static final Config CONFIG = ConfigUtils.load(ZlibCompressingConnected.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("zlib.buffer").intValue();
 
 	private final Connected wrappee;
 	private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION);
 	private boolean activated = false;
 
-	public ZlibCompressingConnector(Connected wrappee) {
+	public ZlibCompressingConnected(Connected wrappee) {
 		this.wrappee = wrappee;
 	}
 
@@ -60,7 +60,7 @@ final class ZlibCompressingConnector implements Connected {
 			deflated.position(offset);
 			
 			if (toSend != null) {
-				wrappee.send(address, toSend, new NopConnecterConnectingCallback());
+				wrappee.send(address, toSend, new Nop());
 			}
 			toSend = deflated;
 		}

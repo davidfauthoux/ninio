@@ -13,18 +13,18 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-final class ZlibUncompressingReceiverClosing implements Connection {
+final class ZlibUncompressingConnection implements Connection {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(ZlibUncompressingReceiverClosing.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ZlibUncompressingConnection.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(ZlibUncompressingReceiverClosing.class);
+	private static final Config CONFIG = ConfigUtils.load(ZlibUncompressingConnection.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("zlib.buffer").intValue();
 
 	private final Inflater inflater = new Inflater();
 	private boolean activated = false;
 	private final Connection wrappee;
 
-	public ZlibUncompressingReceiverClosing(Connection wrappee) {
+	public ZlibUncompressingConnection(Connection wrappee) {
 		this.wrappee = wrappee;
 	}
 

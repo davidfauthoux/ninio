@@ -77,7 +77,7 @@ public final class TcpSocketServer implements Listener {
 	private SelectionKey currentAcceptSelectionKey = null;
 	
 	private boolean closed = false;
-	private Listener.Callback listenCallback = null;
+	private Listening listenCallback = null;
 
 	private TcpSocketServer(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress) {
 		this.queue = queue;
@@ -86,7 +86,7 @@ public final class TcpSocketServer implements Listener {
 	}
 	
 	@Override
-	public void listen(final Listener.Callback callback) {
+	public void listen(final Listening callback) {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -330,7 +330,7 @@ public final class TcpSocketServer implements Listener {
 		});
 	}
 	
-	private void disconnect(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey, Listener.Callback callback) {
+	private void disconnect(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey, Listening callback) {
 		for (InnerSocketContext context : outboundChannels) {
 			LOGGER.debug("Closing outbound channel");
 			context.disconnect();

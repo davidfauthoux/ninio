@@ -5,6 +5,6 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.NinioBuilder;
 
 public interface WithHeaderSocketBuilder extends NinioBuilder<Connecter> {
-	WithHeaderSocketBuilder header(Header header);
+	WithHeaderSocketBuilder header(ProxyHeader header);
 	WithHeaderSocketBuilder with(Address address);
 }

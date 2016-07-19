@@ -16,7 +16,7 @@ import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.util.Lock;
@@ -91,7 +91,7 @@ public class HttpGetTest {
 					};
 				}
 			});
-		s.send(ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+		s.send(ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Nop());
 		s.finish();
 		return lock;
 	}
@@ -106,7 +106,7 @@ public class HttpGetTest {
 		tcp.listen(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
 						
 						@Override
-						public void connected() {
+						public void connected(Address address) {
 						}
 
 						@Override
@@ -121,7 +121,7 @@ public class HttpGetTest {
 						}
 						
 						@Override
-						public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
+						public HttpContentReceiver handle(final HttpRequest request, final HttpResponseSender responseHandler) {
 							LOGGER.debug("----> {}", request);
 							return new HttpContentReceiver() {
 								private final InMemoryBuffers post = new InMemoryBuffers();
@@ -138,7 +138,7 @@ public class HttpGetTest {
 										b = (post.toString(Charsets.UTF_8) + suffix).getBytes(Charsets.UTF_8);
 									}
 									HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK));//, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(b.length))));
-									sender.send(ByteBuffer.wrap(b), new NopConnecterConnectingCallback());
+									sender.send(ByteBuffer.wrap(b), new Nop());
 									sender.finish();
 								}
 							};
@@ -463,7 +463,7 @@ public class HttpGetTest {
 				Thread.sleep(100);
 				byte[] post = "TEST0".getBytes(Charsets.UTF_8);
 				for (int i = 0; i < post.length; i++) {
-					s.send(ByteBuffer.wrap(post, i, 1), new NopConnecterConnectingCallback());
+					s.send(ByteBuffer.wrap(post, i, 1), new Nop());
 					LOGGER.debug("WAITING");
 					Thread.sleep(20);
 				}

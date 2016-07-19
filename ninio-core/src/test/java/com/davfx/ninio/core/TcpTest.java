@@ -24,10 +24,10 @@ public class TcpTest {
 			final Wait serverWaitClientClosing = new Wait();
 			try (Listener server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				server.listen(
-					new WaitConnectedListenerCallback(serverWaitConnecting,
-					new WaitClosedListenerCallback(serverWaitClosing,
-					new LockFailedListenerCallback(lock,
-					new Listener.Callback() {
+					new WaitConnectedListening(serverWaitConnecting,
+					new WaitClosedListening(serverWaitClosing,
+					new LockListening(lock,
+					new Listening() {
 						@Override
 						public void failed(IOException ioe) {
 						}
@@ -43,7 +43,7 @@ public class TcpTest {
 							return new Connection() {
 								@Override
 								public void received(Address address, ByteBuffer buffer) {
-									connecting.send(null, buffer, new NopConnecterConnectingCallback());
+									connecting.send(null, buffer, new Nop());
 								}
 								
 								@Override
@@ -70,15 +70,15 @@ public class TcpTest {
 
 				try (Connecter client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))) {
 					client.connect(
-						new WaitConnectedConnecterCallback(clientWaitConnecting, 
-						new WaitClosedConnecterCallback(clientWaitClosing, 
-						new LockFailedConnecterCallback(lock, 
-						new LockReceivedConnecterCallback(lock,
-						new NopConnecterCallback())))));
+						new WaitConnectedConnection(clientWaitConnecting, 
+						new WaitClosedConnection(clientWaitClosing, 
+						new LockFailedConnection(lock, 
+						new LockReceivedConnection(lock,
+						new Nop())))));
 					client.send(null, ByteBufferUtils.toByteBuffer("test"),
-						new WaitSentConnecterConnectingCallback(clientWaitSent,
-						new LockFailedConnecterConnectingCallback(lock,
-						new NopConnecterConnectingCallback())));
+						new WaitSentSendCallback(clientWaitSent,
+						new LockSendCallback(lock,
+						new Nop())));
 					
 					clientWaitConnecting.waitFor();
 					serverWaitClientConnecting.waitFor();

@@ -2,7 +2,7 @@ package com.davfx.ninio.http;
 
 import java.nio.ByteBuffer;
 
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 
 final class ChunkedWriter implements HttpContentSender {
@@ -18,18 +18,19 @@ final class ChunkedWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(final ByteBuffer buffer, final SendCallback callback) {
+	public HttpContentSender send(final ByteBuffer buffer, final SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
 		if (!buffer.hasRemaining()) {
 			callback.sent();
-			return;
+			return this;
 		}
 		
-		wrappee.send(LineReader.toBuffer(Integer.toHexString(buffer.remaining())), new NopConnecterConnectingCallback());
-		wrappee.send(buffer, new NopConnecterConnectingCallback());
+		wrappee.send(LineReader.toBuffer(Integer.toHexString(buffer.remaining())), new Nop());
+		wrappee.send(buffer, new Nop());
 		wrappee.send(emptyLineByteBuffer.duplicate(), callback);
+		return this;
 	}
 
 	@Override
@@ -40,8 +41,8 @@ final class ChunkedWriter implements HttpContentSender {
 		
 		finished = true;
 		
-		wrappee.send(zeroByteBuffer.duplicate(), new NopConnecterConnectingCallback());
-		wrappee.send(emptyLineByteBuffer.duplicate(), new NopConnecterConnectingCallback());
+		wrappee.send(zeroByteBuffer.duplicate(), new Nop());
+		wrappee.send(emptyLineByteBuffer.duplicate(), new Nop());
 		wrappee.finish();
 	}
 	

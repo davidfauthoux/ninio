@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.Listener;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
@@ -22,7 +22,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 
 	private final HttpContentReceiver receiver;
 
-	public WebsocketHttpContentReceiver(HttpRequest request, HttpListeningHandler.ResponseHandler responseHandler, final boolean textResponses, Listener.Callback listening) {
+	public WebsocketHttpContentReceiver(HttpRequest request, HttpListeningHandler.HttpResponseSender responseHandler, final boolean textResponses, Listening listening) {
 		String wsKey = null;
 		for (String v : request.headers.get("Sec-WebSocket-Key")) {
 			wsKey = v;
@@ -91,7 +91,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 				}
 				*/
 				
-				sender.send(WebsocketUtils.headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()), new NopConnecterConnectingCallback());
+				sender.send(WebsocketUtils.headerOf(textResponses ? 0x01 : 0x02, buffer.remaining()), new Nop());
 				sender.send(buffer, callback);
 			}
 		});

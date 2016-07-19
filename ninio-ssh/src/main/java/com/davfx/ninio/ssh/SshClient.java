@@ -20,7 +20,7 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -155,10 +155,10 @@ public final class SshClient implements Connecter {
 	private final List<String> clientExchange = new LinkedList<>();
 	private final List<String> serverExchange = new LinkedList<>();
 	
-	private ZlibUncompressingReceiverClosing uncompressingCloseableByteBufferHandler;
-	private UncipheringReceiverClosing uncipheringCloseableByteBufferHandler;
-	private CipheringConnector cipheringCloseableByteBufferHandler;
-	private ZlibCompressingConnector compressingCloseableByteBufferHandler;
+	private ZlibUncompressingConnection uncompressingCloseableByteBufferHandler;
+	private UncipheringConnection uncipheringCloseableByteBufferHandler;
+	private CipheringConnected cipheringCloseableByteBufferHandler;
+	private ZlibCompressingConnected compressingCloseableByteBufferHandler;
 
 	private Connected connecting;
 	
@@ -179,7 +179,7 @@ public final class SshClient implements Connecter {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				final SendCallback sendCallback = new NopConnecterConnectingCallback(); //TODO fail
+				final SendCallback sendCallback = new Nop(); //TODO fail
 				
 				clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
 				clientExchange.add("ssh-rsa");
@@ -600,11 +600,11 @@ public final class SshClient implements Connecter {
 					}
 				};
 		
-				uncompressingCloseableByteBufferHandler = new ZlibUncompressingReceiverClosing(sshReceiver);
-				SshPacketReceiverClosing sshPacketInputHandler = new SshPacketReceiverClosing(uncompressingCloseableByteBufferHandler);
-				uncipheringCloseableByteBufferHandler = new UncipheringReceiverClosing(sshPacketInputHandler);
+				uncompressingCloseableByteBufferHandler = new ZlibUncompressingConnection(sshReceiver);
+				SshPacketConnection sshPacketInputHandler = new SshPacketConnection(uncompressingCloseableByteBufferHandler);
+				uncipheringCloseableByteBufferHandler = new UncipheringConnection(sshPacketInputHandler);
 				
-				ReadingSshHeaderReceiverClosing readingSshHeaderCloseableByteBufferHandler = new ReadingSshHeaderReceiverClosing(new ReadingSshHeaderReceiverClosing.Handler() {
+				ReadingSshHeaderConnection readingSshHeaderCloseableByteBufferHandler = new ReadingSshHeaderConnection(new ReadingSshHeaderConnection.Handler() {
 					@Override
 					public void handle(final String header) {
 						executor.execute(new Runnable() {
@@ -633,9 +633,9 @@ public final class SshClient implements Connecter {
 		
 				connecter.connect(readingSshHeaderCloseableByteBufferHandler);
 
-				cipheringCloseableByteBufferHandler = new CipheringConnector(connecter);
-				SshPacketConnector sshPacketOuputHandler = new SshPacketConnector(cipheringCloseableByteBufferHandler);
-				compressingCloseableByteBufferHandler = new ZlibCompressingConnector(sshPacketOuputHandler);
+				cipheringCloseableByteBufferHandler = new CipheringConnected(connecter);
+				SshPacketConnected sshPacketOuputHandler = new SshPacketConnected(cipheringCloseableByteBufferHandler);
+				compressingCloseableByteBufferHandler = new ZlibCompressingConnected(sshPacketOuputHandler);
 				connecting = compressingCloseableByteBufferHandler;
 				
 				connecter.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)), sendCallback);

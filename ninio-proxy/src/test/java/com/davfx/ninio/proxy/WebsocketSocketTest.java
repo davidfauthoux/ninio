@@ -14,16 +14,16 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Listener;
-import com.davfx.ninio.core.LockFailedConnecterCallback;
-import com.davfx.ninio.core.LockReceivedConnecterCallback;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.LockFailedConnection;
+import com.davfx.ninio.core.LockReceivedConnection;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterCallback;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.core.WaitClosedConnecterCallback;
-import com.davfx.ninio.core.WaitConnectedConnecterCallback;
+import com.davfx.ninio.core.WaitClosedConnection;
+import com.davfx.ninio.core.WaitConnectedConnection;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpListening;
@@ -49,8 +49,8 @@ public class WebsocketSocketTest {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketSocketTest.class)).with(new HttpListeningHandler() {
 					@Override
-					public HttpContentReceiver handle(HttpRequest request, final ResponseHandler responseHandler) {
-						return new WebsocketHttpContentReceiver(request, responseHandler, true, new Listener.Callback() { //TODO WebsocketHttpContentReceiver extends HttpListeningHandler
+					public HttpContentReceiver handle(HttpRequest request, final HttpResponseSender responseHandler) {
+						return new WebsocketHttpContentReceiver(request, responseHandler, true, new Listening() { //TODO WebsocketHttpContentReceiver extends HttpListeningHandler
 							@Override
 							public void closed() {
 							}
@@ -71,7 +71,7 @@ public class WebsocketSocketTest {
 										buffers.add(buffer);
 										String s = buffers.toString();
 										if (s.indexOf('\n') >= 0) {
-											connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new NopConnecterConnectingCallback());
+											connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new Nop());
 										}
 									}
 									
@@ -96,7 +96,7 @@ public class WebsocketSocketTest {
 					serverWaitServerClosing.run();
 				}
 				@Override
-				public void connected() {
+				public void connected(Address address) {
 					serverWaitServerConnecting.run();
 				}
 				@Override
@@ -117,15 +117,15 @@ public class WebsocketSocketTest {
 				final Wait clientWaitSending1 = new Wait();
 
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
-					try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 						try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketSocketTest.class)))) {
 							try (Connecter client = ninio.create(proxyClient.websocket().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
 								client.connect(
-										new WaitConnectedConnecterCallback(clientWaitConnecting, 
-										new WaitClosedConnecterCallback(clientWaitClosing, 
-										new LockFailedConnecterCallback(lock, 
-										new LockReceivedConnecterCallback(lock,
-										new NopConnecterCallback())))));
+										new WaitConnectedConnection(clientWaitConnecting, 
+										new WaitClosedConnection(clientWaitClosing, 
+										new LockFailedConnection(lock, 
+										new LockReceivedConnection(lock,
+										new Nop())))));
 								
 								clientWaitConnecting.waitFor();
 								client.send(null, ByteBufferUtils.toByteBuffer("test0"), new SendCallback() {

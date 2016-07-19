@@ -13,7 +13,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
 
@@ -189,7 +189,7 @@ public final class PingClient implements PingConnecter {
 				b.position(endPosition);
 				b.flip();
 				
-				connecter.send(new Address(host, 0), b, new NopConnecterConnectingCallback());
+				connecter.send(new Address(host, 0), b, new Nop());
 			}
 		});
 		

@@ -14,7 +14,7 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocket;
-import com.davfx.ninio.core.ToFileReceiverClosing;
+import com.davfx.ninio.core.ToFileConnection;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -43,7 +43,7 @@ public class ScpDownloadTest {
 
 		try (Ninio ninio = Ninio.create()) {
 			Wait wait = new Wait();
-			try (ToFileReceiverClosing toFileReceiverClosing = new ToFileReceiverClosing(new File("downloaded.txt"), new Connection() {
+			try (ToFileConnection toFileReceiverClosing = new ToFileConnection(new File("downloaded.txt"), new Connection() {
 				@Override
 				public void connected(Address address) {
 					LOGGER.debug("Connected");

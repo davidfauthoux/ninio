@@ -2,19 +2,20 @@ package com.davfx.ninio.core;
 
 import java.io.IOException;
 
-import com.davfx.ninio.util.Lock;
+import com.davfx.ninio.util.Wait;
 
-public final class LockFailedListenerCallback implements Listener.Callback {
-	private final Lock<?, IOException> lock;
-	private final Listener.Callback wrappee;
+public final class WaitConnectedListening implements Listening {
+	private final Wait wait;
+	private final Listening wrappee;
 	
-	public LockFailedListenerCallback(Lock<?, IOException> lock, Listener.Callback wrappee) {
-		this.lock = lock;
+	public WaitConnectedListening(Wait wait, Listening wrappee) {
+		this.wait = wait;
 		this.wrappee = wrappee;
 	}
 	
 	@Override
 	public void connected(Address address) {
+		wait.run();
 		wrappee.connected(address);
 	}
 	
@@ -24,7 +25,6 @@ public final class LockFailedListenerCallback implements Listener.Callback {
 	}
 	@Override
 	public void failed(IOException ioe) {
-		lock.fail(ioe);
 		wrappee.failed(ioe);
 	}
 	@Override

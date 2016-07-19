@@ -11,7 +11,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -325,12 +325,12 @@ public final class WebsocketSocket implements Connecter {
 	@Override
 	public void close() {
 		LOGGER.trace("Close requested");
-		sender.send(WebsocketUtils.headerOf(0x08, 0L), new NopConnecterConnectingCallback());
+		sender.send(WebsocketUtils.headerOf(0x08, 0L), new Nop());
 	}
 	
 	@Override
 	public void send(Address address, ByteBuffer buffer, final SendCallback callback) {
-		sender.send(WebsocketUtils.headerOf(0x02, buffer.remaining()), new NopConnecterConnectingCallback()); //TODO ENCHAINER!!! ne pas assume qu'un send fail est forcement suivi de fail pour les autres send
+		sender.send(WebsocketUtils.headerOf(0x02, buffer.remaining()), new Nop()); //TODO ENCHAINER!!! ne pas assume qu'un send fail est forcement suivi de fail pour les autres send
 		sender.send(buffer, new SendCallback() {
 			@Override
 			public void failed(final IOException e) {
@@ -370,6 +370,6 @@ public final class WebsocketSocket implements Connecter {
 				callback.connected(null);
 			}
 		});
-		sender.send(ByteBuffer.allocate(0), new NopConnecterConnectingCallback());
+		sender.send(ByteBuffer.allocate(0), new Nop());
 	}
 }

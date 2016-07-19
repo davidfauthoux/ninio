@@ -5,7 +5,7 @@ import java.nio.ByteOrder;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
@@ -53,7 +53,7 @@ final class GzipWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(ByteBuffer buffer, SendCallback callback) {
+	public HttpContentSender send(ByteBuffer buffer, SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
@@ -62,6 +62,7 @@ final class GzipWriter implements HttpContentSender {
 		crc.update(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 		buffer.position(buffer.limit());
 		write(callback);
+		return this;
 	}
 
 	@Override
@@ -72,8 +73,8 @@ final class GzipWriter implements HttpContentSender {
 
 		finished = true;
 		deflater.finish();
-		write(new NopConnecterConnectingCallback());
-		wrappee.send(buildGzipFooter(), new NopConnecterConnectingCallback());
+		write(new Nop());
+		wrappee.send(buildGzipFooter(), new Nop());
 		wrappee.finish();
 	}
 
@@ -93,7 +94,7 @@ final class GzipWriter implements HttpContentSender {
 			}
 			
 			if (toSend != null) {
-				wrappee.send(toSend, new NopConnecterConnectingCallback());
+				wrappee.send(toSend, new Nop());
 			}
 			
 			deflated.position(deflated.position() + c);

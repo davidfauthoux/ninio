@@ -30,10 +30,10 @@ public class SecureTest {
 			final Wait serverWaitClientClosing = new Wait();
 			try (Listener server = ninio.create(new SecureSocketServerBuilder(TcpSocketServer.builder()).with(executor).trust(trust).bind(new Address(Address.ANY, port)))) {
 				server.listen(
-					new WaitConnectedListenerCallback(serverWaitConnecting,
-					new WaitClosedListenerCallback(serverWaitClosing,
-					new LockFailedListenerCallback(lock,
-					new Listener.Callback() {
+					new WaitConnectedListening(serverWaitConnecting,
+					new WaitClosedListening(serverWaitClosing,
+					new LockListening(lock,
+					new Listening() {
 						@Override
 						public void failed(IOException ioe) {
 						}
@@ -49,7 +49,7 @@ public class SecureTest {
 							return new Connection() {
 								@Override
 								public void received(Address address, ByteBuffer buffer) {
-									connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO:" + ByteBufferUtils.toString(buffer)), new NopConnecterConnectingCallback());
+									connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO:" + ByteBufferUtils.toString(buffer)), new Nop());
 								}
 								
 								@Override
@@ -76,15 +76,15 @@ public class SecureTest {
 
 				try (Connecter client = ninio.create(new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(new Address(Address.LOCALHOST, port)))) {
 					client.connect(
-						new WaitConnectedConnecterCallback(clientWaitConnecting, 
-						new WaitClosedConnecterCallback(clientWaitClosing, 
-						new LockFailedConnecterCallback(lock, 
-						new LockReceivedConnecterCallback(lock,
-						new NopConnecterCallback())))));
+						new WaitConnectedConnection(clientWaitConnecting, 
+						new WaitClosedConnection(clientWaitClosing, 
+						new LockFailedConnection(lock, 
+						new LockReceivedConnection(lock,
+						new Nop())))));
 					client.send(null, ByteBufferUtils.toByteBuffer("loooooooooooongtest"),
-						new WaitSentConnecterConnectingCallback(clientWaitSent,
-						new LockFailedConnecterConnectingCallback(lock,
-						new NopConnecterConnectingCallback())));
+						new WaitSentSendCallback(clientWaitSent,
+						new LockSendCallback(lock,
+						new Nop())));
 					
 					clientWaitConnecting.waitFor();
 					serverWaitClientConnecting.waitFor();

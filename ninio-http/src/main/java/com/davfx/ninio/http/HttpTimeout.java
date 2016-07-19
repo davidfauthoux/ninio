@@ -19,17 +19,19 @@ public final class HttpTimeout {
 			}
 
 			private Timeout.Manager m;
+			private HttpContentSender sender;
 
 			@Override
-			public HttpContentSender build(HttpRequest request) {
+			public HttpRequestBuilderHttpContentSender build(HttpRequest request) {
 				m = t.set(timeout);
 				final HttpContentSender s = wrappee.build(request);
 
-				return new HttpContentSender() {
+				sender = new HttpContentSender() {
 					@Override
-					public void send(ByteBuffer buffer, SendCallback callback) {
+					public HttpContentSender send(ByteBuffer buffer, SendCallback callback) {
 						m.reset();
 						s.send(buffer, callback);
+						return this;
 					}
 					
 					@Override
@@ -49,10 +51,12 @@ public final class HttpTimeout {
 						s.cancel();
 					}
 				};
+				
+				return new HttpRequestBuilderHttpContentSenderImpl(this, sender);
 			}
 			
 			@Override
-			public void receive(final HttpReceiver callback) {
+			public HttpContentSender receive(final HttpReceiver callback) {
 				wrappee.receive(new HttpReceiver() {
 					@Override
 					public void failed(IOException ioe) {
@@ -80,6 +84,7 @@ public final class HttpTimeout {
 						};
 					}
 				});
+				return sender;
 			}
 		};
 	}

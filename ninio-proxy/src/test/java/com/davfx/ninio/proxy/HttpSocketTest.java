@@ -13,16 +13,15 @@ import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
-import com.davfx.ninio.core.LockFailedConnecterCallback;
-import com.davfx.ninio.core.LockFailedConnecterConnectingCallback;
-import com.davfx.ninio.core.LockReceivedConnecterCallback;
+import com.davfx.ninio.core.LockFailedConnection;
+import com.davfx.ninio.core.LockReceivedConnection;
+import com.davfx.ninio.core.LockSendCallback;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterCallback;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.WaitClosedConnecterCallback;
-import com.davfx.ninio.core.WaitConnectedConnecterCallback;
-import com.davfx.ninio.core.WaitSentConnecterConnectingCallback;
+import com.davfx.ninio.core.WaitClosedConnection;
+import com.davfx.ninio.core.WaitConnectedConnection;
+import com.davfx.ninio.core.WaitSentSendCallback;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpListening;
@@ -49,7 +48,7 @@ public class HttpSocketTest {
 			try (Listener httpSocketServer = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				httpSocketServer.listen(HttpListening.builder().with(new SerialExecutor(HttpSocketTest.class)).with(new HttpListeningHandler() {
 				@Override
-				public HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler) {
+				public HttpContentReceiver handle(HttpRequest request, HttpResponseSender responseHandler) {
 					LOGGER.debug("----> {}", request);
 					if (request.path.equals("/ws")) {
 						final HttpContentSender sender = responseHandler.send(HttpResponse.ok());
@@ -62,7 +61,7 @@ public class HttpSocketTest {
 							public void received(ByteBuffer buffer) {
 								String s = ByteBufferUtils.toString(buffer);
 								LOGGER.debug("Received <--: {}", s);
-								sender.send(ByteBufferUtils.toByteBuffer("ECHO " + s), new NopConnecterConnectingCallback());
+								sender.send(ByteBufferUtils.toByteBuffer("ECHO " + s), new Nop());
 							}
 						};
 					} else {
@@ -75,7 +74,7 @@ public class HttpSocketTest {
 					serverWaitHttpServerClosing.run();
 				}
 				@Override
-				public void connected() {
+				public void connected(Address address) {
 					serverWaitHttpServerConnecting.run();
 				}
 				@Override
@@ -95,19 +94,19 @@ public class HttpSocketTest {
 				Wait clientWaitSent = new Wait();
 
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
-					try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 						try (Connecter client = ninio.create(proxyClient.http().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
 							client.connect(
-									new WaitConnectedConnecterCallback(clientWaitConnecting, 
-									new WaitClosedConnecterCallback(clientWaitClosing, 
-									new LockFailedConnecterCallback(lock, 
-									new LockReceivedConnecterCallback(lock,
-									new NopConnecterCallback())))));
+									new WaitConnectedConnection(clientWaitConnecting, 
+									new WaitClosedConnection(clientWaitClosing, 
+									new LockFailedConnection(lock, 
+									new LockReceivedConnection(lock,
+									new Nop())))));
 								
 							client.send(null, ByteBufferUtils.toByteBuffer("test0"),
-									new WaitSentConnecterConnectingCallback(clientWaitSent,
-									new LockFailedConnecterConnectingCallback(lock,
-									new NopConnecterConnectingCallback())));
+									new WaitSentSendCallback(clientWaitSent,
+									new LockSendCallback(lock,
+									new Nop())));
 								
 							clientWaitConnecting.waitFor();
 							Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test0");
@@ -140,11 +139,11 @@ public class HttpSocketTest {
 			try (Listener httpSocketServer = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				httpSocketServer.listen(HttpListening.builder().with(new SerialExecutor(HttpSocketTest.class)).with(new HttpListeningHandler() {
 				@Override
-				public HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler) {
+				public HttpContentReceiver handle(HttpRequest request, HttpResponseSender responseHandler) {
 					LOGGER.debug("----> {}", request);
 					if (request.path.equals("/ws")) {
 						final HttpContentSender sender = responseHandler.send(HttpResponse.ok());
-						sender.send(ByteBufferUtils.toByteBuffer("test1"), new NopConnecterConnectingCallback());
+						sender.send(ByteBufferUtils.toByteBuffer("test1"), new Nop());
 						return new HttpContentReceiver() {
 							@Override
 							public void ended() {
@@ -166,7 +165,7 @@ public class HttpSocketTest {
 					serverWaitHttpServerClosing.run();
 				}
 				@Override
-				public void connected() {
+				public void connected(Address address) {
 					serverWaitHttpServerConnecting.run();
 				}
 				@Override
@@ -185,14 +184,14 @@ public class HttpSocketTest {
 				Wait clientWaitClosing = new Wait();
 
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
-					try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 						try (Connecter client = ninio.create(proxyClient.http().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
 							client.connect(
-									new WaitConnectedConnecterCallback(clientWaitConnecting, 
-									new WaitClosedConnecterCallback(clientWaitClosing, 
-									new LockFailedConnecterCallback(lock, 
-									new LockReceivedConnecterCallback(lock,
-									new NopConnecterCallback())))));
+									new WaitConnectedConnection(clientWaitConnecting, 
+									new WaitClosedConnection(clientWaitClosing, 
+									new LockFailedConnection(lock, 
+									new LockReceivedConnection(lock,
+									new Nop())))));
 							
 							clientWaitConnecting.waitFor();
 							Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test1");

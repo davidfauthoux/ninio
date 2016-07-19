@@ -5,23 +5,23 @@ import java.nio.ByteBuffer;
 
 import com.davfx.ninio.util.Wait;
 
-public final class WaitClosedConnecterCallback implements Connection {
+public final class WaitConnectedConnection implements Connection {
 	private final Wait wait;
 	private final Connection wrappee;
 	
-	public WaitClosedConnecterCallback(Wait wait, Connection wrappee) {
+	public WaitConnectedConnection(Wait wait, Connection wrappee) {
 		this.wait = wait;
 		this.wrappee = wrappee;
 	}
 	
 	@Override
 	public void connected(Address address) {
+		wait.run();
 		wrappee.connected(address);
 	}
 	
 	@Override
 	public void closed() {
-		wait.run();
 		wrappee.closed();
 	}
 	@Override

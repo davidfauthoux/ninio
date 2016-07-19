@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 import com.davfx.ninio.core.SendCallback;
 
 public interface HttpContentSender {
-	void send(ByteBuffer buffer, SendCallback callback);
+	HttpContentSender send(ByteBuffer buffer, SendCallback callback);
 	void finish();
 	void cancel();
 }

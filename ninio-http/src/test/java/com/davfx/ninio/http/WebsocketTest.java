@@ -12,8 +12,9 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.util.SerialExecutor;
@@ -30,10 +31,10 @@ public class WebsocketTest {
 		Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
 		tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
 			@Override
-			public HttpContentReceiver handle(HttpRequest request, ResponseHandler responseHandler) {
+			public HttpContentReceiver handle(HttpRequest request, HttpResponseSender responseHandler) {
 				LOGGER.debug("----> {}", request);
 				if (request.path.equals("/ws")) {
-					return new WebsocketHttpContentReceiver(request, responseHandler, false, new Listener.Callback() {
+					return new WebsocketHttpContentReceiver(request, responseHandler, false, new Listening() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.warn("Socket failed <--", e);
@@ -56,7 +57,7 @@ public class WebsocketTest {
 								public void received(Address address, ByteBuffer buffer) {
 									String s = new String(buffer.array(), buffer.position(), buffer.remaining(), Charsets.UTF_8);
 									LOGGER.debug("Received {} <--: {}", address, s);
-									connecting.send(null, ByteBuffer.wrap(("ECHO " + s).getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+									connecting.send(null, ByteBuffer.wrap(("ECHO " + s).getBytes(Charsets.UTF_8)), new Nop());
 								}
 								@Override
 								public void closed() {
@@ -68,9 +69,7 @@ public class WebsocketTest {
 						}
 					});
 				} else if (request.path.equals("/")) {
-					HttpContentSender s = responseHandler.send(HttpResponse.ok());
-					s.send(ByteBuffer.wrap(indexHtml), new NopConnecterConnectingCallback());
-					s.finish();
+					responseHandler.send(HttpResponse.ok()).send(ByteBuffer.wrap(indexHtml), new Nop()).finish();
 					//responseHandler.send(new HttpResponse(HttpStatus.OK, HttpMessage.OK, ImmutableMultimap.of(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(indexHtml.length)))).send(ByteBuffer.wrap(indexHtml)).finish();;
 					return null;
 				} else {
@@ -82,7 +81,7 @@ public class WebsocketTest {
 			public void closed() {
 			}
 			@Override
-			public void connected() {
+			public void connected(Address address) {
 			}
 			@Override
 			public void failed(IOException ioe) {

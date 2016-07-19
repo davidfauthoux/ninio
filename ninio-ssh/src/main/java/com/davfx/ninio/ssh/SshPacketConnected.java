@@ -7,14 +7,14 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.SendCallback;
 
-final class SshPacketConnector implements Connected {
+final class SshPacketConnected implements Connected {
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	private static final int PADDING = 16;
 	
 	private final Connected wrappee;
 	
-	public SshPacketConnector(Connected wrappee) {
+	public SshPacketConnected(Connected wrappee) {
 		this.wrappee = wrappee;
 	}
 	

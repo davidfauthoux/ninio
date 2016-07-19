@@ -14,7 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ArrayListMultimap;
@@ -22,7 +22,7 @@ import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 
-public final class HttpListening implements Listener.Callback {
+public final class HttpListening implements Listening {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpListening.class);
 	
@@ -95,7 +95,7 @@ public final class HttpListening implements Listener.Callback {
 
 	@Override
 	public void connected(Address address) {
-		listeningHandler.connected(); // Called globally
+		listeningHandler.connected(address); // Called globally
 	}
 	
 	@Override
@@ -276,7 +276,7 @@ public final class HttpListening implements Listener.Callback {
 						if (line.isEmpty()) {
 							requestHeadersRead = true;
 
-							final HttpContentReceiver h = listeningHandler.handle(new HttpRequest(from, secure, requestMethod, requestPath, ImmutableMultimap.copyOf(requestHeaders)), new HttpListeningHandler.ResponseHandler() {
+							final HttpContentReceiver h = listeningHandler.handle(new HttpRequest(from, secure, requestMethod, requestPath, ImmutableMultimap.copyOf(requestHeaders)), new HttpListeningHandler.HttpResponseSender() {
 								private boolean responseKeepAlive;
 								private HttpContentSender sender = null;
 								
@@ -294,8 +294,9 @@ public final class HttpListening implements Listener.Callback {
 											
 											sender = new HttpContentSender() {
 												@Override
-												public void send(ByteBuffer buffer, SendCallback callback) {
+												public HttpContentSender send(ByteBuffer buffer, SendCallback callback) {
 													connecting.send(null, buffer, callback);
+													return this;
 												}
 												
 												@Override
@@ -412,7 +413,7 @@ public final class HttpListening implements Listener.Callback {
 										}
 										
 										@Override
-										public void send(final ByteBuffer buffer, final SendCallback callback) {
+										public HttpContentSender send(final ByteBuffer buffer, final SendCallback callback) {
 											executor.execute(new Runnable() {
 												@Override
 												public void run() {
@@ -423,6 +424,7 @@ public final class HttpListening implements Listener.Callback {
 													sender.send(buffer, callback);
 												}
 											});
+											return this;
 										}
 										
 										@Override

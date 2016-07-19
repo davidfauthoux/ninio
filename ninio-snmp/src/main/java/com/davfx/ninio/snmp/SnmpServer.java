@@ -13,7 +13,7 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.UdpSocket;
 
@@ -135,12 +135,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GET {}: None", oid);
-						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
+						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new Nop());
 						return;
 					}
 
 					LOGGER.trace("GET {}: {}", oid, next);
-					connecter.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
+					connecter.send(address, build(requestId, community, 0, 0, next), new Nop());
 					return;
 				}
 				
@@ -166,12 +166,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETNEXT {}: No next", oid);
-						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
+						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new Nop());
 						return;
 					}
 
 					LOGGER.trace("GETNEXT {}: {}", oid, next);
-					connecter.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
+					connecter.send(address, build(requestId, community, 0, 0, next), new Nop());
 					return;
 				}
 				
@@ -197,12 +197,12 @@ public final class SnmpServer implements Disconnectable {
 
 					if (next.isEmpty()) {
 						LOGGER.trace("GETBULK {}: No next", oid);
-						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new NopConnecterConnectingCallback());
+						connecter.send(address, build(requestId, community, BerConstants.NO_SUCH_NAME_ERROR, 0, null), new Nop());
 						return;
 					}
 
 					LOGGER.trace("GETBULK {}: {}", oid, next);
-					connecter.send(address, build(requestId, community, 0, 0, next), new NopConnecterConnectingCallback());
+					connecter.send(address, build(requestId, community, 0, 0, next), new Nop());
 					return;
 				}
 			}

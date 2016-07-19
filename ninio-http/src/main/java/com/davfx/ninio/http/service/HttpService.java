@@ -13,7 +13,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
@@ -116,7 +117,7 @@ public final class HttpService implements HttpListeningHandler {
 	}
 	
 	@Override
-	public void connected() {
+	public void connected(Address address) {
 	}
 	
 	@Override
@@ -130,7 +131,7 @@ public final class HttpService implements HttpListeningHandler {
 	}
 	
 	@Override
-	public HttpContentReceiver handle(final HttpRequest request, final ResponseHandler responseHandler) {
+	public HttpContentReceiver handle(final HttpRequest request, final HttpResponseSender responseHandler) {
 		return new HttpContentReceiver() {
 			
 			private final ByteBufferHandlerInputStream post = new ByteBufferHandlerInputStream();
@@ -200,7 +201,7 @@ public final class HttpService implements HttpListeningHandler {
 							} catch (Exception e) {
 								r = null;
 								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
-								sender.send(ByteBuffer.wrap(e.getMessage().getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+								sender.send(ByteBuffer.wrap(e.getMessage().getBytes(Charsets.UTF_8)), new Nop());
 								sender.finish();
 								break;
 							}
@@ -323,7 +324,7 @@ public final class HttpService implements HttpListeningHandler {
 								@Override
 								public synchronized HttpAsyncOutput produce(final ByteBuffer buffer) {
 									send();
-									sender.send(buffer, new NopConnecterConnectingCallback());
+									sender.send(buffer, new Nop());
 									return this;
 								}
 
@@ -357,7 +358,7 @@ public final class HttpService implements HttpListeningHandler {
 
 							if (http.stream == null) {
 								if (http.content != null) {
-									sender.send(ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+									sender.send(ByteBuffer.wrap(http.content.getBytes(Charsets.UTF_8)), new Nop());
 								}
 								sender.finish();
 							} else {

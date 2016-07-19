@@ -73,7 +73,7 @@ final class SecureSocketManager implements Connected, Connection {
 			if (!force) {
 				return false;
 			}
-			sent.addFirst(new ToWrite(ByteBuffer.allocate(0), new NopConnecterConnectingCallback()));
+			sent.addFirst(new ToWrite(ByteBuffer.allocate(0), new Nop()));
 		}
 		
 		ToWrite toWrite = sent.getFirst();
@@ -98,7 +98,7 @@ final class SecureSocketManager implements Connected, Connection {
 		}
 
 		if (sendCallback == null) {
-			sendCallback = new NopConnecterConnectingCallback();
+			sendCallback = new Nop();
 		} else {
 			sent.removeFirst();
 		}

@@ -15,14 +15,14 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.primitives.Ints;
 
-final class CipheringConnector implements Connected {
+final class CipheringConnected implements Connected {
 
 	private final Connected wrappee;
 	private Cipher cipher = null;
 	private Mac mac = null;
 	private int sequence = 0;
 
-	public CipheringConnector(Connected wrappee) {
+	public CipheringConnected(Connected wrappee) {
 		this.wrappee = wrappee;
 	}
 

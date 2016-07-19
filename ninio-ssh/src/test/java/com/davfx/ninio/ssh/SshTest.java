@@ -12,7 +12,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.telnet.TelnetSpecification;
@@ -51,7 +51,7 @@ public class SshTest {
 						LOGGER.debug("Received: {}", com.davfx.ninio.core.ByteBufferUtils.toString(buffer));
 						switch (n) {
 						case 0:
-							c.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+							c.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)), new Nop());
 							break;
 						}
 						n++;

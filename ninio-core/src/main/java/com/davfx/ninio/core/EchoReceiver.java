@@ -18,6 +18,6 @@ public final class EchoReceiver implements Receiver {
 	@Override
 	public void received(Address address, ByteBuffer buffer) {
 		LOGGER.trace("Received {} bytes to echo", buffer.remaining());
-		sender.send(address, buffer, new NopConnecterConnectingCallback());
+		sender.send(address, buffer, new Nop());
 	}
 }

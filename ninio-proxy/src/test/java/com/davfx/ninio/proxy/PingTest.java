@@ -28,7 +28,7 @@ public class PingTest {
 			final Lock<Double, IOException> lock = new Lock<>();
 			
 			try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), null))) {
-				try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+				try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 					try (PingConnecter client = PingTimeout.wrap(1d, ninio.create(PingClient.builder().with(proxyClient.raw()).with(new SerialExecutor(PingTest.class))))) {
 						client.connect(new PingConnection() {
 							@Override

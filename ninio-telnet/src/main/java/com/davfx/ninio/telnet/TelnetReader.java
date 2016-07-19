@@ -7,7 +7,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 
 final class TelnetReader {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TelnetReader.class);
@@ -96,12 +96,12 @@ final class TelnetReader {
 						readingCommand = State.SUBCOMMAND;
 					} else {
 						if (lastRequest == DO) {
-							back.send(null, write(WONT, b), new NopConnecterConnectingCallback());
+							back.send(null, write(WONT, b), new Nop());
 						} else if (lastRequest == WILL) {
 							if (b == ECHO) {
-								back.send(null, write(DO, b), new NopConnecterConnectingCallback());
+								back.send(null, write(DO, b), new Nop());
 							} else {
-								back.send(null, write(DONT, b), new NopConnecterConnectingCallback());
+								back.send(null, write(DONT, b), new Nop());
 							}
 							/*
 							} else if (lastRequest == DONT) {

@@ -53,8 +53,8 @@ public final class RoutingTcpSocketServer {
 					}
 					
 					@Override
-					public void listen(Callback callback) {
-						listener.listen(new Listener.Callback() {
+					public void listen(Listening callback) {
+						listener.listen(new Listening() {
 							@Override
 							public Connection connecting(final Connected connecting) {
 								final Connecter connecter = supplier.get().create(queue);

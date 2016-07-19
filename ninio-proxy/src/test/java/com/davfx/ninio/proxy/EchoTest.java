@@ -13,7 +13,7 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
@@ -58,8 +58,8 @@ public class EchoTest {
 				final Wait clientWaitClientConnecting = new Wait();
 				final Wait clientWaitClientClosing = new Wait();
 
-				try (ProxyConnectorProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
-					try (Connecter client = ninio.create(proxyClient.factory().header(new Header("_")).with(new Address(Address.LOCALHOST, port)))) {
+				try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					try (Connecter client = ninio.create(proxyClient.factory().header(new ProxyHeader("_")).with(new Address(Address.LOCALHOST, port)))) {
 						client.connect(new Connection() {
 							
 							@Override
@@ -84,7 +84,7 @@ public class EchoTest {
 						});
 
 						clientWaitClientConnecting.waitFor();
-						client.send(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+						client.send(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)), new Nop());
 	
 						Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test");
 					}

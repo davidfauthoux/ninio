@@ -4,11 +4,11 @@ import java.io.IOException;
 
 import com.davfx.ninio.util.Lock;
 
-public final class LockFailedConnecterConnectingCallback implements SendCallback {
+public final class LockSendCallback implements SendCallback {
 	private final Lock<?, IOException> lock;
 	private final SendCallback wrappee;
 	
-	public LockFailedConnecterConnectingCallback(Lock<?, IOException> lock, SendCallback wrappee) {
+	public LockSendCallback(Lock<?, IOException> lock, SendCallback wrappee) {
 		this.lock = lock;
 		this.wrappee = wrappee;
 	}

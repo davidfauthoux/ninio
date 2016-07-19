@@ -3,6 +3,9 @@ package com.davfx.ninio.http;
 public interface HttpRequestBuilder {
 	HttpRequestBuilder maxRedirections(int maxRedirections);
 	
-	HttpContentSender build(HttpRequest request);
-	void receive(HttpReceiver callback);
+	interface HttpRequestBuilderHttpContentSender extends HttpRequestBuilder, HttpContentSender {
+	}
+	
+	HttpRequestBuilderHttpContentSender build(HttpRequest request);
+	HttpContentSender receive(HttpReceiver callback);
 }

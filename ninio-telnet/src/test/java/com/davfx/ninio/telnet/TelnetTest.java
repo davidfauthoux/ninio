@@ -14,6 +14,7 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Listener;
+import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -55,7 +56,7 @@ public class TelnetTest {
 			final Wait serverWaitClientConnecting = new Wait();
 			final Wait serverWaitClientClosing = new Wait();
 			try (Listener ss = ninio.create(TelnetServer.builder().with(TcpSocketServer.builder().bind(new Address(Address.ANY, port))))) {
-				ss.listen(new Listener.Callback() {
+				ss.listen(new Listening() {
 					@Override
 					public Connection connecting(final Connected connecting) {
 						return new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(TelnetSpecification.EOL), new Connection() {
@@ -121,20 +122,20 @@ public class TelnetTest {
 				final Wait clientWaitClientClosing = new Wait();
 				try (CutOnPromptClient c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class))
 					.with(TelnetClient.builder().with(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))))) {
-					c.connect(new CutOnPromptClient.Handler() {
+					c.connect(new CutOnPromptClientHandler() {
 						@Override
-						public void connected(final Write write) {
-							write.write("Hello", TelnetSpecification.EOL, new CutOnPromptClient.Handler.Receive() {
+						public void connected(final CutOnPromptClientWriter write) {
+							write.write("Hello", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
 								@Override
 								public void received(String result) {
 									lock0.set(result);
 									LOGGER.debug("---------------> ***{}***", result);
-									write.write("Hello again", TelnetSpecification.EOL, new CutOnPromptClient.Handler.Receive() {
+									write.write("Hello again", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
 										@Override
 										public void received(String result) {
 											LOGGER.debug("---------------> ***{}***", result);
 											lock1.set(result);
-											write.write("Bye", TelnetSpecification.EOL, new CutOnPromptClient.Handler.Receive() {
+											write.write("Bye", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
 												@Override
 												public void received(String result) {
 													LOGGER.debug("---------------> ***{}***", result);

@@ -26,9 +26,9 @@ public class UdpTest {
 			Wait serverWaitClosing = new Wait();
 			try (Connecter server = ninio.create(UdpSocket.builder().bind(new Address(Address.ANY, port)))) {
 				server.connect(
-					new WaitConnectedConnecterCallback(serverWaitConnecting,
-					new WaitClosedConnecterCallback(serverWaitClosing,
-					new LockFailedConnecterCallback(lock,
+					new WaitConnectedConnection(serverWaitConnecting,
+					new WaitClosedConnection(serverWaitClosing,
+					new LockFailedConnection(lock,
 					new Connection() {
 						@Override
 						public void failed(IOException ioe) {
@@ -43,7 +43,7 @@ public class UdpTest {
 						@Override
 						public void received(Address address, ByteBuffer buffer) {
 							LOGGER.debug("Received: {}", ByteBufferUtils.toString(buffer));
-							server.send(address, buffer, new NopConnecterConnectingCallback());
+							server.send(address, buffer, new Nop());
 						}
 					}))));
 
@@ -55,15 +55,15 @@ public class UdpTest {
 
 				try (Connecter client = ninio.create(UdpSocket.builder())) {
 					client.connect(
-						new WaitConnectedConnecterCallback(clientWaitConnecting, 
-						new WaitClosedConnecterCallback(clientWaitClosing, 
-						new LockFailedConnecterCallback(lock, 
-						new LockReceivedConnecterCallback(lock,
-						new NopConnecterCallback())))));
+						new WaitConnectedConnection(clientWaitConnecting, 
+						new WaitClosedConnection(clientWaitClosing, 
+						new LockFailedConnection(lock, 
+						new LockReceivedConnection(lock,
+						new Nop())))));
 					client.send(new Address(Address.LOCALHOST, port), ByteBufferUtils.toByteBuffer("test"),
-						new WaitSentConnecterConnectingCallback(clientWaitSent,
-						new LockFailedConnecterConnectingCallback(lock,
-						new NopConnecterConnectingCallback())));
+						new WaitSentSendCallback(clientWaitSent,
+						new LockSendCallback(lock,
+						new Nop())));
 					
 					clientWaitConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");

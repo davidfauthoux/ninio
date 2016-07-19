@@ -7,14 +7,14 @@ import com.davfx.ninio.util.StringUtils;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableMap;
 
-public final class Header {
+public final class ProxyHeader {
 	public final String type;
 	public final ImmutableMap<String, String> parameters;
-	public Header(String type, ImmutableMap<String, String> parameters) {
+	public ProxyHeader(String type, ImmutableMap<String, String> parameters) {
 		this.type = type;
 		this.parameters = parameters;
 	}
-	public Header(String type) {
+	public ProxyHeader(String type) {
 		this.type = type;
 		parameters = ImmutableMap.of();
 	}
@@ -28,7 +28,7 @@ public final class Header {
 		return b.toString();
 	}
 	
-	public static Header of(String header) {
+	public static ProxyHeader of(String header) {
 		List<String> l = Splitter.on(' ').splitToList(header);
 		String type = null;
 		String key = null;
@@ -44,6 +44,6 @@ public final class Header {
 				key = null;
 			}
 		}
-		return new Header(type, p.build());
+		return new ProxyHeader(type, p.build());
 	}
 }

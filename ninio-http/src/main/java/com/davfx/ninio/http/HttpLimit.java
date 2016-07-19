@@ -19,21 +19,23 @@ public final class HttpLimit {
 			}
 
 			private Limit.Manager m;
+			private HttpContentSender sender;
 
 			@Override
-			public HttpContentSender build(HttpRequest request) {
+			public HttpRequestBuilderHttpContentSender build(HttpRequest request) {
 				m = l.inc();
 				final HttpContentSender s = wrappee.build(request);
 
-				return new HttpContentSender() {
+				sender = new HttpContentSender() {
 					@Override
-					public void send(final ByteBuffer buffer, final SendCallback callback) {
+					public HttpContentSender send(final ByteBuffer buffer, final SendCallback callback) {
 						m.add(new Runnable() {
 							@Override
 							public void run() {
 								s.send(buffer, callback);
 							}
 						});
+						return this;
 					}
 					
 					@Override
@@ -57,10 +59,12 @@ public final class HttpLimit {
 						m.cancel();
 					}
 				};
+				
+				return new HttpRequestBuilderHttpContentSenderImpl(this, sender);
 			}
 			
 			@Override
-			public void receive(final HttpReceiver callback) {
+			public HttpContentSender receive(final HttpReceiver callback) {
 				wrappee.receive(new HttpReceiver() {
 					@Override
 					public void failed(IOException ioe) {
@@ -85,6 +89,7 @@ public final class HttpLimit {
 						};
 					}
 				});
+				return sender;
 			}
 		};
 	}

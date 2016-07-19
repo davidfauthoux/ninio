@@ -24,10 +24,10 @@ public class AsyncSocketTest {
 			final Wait serverWaitClientClosing = new Wait();
 			try (Listener server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				server.listen(
-					new WaitConnectedListenerCallback(serverWaitConnecting,
-					new WaitClosedListenerCallback(serverWaitClosing,
-					new LockFailedListenerCallback(lock,
-					new Listener.Callback() {
+					new WaitConnectedListening(serverWaitConnecting,
+					new WaitClosedListening(serverWaitClosing,
+					new LockListening(lock,
+					new Listening() {
 						@Override
 						public void failed(IOException ioe) {
 						}
@@ -43,7 +43,7 @@ public class AsyncSocketTest {
 							return new Connection() {
 								@Override
 								public void received(Address address, ByteBuffer buffer) {
-									connecting.send(null, buffer, new NopConnecterConnectingCallback());
+									connecting.send(null, buffer, new Nop());
 								}
 								
 								@Override

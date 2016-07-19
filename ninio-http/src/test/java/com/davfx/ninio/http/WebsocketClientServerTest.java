@@ -13,16 +13,16 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Listener;
-import com.davfx.ninio.core.LockFailedConnecterCallback;
-import com.davfx.ninio.core.LockReceivedConnecterCallback;
+import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.LockFailedConnection;
+import com.davfx.ninio.core.LockReceivedConnection;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.NopConnecterCallback;
-import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.core.WaitClosedConnecterCallback;
-import com.davfx.ninio.core.WaitConnectedConnecterCallback;
+import com.davfx.ninio.core.WaitClosedConnection;
+import com.davfx.ninio.core.WaitConnectedConnection;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -42,8 +42,8 @@ public class WebsocketClientServerTest {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketClientServerTest.class)).with(new HttpListeningHandler() {
 					@Override
-					public HttpContentReceiver handle(HttpRequest request, final ResponseHandler responseHandler) {
-						return new WebsocketHttpContentReceiver(request, responseHandler, true, new Listener.Callback() { //TODO WebsocketHttpContentReceiver extends HttpListeningHandler
+					public HttpContentReceiver handle(HttpRequest request, final HttpResponseSender responseHandler) {
+						return new WebsocketHttpContentReceiver(request, responseHandler, true, new Listening() { //TODO WebsocketHttpContentReceiver extends HttpListeningHandler
 							@Override
 							public void closed() {
 							}
@@ -64,7 +64,7 @@ public class WebsocketClientServerTest {
 										buffers.add(buffer);
 										String s = buffers.toString();
 										if (s.indexOf('\n') >= 0) {
-											connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new NopConnecterConnectingCallback());
+											connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new Nop());
 										}
 									}
 									
@@ -89,7 +89,7 @@ public class WebsocketClientServerTest {
 					serverWaitServerClosing.run();
 				}
 				@Override
-				public void connected() {
+				public void connected(Address address) {
 					serverWaitServerConnecting.run();
 				}
 				@Override
@@ -107,11 +107,11 @@ public class WebsocketClientServerTest {
 				try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketClientServerTest.class)))) {
 					try (Connecter client = ninio.create(WebsocketSocket.builder().with(httpClient).to(new Address(Address.LOCALHOST, port)))) {
 						client.connect(
-								new WaitConnectedConnecterCallback(clientWaitConnecting, 
-								new WaitClosedConnecterCallback(clientWaitClosing, 
-								new LockFailedConnecterCallback(lock, 
-								new LockReceivedConnecterCallback(lock,
-								new NopConnecterCallback())))));
+								new WaitConnectedConnection(clientWaitConnecting, 
+								new WaitClosedConnection(clientWaitClosing, 
+								new LockFailedConnection(lock, 
+								new LockReceivedConnection(lock,
+								new Nop())))));
 						
 						clientWaitConnecting.waitFor();
 						client.send(null, ByteBufferUtils.toByteBuffer("test0\n"), new SendCallback() {

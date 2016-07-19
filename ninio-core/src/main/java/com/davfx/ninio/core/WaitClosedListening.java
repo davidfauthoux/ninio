@@ -4,11 +4,11 @@ import java.io.IOException;
 
 import com.davfx.ninio.util.Wait;
 
-public final class WaitClosedListenerCallback implements Listener.Callback {
+public final class WaitClosedListening implements Listening {
 	private final Wait wait;
-	private final Listener.Callback wrappee;
+	private final Listening wrappee;
 	
-	public WaitClosedListenerCallback(Wait wait, Listener.Callback wrappee) {
+	public WaitClosedListening(Wait wait, Listening wrappee) {
 		this.wait = wait;
 		this.wrappee = wrappee;
 	}

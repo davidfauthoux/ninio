@@ -3,8 +3,8 @@ package com.davfx.ninio.core;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-public final class NopConnecterCallback implements Connection {
-	public NopConnecterCallback() {
+public final class Nop implements Connection, SendCallback {
+	public Nop() {
 	}
 	
 	@Override
@@ -18,5 +18,9 @@ public final class NopConnecterCallback implements Connection {
 	}
 	@Override
 	public void received(Address address, ByteBuffer buffer) {
+	}
+	
+	@Override
+	public void sent() {
 	}
 }

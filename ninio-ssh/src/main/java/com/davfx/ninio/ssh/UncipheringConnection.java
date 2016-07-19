@@ -18,8 +18,8 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connection;
 import com.google.common.primitives.Ints;
 
-final class UncipheringReceiverClosing implements Connection {
-	private static final Logger LOGGER = LoggerFactory.getLogger(UncipheringReceiverClosing.class);
+final class UncipheringConnection implements Connection {
+	private static final Logger LOGGER = LoggerFactory.getLogger(UncipheringConnection.class);
 
 	private final Connection wrappee;
 	private Cipher cipher = null;
@@ -36,7 +36,7 @@ final class UncipheringReceiverClosing implements Connection {
 	private ByteBuffer macBuffer = null;
 	private int state = 0;
 
-	public UncipheringReceiverClosing(Connection wrappee) {
+	public UncipheringConnection(Connection wrappee) {
 		this.wrappee = wrappee;
 	}
 

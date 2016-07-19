@@ -1,8 +1,7 @@
 package com.davfx.ninio.http;
 
-import java.io.IOException;
+import com.davfx.ninio.core.Failing;
 
-public interface HttpReceiver {
+public interface HttpReceiver extends Failing {
 	HttpContentReceiver received(HttpResponse response);
-	void failed(IOException ioe);
 }

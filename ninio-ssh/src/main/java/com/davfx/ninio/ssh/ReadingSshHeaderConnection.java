@@ -9,8 +9,8 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connection;
 
-final class ReadingSshHeaderReceiverClosing implements Connection {
-	private static final Logger LOGGER = LoggerFactory.getLogger(ReadingSshHeaderReceiverClosing.class);
+final class ReadingSshHeaderConnection implements Connection {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ReadingSshHeaderConnection.class);
 	
 	private static final char EOL = SshSpecification.EOL.charAt(0);
 	{
@@ -28,7 +28,7 @@ final class ReadingSshHeaderReceiverClosing implements Connection {
 	private final StringBuilder lineBuilder = new StringBuilder();
 	private String header = null;
 
-	public ReadingSshHeaderReceiverClosing(Handler handler, Connection wrappee) {
+	public ReadingSshHeaderConnection(Handler handler, Connection wrappee) {
 		this.handler = handler;
 		this.wrappee = wrappee;
 	}

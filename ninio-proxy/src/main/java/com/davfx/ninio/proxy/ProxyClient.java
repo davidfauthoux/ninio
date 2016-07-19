@@ -28,15 +28,15 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.Ints;
 
-public final class ProxyClient implements ProxyConnectorProvider {
+public final class ProxyClient implements ProxyProvider {
 	
-	public static NinioBuilder<ProxyConnectorProvider> defaultClient(final Address address) {
-		return new NinioBuilder<ProxyConnectorProvider>() {
+	public static NinioBuilder<ProxyProvider> defaultClient(final Address address) {
+		return new NinioBuilder<ProxyProvider>() {
 			@Override
-			public ProxyConnectorProvider create(Queue queue) {
+			public ProxyProvider create(Queue queue) {
 				final Executor executor = new SerialExecutor(ProxyClient.class);
 				final ProxyClient client = ProxyClient.builder().with(executor).with(TcpSocket.builder().to(address)).create(queue);
-				return new ProxyConnectorProvider() {
+				return new ProxyProvider() {
 					@Override
 					public void close() {
 						client.close();
@@ -152,11 +152,11 @@ public final class ProxyClient implements ProxyConnectorProvider {
 	@Override
 	public WithHeaderSocketBuilder factory() {
 		return new WithHeaderSocketBuilder() {
-			private Header header;
+			private ProxyHeader header;
 			private Address address;
 			
 			@Override
-			public WithHeaderSocketBuilder header(Header header) {
+			public WithHeaderSocketBuilder header(ProxyHeader header) {
 				this.header = header;
 				return this;
 			}
@@ -200,7 +200,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue ignoredQueue) {
-				return createConnector(new Header(ProxyCommons.Types.TCP), connectAddress);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.TCP), connectAddress);
 			}
 		};
 	}
@@ -228,7 +228,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue ignoredQueue) {
-				return createConnector(new Header(ProxyCommons.Types.SSL), connectAddress);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.SSL), connectAddress);
 			}
 		};
 	}
@@ -248,7 +248,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				return createConnector(new Header(ProxyCommons.Types.UDP), null);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.UDP), null);
 			}
 		};
 	}
@@ -277,7 +277,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				return createConnector(new Header(ProxyCommons.Types.TCPDUMP, ImmutableMap.of("interfaceId", interfaceId, "rule", rule)), null);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.TCPDUMP, ImmutableMap.of("interfaceId", interfaceId, "rule", rule)), null);
 			}
 		};
 	}
@@ -306,7 +306,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				return createConnector(new Header(ProxyCommons.Types.RAW, ImmutableMap.of("family", (family == StandardProtocolFamily.INET6) ? "6" : "4", "protocol", String.valueOf(protocol))), null);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.RAW, ImmutableMap.of("family", (family == StandardProtocolFamily.INET6) ? "6" : "4", "protocol", String.valueOf(protocol))), null);
 			}
 		};
 	}
@@ -347,7 +347,7 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				return createConnector(new Header(ProxyCommons.Types.WEBSOCKET, ImmutableMap.of("route", route)), connectAddress);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.WEBSOCKET, ImmutableMap.of("route", route)), connectAddress);
 			}
 		};
 	}
@@ -388,21 +388,21 @@ public final class ProxyClient implements ProxyConnectorProvider {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				return createConnector(new Header(ProxyCommons.Types.HTTP, ImmutableMap.of("route", route)), connectAddress);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.HTTP, ImmutableMap.of("route", route)), connectAddress);
 			}
 		};
 	}
 	
-	private Connecter createConnector(Header header, Address connectAddress) {
+	private Connecter createConnector(ProxyHeader header, Address connectAddress) {
 		return new InnerConnector(header, connectAddress);
 	}
 	
 	private final class InnerConnector implements Connecter {
-		private final Header header;
+		private final ProxyHeader header;
 		private final Address connectAddress;
 		private final InnerConnection innerConnection;
 		
-		public InnerConnector(Header header, final Address connectAddress) {
+		public InnerConnector(ProxyHeader header, final Address connectAddress) {
 			this.header = header;
 			this.connectAddress = connectAddress;
 			

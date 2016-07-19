@@ -18,7 +18,7 @@ final class ContentLengthWriter implements HttpContentSender {
 	}
 
 	@Override
-	public void send(ByteBuffer buffer, SendCallback callback) {
+	public HttpContentSender send(ByteBuffer buffer, SendCallback callback) {
 		if (finished) {
 			throw new IllegalStateException();
 		}
@@ -30,6 +30,7 @@ final class ContentLengthWriter implements HttpContentSender {
 		}
 
 		wrappee.send(buffer, callback);
+		return this;
 	}
 
 	@Override

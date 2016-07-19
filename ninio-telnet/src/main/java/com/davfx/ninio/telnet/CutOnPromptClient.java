@@ -9,12 +9,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Closing;
 import com.davfx.ninio.core.Connecter;
-import com.davfx.ninio.core.Connecting;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
-import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
@@ -72,16 +69,6 @@ public final class CutOnPromptClient implements Disconnectable {
 	private static final Charset DEFAULT_CHARSET = Charsets.UTF_8;
 	private static final int DEFAULT_LIMIT = 100;
 	private static final String DEFAULT_EOL = TelnetSpecification.EOL;
-	
-	public static interface Handler extends Closing, Failing, Connecting {
-		interface Receive {
-			void received(String result);
-		}
-		interface Write extends Disconnectable {
-			void write(String command, String prompt, Receive callback);
-		}
-		void connected(Write write);
-	}
 	
 	public static interface Builder extends NinioBuilder<CutOnPromptClient> {
 		Builder with(NinioBuilder<Connecter> builder);
@@ -142,7 +129,7 @@ public final class CutOnPromptClient implements Disconnectable {
 		};
 	}
 	
-	private Handler.Receive currentReceiveCallback;
+	private CutOnPromptClientReceiver currentReceiveCallback;
 	private final Connecter connecter;
 	private CuttingReceiver cuttingReceiver;
 	private final Executor executor;
@@ -158,7 +145,7 @@ public final class CutOnPromptClient implements Disconnectable {
 		this.limit = limit;
 	}
 	
-	public void connect(final Handler handler) {
+	public void connect(final CutOnPromptClientHandler handler) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -194,7 +181,7 @@ public final class CutOnPromptClient implements Disconnectable {
 					}
 					@Override
 					public void connected(Address address) {
-						handler.connected(new Handler.Write() {
+						handler.connected(new CutOnPromptClientWriter() {
 							@Override
 							public void close() {
 								executor.execute(new Runnable() {
@@ -206,7 +193,7 @@ public final class CutOnPromptClient implements Disconnectable {
 							}
 							
 							@Override
-							public void write(final String command, final String prompt, final Handler.Receive receiveCallback) {
+							public void write(final String command, final String prompt, final CutOnPromptClientReceiver receiveCallback) {
 								executor.execute(new Runnable() {
 									@Override
 									public void run() {

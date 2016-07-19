@@ -6,13 +6,13 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-public final class ToFileReceiverClosing implements Connection, Disconnectable {
+public final class ToFileConnection implements Connection, Disconnectable {
 	
 	private final OutputStream out;
 	private final Connection wrappee;
 	private boolean closed = false;
 	
-	public ToFileReceiverClosing(File file, Connection wrappee) throws IOException {
+	public ToFileConnection(File file, Connection wrappee) throws IOException {
 		this.wrappee = wrappee;
 		out = new FileOutputStream(file);
 	}
