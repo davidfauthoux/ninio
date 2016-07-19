@@ -22,13 +22,13 @@ public final class HttpSocket implements Connecter {
 
 	public static interface Builder extends TcpSocket.Builder {
 		Builder to(Address connectAddress);
-		Builder with(HttpClient httpClient);
+		Builder with(HttpConnecter httpClient);
 		Builder route(String path);
 	}
 
 	public static Builder builder() {
 		return new Builder() {
-			private HttpClient httpClient = null;
+			private HttpConnecter httpClient = null;
 			private String path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
 			
 			private Address connectAddress = null;
@@ -49,7 +49,7 @@ public final class HttpSocket implements Connecter {
 			}
 			
 			@Override
-			public Builder with(HttpClient httpClient) {
+			public Builder with(HttpConnecter httpClient) {
 				this.httpClient = httpClient;
 				return this;
 			}
@@ -75,7 +75,7 @@ public final class HttpSocket implements Connecter {
 	private Connection connection = null;
 	private boolean closed = false;
 	
-	private HttpSocket(final Queue queue, HttpClient httpClient, String path, final Address connectAddress) {
+	private HttpSocket(final Queue queue, HttpConnecter httpClient, String path, final Address connectAddress) {
 		this.queue = queue;
 		
 		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()

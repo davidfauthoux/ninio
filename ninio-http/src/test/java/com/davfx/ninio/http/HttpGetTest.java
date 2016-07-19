@@ -31,7 +31,69 @@ public class HttpGetTest {
 
 	private static final int LIMIT = 2;
 	
-	private static Lock<Object, IOException> getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {
+	@SuppressWarnings("unused")
+	private static void example() {
+		Limit limit = new Limit(10);
+		Timeout timeout = new Timeout();
+		Ninio ninio = Ninio.create();
+		HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)));
+		
+		String url = "http://...";
+
+		{
+			HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
+				.build(HttpRequest.of(url))
+				.receive(new HttpReceiver() {
+					@Override
+					public void failed(IOException ioe) {
+					}
+					@Override
+					public HttpContentReceiver received(HttpResponse response) {
+						return new HttpContentReceiver() {
+							private final InMemoryBuffers b = new InMemoryBuffers();
+							@Override
+							public void received(ByteBuffer buffer) {
+								b.add(buffer);
+							}
+							@Override
+							public void ended() {
+								LOGGER.debug("Content received: {}", b.toString());
+							}
+						};
+					}
+				})
+			.finish();
+		}
+
+		// If you need to call cancel() within received():
+		{
+			HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()));
+			HttpContentSender s = b.build(HttpRequest.of(url));
+			b.receive(new HttpReceiver() {
+				@Override
+				public void failed(IOException ioe) {
+				}
+				@Override
+				public HttpContentReceiver received(HttpResponse response) {
+					// Here you can call s.cancel()
+					return new HttpContentReceiver() {
+						private final InMemoryBuffers b = new InMemoryBuffers();
+						@Override
+						public void received(ByteBuffer buffer) {
+							b.add(buffer);
+						}
+						@Override
+						public void ended() {
+							LOGGER.debug("Content received: {}", b.toString());
+						}
+					};
+				}
+			});
+			s.finish();
+		}
+	}
+	
+	private static Lock<Object, IOException> getRequest(HttpConnecter client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
 		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
 		.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)))
@@ -61,11 +123,11 @@ public class HttpGetTest {
 		return lock;
 	}
 	
-	private static void getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive, String expected) throws IOException {
+	private static void getRequest(HttpConnecter client, Timeout timeout, Limit limit, String url, boolean keepAlive, String expected) throws IOException {
 		Assertions.assertThat(getRequest(client, timeout, limit, url, keepAlive).waitFor()).isEqualTo(expected);
 	}
 	
-	private static Lock<Object, IOException> postRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post) throws IOException {
+	private static Lock<Object, IOException> postRequest(HttpConnecter client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
 		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
 		.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)))
@@ -96,7 +158,7 @@ public class HttpGetTest {
 		return lock;
 	}
 	
-	private static void postRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post, String expected) throws IOException {
+	private static void postRequest(HttpConnecter client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post, String expected) throws IOException {
 		Assertions.assertThat(postRequest(client, timeout, limit, url, keepAlive, post).waitFor()).isEqualTo(expected);
 	}
 	
@@ -167,7 +229,7 @@ public class HttpGetTest {
 			Executor executor = new SerialExecutor(HttpGetTest.class);
 			Limit limit = new Limit(LIMIT);
 			try (Timeout timeout = new Timeout()) {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(executor))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(executor))) {
 					HttpRequestBuilder b = HttpTimeout.wrap(timeout, TIMEOUT, HttpLimit.wrap(limit, client.request()));
 					HttpContentSender s = b.build(HttpRequest.of("http://google.com"));
 					b.receive(new HttpReceiver() {
@@ -205,7 +267,7 @@ public class HttpGetTest {
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			try (Disconnectable tcp = server(ninio, port)) {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
 				}
 			}
@@ -219,7 +281,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "TEST1", "TEST1");
 				}
 			} finally {
@@ -235,7 +297,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "/test1");
 				}
 			} finally {
@@ -251,7 +313,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true, "/test2");
 				}
@@ -268,7 +330,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "TEST1", "TEST1");
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true, "TEST2", "TEST2");
 				}
@@ -285,7 +347,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "/test1");
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", false, "/test2");
 				}
@@ -300,7 +362,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "/test1");
@@ -323,7 +385,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "/test1");
@@ -346,7 +408,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true, "TEST1", "TEST1");
@@ -369,7 +431,7 @@ public class HttpGetTest {
 		int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				Disconnectable tcp = server(ninio, port);
 				try {
 					postRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", false, "TEST1", "TEST1");
@@ -393,7 +455,7 @@ public class HttpGetTest {
 		final int port = 8080;
 		Limit limit = new Limit(LIMIT);
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 				new Thread(new Runnable() {
 					@Override
 					public void run() {
@@ -487,7 +549,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(HttpGetTest.class)))) {
 					Lock<Object, IOException> lock1 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true);
 					Lock<Object, IOException> lock2 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true);
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("/test1");
@@ -507,7 +569,7 @@ public class HttpGetTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			Disconnectable tcp = server(ninio, port);
 			try {
-				try (HttpClient client = ninio.create(HttpClient.builder().pipelining().with(new SerialExecutor(HttpGetTest.class)))) {
+				try (HttpConnecter client = ninio.create(HttpClient.builder().pipelining().with(new SerialExecutor(HttpGetTest.class)))) {
 					Lock<Object, IOException> lock1 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test1", true);
 					Lock<Object, IOException> lock2 = getRequest(client, timeout, limit, "http://" + Address.LOCALHOST + ":" + port + "/test2", true);
 					Assertions.assertThat(lock1.waitFor()).isEqualTo("/test1");

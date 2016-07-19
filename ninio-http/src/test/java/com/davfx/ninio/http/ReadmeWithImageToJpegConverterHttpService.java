@@ -14,7 +14,7 @@ public final class ReadmeWithImageToJpegConverterHttpService {
 	public static void main(String[] args) throws Exception {
 		int port = 8080;
 		try (Ninio ninio = Ninio.create()) {
-			try (HttpClient client = ninio.create(HttpClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class)))) {
+			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class)))) {
 				Annotated.Builder a = Annotated.builder(HttpService.builder());
 				a.register(new ImageToJpegConverter(client));
 		

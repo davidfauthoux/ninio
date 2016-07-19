@@ -18,7 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.InMemoryBuffers;
-import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
 import com.davfx.ninio.http.HttpMethod;
@@ -39,9 +39,9 @@ public final class ImageToJpegConverter implements HttpController {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ImageToJpegConverter.class);
 	
-	private final HttpClient client;
+	private final HttpConnecter client;
 	
-	public ImageToJpegConverter(HttpClient client) {
+	public ImageToJpegConverter(HttpConnecter client) {
 		this.client = client;
 	}
 	

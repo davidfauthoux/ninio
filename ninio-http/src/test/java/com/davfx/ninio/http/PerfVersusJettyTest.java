@@ -97,7 +97,7 @@ public class PerfVersusJettyTest {
 	*/
 
 	private static final Ninio ninio = Ninio.create();
-	private static final com.davfx.ninio.http.HttpClient ninioClient;
+	private static final com.davfx.ninio.http.HttpConnecter ninioClient;
 	private static final Timeout timeout = new Timeout();
 	private static final Executor executor = new SerialExecutor(HttpGetTest.class);
 	private static final Limit limit = new Limit(10);

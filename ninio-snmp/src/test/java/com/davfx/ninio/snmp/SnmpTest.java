@@ -81,7 +81,7 @@ public class SnmpTest {
 	
 	private static List<SnmpResult> get(SnmpConnecter snmpClient, Address a, Oid oid) throws IOException {
 		final Lock<List<SnmpResult>, IOException> lock = new Lock<>();
-		snmpClient.get(a, "community", null, oid, new SnmpReceiver() {
+		snmpClient.request().community("community").build(a, oid).receive(new SnmpReceiver() {
 			private final List<SnmpResult> r = new LinkedList<>();
 			
 			@Override
@@ -121,7 +121,7 @@ public class SnmpTest {
 						}
 					});
 				
-				snmpClient.get(new Address(Address.LOCALHOST, port), "community", null, new Oid("1.1.1"), new SnmpReceiver() {
+				snmpClient.request().community("community").build(new Address(Address.LOCALHOST, port), new Oid("1.1.1")).receive(new SnmpReceiver() {
 							@Override
 							public void received(SnmpResult result) {
 							}

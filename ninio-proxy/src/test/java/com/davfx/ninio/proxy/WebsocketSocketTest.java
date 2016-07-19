@@ -25,6 +25,7 @@ import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitClosedConnection;
 import com.davfx.ninio.core.WaitConnectedConnection;
 import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.WebsocketHttpListeningHandler;
 import com.davfx.ninio.util.Lock;
@@ -100,7 +101,7 @@ public class WebsocketSocketTest {
 
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
 					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
-						try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketSocketTest.class)))) {
+						try (HttpConnecter httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketSocketTest.class)))) {
 							try (Connecter client = ninio.create(proxyClient.websocket().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
 								client.connect(
 										new WaitConnectedConnection(clientWaitConnecting, 

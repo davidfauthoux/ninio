@@ -89,7 +89,7 @@ public class WebsocketClientServerTest {
 				Wait clientWaitClosing = new Wait();
 				final Wait clientWaitSending = new Wait();
 
-				try (HttpClient httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketClientServerTest.class)))) {
+				try (HttpConnecter httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketClientServerTest.class)))) {
 					try (Connecter client = ninio.create(WebsocketSocket.builder().with(httpClient).to(new Address(Address.LOCALHOST, port)))) {
 						client.connect(
 								new WaitConnectedConnection(clientWaitConnecting, 

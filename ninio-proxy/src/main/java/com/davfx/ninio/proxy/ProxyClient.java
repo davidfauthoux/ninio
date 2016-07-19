@@ -19,7 +19,7 @@ import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpdumpSocket;
 import com.davfx.ninio.core.UdpSocket;
-import com.davfx.ninio.http.HttpClient;
+import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.WebsocketSocket;
@@ -325,7 +325,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public WebsocketSocket.Builder with(HttpClient httpClient) {
+			public WebsocketSocket.Builder with(HttpConnecter httpClient) {
 				return this;
 			}
 			
@@ -366,7 +366,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public HttpSocket.Builder with(HttpClient httpClient) {
+			public HttpSocket.Builder with(HttpConnecter httpClient) {
 				return this;
 			}
 			

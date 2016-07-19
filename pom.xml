@@ -3,7 +3,7 @@
 
 	<groupId>com.davfx.ninio</groupId>
 	<artifactId>ninio</artifactId>
-	<version>3.0.0</version>
+	<version>3.0.2</version>
 	<!-- mvn versions:set -DgenerateBackupPoms=false -->
 
 	<packaging>pom</packaging>
@@ -25,6 +25,11 @@
 			<organizationUrl>http://davfx.com</organizationUrl>
 		</developer>
 	</developers>
+	<scm>
+		<connection>scm:git:https://github.com/davidfauthoux/ninio.git</connection>
+		<developerConnection>scm:git:https://github.com/davidfauthoux/ninio.git</developerConnection>
+		<url>https://github.com/davidfauthoux/ninio.git</url>
+	</scm>
 
 	<profiles>
 		<profile>

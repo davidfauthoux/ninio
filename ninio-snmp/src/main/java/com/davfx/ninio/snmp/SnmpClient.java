@@ -34,7 +34,7 @@ public final class SnmpClient implements SnmpConnecter {
 	public static final int DEFAULT_PORT = 161;
 
 	private static final int BULK_SIZE = CONFIG.getInt("bulkSize");
-	private static final int GET_LIMIT = CONFIG.getInt("getLimit");
+	// private static final int GET_LIMIT = CONFIG.getInt("getLimit");
 	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "auth.cache");
 
 	public static interface Builder extends NinioBuilder<SnmpConnecter> {
@@ -83,6 +83,91 @@ public final class SnmpClient implements SnmpConnecter {
 		instanceMapper = new InstanceMapper(requestIdProvider);
 	}
 	
+	@Override
+	public SnmpRequestBuilder request() {
+		return new SnmpRequestBuilder() {
+			private String community = null;
+			private AuthRemoteSpecification authRemoteSpecification = null;
+			
+			@Override
+			public SnmpRequestBuilder community(String community) {
+				this.community = community;
+				return this;
+			}
+			@Override
+			public SnmpRequestBuilder auth(AuthRemoteSpecification authRemoteSpecification) {
+				this.authRemoteSpecification = authRemoteSpecification;
+				return this;
+			}
+			
+			private Instance instance = null;
+			private boolean receiverSet = false;
+			private Cancelable cancelable = null;
+			private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
+			
+			@Override
+			public SnmpRequestBuilderCancelable build(final Address address, Oid oid) {
+				if (cancelable != null) {
+					throw new IllegalStateException();
+				}
+				
+				instance = new Instance(connecter, instanceMapper, oid, address, community);
+
+				cancelable = new Cancelable() {
+					@Override
+					public void cancel() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								instance.cancel();
+							}
+						});
+					}
+				};
+				
+				final AuthRemoteSpecification s = authRemoteSpecification;
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (s != null) {
+							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+							if (authRemoteEnginePendingRequestManager == null) {
+								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
+							}
+							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecter);
+						}
+					}
+				});
+
+
+				return new SnmpRequestBuilderCancelableImpl(this, cancelable);
+			}
+
+			@Override
+			public Cancelable receive(final SnmpReceiver c) {
+				if (cancelable == null) {
+					throw new IllegalStateException();
+				}
+				if (receiverSet) {
+					throw new IllegalStateException();
+				}
+				
+				receiverSet = true;
+				
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						instance.receiver = c;
+						instance.authRemoteEnginePendingRequestManager = authRemoteEnginePendingRequestManager;
+						instance.launch();
+					}
+				});
+
+				return cancelable;
+			}
+		};
+	}
 	@Override
 	public void connect(final SnmpConnection callback) {
 		connecter.connect(new Connection() {
@@ -151,37 +236,6 @@ public final class SnmpClient implements SnmpConnecter {
 				callback.closed();
 			}
 		});
-	}
-	
-	@Override
-	public Cancelable get(final Address address, String community, final AuthRemoteSpecification authRemoteSpecification, Oid oid, SnmpReceiver callback) {
-		final Instance instance = new Instance(connecter, instanceMapper, callback, oid, address, community);
-
-		executor.execute(new Runnable() {
-			@Override
-			public void run() {
-				if (authRemoteSpecification != null) {
-					instance.authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
-					if (instance.authRemoteEnginePendingRequestManager == null) {
-						instance.authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-						authRemoteEngines.put(address, instance.authRemoteEnginePendingRequestManager);
-					}
-					instance.authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecter);
-				}
-			}
-		});
-		
-		return new Cancelable() {
-			@Override
-			public void cancel() {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						instance.cancel();
-					}
-				});
-			}
-		};
 	}
 	
 	@Override
@@ -404,18 +458,18 @@ public final class SnmpClient implements SnmpConnecter {
 		private final String community;
 		private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, SnmpReceiver receiver, Oid requestOid, Address address, String community) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, String community) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
-			this.receiver = receiver;
-
 			this.requestOid = requestOid;
 			initialRequestOid = requestOid;
 			
 			this.address = address;
 			this.community = community;
-
+		}
+		
+		public void launch() {
 			instanceMapper.map(this);
 			shouldRepeatWhat = BerConstants.GET;
 			write();
@@ -546,11 +600,13 @@ public final class SnmpClient implements SnmpConnecter {
 						break;
 					}
 					LOGGER.trace("Addind to results: {}", r);
+					/*
 					if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
 						LOGGER.warn("{} reached limit", requestOid);
 						lastOid = null;
 						break;
 					}
+					*/
 					countResults++;
 					if (receiver != null) {
 						receiver.received(r);

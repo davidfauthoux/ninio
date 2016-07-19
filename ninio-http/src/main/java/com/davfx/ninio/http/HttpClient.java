@@ -14,7 +14,6 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
@@ -28,7 +27,7 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.typesafe.config.Config;
 
-public final class HttpClient implements Disconnectable {
+public final class HttpClient implements HttpConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 	
 	private static final Config CONFIG = ConfigUtils.load(HttpClient.class);
@@ -37,7 +36,7 @@ public final class HttpClient implements Disconnectable {
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
 	private static final String DEFAULT_ACCEPT = "*/*";
 
-	public static interface Builder extends NinioBuilder<HttpClient> {
+	public static interface Builder extends NinioBuilder<HttpConnecter> {
 		Builder pipelining();
 		Builder with(Executor executor);
 		Builder with(TcpSocket.Builder connectorFactory);
@@ -231,6 +230,7 @@ public final class HttpClient implements Disconnectable {
 		});
 	}
 
+	@Override
 	public HttpRequestBuilder request() {
 		return new HttpRequestBuilder() {
 			private int maxRedirections = DEFAULT_MAX_REDIRECTIONS;
@@ -242,11 +242,11 @@ public final class HttpClient implements Disconnectable {
 			}
 			
 			private HttpReceiver callback = null;
-			private HttpContentSender contentSender;
+			private HttpContentSender contentSender = null;
 			
 			@Override
 			public HttpRequestBuilderHttpContentSender build(final HttpRequest request) {
-				if (callback != null) {
+				if (contentSender != null) {
 					throw new IllegalStateException();
 				}
 				
@@ -725,7 +725,7 @@ public final class HttpClient implements Disconnectable {
 			}
 			
 			@Override
-			public HttpContentSender receive(final HttpReceiver c) {
+			public HttpContentSender receive(HttpReceiver c) {
 				if (contentSender == null) {
 					throw new IllegalStateException();
 				}

@@ -24,40 +24,69 @@ public final class SnmpTimeout {
 			}
 			
 			@Override
-			public Cancelable get(Address address, String community, AuthRemoteSpecification authRemoteSpecification, Oid oid, final SnmpReceiver receiver) {
-				final Timeout.Manager m = t.set(timeout);
-				m.run(new Runnable() {
+			public SnmpRequestBuilder request() {
+				final SnmpRequestBuilder builder = wrappee.request();
+				return new SnmpRequestBuilder() {
 					@Override
-					public void run() {
-						receiver.failed(new IOException("Timeout"));
+					public SnmpRequestBuilder community(String community) {
+						builder.community(community);
+						return this;
 					}
-				});
+					@Override
+					public SnmpRequestBuilder auth(AuthRemoteSpecification authRemoteSpecification) {
+						builder.auth(authRemoteSpecification);
+						return this;
+					}
+					
+					private Timeout.Manager m;
+					private Cancelable cancelable;
 
-				final Cancelable cancelable = wrappee.get(address, community, authRemoteSpecification, oid, new SnmpReceiver() {
 					@Override
-					public void received(SnmpResult result) {
-						m.reset();
-						receiver.received(result);
+					public SnmpRequestBuilderCancelable build(Address address, Oid oid) {
+						m = t.set(timeout);
+						
+						final Cancelable c = builder.build(address, oid);
+
+						cancelable = new Cancelable() {
+							@Override
+							public void cancel() {
+								m.cancel();
+								c.cancel();
+							}
+						};
+						
+						return new SnmpRequestBuilderCancelableImpl(this, cancelable);
 					}
-					
+
 					@Override
-					public void finished() {
-						m.cancel();
-						receiver.finished();
-					}
-					
-					@Override
-					public void failed(IOException ioe) {
-						m.cancel();
-						receiver.failed(ioe);
-					}
-				});
-				
-				return new Cancelable() {
-					@Override
-					public void cancel() {
-						m.cancel();
-						cancelable.cancel();
+					public Cancelable receive(final SnmpReceiver callback) {
+						builder.receive(new SnmpReceiver() {
+							@Override
+							public void failed(IOException ioe) {
+								m.cancel();
+								callback.failed(ioe);
+							}
+							
+							@Override
+							public void received(SnmpResult result) {
+								m.reset();
+								callback.received(result);
+							}
+							@Override
+							public void finished() {
+								m.cancel();
+								callback.finished();
+							}
+						});
+
+						m.run(new Runnable() {
+							@Override
+							public void run() {
+								callback.failed(new IOException("Timeout"));
+							}
+						});
+
+						return cancelable;
 					}
 				};
 			}
