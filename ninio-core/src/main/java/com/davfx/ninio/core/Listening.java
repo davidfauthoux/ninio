@@ -1,5 +1,5 @@
 package com.davfx.ninio.core;
 
-public interface Listening extends Connecting, Failing, Closing {
+public interface Listening extends ConnectingClosingFailing {
 	Connection connecting(Connected connecting);
 }

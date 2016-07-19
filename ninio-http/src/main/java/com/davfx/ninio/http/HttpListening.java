@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
@@ -480,7 +481,7 @@ public final class HttpListening implements Listening {
 								requestHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
 							}
 
-							ReaderFailing failing = new ReaderFailing() {
+							Failing failing = new Failing() {
 								@Override
 								public void failed(IOException ioe) {
 									abruptlyCloseAndFail(ioe);

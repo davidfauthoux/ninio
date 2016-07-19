@@ -15,6 +15,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SecureSocketBuilder;
@@ -583,7 +584,7 @@ public final class HttpClient implements Disconnectable {
 										}
 										LOGGER.trace("Keep alive = {}", responseKeepAlive);
 
-										ReaderFailing failing = new ReaderFailing() {
+										Failing failing = new Failing() {
 											@Override
 											public void failed(IOException ioe) {
 												abruptlyCloseAndFail(ioe);

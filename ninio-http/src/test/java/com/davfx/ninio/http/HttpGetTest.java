@@ -33,9 +33,9 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> getRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()));
-		HttpContentSender s = b.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)));
-		b.receive(new HttpReceiver() {
+		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
+		.build(HttpRequest.of(url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)))
+		.receive(new HttpReceiver() {
 				@Override
 				public void failed(IOException ioe) {
 					lock.fail(ioe);
@@ -56,8 +56,8 @@ public class HttpGetTest {
 						}
 					};
 				}
-			});
-		s.finish();
+			})
+		.finish();
 		return lock;
 	}
 	
@@ -67,9 +67,9 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> postRequest(HttpClient client, Timeout timeout, Limit limit, String url, boolean keepAlive, String post) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()));
-		HttpContentSender s = b.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)));
-		b.receive(new HttpReceiver() {
+		HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, client.request()))
+		.build(HttpRequest.of(url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE)))
+		.receive(new HttpReceiver() {
 				@Override
 				public void failed(IOException e) {
 					lock.fail(e);
@@ -90,9 +90,9 @@ public class HttpGetTest {
 						}
 					};
 				}
-			});
-		s.send(ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Nop());
-		s.finish();
+			})
+		.send(ByteBuffer.wrap(post.getBytes(Charsets.UTF_8)), new Nop())
+		.finish();
 		return lock;
 	}
 	

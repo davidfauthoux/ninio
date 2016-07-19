@@ -6,20 +6,22 @@ import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Supplier;
-
 public final class RoutingTcpSocketServer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RoutingTcpSocketServer.class);
 
-	public static interface Builder extends NinioBuilder<Listener> {
+	public interface RoutingListener extends Disconnectable {
+		void listen(ConnectingClosingFailing listening);
+	}
+
+	public static interface Builder extends NinioBuilder<RoutingListener> {
 		Builder serve(TcpSocketServer.Builder serverBuilder);
-		Builder to(Supplier<TcpSocket.Builder> clientBuilderSupplier);
+		Builder to(TcpSocket.Builder clientBuilder);
 	}
 
 	public static Builder builder() {
 		return new Builder() {
 			private TcpSocketServer.Builder serverBuilder = null;
-			private Supplier<TcpSocket.Builder> clientBuilderSupplier = null;
+			private TcpSocket.Builder clientBuilder = null;
 			
 			@Override
 			public Builder serve(TcpSocketServer.Builder serverBuilder) {
@@ -28,36 +30,34 @@ public final class RoutingTcpSocketServer {
 			}
 			
 			@Override
-			public Builder to(Supplier<TcpSocket.Builder> clientBuilderSupplier) {
-				this.clientBuilderSupplier = clientBuilderSupplier;
+			public Builder to(TcpSocket.Builder clientBuilder) {
+				this.clientBuilder = clientBuilder;
 				return this;
 			}
 			
 			@Override
-			public Listener create(final Queue queue) {
+			public RoutingListener create(final Queue queue) {
 				if (serverBuilder == null) {
 					throw new NullPointerException("serverBuilder");
 				}
-				if (clientBuilderSupplier == null) {
-					throw new NullPointerException("clientBuilderSupplier");
+				if (clientBuilder == null) {
+					throw new NullPointerException("clientBuilder");
 				}
 
-				final Supplier<TcpSocket.Builder> supplier = clientBuilderSupplier;
+				final TcpSocket.Builder supplier = clientBuilder;
 				final Listener listener = serverBuilder.create(queue);
-
-				return new Listener() {
-					
+				
+				return new RoutingListener() {
 					@Override
 					public void close() {
 						listener.close();
 					}
-					
 					@Override
-					public void listen(Listening callback) {
+					public void listen(final ConnectingClosingFailing listening) {
 						listener.listen(new Listening() {
 							@Override
 							public Connection connecting(final Connected connecting) {
-								final Connecter connecter = supplier.get().create(queue);
+								final Connecter connecter = supplier.create(queue);
 								
 								connecter.connect(new Connection() {
 									@Override
@@ -70,6 +70,7 @@ public final class RoutingTcpSocketServer {
 											@Override
 											public void failed(IOException e) {
 												LOGGER.warn("Failed to route packet", e);
+												connecting.close();
 												connecter.close();
 											}
 											@Override
@@ -85,6 +86,7 @@ public final class RoutingTcpSocketServer {
 									
 									@Override
 									public void failed(IOException e) {
+										LOGGER.warn("Failed to route", e);
 										connecting.close();
 									}
 								});
@@ -100,6 +102,7 @@ public final class RoutingTcpSocketServer {
 											@Override
 											public void failed(IOException e) {
 												LOGGER.warn("Failed to route packet", e);
+												connecting.close();
 												connecter.close();
 											}
 											@Override
@@ -122,15 +125,17 @@ public final class RoutingTcpSocketServer {
 							
 							@Override
 							public void connected(Address address) {
+								listening.connected(address);
 							}
 							
 							@Override
 							public void failed(IOException e) {
-								LOGGER.warn("Failed to listen", e);
+								listening.failed(e);
 							}
 							
 							@Override
 							public void closed() {
+								listening.closed();
 							}
 						});
 					}

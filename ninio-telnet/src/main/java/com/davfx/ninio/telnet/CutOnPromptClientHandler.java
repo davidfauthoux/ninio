@@ -1,9 +1,7 @@
 package com.davfx.ninio.telnet;
 
-import com.davfx.ninio.core.Closing;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.ConnectingClosingFailing;
 
-public interface CutOnPromptClientHandler extends Closing, Failing, Connecting {
+public interface CutOnPromptClientHandler extends ConnectingClosingFailing {
 	void connected(CutOnPromptClientWriter write);
 }

@@ -92,7 +92,7 @@ public final class RawSocket implements Connecter {
 			try {
 				InetAddress a = InetAddress.getByName(bindAddress.host); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
 				s.bind(a);
-			} catch (final Exception ee) {
+			} catch (Exception ee) {
 				try {
 					s.close();
 				} catch (Exception ce) {

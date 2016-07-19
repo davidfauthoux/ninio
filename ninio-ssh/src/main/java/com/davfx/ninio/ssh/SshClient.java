@@ -20,7 +20,6 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -33,7 +32,7 @@ public final class SshClient implements Connecter {
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
 
 	public static interface Builder extends NinioBuilder<Connecter> {
-		Builder with(TcpSocket.Builder builder); //TODO rename "on" ?
+		Builder with(TcpSocket.Builder builder);
 		Builder with(Executor executor);
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);
@@ -162,6 +161,8 @@ public final class SshClient implements Connecter {
 
 	private Connected connecting;
 	
+	private boolean closed = false;
+	
 	private SshClient(Connecter connecter, String finalLogin, String finalPassword, SshPublicKey finalPublicKey, String finalExec, Executor e) {
 		this.connecter = connecter;
 		this.login = finalLogin;
@@ -171,15 +172,28 @@ public final class SshClient implements Connecter {
 		this.executor = e;
 	}
 	
-	//TODO proteger l'appel multiple au callback
-	//TODO abruptlyClose on error
-	
 	@Override
 	public void connect(final Connection callback) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				final SendCallback sendCallback = new Nop(); //TODO fail
+				if (connecting != null) {
+					throw new IllegalStateException("connect() cannot be called twice");
+				}
+
+				if (closed) {
+					return;
+				}
+
+				final SendCallback sendCallback = new SendCallback() {
+					@Override
+					public void failed(IOException e) {
+						connecting.close();
+					}
+					@Override
+					public void sent() {
+					}
+				};
 				
 				clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
 				clientExchange.add("ssh-rsa");
@@ -213,6 +227,10 @@ public final class SshClient implements Connecter {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
+								if (closed) {
+									return;
+								}
+								
 								while (lengthToRead > 0L) {
 									int l = buffer.remaining();
 									if (lengthToRead >= l) {
@@ -568,6 +586,7 @@ public final class SshClient implements Connecter {
 										// Ignored
 									} else if (command == SSH_MSG_CHANNEL_CLOSE) {
 										connecting.close();
+										closed = true;
 										callback.closed();
 									} else if (command == SSH_MSG_DISCONNECT) {
 										packet.readInt();
@@ -581,6 +600,7 @@ public final class SshClient implements Connecter {
 								} catch (Exception eee) {
 									LOGGER.error("Fatal error", eee);
 									connecting.close();
+									closed = true;
 									callback.failed(new IOException("Fatal error", eee));
 								}
 							}
@@ -589,12 +609,34 @@ public final class SshClient implements Connecter {
 					
 					@Override
 					public void closed() {
-						callback.closed();
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (closed) {
+									return;
+								}
+								
+								closed = true;
+								callback.closed();
+							}
+						});
 					}
+					
 					@Override
-					public void failed(IOException ioe) {
-						callback.failed(ioe);
+					public void failed(final IOException ioe) {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (closed) {
+									return;
+								}
+								
+								closed = true;
+								callback.failed(ioe);
+							}
+						});
 					}
+
 					@Override
 					public void connected(Address address) {
 					}
@@ -648,6 +690,14 @@ public final class SshClient implements Connecter {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				if (connecting == null) {
+					throw new IllegalStateException("send() must be called after connect()");
+				}
+				
+				if (closed) {
+					return;
+				}
+				
 				int channelId = 0;
 				SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
 				b.writeInt(channelId);
@@ -662,7 +712,11 @@ public final class SshClient implements Connecter {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				connecting.close();
+				if (connecting != null) {
+					connecting.close();
+				}
+				
+				closed = true;
 			}
 		});
 	}

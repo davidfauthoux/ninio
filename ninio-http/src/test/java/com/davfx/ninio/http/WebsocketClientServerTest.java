@@ -40,63 +40,48 @@ public class WebsocketClientServerTest {
 		int port = 8080;
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketClientServerTest.class)).with(new HttpListeningHandler() {
+				tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketClientServerTest.class)).with(new WebsocketHttpListeningHandler(true, new Listening() {
 					@Override
-					public HttpContentReceiver handle(HttpRequest request, final HttpResponseSender responseHandler) {
-						return new WebsocketHttpContentReceiver(request, responseHandler, true, new Listening() { //TODO WebsocketHttpContentReceiver extends HttpListeningHandler
+					public void closed() {
+						serverWaitServerClosing.run();
+					}
+					@Override
+					public void failed(IOException e) {
+						lock.fail(e);
+					}
+					@Override
+					public void connected(Address address) {
+						serverWaitServerConnecting.run();
+					}
+					
+					@Override
+					public Connection connecting(final Connected connecting) {
+						return new Connection() {
+							private final InMemoryBuffers buffers = new InMemoryBuffers();
 							@Override
-							public void closed() {
-							}
-							@Override
-							public void failed(IOException e) {
-								lock.fail(e);
-							}
-							@Override
-							public void connected(Address address) {
+							public void received(Address address, ByteBuffer buffer) {
+								buffers.add(buffer);
+								String s = buffers.toString();
+								if (s.indexOf('\n') >= 0) {
+									connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new Nop());
+								}
 							}
 							
 							@Override
-							public Connection connecting(final Connected connecting) {
-								return new Connection() {
-									private final InMemoryBuffers buffers = new InMemoryBuffers();
-									@Override
-									public void received(Address address, ByteBuffer buffer) {
-										buffers.add(buffer);
-										String s = buffers.toString();
-										if (s.indexOf('\n') >= 0) {
-											connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new Nop());
-										}
-									}
-									
-									@Override
-									public void failed(IOException ioe) {
-										lock.fail(ioe);
-									}
-									@Override
-									public void connected(Address address) {
-										serverWaitClientConnecting.run();
-									}
-									@Override
-									public void closed() {
-										serverWaitClientClosing.run();
-									}
-								};
+							public void failed(IOException ioe) {
+								lock.fail(ioe);
 							}
-						});
-				}
-				@Override
-				public void closed() {
-					serverWaitServerClosing.run();
-				}
-				@Override
-				public void connected(Address address) {
-					serverWaitServerConnecting.run();
-				}
-				@Override
-				public void failed(IOException ioe) {
-					lock.fail(ioe);
-				}
-			}).build());
+							@Override
+							public void connected(Address address) {
+								serverWaitClientConnecting.run();
+							}
+							@Override
+							public void closed() {
+								serverWaitClientClosing.run();
+							}
+						};
+					}
+				})).build());
 				
 				serverWaitServerConnecting.waitFor();
 				

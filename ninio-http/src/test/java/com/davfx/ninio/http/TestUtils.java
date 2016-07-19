@@ -13,11 +13,14 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.ConnectingClosingFailing;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.Ninio;
+import com.davfx.ninio.core.RoutingTcpSocketServer;
+import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.Annotated.Builder;
@@ -132,16 +135,12 @@ class TestUtils {
 
 		final Wait routedWait = new Wait();
 		final Wait routedWaitForClosing = new Wait();
-		final Listener routedTcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)));/* TODO
-			RoutingTcpSocketServer.builder().serve(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)))
-				.to(new Supplier<TcpSocket.Builder>() {
-					@Override
-					public TcpSocket.Builder get() {
-						return TcpSocket.builder().to(new Address(Address.LOCALHOST, port));
-					}
-				})
-		);*/
-		routedTcp.listen(new Listening() {
+		final RoutingTcpSocketServer.RoutingListener routedTcp = ninio.create(
+			RoutingTcpSocketServer.builder()
+				.serve(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)))
+				.to(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))
+		);
+		routedTcp.listen(new ConnectingClosingFailing() {
 			@Override
 			public void closed() {
 				routedWaitForClosing.run();
@@ -154,11 +153,6 @@ class TestUtils {
 			@Override
 			public void connected(Address address) {
 				routedWait.run();
-			}
-			
-			@Override
-			public Connection connecting(Connected connecting) {
-				return HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build().connecting(connecting);
 			}
 		});
 		routedWait.waitFor();

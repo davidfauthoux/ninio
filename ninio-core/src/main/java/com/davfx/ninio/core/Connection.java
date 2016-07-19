@@ -1,4 +1,4 @@
 package com.davfx.ninio.core;
 
-public interface Connection extends Failing, Closing, Receiver, Connecting {
+public interface Connection extends ConnectingClosingFailing, Receiver {
 }

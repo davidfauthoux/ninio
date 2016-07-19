@@ -3,9 +3,11 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import com.davfx.ninio.core.Failing;
+
 final class ChunkedReader implements HttpContentReceiver {
 
-	private final ReaderFailing failing;
+	private final Failing failing;
 	private final HttpContentReceiver wrappee;
 	
 	private final LineReader lineReader = new LineReader();
@@ -15,7 +17,7 @@ final class ChunkedReader implements HttpContentReceiver {
 
 	private boolean ended = false;
 	
-	public ChunkedReader(ReaderFailing failing, HttpContentReceiver wrappee) {
+	public ChunkedReader(Failing failing, HttpContentReceiver wrappee) {
 		this.failing = failing;
 		this.wrappee = wrappee;
 	}

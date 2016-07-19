@@ -3,9 +3,11 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import com.davfx.ninio.core.Failing;
+
 final class ContentLengthReader implements HttpContentReceiver {
 
-	private final ReaderFailing failing;
+	private final Failing failing;
 	private final HttpContentReceiver wrappee;
 	
 	private final long contentLength;
@@ -13,7 +15,7 @@ final class ContentLengthReader implements HttpContentReceiver {
 
 	private boolean ended = false;
 	
-	public ContentLengthReader(long contentLength, ReaderFailing failing, HttpContentReceiver wrappee) {
+	public ContentLengthReader(long contentLength, Failing failing, HttpContentReceiver wrappee) {
 		this.failing = failing;
 		this.wrappee = wrappee;
 		this.contentLength = contentLength;

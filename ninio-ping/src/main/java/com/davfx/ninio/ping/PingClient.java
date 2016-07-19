@@ -61,9 +61,9 @@ public final class PingClient implements PingConnecter {
 	private long nextId = 0L;
 
 	private final Map<Long, PingReceiver> receivers = new HashMap<>();
-
-	//TODO gerer les multiples appels au callback (qd closed)
 	
+	private boolean closed = false;
+
 	public PingClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
 		this.connecter = connecter;
@@ -85,6 +85,10 @@ public final class PingClient implements PingConnecter {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
+						if (closed) {
+							return;
+						}
+						
 						long now = System.nanoTime();
 						long time;
 						long id;
@@ -113,19 +117,33 @@ public final class PingClient implements PingConnecter {
 			}
 			
 			@Override
-			public void failed(IOException ioe) {
+			public void failed(final IOException ioe) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
+						if (closed) {
+							return;
+						}
+						
+						closed = true;
 						closeSendCallbacks(receivers);
+						callback.failed(ioe);
 					}
 				});
-				callback.failed(ioe);
 			}
 			
 			@Override
-			public void connected(Address address) {
-				callback.connected(address);
+			public void connected(final Address address) {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (closed) {
+							return;
+						}
+						
+						callback.connected(address);
+					}
+				});
 			}
 			
 			@Override
@@ -133,10 +151,15 @@ public final class PingClient implements PingConnecter {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
+						if (closed) {
+							return;
+						}
+						
+						closed = true;
 						closeSendCallbacks(receivers);
+						callback.closed();
 					}
 				});
-				callback.closed();
 			}
 		});
 	}
@@ -152,6 +175,11 @@ public final class PingClient implements PingConnecter {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				if (closed) {
+					callback.failed(new IOException("Closed"));
+					return;
+				}
+				
 				if (idManager.id < 0L) {
 					idManager.id = nextId;
 					nextId++;
@@ -202,7 +230,12 @@ public final class PingClient implements PingConnecter {
 						if (idManager.id < 0L) {
 							return;
 						}
-						receivers.remove(idManager.id);
+
+						PingReceiver r = receivers.remove(idManager.id);
+						if (r == null) {
+							return;
+						}
+						r.failed(new IOException("Canceled"));;
 					}
 				});
 			}
@@ -216,6 +249,10 @@ public final class PingClient implements PingConnecter {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				if (closed) {
+					return;
+				}
+
 				closeSendCallbacks(receivers);
 			}
 		});

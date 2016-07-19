@@ -330,7 +330,7 @@ public final class WebsocketSocket implements Connecter {
 	
 	@Override
 	public void send(Address address, ByteBuffer buffer, final SendCallback callback) {
-		sender.send(WebsocketUtils.headerOf(0x02, buffer.remaining()), new Nop()); //TODO ENCHAINER!!! ne pas assume qu'un send fail est forcement suivi de fail pour les autres send
+		sender.send(WebsocketUtils.headerOf(0x02, buffer.remaining()), new Nop());
 		sender.send(buffer, new SendCallback() {
 			@Override
 			public void failed(final IOException e) {

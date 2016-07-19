@@ -10,6 +10,7 @@ import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
+import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -43,12 +44,12 @@ final class GzipReader implements HttpContentReceiver {
     private final Deque<ByteBuffer> previewFooter = new LinkedList<>();
     private int currentPreviewFooterLength = 0;
 
-	private final ReaderFailing failing;
+	private final Failing failing;
 	private final HttpContentReceiver wrappee;
 	
 	private boolean ended = false;
 
-	public GzipReader(ReaderFailing failing, HttpContentReceiver wrappee) {
+	public GzipReader(Failing failing, HttpContentReceiver wrappee) {
 		this.failing = failing;
 		this.wrappee = wrappee;
 	}

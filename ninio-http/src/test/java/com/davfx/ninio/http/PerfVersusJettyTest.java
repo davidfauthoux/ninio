@@ -48,7 +48,7 @@ public class PerfVersusJettyTest {
 	
 	static {
 		// System.setProperty("http.keepAlive", "false");
-		//TODO test w/o gzip
+		//TODO Check it does not use gzip encoding
 	}
 	
 	private static final class JettyHandler extends AbstractHandler {
@@ -108,7 +108,7 @@ public class PerfVersusJettyTest {
 	private static String getNinio(int port) throws Exception {
 		final Lock<String, IOException> lock = new Lock<>();
 		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, ninioClient.request()));
-		HttpContentSender s = b.build(HttpRequest.of("http://127.0.0.1:" + port + path(), HttpMethod.GET, ImmutableMultimap.<String, String>of(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY)));
+		HttpContentSender s = b.build(HttpRequest.of("http://127.0.0.1:" + port + path(), HttpMethod.GET, ImmutableMultimap.<String, String>of(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY, HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)));
 		b.receive(new HttpReceiver() {
 			@Override
 			public HttpContentReceiver received(HttpResponse response) {

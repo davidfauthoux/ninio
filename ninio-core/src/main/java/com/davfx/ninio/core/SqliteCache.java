@@ -26,7 +26,7 @@ public final class SqliteCache {
 		Builder<T> database(File database);
 		Builder<T> expiration(double expiration);
 		Builder<T> using(Interpreter<T> interpreter);
-		Builder<T> on(NinioBuilder<Connecter> builder);
+		Builder<T> with(NinioBuilder<Connecter> builder);
 	}
 
 	public static <T> Builder<T> builder() {
@@ -44,7 +44,7 @@ public final class SqliteCache {
 			}
 			
 			@Override
-			public Builder<T> on(NinioBuilder<Connecter> builder) {
+			public Builder<T> with(NinioBuilder<Connecter> builder) {
 				this.builder = builder;
 				return this;
 			}

@@ -88,7 +88,7 @@ final class GzipWriter implements HttpContentSender {
 		
 		while (true) { // !deflater.needsInput()) {
 			ByteBuffer deflated = ByteBuffer.allocate(BUFFER_SIZE);
-			int c = deflater.deflate(deflated.array(), deflated.arrayOffset() + deflated.position(), deflated.remaining()); //, Deflater.SYNC_FLUSH); //TODO No SYNC_FLUSH when HttpSocket not used
+			int c = deflater.deflate(deflated.array(), deflated.arrayOffset() + deflated.position(), deflated.remaining()); //, Deflater.SYNC_FLUSH); //TODO SYNC_FLUSH when HttpSocket used
 			if (c <= 0) {
 				break;
 			}
