@@ -450,7 +450,7 @@ public final class SnmpClient implements SnmpConnecter {
 		
 		private final Oid initialRequestOid;
 		private Oid requestOid;
-		private int countResults = 0;
+		// private int countResults = 0;
 		private int shouldRepeatWhat = BerConstants.GET;
 		public int instanceId = RequestIdProvider.IGNORE_ID;
 
@@ -606,8 +606,8 @@ public final class SnmpClient implements SnmpConnecter {
 						lastOid = null;
 						break;
 					}
-					*/
 					countResults++;
+					*/
 					if (receiver != null) {
 						receiver.received(r);
 					}
