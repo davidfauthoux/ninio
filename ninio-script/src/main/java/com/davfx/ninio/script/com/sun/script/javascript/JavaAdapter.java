@@ -36,25 +36,7 @@ import org.mozilla.javascript.Wrapper;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoTopLevel;
 
-/**
- * This class implements Rhino-like JavaAdapter to help implement a Java
- * interface in JavaScript. We support this using Invocable.getInterface.
- * Using this JavaAdapter, script author could write:
- *
- *    var r = new java.lang.Runnable() {
- *                run: function() { script... }
- *            };
- *
- *    r.run();
- *    new java.lang.Thread(r).start();
- *
- * Note that Rhino's JavaAdapter support allows extending a Java class and/or
- * implementing one or more interfaces. This JavaAdapter implementation does
- * not support these.
- *
- * @author A. Sundararajan
- * @since 1.6
- */
+
 @SuppressWarnings({ "static-access", "rawtypes", "serial" })
 final class JavaAdapter extends ScriptableObject implements Function {
     private JavaAdapter(Invocable engine) {

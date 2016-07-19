@@ -30,12 +30,7 @@ import java.util.Map;
 
 import com.davfx.ninio.script.com.sun.script.util.BindingsBase;
 
-/**
- * Entry set implementation for Bindings implementations
- *
- * @author Mike Grogan
- * @since 1.6
- */
+
 public class BindingsEntrySet extends AbstractSet<Map.Entry<String, Object>> {
 
     private BindingsBase base;

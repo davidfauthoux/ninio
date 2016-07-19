@@ -42,7 +42,7 @@ public class ScpDownloadTest {
 		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));
 
 		try (Ninio ninio = Ninio.create()) {
-			Wait wait = new Wait();
+			final Wait wait = new Wait();
 			try (ToFileConnection toFileReceiverClosing = new ToFileConnection(new File("downloaded.txt"), new Connection() {
 				@Override
 				public void connected(Address address) {

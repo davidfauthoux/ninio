@@ -33,47 +33,7 @@ import org.mozilla.javascript.RhinoException;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 
-/**
- * JSAdapter is java.lang.reflect.Proxy equivalent for JavaScript. JSAdapter
- * calls specially named JavaScript methods on an adaptee object when property
- * access is attempted on it.
- *
- * Example:
- *
- *    var y = {
- *                __get__    : function (name) { ... }
- *                __has__    : function (name) { ... }
- *                __put__    : function (name, value) {...}
- *                __delete__ : function (name) { ... }
- *                __getIds__ : function () { ... }
- *            };
- *
- *    var x = new JSAdapter(y);
- *
- *    x.i;                        // calls y.__get__
- *    i in x;                     // calls y.__has__
- *    x.p = 10;                   // calls y.__put__
- *    delete x.p;                 // calls y.__delete__
- *    for (i in x) { print(i); }  // calls y.__getIds__
- *
- * If a special JavaScript method is not found in the adaptee, then JSAdapter
- * forwards the property access to the adaptee itself.
- *
- * JavaScript caller of adapter object is isolated from the fact that
- * the property access/mutation/deletion are really calls to
- * JavaScript methods on adaptee.  Use cases include 'smart'
- * properties, property access tracing/debugging, encaptulation with
- * easy client access - in short JavaScript becomes more "Self" like.
- *
- * Note that Rhino already supports special properties like __proto__
- * (to set, get prototype), __parent__ (to set, get parent scope). We
- * follow the same double underscore nameing convention here. Similarly
- * the name JSAdapter is derived from JavaAdapter -- which is a facility
- * to extend, implement Java classes/interfaces by JavaScript.
- *
- * @author A. Sundararajan
- * @since 1.6
- */
+
 @SuppressWarnings({ "rawtypes" })
 public final class JSAdapter implements Scriptable, Function {
     private JSAdapter(Scriptable obj) {

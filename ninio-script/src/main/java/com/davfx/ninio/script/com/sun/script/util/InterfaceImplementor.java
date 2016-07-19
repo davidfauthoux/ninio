@@ -46,7 +46,7 @@ public class InterfaceImplementor {
 
     private Invocable engine;
 
-    /** Creates a new instance of Invocable */
+    
     public InterfaceImplementor(Invocable engine) {
         this.engine = engine;
     }

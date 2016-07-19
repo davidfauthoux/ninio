@@ -30,12 +30,7 @@ import java.util.Map;
 
 import javax.script.Bindings;
 
-/**
- * Abstract super class for Bindings implementations
- *
- * @author Mike Grogan
- * @since 1.6
- */
+
 public abstract class BindingsBase extends AbstractMap<String, Object>
         implements Bindings {
 

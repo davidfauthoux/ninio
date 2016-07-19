@@ -37,12 +37,7 @@ import org.mozilla.javascript.Scriptable;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngine;
 
-/**
- * Represents compiled JavaScript code.
- *
- * @author Mike Grogan
- * @since 1.6
- */
+
 final class RhinoCompiledScript extends CompiledScript {
 
     private RhinoScriptEngine engine;

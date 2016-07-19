@@ -33,12 +33,7 @@ import javax.script.ScriptEngine;
 import com.davfx.ninio.script.com.sun.script.util.ScriptEngineFactoryBase;
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngine;
 
-/**
- * Factory to create RhinoScriptEngine
- *
- * @author Mike Grogan
- * @since 1.6
- */
+
 public class RhinoScriptEngineFactory extends ScriptEngineFactoryBase {
 
     public RhinoScriptEngineFactory() {

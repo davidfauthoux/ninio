@@ -58,14 +58,7 @@ import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoTopLevel;
 
 
-/**
- * Implementation of <code>ScriptEngine</code> using the Mozilla Rhino
- * interpreter.
- *
- * @author Mike Grogan
- * @author A. Sundararajan
- * @since 1.6
- */
+
 @SuppressWarnings({ "static-access", "rawtypes", "deprecation", "restriction" })
 public final class RhinoScriptEngine extends AbstractScriptEngine
         implements  Invocable, Compilable {
@@ -126,9 +119,7 @@ public final class RhinoScriptEngine extends AbstractScriptEngine
         return optLevel;
     }
 
-    /**
-     * Creates a new instance of RhinoScriptEngine
-     */
+    
     public RhinoScriptEngine() {
 
         Context cx = enterContext();

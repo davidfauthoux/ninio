@@ -30,14 +30,7 @@ import java.util.Map;
 
 import org.mozilla.javascript.ClassShutter;
 
-/**
- * This class prevents script access to certain sensitive classes.
- * Note that this class checks over and above SecurityManager. i.e., although
- * a SecurityManager would pass, class shutter may still prevent access.
- *
- * @author A. Sundararajan
- * @since 1.6
- */
+
 final class RhinoClassShutter implements ClassShutter {
     private static Map<String, Boolean> protectedClasses;
     private static RhinoClassShutter theInstance;

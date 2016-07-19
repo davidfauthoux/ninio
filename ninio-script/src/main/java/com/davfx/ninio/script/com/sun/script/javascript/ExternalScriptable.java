@@ -41,14 +41,7 @@ import org.mozilla.javascript.Wrapper;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngine;
 
-/**
- * ExternalScriptable is an implementation of Scriptable
- * backed by a JSR 223 ScriptContext instance.
- *
- * @author Mike Grogan
- * @author A. Sundararajan
- * @since 1.6
- */
+
 
 @SuppressWarnings({ "static-access", "rawtypes" })
 final class ExternalScriptable implements Scriptable {
@@ -93,23 +86,12 @@ final class ExternalScriptable implements Scriptable {
         return name.equals("");
     }
 
-    /**
-     * Return the name of the class.
-     */
+    
     public String getClassName() {
         return "Global";
     }
 
-    /**
-     * Returns the value of the named property or NOT_FOUND.
-     *
-     * If the property was created using defineProperty, the
-     * appropriate getter method is called.
-     *
-     * @param name the name of the property
-     * @param start the object in which the lookup began
-     * @return the value of the property (may be null), or NOT_FOUND
-     */
+    
     public synchronized Object get(String name, Scriptable start) {
         if (isEmpty(name)) {
             if (indexedProps.containsKey(name)) {
@@ -130,13 +112,7 @@ final class ExternalScriptable implements Scriptable {
         }
     }
 
-    /**
-     * Returns the value of the indexed property or NOT_FOUND.
-     *
-     * @param index the numeric index for the property
-     * @param start the object in which the lookup began
-     * @return the value of the property (may be null), or NOT_FOUND
-     */
+    
     public synchronized Object get(int index, Scriptable start) {
         Integer key = new Integer(index);
         if (indexedProps.containsKey(index)) {
@@ -146,13 +122,7 @@ final class ExternalScriptable implements Scriptable {
         }
     }
 
-    /**
-     * Returns true if the named property is defined.
-     *
-     * @param name the name of the property
-     * @param start the object in which the lookup began
-     * @return true if and only if the property was found in the object
-     */
+    
     public synchronized boolean has(String name, Scriptable start) {
         if (isEmpty(name)) {
             return indexedProps.containsKey(name);
@@ -163,25 +133,13 @@ final class ExternalScriptable implements Scriptable {
         }
     }
 
-    /**
-     * Returns true if the property index is defined.
-     *
-     * @param index the numeric index for the property
-     * @param start the object in which the lookup began
-     * @return true if and only if the property was found in the object
-     */
+    
     public synchronized boolean has(int index, Scriptable start) {
         Integer key = new Integer(index);
         return indexedProps.containsKey(key);
     }
 
-    /**
-     * Sets the value of the named property, creating it if need be.
-     *
-     * @param name the name of the property
-     * @param start the object whose property is being set
-     * @param value value to set the property to
-     */
+    
     public void put(String name, Scriptable start, Object value) {
         if (start == this) {
             synchronized (this) {
@@ -202,13 +160,7 @@ final class ExternalScriptable implements Scriptable {
         }
     }
 
-    /**
-     * Sets the value of the indexed property, creating it if need be.
-     *
-     * @param index the numeric index for the property
-     * @param start the object whose property is being set
-     * @param value value to set the property to
-     */
+    
     public void put(int index, Scriptable start, Object value) {
         if (start == this) {
             synchronized (this) {
@@ -219,13 +171,7 @@ final class ExternalScriptable implements Scriptable {
         }
     }
 
-    /**
-     * Removes a named property from the object.
-     *
-     * If the property is not found, no action is taken.
-     *
-     * @param name the name of the property
-     */
+    
     public synchronized void delete(String name) {
         if (isEmpty(name)) {
             indexedProps.remove(name);
@@ -239,58 +185,32 @@ final class ExternalScriptable implements Scriptable {
         }
     }
 
-    /**
-     * Removes the indexed property from the object.
-     *
-     * If the property is not found, no action is taken.
-     *
-     * @param index the numeric index for the property
-     */
+    
     public void delete(int index) {
         indexedProps.remove(new Integer(index));
     }
 
-    /**
-     * Get the prototype of the object.
-     * @return the prototype
-     */
+    
     public Scriptable getPrototype() {
         return prototype;
     }
 
-    /**
-     * Set the prototype of the object.
-     * @param prototype the prototype to set
-     */
+    
     public void setPrototype(Scriptable prototype) {
         this.prototype = prototype;
     }
 
-    /**
-     * Get the parent scope of the object.
-     * @return the parent scope
-     */
+    
     public Scriptable getParentScope() {
         return parent;
     }
 
-    /**
-     * Set the parent scope of the object.
-     * @param parent the parent scope to set
-     */
+    
     public void setParentScope(Scriptable parent) {
         this.parent = parent;
     }
 
-     /**
-     * Get an array of property ids.
-     *
-     * Not all property ids need be returned. Those properties
-     * whose ids are not returned are considered non-enumerable.
-     *
-     * @return an array of Objects. Each entry in the array is either
-     *         a java.lang.String or a java.lang.Number
-     */
+     
     public synchronized Object[] getIds() {
         String[] keys = getAllKeys();
         int size = keys.length + indexedProps.size();
@@ -304,19 +224,7 @@ final class ExternalScriptable implements Scriptable {
         return res;
     }
 
-    /**
-     * Get the default value of the object with a given hint.
-     * The hints are String.class for type String, Number.class for type
-     * Number, Scriptable.class for type Object, and Boolean.class for
-     * type Boolean. <p>
-     *
-     * A <code>hint</code> of null means "no hint".
-     *
-     * See ECMA 8.6.2.6.
-     *
-     * @param hint the type hint
-     * @return the default value
-     */
+    
 	public Object getDefaultValue(Class typeHint) {
         for (int i=0; i < 2; i++) {
             boolean tryToString;
@@ -401,14 +309,7 @@ final class ExternalScriptable implements Scriptable {
                   "Cannot find default value for object " + arg);
     }
 
-    /**
-     * Implements the instanceof operator.
-     *
-     * @param instance The value that appeared on the LHS of the instanceof
-     *              operator
-     * @return true if "this" appears in value's prototype chain
-     *
-     */
+    
     public boolean hasInstance(Scriptable instance) {
         // Default for JS objects (other than Function) is to do prototype
         // chasing.
@@ -438,13 +339,7 @@ final class ExternalScriptable implements Scriptable {
         return res;
     }
 
-   /**
-    * We convert script values to the nearest Java value.
-    * We unwrap wrapped Java objects so that access from
-    * Bindings.get() would return "workable" value for Java.
-    * But, at the same time, we need to make few special cases
-    * and hence the following function is used.
-    */
+   
     private Object jsToJava(Object jsObj) {
         if (jsObj instanceof Wrapper) {
             Wrapper njb = (Wrapper) jsObj;
