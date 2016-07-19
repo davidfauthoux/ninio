@@ -48,15 +48,21 @@ public final class ProxyServer implements Listener.Callback {
 				final ProxyServer.Builder proxyServerBuilder = ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
 					public void connected(Address address) {
-						listening.connected(address);
+						if (listening != null) {
+							listening.connected(address);
+						}
 					}
 					@Override
 					public void failed(IOException e) {
-						listening.failed(e);
+						if (listening != null) {
+							listening.failed(e);
+						}
 					}
 					@Override
 					public void closed() {
-						listening.closed();
+						if (listening != null) {
+							listening.closed();
+						}
 					}
 					
 					@Override

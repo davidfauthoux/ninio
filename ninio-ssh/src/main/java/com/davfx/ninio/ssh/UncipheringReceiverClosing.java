@@ -15,13 +15,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.google.common.primitives.Ints;
 
-final class UncipheringReceiverClosing implements Connecter.Callback {
+final class UncipheringReceiverClosing implements Connection {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UncipheringReceiverClosing.class);
 
-	private final Connecter.Callback wrappee;
+	private final Connection wrappee;
 	private Cipher cipher = null;
 	private Mac mac = null;
 	private int sequence = 0;
@@ -36,18 +36,18 @@ final class UncipheringReceiverClosing implements Connecter.Callback {
 	private ByteBuffer macBuffer = null;
 	private int state = 0;
 
-	public UncipheringReceiverClosing(Connecter.Callback wrappee) {
+	public UncipheringReceiverClosing(Connection wrappee) {
 		this.wrappee = wrappee;
 	}
 
     /*
-	    Initial IV client to server:     HASH (K || H || "A" || session_id)
-	    Initial IV server to client:     HASH (K || H || "B" || session_id)
-	    Encryption key client to server: HASH (K || H || "C" || session_id)
-	    Encryption key server to client: HASH (K || H || "D" || session_id)
-	    Integrity key client to server:  HASH (K || H || "E" || session_id)
-	    Integrity key server to client:  HASH (K || H || "F" || session_id)
-	  */
+	Initial IV client to server:     HASH (K || H || "A" || session_id)
+	Initial IV server to client:     HASH (K || H || "B" || session_id)
+	Encryption key client to server: HASH (K || H || "C" || session_id)
+	Encryption key server to client: HASH (K || H || "D" || session_id)
+	Integrity key client to server:  HASH (K || H || "E" || session_id)
+	Integrity key server to client:  HASH (K || H || "F" || session_id)
+	*/
 	public void init(String encryptionAlgorithm, String cipherAlgorithm, int keyLength, String macAlgorithm, byte[] K, byte[] H, byte[] sessionId) throws GeneralSecurityException {
 		MessageDigest sha = MessageDigest.getInstance("SHA-1");
 

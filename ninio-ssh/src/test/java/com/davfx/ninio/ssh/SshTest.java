@@ -10,11 +10,12 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.telnet.TelnetSpecification;
-import com.davfx.ninio.util.Mutable;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 
@@ -41,37 +42,36 @@ public class SshTest {
 		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));
 
 		try (Ninio ninio = Ninio.create()) {
-			final Mutable<Connecter.Connecting> connecting = new Mutable<>();
-			try (Connecter.Connecting c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT))).connect(new Connecter.Callback() {
-				private int n = 0;
-				
-				@Override
-				public void received(Address address, ByteBuffer buffer) {
-					LOGGER.debug("Received: {}", com.davfx.ninio.core.ByteBufferUtils.toString(buffer));
-					switch (n) {
-					case 0:
-						connecting.value.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
-						break;
+			try (Connecter c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT))))) {
+				c.connect(new Connection() {
+					private int n = 0;
+					
+					@Override
+					public void received(Address address, ByteBuffer buffer) {
+						LOGGER.debug("Received: {}", com.davfx.ninio.core.ByteBufferUtils.toString(buffer));
+						switch (n) {
+						case 0:
+							c.send(null, ByteBuffer.wrap(("ls" + TelnetSpecification.EOL).getBytes(Charsets.UTF_8)), new NopConnecterConnectingCallback());
+							break;
+						}
+						n++;
 					}
-					n++;
-				}
-				
-				@Override
-				public void failed(IOException ioe) {
-					LOGGER.error("Failed", ioe);
-				}
-				
-				@Override
-				public void connected(Address address) {
-					LOGGER.debug("Connected");
-				}
-				
-				@Override
-				public void closed() {
-					LOGGER.debug("Closed");
-				}
-			})) {
-				connecting.value = c;
+					
+					@Override
+					public void failed(IOException ioe) {
+						LOGGER.error("Failed", ioe);
+					}
+					
+					@Override
+					public void connected(Address address) {
+						LOGGER.debug("Connected");
+					}
+					
+					@Override
+					public void closed() {
+						LOGGER.debug("Closed");
+					}
+				});
 				Thread.sleep(60000);
 			}
 		}

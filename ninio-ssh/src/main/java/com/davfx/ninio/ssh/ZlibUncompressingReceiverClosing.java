@@ -9,11 +9,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-final class ZlibUncompressingReceiverClosing implements Connecter.Callback {
+final class ZlibUncompressingReceiverClosing implements Connection {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ZlibUncompressingReceiverClosing.class);
 	
@@ -22,9 +22,9 @@ final class ZlibUncompressingReceiverClosing implements Connecter.Callback {
 
 	private final Inflater inflater = new Inflater();
 	private boolean activated = false;
-	private final Connecter.Callback wrappee;
+	private final Connection wrappee;
 
-	public ZlibUncompressingReceiverClosing(Connecter.Callback wrappee) {
+	public ZlibUncompressingReceiverClosing(Connection wrappee) {
 		this.wrappee = wrappee;
 	}
 

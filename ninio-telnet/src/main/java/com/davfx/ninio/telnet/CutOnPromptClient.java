@@ -19,7 +19,6 @@ import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
-import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Charsets;
 
 public final class CutOnPromptClient implements Disconnectable {
@@ -85,7 +84,7 @@ public final class CutOnPromptClient implements Disconnectable {
 	}
 	
 	public static interface Builder extends NinioBuilder<CutOnPromptClient> {
-		Builder with(TcpSocket.Builder builder);
+		Builder with(NinioBuilder<Connecter> builder);
 		Builder with(Executor executor);
 		Builder charset(Charset charset);
 		Builder limit(int limit);
@@ -94,8 +93,7 @@ public final class CutOnPromptClient implements Disconnectable {
 
 	public static Builder builder() {
 		return new Builder() {
-			private TcpSocket.Builder builder = TelnetClient.builder();
-			
+			private NinioBuilder<Connecter> builder = null;
 			private Executor executor = null;
 			
 			private Charset charset = DEFAULT_CHARSET;
@@ -109,7 +107,7 @@ public final class CutOnPromptClient implements Disconnectable {
 			}
 			
 			@Override
-			public Builder with(TcpSocket.Builder builder) {
+			public Builder with(NinioBuilder<Connecter> builder) {
 				this.builder = builder;
 				return this;
 			}

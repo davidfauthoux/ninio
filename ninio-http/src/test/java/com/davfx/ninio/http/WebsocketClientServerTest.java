@@ -11,6 +11,7 @@ import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.LockFailedConnecterCallback;
 import com.davfx.ninio.core.LockReceivedConnecterCallback;
@@ -57,9 +58,14 @@ public class WebsocketClientServerTest {
 							@Override
 							public Connection connecting(final Connected connecting) {
 								return new Connection() {
+									private final InMemoryBuffers buffers = new InMemoryBuffers();
 									@Override
 									public void received(Address address, ByteBuffer buffer) {
-										connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + ByteBufferUtils.toString(buffer)), new NopConnecterConnectingCallback());
+										buffers.add(buffer);
+										String s = buffers.toString();
+										if (s.indexOf('\n') >= 0) {
+											connecting.send(null, ByteBufferUtils.toByteBuffer("ECHO " + s), new NopConnecterConnectingCallback());
+										}
 									}
 									
 									@Override
@@ -108,7 +114,7 @@ public class WebsocketClientServerTest {
 								new NopConnecterCallback())))));
 						
 						clientWaitConnecting.waitFor();
-						client.send(null, ByteBufferUtils.toByteBuffer("test0"), new SendCallback() {
+						client.send(null, ByteBufferUtils.toByteBuffer("test0\n"), new SendCallback() {
 							@Override
 							public void failed(IOException e) {
 								lock.fail(e);
@@ -119,7 +125,7 @@ public class WebsocketClientServerTest {
 							}
 						});
 						clientWaitSending.waitFor();
-						Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test0");
+						Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test0\n");
 					}
 					clientWaitClosing.waitFor();
 				}

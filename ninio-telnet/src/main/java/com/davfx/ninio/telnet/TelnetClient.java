@@ -4,10 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
-import com.davfx.ninio.core.DefaultByteBufferAllocator;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -44,36 +43,14 @@ public final class TelnetClient {
 	}
 	*/
 	
-	public static interface Builder extends TcpSocket.Builder {
+	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(TcpSocket.Builder builder);
 	}
 
 	public static Builder builder() {
 		return new Builder() {
-			private TcpSocket.Builder builder = TcpSocket.builder();
+			private TcpSocket.Builder builder = null;
 			
-			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
-			private Address bindAddress = null;
-			private Address connectAddress = null;
-			
-			@Override
-			public Builder bind(Address bindAddress) {
-				this.bindAddress = bindAddress;
-				return this;
-			}
-			
-			@Override
-			public Builder with(ByteBufferAllocator byteBufferAllocator) {
-				this.byteBufferAllocator = byteBufferAllocator;
-				return this;
-			}
-			
-			@Override
-			public Builder to(Address connectAddress) {
-				this.connectAddress = connectAddress;
-				return this;
-			}
-
 			@Override
 			public Builder with(TcpSocket.Builder builder) {
 				this.builder = builder;
@@ -82,7 +59,11 @@ public final class TelnetClient {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				final Connecter connecter = builder.to(connectAddress).bind(bindAddress).with(byteBufferAllocator).create(queue);
+				if (builder == null) {
+					throw new NullPointerException("builder");
+				}
+				
+				final Connecter connecter = builder.create(queue);
 
 				return new Connecter() {
 					@Override

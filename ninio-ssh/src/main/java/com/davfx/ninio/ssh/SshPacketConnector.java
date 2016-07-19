@@ -4,16 +4,17 @@ import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.SendCallback;
 
-final class SshPacketConnector implements Connecter.Connecting {
+final class SshPacketConnector implements Connected {
 	private static final SecureRandom RANDOM = new SecureRandom();
 
 	private static final int PADDING = 16;
 	
-	private final Connecter.Connecting wrappee;
+	private final Connected wrappee;
 	
-	public SshPacketConnector(Connecter.Connecting wrappee) {
+	public SshPacketConnector(Connected wrappee) {
 		this.wrappee = wrappee;
 	}
 	
@@ -23,7 +24,7 @@ final class SshPacketConnector implements Connecter.Connecting {
 	}
 	
 	@Override
-	public void send(Address address, ByteBuffer buffer, Callback callback) {
+	public void send(Address address, ByteBuffer buffer, SendCallback callback) {
 		int len = buffer.remaining();
 		
 		int pad = (-(len + SshSpecification.OPTIMIZATION_SPACE)) & (PADDING - 1);

@@ -16,11 +16,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ByteBufferAllocator;
+import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connecter;
-import com.davfx.ninio.core.DefaultByteBufferAllocator;
+import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
 import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Splitter;
 import com.google.common.primitives.Ints;
@@ -30,7 +32,7 @@ public final class SshClient implements Connecter {
 
 	private static final String CLIENT_HEADER = "SSH-2.0-ninio";
 
-	public static interface Builder extends TcpSocket.Builder {
+	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(TcpSocket.Builder builder); //TODO rename "on" ?
 		Builder with(Executor executor);
 		Builder login(String login, String password);
@@ -78,34 +80,18 @@ public final class SshClient implements Connecter {
 
 	public static Builder builder() {
 		return new Builder() {
-			private TcpSocket.Builder builder = TcpSocket.builder();
+			private TcpSocket.Builder builder = null;
 			
 			private String login = null;
 			private String password = null;
 			private SshPublicKey publicKey = null;
 			private String exec = null;
 			
-			private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator();
-			private Address bindAddress = null;
-			private Address connectAddress = null;
-			
 			private Executor executor = null;
 
 			@Override
 			public Builder exec(String exec) {
 				this.exec = exec;
-				return this;
-			}
-			
-			@Override
-			public Builder bind(Address bindAddress) {
-				this.bindAddress = bindAddress;
-				return this;
-			}
-			
-			@Override
-			public Builder with(ByteBufferAllocator byteBufferAllocator) {
-				this.byteBufferAllocator = byteBufferAllocator;
 				return this;
 			}
 			
@@ -131,12 +117,6 @@ public final class SshClient implements Connecter {
 			}
 			
 			@Override
-			public Builder to(Address connectAddress) {
-				this.connectAddress = connectAddress;
-				return this;
-			}
-
-			@Override
 			public Builder with(TcpSocket.Builder builder) {
 				this.builder = builder;
 				return this;
@@ -144,6 +124,9 @@ public final class SshClient implements Connecter {
 			
 			@Override
 			public Connecter create(Queue queue) {
+				if (builder == null) {
+					throw new NullPointerException("builder");
+				}
 				if (login == null) {
 					throw new NullPointerException("login");
 				}
@@ -154,7 +137,7 @@ public final class SshClient implements Connecter {
 					throw new NullPointerException("executor");
 				}
 				
-				return new SshClient(builder.bind(bindAddress).to(connectAddress).with(byteBufferAllocator).create(queue), login, password, publicKey, exec, executor);
+				return new SshClient(builder.create(queue), login, password, publicKey, exec, executor);
 			}
 		};
 	}
@@ -177,7 +160,7 @@ public final class SshClient implements Connecter {
 	private CipheringConnector cipheringCloseableByteBufferHandler;
 	private ZlibCompressingConnector compressingCloseableByteBufferHandler;
 
-	private Connecter.Connecting connecting;
+	private Connected connecting;
 	
 	private SshClient(Connecter connecter, String finalLogin, String finalPassword, SshPublicKey finalPublicKey, String finalExec, Executor e) {
 		this.connecter = connecter;
@@ -192,11 +175,11 @@ public final class SshClient implements Connecter {
 	//TODO abruptlyClose on error
 	
 	@Override
-	public Connecter.Connecting connect(final Connecter.Callback callback) {
+	public void connect(final Connection callback) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
-				final Connecter.Connecting.Callback sendCallback = new NopConnecterConnectingCallback(); //TODO fail
+				final SendCallback sendCallback = new NopConnecterConnectingCallback(); //TODO fail
 				
 				clientExchange.add("diffie-hellman-group-exchange-sha1,diffie-hellman-group14-sha1,diffie-hellman-group1-sha1");
 				clientExchange.add("ssh-rsa");
@@ -211,7 +194,7 @@ public final class SshClient implements Connecter {
 		
 				final SecureRandom random = new SecureRandom();
 		
-				Connecter.Callback sshReceiver = new Connecter.Callback() {
+				Connection sshReceiver = new Connection() {
 					private final DiffieHellmanGroupKeyExchange keyExchange = new DiffieHellmanGroupKeyExchange();
 					private boolean groupKeyExchange;
 					private byte[] K;
@@ -648,42 +631,40 @@ public final class SshClient implements Connecter {
 				}, uncipheringCloseableByteBufferHandler);
 		
 		
-				final Connecter.Connecting builtConnector = connecter.connect(readingSshHeaderCloseableByteBufferHandler);
+				connecter.connect(readingSshHeaderCloseableByteBufferHandler);
 
-				cipheringCloseableByteBufferHandler = new CipheringConnector(builtConnector);
+				cipheringCloseableByteBufferHandler = new CipheringConnector(connecter);
 				SshPacketConnector sshPacketOuputHandler = new SshPacketConnector(cipheringCloseableByteBufferHandler);
 				compressingCloseableByteBufferHandler = new ZlibCompressingConnector(sshPacketOuputHandler);
 				connecting = compressingCloseableByteBufferHandler;
 				
-				builtConnector.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)), sendCallback);
+				connecter.send(null, ByteBuffer.wrap((CLIENT_HEADER + SshSpecification.EOL).getBytes(SshSpecification.CHARSET)), sendCallback);
 			}
 		});
-		
-		return new Connecter.Connecting() {
+	}
+
+	@Override
+	public void send(final Address address, final ByteBuffer buffer, final SendCallback callback) {
+		executor.execute(new Runnable() {
 			@Override
-			public void send(final Address address, final ByteBuffer buffer, final Callback callback) {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						int channelId = 0;
-						SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
-						b.writeInt(channelId);
-						b.writeBlob(buffer);
-						connecting.send(address, b.finish(), callback);
-					}
-				});
+			public void run() {
+				int channelId = 0;
+				SshPacketBuilder b = new SshPacketBuilder().writeByte(SSH_MSG_CHANNEL_DATA);
+				b.writeInt(channelId);
+				b.writeBlob(buffer);
+				connecting.send(address, b.finish(), callback);
 			}
-			
+		});
+	}
+	
+	@Override
+	public void close() {
+		executor.execute(new Runnable() {
 			@Override
-			public void close() {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						connecting.close();
-					}
-				});
+			public void run() {
+				connecting.close();
 			}
-		};
+		});
 	}
 
 	private static String getEncryptionAlgorithm(String alg) {

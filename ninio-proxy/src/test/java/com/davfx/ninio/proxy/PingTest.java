@@ -14,7 +14,6 @@ import com.davfx.ninio.ping.PingTimeout;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 
-//TODO test it
 //mvn install dependency:copy-dependencies
 //sudo java -cp target/dependency/*:target/test-classes/:target/classes/ com.davfx.ninio.proxy.PingTest
 public class PingTest {

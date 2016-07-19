@@ -4,20 +4,21 @@ import java.nio.ByteBuffer;
 import java.util.zip.Deflater;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.NopConnecterConnectingCallback;
+import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
-final class ZlibCompressingConnector implements Connecter.Connecting {
+final class ZlibCompressingConnector implements Connected {
 	private static final Config CONFIG = ConfigUtils.load(ZlibCompressingConnector.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("zlib.buffer").intValue();
 
-	private final Connecter.Connecting wrappee;
+	private final Connected wrappee;
 	private final Deflater deflater = new Deflater(Deflater.DEFAULT_COMPRESSION);
 	private boolean activated = false;
 
-	public ZlibCompressingConnector(Connecter.Connecting wrappee) {
+	public ZlibCompressingConnector(Connected wrappee) {
 		this.wrappee = wrappee;
 	}
 
@@ -26,7 +27,7 @@ final class ZlibCompressingConnector implements Connecter.Connecting {
 	}
 
 	@Override
-	public void send(Address address, ByteBuffer buffer, Callback callback) {
+	public void send(Address address, ByteBuffer buffer, SendCallback callback) {
 		if (!activated) {
 			wrappee.send(address, buffer, callback);
 			return;
@@ -41,7 +42,7 @@ final class ZlibCompressingConnector implements Connecter.Connecting {
 		wrappee.close();
 	}
 
-	private void write(Address address, Callback callback) {
+	private void write(Address address, SendCallback callback) {
 		ByteBuffer toSend = null;
 		
 		while (true) {

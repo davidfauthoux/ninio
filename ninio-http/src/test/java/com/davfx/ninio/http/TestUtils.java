@@ -134,7 +134,7 @@ class TestUtils {
 
 		final Wait routedWait = new Wait();
 		final Wait routedWaitForClosing = new Wait();
-		final Listener routedTcp = ninio.create(/*TODO TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)));*/
+		final Listener routedTcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)));/* TODO
 			RoutingTcpSocketServer.builder().serve(TcpSocketServer.builder().bind(new Address(Address.ANY, routedPort)))
 				.to(new Supplier<TcpSocket.Builder>() {
 					@Override
@@ -142,7 +142,7 @@ class TestUtils {
 						return TcpSocket.builder().to(new Address(Address.LOCALHOST, port));
 					}
 				})
-		);
+		);*/
 		routedTcp.listen(new Listener.Callback() {
 			@Override
 			public void closed() {

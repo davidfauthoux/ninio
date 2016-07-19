@@ -16,6 +16,7 @@ import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.SendCallback;
+import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
@@ -119,7 +120,7 @@ public class TelnetTest {
 				final Wait clientWaitClientConnecting = new Wait();
 				final Wait clientWaitClientClosing = new Wait();
 				try (CutOnPromptClient c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class))
-					.with(TelnetClient.builder().to(new Address(Address.LOCALHOST, port))))) {
+					.with(TelnetClient.builder().with(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))))) {
 					c.connect(new CutOnPromptClient.Handler() {
 						@Override
 						public void connected(final Write write) {

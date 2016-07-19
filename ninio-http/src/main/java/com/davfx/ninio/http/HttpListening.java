@@ -113,12 +113,12 @@ public final class HttpListening implements Listener.Callback {
 		return new Connection() {
 			@Override
 			public void closed() {
-				LOGGER.info("Service connection closed");
+				LOGGER.trace("Service connection closed");
 				// listeningHandler.closed() NOT called
 			}
 			@Override
 			public void failed(IOException ioe) {
-				LOGGER.info("Service connection failed", ioe);
+				LOGGER.warn("Service connection failed", ioe);
 				// listeningHandler.failed() NOT called
 			}
 			
@@ -126,7 +126,7 @@ public final class HttpListening implements Listener.Callback {
 			
 			@Override
 			public void connected(Address address) {
-				LOGGER.debug("Connecting from {}", address);
+				LOGGER.trace("Connecting from {}", address);
 				from = address;
 			}
 			

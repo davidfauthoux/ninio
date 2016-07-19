@@ -2,6 +2,7 @@ package com.davfx.ninio.ssh;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.interfaces.RSAPrivateKey;
 import java.security.interfaces.RSAPublicKey;
 
@@ -9,15 +10,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecting;
-import com.davfx.ninio.core.Connector;
-import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.ToFileReceiverClosing;
 import com.davfx.ninio.core.Trust;
-import com.davfx.ninio.core.WaitClosing;
-import com.davfx.ninio.core.WaitFailing;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
@@ -45,18 +43,25 @@ public class ScpDownloadTest {
 
 		try (Ninio ninio = Ninio.create()) {
 			Wait wait = new Wait();
-			try (ToFileReceiverClosing toFileReceiverClosing = new ToFileReceiverClosing(new File("downloaded.txt"), new WaitClosing(wait), new WaitFailing(wait))) {
-				try (Connector c = ninio.create(ScpDownloadClient.builder().path("todownload.txt").receiving(toFileReceiverClosing).closing(toFileReceiverClosing).failing(new Failing() {
-					@Override
-					public void failed(IOException e) {
-						LOGGER.error("Failed", e);
-					}
-				}).build(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)).connecting(new Connecting() {
-					@Override
-					public void connected(Connector connector, Address address) {
-						LOGGER.debug("Connected");
-					}
-				}).with(TcpSocket.builder())))) {
+			try (ToFileReceiverClosing toFileReceiverClosing = new ToFileReceiverClosing(new File("downloaded.txt"), new Connection() {
+				@Override
+				public void connected(Address address) {
+					LOGGER.debug("Connected");
+				}
+				@Override
+				public void received(Address address, ByteBuffer buffer) {
+				}
+				@Override
+				public void closed() {
+					wait.run();
+				}
+				@Override
+				public void failed(IOException e) {
+					LOGGER.error("Failed", e);
+				}
+			})) {
+				try (Connecter c = ninio.create(ScpDownloadClient.builder().path("todownload.txt").with(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)))))) {
+					c.connect(toFileReceiverClosing);
 					wait.waitFor();
 				}
 			}

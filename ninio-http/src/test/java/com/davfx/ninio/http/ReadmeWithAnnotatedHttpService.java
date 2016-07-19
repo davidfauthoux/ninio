@@ -5,10 +5,9 @@ import java.io.IOException;
 import java.util.Arrays;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.WaitListenConnecting;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.HttpContentType;
 import com.davfx.ninio.http.service.HttpController;
@@ -23,7 +22,6 @@ import com.davfx.ninio.http.service.annotations.PathParameter;
 import com.davfx.ninio.http.service.annotations.QueryParameter;
 import com.davfx.ninio.http.service.annotations.Route;
 import com.davfx.ninio.util.SerialExecutor;
-import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 
 public final class ReadmeWithAnnotatedHttpService {
@@ -136,11 +134,8 @@ public final class ReadmeWithAnnotatedHttpService {
 				}
 			}
 	
-			Wait wait = new Wait();
-			try (Disconnectable tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port))
-					.connecting(new WaitListenConnecting(wait)).listening(
-							HttpListening.builder().with(new SerialExecutor(ReadmeWithAnnotatedHttpService.class)).with(a.build()).build()))) {
-				wait.waitFor();
+			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
+				tcp.listen(HttpListening.builder().with(new SerialExecutor(ReadmeWithAnnotatedHttpService.class)).with(a.build()).build());
 	
 				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/a/echo?message=helloworld");
 				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/b?message=helloworld");

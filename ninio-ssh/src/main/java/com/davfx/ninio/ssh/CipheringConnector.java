@@ -11,28 +11,29 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.SendCallback;
 import com.google.common.primitives.Ints;
 
-final class CipheringConnector implements Connecter.Connecting {
+final class CipheringConnector implements Connected {
 
-	private final Connecter.Connecting wrappee;
+	private final Connected wrappee;
 	private Cipher cipher = null;
 	private Mac mac = null;
 	private int sequence = 0;
 
-	public CipheringConnector(Connecter.Connecting wrappee) {
+	public CipheringConnector(Connected wrappee) {
 		this.wrappee = wrappee;
 	}
 
 	/*
-	 * Initial IV client to server: HASH (K || H || "A" || session_id) Initial
-	 * IV server to client: HASH (K || H || "B" || session_id) Encryption key
-	 * client to server: HASH (K || H || "C" || session_id) Encryption key
-	 * server to client: HASH (K || H || "D" || session_id) Integrity key client
-	 * to server: HASH (K || H || "E" || session_id) Integrity key server to
-	 * client: HASH (K || H || "F" || session_id)
-	 */
+	Initial IV client to server:     HASH (K || H || "A" || session_id)
+	Initial IV server to client:     HASH (K || H || "B" || session_id)
+	Encryption key client to server: HASH (K || H || "C" || session_id)
+	Encryption key server to client: HASH (K || H || "D" || session_id)
+	Integrity key client to server:  HASH (K || H || "E" || session_id)
+	Integrity key server to client:  HASH (K || H || "F" || session_id)
+	*/
 	public void init(String encryptionAlgorithm, String cipherAlgorithm, int keyLength, String macAlgorithm, byte[] K, byte[] H, byte[] sessionId) throws GeneralSecurityException {
 		MessageDigest sha = MessageDigest.getInstance("SHA-1");
 
@@ -78,7 +79,7 @@ final class CipheringConnector implements Connecter.Connecting {
 	}
 
 	@Override
-	public void send(Address address, ByteBuffer buffer, Callback callback) {
+	public void send(Address address, ByteBuffer buffer, SendCallback callback) {
 		if ((cipher == null) || (mac == null)) {
 			sequence++;
 			wrappee.send(address, buffer, callback);

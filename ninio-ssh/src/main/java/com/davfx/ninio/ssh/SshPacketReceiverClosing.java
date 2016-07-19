@@ -4,19 +4,19 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.Connection;
 import com.google.common.primitives.Ints;
 
-final class SshPacketReceiverClosing implements Connecter.Callback {
+final class SshPacketReceiverClosing implements Connection {
 	
 	private ByteBuffer buffer = null;
 	private ByteBuffer paddingBuffer = null;
 	private ByteBuffer lengthBuffer = ByteBuffer.allocate(Ints.BYTES);
 	private int state = 0;
 	private int length = -1;
-	private final Connecter.Callback wrappee;
+	private final Connection wrappee;
 	
-	public SshPacketReceiverClosing(Connecter.Callback wrappee) {
+	public SshPacketReceiverClosing(Connection wrappee) {
 		this.wrappee = wrappee;
 	}
 
