@@ -7,4 +7,7 @@ public interface HttpStatus {
 	int NOT_FOUND = 404;
 	int FORBIDDEN = 403;
 
+	int REDIRECT = 300;
+
+	int STATUSES_GROUP = 100;
 }

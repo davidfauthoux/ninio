@@ -8,4 +8,7 @@ public interface HttpStatus {
 	int FORBIDDEN = 403;
 	int BAD_REQUEST = 400;
 
+	int REDIRECT = 300;
+
+	int STATUSES_GROUP = 100;
 }

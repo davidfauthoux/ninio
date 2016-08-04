@@ -62,10 +62,14 @@ public final class HttpClient {
 			wrappee.close();
 		}
 		
+		private static boolean isRedirect(int status) {
+			return (status >= HttpStatus.REDIRECT) && (status < (HttpStatus.REDIRECT + HttpStatus.STATUSES_GROUP));
+		}
+		
 		@Override
 		public void received(HttpResponse response) {
 			try {
-				if (levelOfRedirect < MAX_REDIRECT_LEVELS) {
+				if (isRedirect(response.status) && (levelOfRedirect < MAX_REDIRECT_LEVELS)) {
 					String location = null;
 					for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
 						location = locationValue;

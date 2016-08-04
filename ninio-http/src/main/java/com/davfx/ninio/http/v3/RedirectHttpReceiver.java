@@ -36,9 +36,13 @@ final class RedirectHttpReceiver implements HttpReceiver {
 		this.failing = failing;
 	}
 
+	private static boolean isRedirect(int status) {
+		return (status >= HttpStatus.REDIRECT) && (status < (HttpStatus.REDIRECT + HttpStatus.STATUSES_GROUP));
+	}
+	
 	@Override
 	public HttpContentReceiver received(Disconnectable disconnectable, HttpResponse response) {
-		if (levelOfRedirect < maxRedirections) {
+		if (isRedirect(response.status) && (levelOfRedirect < maxRedirections)) {
 			String location = null;
 			for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
 				location = locationValue;
