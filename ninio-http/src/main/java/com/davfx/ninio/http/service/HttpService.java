@@ -259,6 +259,7 @@ public final class HttpService implements HttpListeningHandler {
 								private String reason = HttpMessage.OK;
 								private Multimap<String, String> headers = HashMultimap.create();
 								private HttpContentSender sender = null;
+								private boolean sending = false;
 
 								private void send() {
 									if (sender != null) {
@@ -321,10 +322,30 @@ public final class HttpService implements HttpListeningHandler {
 									return header(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(contentLength));
 								}
 
+								private synchronized void notSending() {
+									sending = false;
+									notifyAll();
+								}
+								
 								@Override
 								public synchronized HttpAsyncOutput produce(final ByteBuffer buffer) {
+									while (sending) {
+										try {
+											wait();
+										} catch (InterruptedException ie) {
+										}
+									}
 									send();
-									sender.send(buffer, new Nop());
+									sender.send(buffer, new SendCallback() {
+										@Override
+										public void failed(IOException e) {
+											notSending();
+										}
+										@Override
+										public void sent() {
+											notSending();
+										}
+									});
 									return this;
 								}
 
