@@ -45,6 +45,7 @@ public final class HttpService implements HttpListeningHandler {
 	private static final Config CONFIG = ConfigUtils.load(HttpListening.class);
 	private static final int DEFAULT_THREADS = CONFIG.getInt("service.threads");
 	private static final int STREAMING_BUFFER_SIZE = CONFIG.getBytes("service.stream.buffer").intValue();
+	private static final long SENDING_LIMIT = CONFIG.getBytes("service.produce.limit").longValue();
 	
 	public static interface Builder {
 		/*%%
@@ -259,7 +260,7 @@ public final class HttpService implements HttpListeningHandler {
 								private String reason = HttpMessage.OK;
 								private Multimap<String, String> headers = HashMultimap.create();
 								private HttpContentSender sender = null;
-								private boolean sending = false;
+								private long sending = 0L;
 
 								private void send() {
 									if (sender != null) {
@@ -322,28 +323,32 @@ public final class HttpService implements HttpListeningHandler {
 									return header(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(contentLength));
 								}
 
-								private synchronized void notSending() {
-									sending = false;
+								private synchronized void isSent(long size) {
+									sending -= size;
 									notifyAll();
 								}
 								
 								@Override
 								public synchronized HttpAsyncOutput produce(final ByteBuffer buffer) {
-									while (sending) {
+									send();
+									
+									while (sending > SENDING_LIMIT) {
 										try {
 											wait();
 										} catch (InterruptedException ie) {
 										}
 									}
-									send();
+
+									final long size = buffer.remaining();
+									sending += size;
 									sender.send(buffer, new SendCallback() {
 										@Override
 										public void failed(IOException e) {
-											notSending();
+											isSent(size);
 										}
 										@Override
 										public void sent() {
-											notSending();
+											isSent(size);
 										}
 									});
 									return this;
