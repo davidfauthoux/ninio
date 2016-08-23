@@ -100,41 +100,120 @@ public final class DnsClient implements DnsConnecter {
 		this.dnsAddress = dnsAddress;
 		
 		connecter.connect(new Connection() {
+			private String readName(ByteBuffer packet, ByteBuffer buffer) {
+				int position = buffer.position();
+				int pointer = buffer.getShort() & 0xFFFF;
+				System.out.println("pointer??? " + Integer.toHexString(pointer));
+				if ((pointer & 0xC000) == 0xC000) {
+					pointer &= 0x3FFF;
+					ByteBuffer bb = packet.duplicate();
+					bb.position(pointer);
+					return readName(packet, bb);
+				}
+				buffer.position(position);
+				
+				StringBuilder s = new StringBuilder();
+				while (true) {
+					int n = buffer.get() & 0xFF;
+					if (n == 0) {
+						break;
+					}
+					System.out.println("==========n = " + n);
+					byte[] b = new byte[n];
+					buffer.get(b);
+					if (s.length() > 0) {
+						s.append('.');
+					}
+					s.append(new String(b, Charsets.UTF_8));
+				}
+				return s.toString();
+			}
+			private String readString(ByteBuffer packet, ByteBuffer buffer) {
+				if (true) {
+					int n = buffer.get() & 0xFF;
+					byte[] b = new byte[n];
+					buffer.get(b);
+					return new String(b, Charsets.UTF_8);
+				}
+				int position = buffer.position();
+				int pointer = buffer.getShort() & 0xFFFF;
+				System.out.println("pointer??? " + Integer.toHexString(pointer));
+				if ((pointer & 0xC000) == 0xC000) {
+					pointer &= 0x3FFF;
+					ByteBuffer bb = packet.duplicate();
+					bb.position(pointer);
+					return readString(packet, bb);
+				}
+				buffer.position(position);
+				
+				StringBuilder s = new StringBuilder();
+				while (true) {
+					int n = buffer.get() & 0xFF;
+					if (n == 0) {
+						break;
+					}
+					s.append((char) n);
+				}
+				return s.toString();
+			}
 			@Override
 			public void received(Address address, ByteBuffer buffer) {
 				System.out.println(Arrays.toString(buffer.array()));
 				
 				int transactionId = buffer.getShort() & 0xFFFF;
 				int flags = buffer.getShort() & 0xFFFF;
+				System.out.println("flags = " + Integer.toHexString(flags));
 				int questions = buffer.getShort() & 0xFFFF;
 				int answers = buffer.getShort() & 0xFFFF;
 				int authorityRRs = buffer.getShort() & 0xFFFF;
 				int addtionalRRs = buffer.getShort() & 0xFFFF;
+				System.out.println("questions = " + questions);
 				System.out.println("answers = " + answers);
 				System.out.println("authorityRRs = " + authorityRRs);
 				System.out.println("addtionalRRs = " + addtionalRRs);
-				
-				while (true) {
-					int n = buffer.get() & 0xFF;
-					if (n == 0) {
-						break;
-					}
-					byte[] b = new byte[n];
-					buffer.get(b);
-					System.out.println("## " + Arrays.toString(b));
+
+				for (int i = 0; i < questions; i++) {
+					System.out.println("QUESTION #" + i);
+					System.out.println("-----NAME " + readName(buffer, buffer));
+					int type = buffer.getShort() & 0xFFFF;
+					int clazz = buffer.getShort() & 0xFFFF;
+					System.out.println("type = " + type);
+					System.out.println("clazz = " + clazz);
 				}
-				int type = buffer.getShort() & 0xFFFF;
-				int clazz = buffer.getShort() & 0xFFFF;
 				
 				for (int i = 0; i < (answers + authorityRRs + addtionalRRs); i++) {
-					System.out.println("___ " + i);
-					int name = buffer.getShort() & 0xFFFF;
-					int subClazz = buffer.getShort() & 0xFFFF;
-					int ttl = buffer.getInt();
-					int n = buffer.get() & 0xFF;
+					System.out.println("ANSWER #" + i);
+					System.out.println("-----NAME " + readName(buffer, buffer));
+					int type = buffer.getShort() & 0xFFFF;
+					int clazz = buffer.getShort() & 0xFFFF;
+					System.out.println("type = " + type);
+					System.out.println("clazz = " + clazz);
+					long ttl = buffer.getInt() & 0xFFFFFFFFL;
+					System.out.println("ttl = " + ttl);
+					int n = buffer.getShort() & 0xFFFF;
 					byte[] b = new byte[n];
 					buffer.get(b);
-					System.out.println("------> " + new String(b, Charsets.UTF_8));
+					System.out.println("-------------------type="+type);
+					if (type == 0x6) {
+						System.out.println(type + " SOA (" + b.length + ")------>>>>>>>>");
+						ByteBuffer bb = ByteBuffer.wrap(b);
+						String primaryNS = readString(buffer, bb);
+						String adminMB = readString(buffer, bb);
+						long serialNumber = bb.getInt() & 0xFFFFFFFFL;
+						long refreshInterval = bb.getInt() & 0xFFFFFFFFL;
+						long retryInterval = bb.getInt() & 0xFFFFFFFFL;
+						long expirationLimit = bb.getInt() & 0xFFFFFFFFL;
+						long minimumTTL = bb.getInt() & 0xFFFFFFFFL;
+						System.out.println("serialNumber = " + serialNumber);
+						System.out.println("refreshInterval = " + refreshInterval);
+						System.out.println("retryInterval = " + retryInterval);
+						System.out.println("expirationLimit = " + expirationLimit);
+						System.out.println("minimumTTL = " + minimumTTL);
+						System.out.println(type + " SOA (" + b.length + ")------> " + primaryNS + "/" + adminMB);
+					} else {
+						System.out.println(type + "------> " + new String(b, Charsets.UTF_8) + " / " + Arrays.toString(b));
+
+					}
 				}
 			}
 			
