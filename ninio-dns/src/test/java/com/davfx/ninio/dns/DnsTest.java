@@ -11,7 +11,7 @@ import com.davfx.ninio.util.SerialExecutor;
 public class DnsTest {
 	
 	public static void main(String[] args) throws Exception {
-		String host = "dnslookup.fr";
+		String host = "david.fauthoux.free.fr";
 
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<byte[], IOException> lock = new Lock<>();

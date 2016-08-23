@@ -5,8 +5,11 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
@@ -22,6 +25,7 @@ import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
+import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.Shorts;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigException;
@@ -93,6 +97,8 @@ public final class DnsClient implements DnsConnecter {
 	private final Queue queue;
 	private final Connecter connecter;
 	private final Address dnsAddress;
+	
+	private final Map<String, Set<byte[]>> domainToNameServers = new HashMap<>(); //TODO expire //TODO de maniere generale, virer les caches guava partout (et en faire un à moi no threadsafe)
 
 	public DnsClient(Queue queue, Executor executor, Connecter connecter, Address dnsAddress) {
 		this.queue = queue;
@@ -106,6 +112,7 @@ public final class DnsClient implements DnsConnecter {
 				System.out.println("pointer??? " + Integer.toHexString(pointer));
 				if ((pointer & 0xC000) == 0xC000) {
 					pointer &= 0x3FFF;
+					System.out.println("pointer=" + Integer.toHexString(pointer));
 					ByteBuffer bb = packet.duplicate();
 					bb.position(pointer);
 					return readName(packet, bb);
@@ -118,6 +125,20 @@ public final class DnsClient implements DnsConnecter {
 					if (n == 0) {
 						break;
 					}
+
+					if ((n & 0xC0) == 0xC0) {
+						int l = buffer.get() & 0xFF;
+						pointer = ((n & 0x3F) << 16) | l;
+						System.out.println("pointer=" + Integer.toHexString(pointer));
+						ByteBuffer bb = packet.duplicate();
+						bb.position(pointer);
+						if (s.length() > 0) {
+							s.append('.');
+						}
+						s.append(readName(packet, bb));
+						break;
+					}
+
 					System.out.println("==========n = " + n);
 					byte[] b = new byte[n];
 					buffer.get(b);
@@ -129,12 +150,6 @@ public final class DnsClient implements DnsConnecter {
 				return s.toString();
 			}
 			private String readString(ByteBuffer packet, ByteBuffer buffer) {
-				if (true) {
-					int n = buffer.get() & 0xFF;
-					byte[] b = new byte[n];
-					buffer.get(b);
-					return new String(b, Charsets.UTF_8);
-				}
 				int position = buffer.position();
 				int pointer = buffer.getShort() & 0xFFFF;
 				System.out.println("pointer??? " + Integer.toHexString(pointer));
@@ -145,6 +160,13 @@ public final class DnsClient implements DnsConnecter {
 					return readString(packet, bb);
 				}
 				buffer.position(position);
+
+				if (true) {
+					int n = buffer.get() & 0xFF;
+					byte[] b = new byte[n];
+					buffer.get(b);
+					return new String(b, Charsets.UTF_8);
+				}
 				
 				StringBuilder s = new StringBuilder();
 				while (true) {
@@ -157,7 +179,8 @@ public final class DnsClient implements DnsConnecter {
 				return s.toString();
 			}
 			@Override
-			public void received(Address address, ByteBuffer buffer) {
+			public void received(Address address, ByteBuffer packet) {
+				ByteBuffer buffer = packet.duplicate();
 				System.out.println(Arrays.toString(buffer.array()));
 				
 				int transactionId = buffer.getShort() & 0xFFFF;
@@ -174,7 +197,7 @@ public final class DnsClient implements DnsConnecter {
 
 				for (int i = 0; i < questions; i++) {
 					System.out.println("QUESTION #" + i);
-					System.out.println("-----NAME " + readName(buffer, buffer));
+					System.out.println("-----NAME " + readName(packet, buffer));
 					int type = buffer.getShort() & 0xFFFF;
 					int clazz = buffer.getShort() & 0xFFFF;
 					System.out.println("type = " + type);
@@ -183,7 +206,7 @@ public final class DnsClient implements DnsConnecter {
 				
 				for (int i = 0; i < (answers + authorityRRs + addtionalRRs); i++) {
 					System.out.println("ANSWER #" + i);
-					System.out.println("-----NAME " + readName(buffer, buffer));
+					System.out.println("-----NAME " + readName(packet, buffer));
 					int type = buffer.getShort() & 0xFFFF;
 					int clazz = buffer.getShort() & 0xFFFF;
 					System.out.println("type = " + type);
@@ -193,12 +216,25 @@ public final class DnsClient implements DnsConnecter {
 					int n = buffer.getShort() & 0xFFFF;
 					byte[] b = new byte[n];
 					buffer.get(b);
-					System.out.println("-------------------type="+type);
-					if (type == 0x6) {
-						System.out.println(type + " SOA (" + b.length + ")------>>>>>>>>");
+					System.out.println(type + " (" + buffer.position() + ", "+b.length + ")------>>>>>>>> " + BaseEncoding.base16().encode(b) + " / " + new String(b));
+					if (type == 0x1) {
+						try {
+							System.out.println(type + " A (" + b.length + ")------> " + InetAddress.getByAddress(b));
+						} catch (UnknownHostException e) {
+							e.printStackTrace();
+						}
+					} else if (type == 0x2) {
 						ByteBuffer bb = ByteBuffer.wrap(b);
-						String primaryNS = readString(buffer, bb);
-						String adminMB = readString(buffer, bb);
+						String name = readString(packet, bb);
+						System.out.println(type + " NS (" + b.length + ")------> " + name);
+					} else if (type == 0x5) {
+						ByteBuffer bb = ByteBuffer.wrap(b);
+						String name = readString(packet, bb);
+						System.out.println(type + " CNAME (" + b.length + ")------> " + name);
+					} else if (type == 0x6) {
+						ByteBuffer bb = ByteBuffer.wrap(b);
+						String primaryNS = readString(packet, bb);
+						String adminMB = readString(packet, bb);
 						long serialNumber = bb.getInt() & 0xFFFFFFFFL;
 						long refreshInterval = bb.getInt() & 0xFFFFFFFFL;
 						long retryInterval = bb.getInt() & 0xFFFFFFFFL;
@@ -210,6 +246,11 @@ public final class DnsClient implements DnsConnecter {
 						System.out.println("expirationLimit = " + expirationLimit);
 						System.out.println("minimumTTL = " + minimumTTL);
 						System.out.println(type + " SOA (" + b.length + ")------> " + primaryNS + "/" + adminMB);
+					} else if (type == 0x15) {
+						ByteBuffer bb = ByteBuffer.wrap(b);
+						String mx = readString(packet, bb);
+						int preference = bb.getShort() & 0xFFFF;
+						System.out.println(type + " MX (" + b.length + ")------> " + preference + "/" + mx);
 					} else {
 						System.out.println(type + "------> " + new String(b, Charsets.UTF_8) + " / " + Arrays.toString(b));
 
@@ -254,7 +295,7 @@ public final class DnsClient implements DnsConnecter {
 			bb.put(b);
 		}
 		bb.put((byte) 0);
-		bb.putShort((short) 0x00ff);
+		bb.putShort((short) 0x0001); // Type 0x01 'A'
 		bb.putShort((short) 0x0001);
 		bb.flip();
 		connecter.send(dnsAddress, bb, new SendCallback() {
