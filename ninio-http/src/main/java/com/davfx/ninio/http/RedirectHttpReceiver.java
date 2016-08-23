@@ -101,7 +101,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 						newPort = p;
 					}
 					
-					dns.resolve(newHost, new DnsReceiver() {
+					dns.request().resolve(newHost, null).receive(new DnsReceiver() {
 						@Override
 						public void failed(IOException e) {
 							LOGGER.debug("Unable to resolve: {}", newHost);

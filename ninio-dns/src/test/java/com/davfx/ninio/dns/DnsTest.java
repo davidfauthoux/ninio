@@ -3,6 +3,7 @@ package com.davfx.ninio.dns;
 import java.io.IOException;
 import java.util.Arrays;
 
+import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.util.Lock;
@@ -11,13 +12,25 @@ import com.davfx.ninio.util.SerialExecutor;
 public class DnsTest {
 	
 	public static void main(String[] args) throws Exception {
-		String host = "david.fauthoux.free.fr";
+		String host = "google.com";
 
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<byte[], IOException> lock = new Lock<>();
 			
-			try (DnsConnecter client = DnsTimeout.wrap(10d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
-				client.resolve(host, new DnsReceiver() {
+			try (DnsConnecter client = DnsTimeout.wrap(1000d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
+				client.connect(new DnsConnection() {
+					@Override
+					public void closed() {
+					}
+					@Override
+					public void failed(IOException e) {
+						lock.fail(e);
+					}
+					@Override
+					public void connected(Address address) {
+					}
+				});
+				client.request().resolve(host, null).receive(new DnsReceiver() {
 					@Override
 					public void received(byte[] ip) {
 						lock.set(ip);

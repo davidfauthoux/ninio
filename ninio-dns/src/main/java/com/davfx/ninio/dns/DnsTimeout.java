@@ -1,6 +1,7 @@
 package com.davfx.ninio.dns;
 
 import java.io.IOException;
+import java.net.ProtocolFamily;
 
 import com.davfx.ninio.core.Timeout;
 
@@ -18,33 +19,58 @@ public final class DnsTimeout {
 			}
 			
 			@Override
-			public Cancelable resolve(String host, final DnsReceiver receiver) {
-				final Timeout.Manager m = t.set(timeout);
-				m.run(new Runnable() {
-					@Override
-					public void run() {
-						receiver.failed(new IOException("Timeout"));
-					}
-				});
+			public void connect(DnsConnection callback) {
+				wrappee.connect(callback);
+			}
+			
+			@Override
+			public DnsRequestBuilder request() {
+				final DnsRequestBuilder builder = wrappee.request();
+				return new DnsRequestBuilder() {
+					private Timeout.Manager m;
+					private Cancelable cancelable;
 
-				final Cancelable cancelable = wrappee.resolve(host, new DnsReceiver() {
 					@Override
-					public void received(byte[] ip) {
-						m.cancel();
-						receiver.received(ip);
+					public SnmpRequestBuilderCancelable resolve(String host, ProtocolFamily family) {
+						m = t.set(timeout);
+						
+						final Cancelable c = builder.resolve(host, family);
+
+						cancelable = new Cancelable() {
+							@Override
+							public void cancel() {
+								m.cancel();
+								c.cancel();
+							}
+						};
+						
+						return new DnsRequestBuilderCancelableImpl(this, cancelable);
 					}
+
 					@Override
-					public void failed(IOException ioe) {
-						m.cancel();
-						receiver.failed(ioe);
-					}
-				});
-				
-				return new Cancelable() {
-					@Override
-					public void cancel() {
-						m.cancel();
-						cancelable.cancel();
+					public Cancelable receive(final DnsReceiver callback) {
+						builder.receive(new DnsReceiver() {
+							@Override
+							public void failed(IOException ioe) {
+								m.cancel();
+								callback.failed(ioe);
+							}
+							
+							@Override
+							public void received(byte[] ip) {
+								m.cancel();
+								callback.received(ip);
+							}
+						});
+
+						m.run(new Runnable() {
+							@Override
+							public void run() {
+								callback.failed(new IOException("Timeout"));
+							}
+						});
+
+						return cancelable;
 					}
 				};
 			}

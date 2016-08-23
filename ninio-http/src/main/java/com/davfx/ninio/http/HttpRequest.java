@@ -90,7 +90,7 @@ public final class HttpRequest {
 			}
 		}
 		
-		dns.resolve(host, new DnsReceiver() {
+		dns.request().resolve(host, null).receive(new DnsReceiver() {
 			@Override
 			public void failed(IOException e) {
 				callback.failed(e);

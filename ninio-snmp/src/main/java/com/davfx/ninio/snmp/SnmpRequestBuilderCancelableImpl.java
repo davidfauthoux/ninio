@@ -1,9 +1,8 @@
 package com.davfx.ninio.snmp;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.snmp.SnmpRequestBuilder.SnmpRequestBuilderCancelable;
 
-final class SnmpRequestBuilderCancelableImpl implements SnmpRequestBuilderCancelable {
+final class SnmpRequestBuilderCancelableImpl implements SnmpRequestBuilder.SnmpRequestBuilderCancelable {
 	private final SnmpRequestBuilder that;
 	private final Cancelable sender;
 	
