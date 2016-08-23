@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.InMemoryBuffers;
+import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpContentSender;
@@ -39,9 +40,11 @@ public final class ImageToJpegConverter implements HttpController {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ImageToJpegConverter.class);
 	
+	private final DnsConnecter dns;
 	private final HttpConnecter client;
 	
-	public ImageToJpegConverter(HttpConnecter client) {
+	public ImageToJpegConverter(DnsConnecter dns, HttpConnecter client) {
+		this.dns = dns;
 		this.client = client;
 	}
 	
@@ -52,88 +55,98 @@ public final class ImageToJpegConverter implements HttpController {
 		return Http.ok().async(new HttpAsync() {
 			@Override
 			public void produce(final HttpAsyncOutput output) {
-				HttpRequestBuilder b = client.request();
-				HttpContentSender sender = b.build(HttpRequest.of(url));
-				b.receive(new HttpReceiver() {
+				HttpRequest.resolve(dns, url, new HttpRequest.ResolveCallback() {
 					@Override
-					public void failed(IOException ioe) {
+					public void failed(IOException e) {
+						LOGGER.error("Could not resolve: {}", url);
+						output.notFound().finish();
 					}
 					@Override
-					public HttpContentReceiver received(final HttpResponse response) {
-						if (response.status != HttpStatus.OK) {
-							output.notFound().finish();
-							return null;
-						}
-						return new HttpContentReceiver() {
-							private final InMemoryBuffers buffers = new InMemoryBuffers();
+					public void resolved(HttpRequest resolvedRequest) {
+						HttpRequestBuilder b = client.request();
+						HttpContentSender sender = b.build(resolvedRequest);
+						b.receive(new HttpReceiver() {
 							@Override
-							public void received(ByteBuffer buffer) {
-								buffers.add(buffer);
+							public void failed(IOException ioe) {
 							}
-							
 							@Override
-							public void ended() {
-								byte[] unconverted = buffers.toByteArray();
-								
-								byte[] converted;
-								try {
-									BufferedImage image;
-									try (InputStream in = new ByteArrayInputStream(unconverted)) {
-										image = ImageIO.read(in);
-									}
-									
-									if ((width > 0) || (height > 0)) {
-										int w = width;
-										int h = height;
-										if (w <= 0) {
-											w = image.getWidth() * h / image.getHeight();
-										} else if (h <= 0) {
-											h = image.getHeight() * w / image.getWidth();
-										}
-										
-										LOGGER.debug("{}x{} -> {}x{}", image.getWidth(), image.getHeight(), w, h);
-										
-										BufferedImage scaled = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-										Graphics2D g = scaled.createGraphics();
-										try {
-										    g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-										    g.drawImage(image, 0, 0, w, h, 0, 0, image.getWidth(), image.getHeight(), null);
-										} finally {
-											g.dispose();
-										}
-										
-										image = scaled;
-									}
-									
-									ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
-									try {
-										ImageWriteParam writerParameters = writer.getDefaultWriteParam();
-										writerParameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-										writerParameters.setCompressionQuality(quality);
-
-										ByteArrayOutputStream out = new ByteArrayOutputStream();
-										try {
-											writer.setOutput(ImageIO.createImageOutputStream(out));
-											writer.write(null, new IIOImage(image, null, null), writerParameters);
-										} finally {
-											out.close();
-										}
-										converted = out.toByteArray();
-									} finally {
-										writer.dispose();
-									}
-								} catch (IOException ioe) {
-									LOGGER.error("Could not convert image: {}", ioe);
-									output.internalServerError().finish();
-									return;
+							public HttpContentReceiver received(final HttpResponse response) {
+								if (response.status != HttpStatus.OK) {
+									output.notFound().finish();
+									return null;
 								}
-
-								output.ok().contentLength(converted.length).contentType("image/jpg").produce(ByteBuffer.wrap(converted)).finish();
+								return new HttpContentReceiver() {
+									private final InMemoryBuffers buffers = new InMemoryBuffers();
+									@Override
+									public void received(ByteBuffer buffer) {
+										buffers.add(buffer);
+									}
+									
+									@Override
+									public void ended() {
+										byte[] unconverted = buffers.toByteArray();
+										
+										byte[] converted;
+										try {
+											BufferedImage image;
+											try (InputStream in = new ByteArrayInputStream(unconverted)) {
+												image = ImageIO.read(in);
+											}
+											
+											if ((width > 0) || (height > 0)) {
+												int w = width;
+												int h = height;
+												if (w <= 0) {
+													w = image.getWidth() * h / image.getHeight();
+												} else if (h <= 0) {
+													h = image.getHeight() * w / image.getWidth();
+												}
+												
+												LOGGER.debug("{}x{} -> {}x{}", image.getWidth(), image.getHeight(), w, h);
+												
+												BufferedImage scaled = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+												Graphics2D g = scaled.createGraphics();
+												try {
+												    g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+												    g.drawImage(image, 0, 0, w, h, 0, 0, image.getWidth(), image.getHeight(), null);
+												} finally {
+													g.dispose();
+												}
+												
+												image = scaled;
+											}
+											
+											ImageWriter writer = ImageIO.getImageWritersByFormatName("jpeg").next();
+											try {
+												ImageWriteParam writerParameters = writer.getDefaultWriteParam();
+												writerParameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+												writerParameters.setCompressionQuality(quality);
+		
+												ByteArrayOutputStream out = new ByteArrayOutputStream();
+												try {
+													writer.setOutput(ImageIO.createImageOutputStream(out));
+													writer.write(null, new IIOImage(image, null, null), writerParameters);
+												} finally {
+													out.close();
+												}
+												converted = out.toByteArray();
+											} finally {
+												writer.dispose();
+											}
+										} catch (IOException ioe) {
+											LOGGER.error("Could not convert image: {}", ioe);
+											output.internalServerError().finish();
+											return;
+										}
+		
+										output.ok().contentLength(converted.length).contentType("image/jpg").produce(ByteBuffer.wrap(converted)).finish();
+									}
+								};
 							}
-						};
+						});
+						sender.finish();
 					}
 				});
-				sender.finish();
 			}
 		});
 	}

@@ -3,6 +3,7 @@ package com.davfx.ninio.core;
 import java.io.IOException;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 
 import com.davfx.ninio.util.LibraryLoader;
 
@@ -55,19 +56,25 @@ public final class NativeRawSocket {
 		throw new IOException("Error: " + err);
 	}
 
-	private int getScopeId(InetAddress address) {
-		if ((family == PF_INET6) && (address instanceof Inet6Address)) {
-			return ((Inet6Address) address).getScopeId();
+	private int getScopeId(byte[] address) {
+		InetAddress a;
+		try {
+			a = InetAddress.getByAddress(address);
+		} catch (UnknownHostException e) {
+			return 0;
+		}
+		if ((family == PF_INET6) && (a instanceof Inet6Address)) {
+			return ((Inet6Address) a).getScopeId();
 		}
 		return 0;
 	}
 
 
 
-	public void bind(InetAddress address) throws IOException {
+	public void bind(byte[] address) throws IOException {
 		int scope_id = getScopeId(address);
 
-		int result = __bind(socket, family, address.getAddress(), scope_id);
+		int result = __bind(socket, family, address, scope_id);
 		if (result != 0) {
 			throwIOException(result);
 		}
@@ -99,14 +106,14 @@ public final class NativeRawSocket {
 		return result;
 	}
 
-	public int write(InetAddress address, byte[] data, int offset, int length) throws IOException {
+	public int write(byte[] address, byte[] data, int offset, int length) throws IOException {
 		int scope_id = getScopeId(address);
 
 		if ((offset < 0) || (length < 0) || (length > data.length - offset)) {
 			throw new IllegalArgumentException("Invalid offset or length");
 		}
 
-		int result = __sendto(socket, data, offset, length, family, address.getAddress(), scope_id);
+		int result = __sendto(socket, data, offset, length, family, address, scope_id);
 
 		if (result < 0) {
 			throwIOException(result);

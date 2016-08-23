@@ -477,8 +477,8 @@ public final class ProxyClient implements ProxyProvider {
 					private int readConnectionId = -1;
 					private int command = -1;
 
-					private int readHostLength = -1;
-					private String readHost = null;
+					private int readIpLength = -1;
+					private byte[] readIp = null;
 					private int readPort = -1;
 					private int readLength = -1;
 					
@@ -511,7 +511,7 @@ public final class ProxyClient implements ProxyProvider {
 							}
 						}
 					}
-					private String readString(String old, ByteBuffer receivedBuffer, int len) {
+					private byte[] readBytes(byte[] old, ByteBuffer receivedBuffer, int len) {
 						if (old != null) {
 							return old;
 						}
@@ -524,9 +524,9 @@ public final class ProxyClient implements ProxyProvider {
 							}
 							readByteBuffer.put(receivedBuffer.get());
 							if (readByteBuffer.position() == readByteBuffer.capacity()) {
-								String s = new String(readByteBuffer.array(), readByteBuffer.arrayOffset(), readByteBuffer.position(), Charsets.UTF_8);
+								byte[] b = readByteBuffer.array();
 								readByteBuffer = null;
-								return s;
+								return b;
 							}
 						}
 					}
@@ -549,12 +549,12 @@ public final class ProxyClient implements ProxyProvider {
 
 									switch (command) {
 									case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
-										readHostLength = readInt(readHostLength, receivedBuffer);
-										if (readHostLength < 0) {
+										readIpLength = readInt(readIpLength, receivedBuffer);
+										if (readIpLength < 0) {
 											return;
 										}
-										readHost = readString(readHost, receivedBuffer, readHostLength);
-										if (readHost == null) {
+										readIp = readBytes(readIp, receivedBuffer, readIpLength);
+										if (readIp == null) {
 											return;
 										}
 										readPort = readInt(readPort, receivedBuffer);
@@ -573,15 +573,15 @@ public final class ProxyClient implements ProxyProvider {
 										if (receivedInnerConnection != null) {
 											ByteBuffer b = receivedBuffer.duplicate();
 											b.limit(b.position() + len);
-											receivedInnerConnection.connection.received(new Address(readHost, readPort), b);
+											receivedInnerConnection.connection.received(new Address(readIp, readPort), b);
 										}
 										receivedBuffer.position(receivedBuffer.position() + len);
 										readLength -= len;
 										if (readLength == 0) {
 											readConnectionId = -1;
 											command = -1;
-											readHostLength = -1;
-											readHost = null;
+											readIpLength = -1;
+											readIp = null;
 											readPort = -1;
 											readLength = -1;
 										}
@@ -648,12 +648,11 @@ public final class ProxyClient implements ProxyProvider {
 					b.flip();
 					proxyConnector.send(null, b, sendCallback);
 				} else {
-					byte[] hostAsBytes = connectAddress.host.getBytes(Charsets.UTF_8);
-					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
+					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + connectAddress.ip.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
 					b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
 					b.putInt(innerConnection.connectionId);
-					b.putInt(hostAsBytes.length);
-					b.put(hostAsBytes);
+					b.putInt(connectAddress.ip.length);
+					b.put(connectAddress.ip);
 					b.putInt(connectAddress.port);
 					b.putInt(headerAsBytes.length);
 					b.put(headerAsBytes);
@@ -683,12 +682,11 @@ public final class ProxyClient implements ProxyProvider {
 						b.flip();
 						proxyConnector.send(null, b, callback);
 					} else {
-						byte[] hostAsBytes = sendAddress.host.getBytes(Charsets.UTF_8);
-						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
+						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + sendAddress.ip.length + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
 						b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 						b.putInt(innerConnection.connectionId);
-						b.putInt(hostAsBytes.length);
-						b.put(hostAsBytes);
+						b.putInt(sendAddress.ip.length);
+						b.put(sendAddress.ip);
 						b.putInt(sendAddress.port);
 						b.putInt(sendBuffer.remaining());
 						b.put(sendBuffer);

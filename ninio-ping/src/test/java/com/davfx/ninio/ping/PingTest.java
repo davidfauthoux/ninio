@@ -13,7 +13,7 @@ import com.davfx.ninio.util.SerialExecutor;
 public class PingTest {
 	
 	public static void main(String[] args) throws Exception {
-		String pingHost = "8.8.8.8";
+		byte[] pingHost = new byte[] { 8, 8, 8, 8 };
 		// ::1
 
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {

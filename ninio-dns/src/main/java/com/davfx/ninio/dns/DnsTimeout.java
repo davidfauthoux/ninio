@@ -1,16 +1,16 @@
-package com.davfx.ninio.ping;
+package com.davfx.ninio.dns;
 
 import java.io.IOException;
 
 import com.davfx.ninio.core.Timeout;
 
-public final class PingTimeout {
-	private PingTimeout() {
+public final class DnsTimeout {
+	private DnsTimeout() {
 	}
 	
-	public static PingConnecter wrap(final double timeout, final PingConnecter wrappee) {
+	public static DnsConnecter wrap(final double timeout, final DnsConnecter wrappee) {
 		final Timeout t = new Timeout();
-		return new PingConnecter() {
+		return new DnsConnecter() {
 			@Override
 			public void close() {
 				t.close();
@@ -18,12 +18,7 @@ public final class PingTimeout {
 			}
 			
 			@Override
-			public void connect(PingConnection callback) {
-				wrappee.connect(callback);
-			}
-			
-			@Override
-			public Cancelable ping(byte[] ip, final PingReceiver receiver) {
+			public Cancelable resolve(String host, final DnsReceiver receiver) {
 				final Timeout.Manager m = t.set(timeout);
 				m.run(new Runnable() {
 					@Override
@@ -32,11 +27,11 @@ public final class PingTimeout {
 					}
 				});
 
-				final Cancelable cancelable = wrappee.ping(ip, new PingReceiver() {
+				final Cancelable cancelable = wrappee.resolve(host, new DnsReceiver() {
 					@Override
-					public void received(double time) {
+					public void received(byte[] ip) {
 						m.cancel();
-						receiver.received(time);
+						receiver.received(ip);
 					}
 					@Override
 					public void failed(IOException ioe) {

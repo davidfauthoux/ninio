@@ -20,6 +20,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
@@ -39,6 +40,7 @@ public final class HttpClient implements HttpConnecter {
 	public static interface Builder extends NinioBuilder<HttpConnecter> {
 		Builder pipelining();
 		Builder with(Executor executor);
+		Builder with(DnsConnecter dns);
 		Builder with(TcpSocket.Builder connectorFactory);
 		Builder withSecure(TcpSocket.Builder secureConnectorFactory);
 	}
@@ -46,6 +48,7 @@ public final class HttpClient implements HttpConnecter {
 	public static Builder builder() {
 		return new Builder() {
 			private Executor executor = null;
+			private DnsConnecter dns = null;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
 			private TcpSocket.Builder secureConnectorFactory = new SecureSocketBuilder(TcpSocket.builder());
 			private boolean pipelining = false;
@@ -59,6 +62,12 @@ public final class HttpClient implements HttpConnecter {
 			@Override
 			public Builder with(Executor executor) {
 				this.executor = executor;
+				return this;
+			}
+			
+			@Override
+			public Builder with(DnsConnecter dns) {
+				this.dns = dns;
 				return this;
 			}
 			
@@ -79,12 +88,16 @@ public final class HttpClient implements HttpConnecter {
 				if (executor == null) {
 					throw new NullPointerException("executor");
 				}
-				return new HttpClient(queue, executor, connectorFactory, secureConnectorFactory, pipelining);
+				if (dns == null) {
+					throw new NullPointerException("dns");
+				}
+				return new HttpClient(queue, executor, dns, connectorFactory, secureConnectorFactory, pipelining);
 			}
 		};
 	}
 	
 	private final Executor executor;
+	private final DnsConnecter dns;
 	private final TcpSocket.Builder connectorFactory;
 	private final TcpSocket.Builder secureConnectorFactory;
 	
@@ -208,9 +221,10 @@ public final class HttpClient implements HttpConnecter {
 		headerSanitization.put(HttpHeaderKey.ACCEPT.toLowerCase(), HttpHeaderKey.ACCEPT);
 	}
 
-	private HttpClient(Queue queue, Executor executor, TcpSocket.Builder connectorFactory, TcpSocket.Builder secureConnectorFactory, boolean pipelining) {
+	private HttpClient(Queue queue, Executor executor, DnsConnecter dns, TcpSocket.Builder connectorFactory, TcpSocket.Builder secureConnectorFactory, boolean pipelining) {
 		this.queue = queue;
 		this.executor = executor;
+		this.dns = dns;
 		this.connectorFactory = connectorFactory;
 		this.secureConnectorFactory = secureConnectorFactory;
 		this.pipelining = pipelining;
@@ -306,6 +320,7 @@ public final class HttpClient implements HttpConnecter {
 						if (emptyBody && ((request.method  == HttpMethod.POST) || (request.method  == HttpMethod.PUT))) {
 							completedHeaders.put(HttpHeaderKey.CONTENT_LENGTH, String.valueOf(0L));
 						}
+						/*%%
 						if (!completedHeaders.containsKey(HttpHeaderKey.HOST)) {
 							String portSuffix;
 							if ((request.secure && (request.address.port != HttpSpecification.DEFAULT_SECURE_PORT))
@@ -314,8 +329,9 @@ public final class HttpClient implements HttpConnecter {
 							} else {
 								portSuffix = "";
 							}
-							completedHeaders.put(HttpHeaderKey.HOST, request.address.host + portSuffix);
+							completedHeaders.put(HttpHeaderKey.HOST, request.host + portSuffix);
 						}
+						*/
 						
 						boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
 						boolean automaticallySetGzipChunked = headerKeepAlive && (request.method == HttpMethod.POST);
@@ -422,7 +438,7 @@ public final class HttpClient implements HttpConnecter {
 	
 						//
 						
-						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, new HttpReceiver() {
+						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(dns, HttpClient.this, thisMaxRedirections, request, new HttpReceiver() {
 							@Override
 							public HttpContentReceiver received(HttpResponse response) {
 								return callback.received(response);

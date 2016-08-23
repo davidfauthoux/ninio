@@ -7,10 +7,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.dns.DnsConnecter;
+import com.davfx.ninio.dns.DnsReceiver;
 
 final class RedirectHttpReceiver implements HttpReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedirectHttpReceiver.class);
 
+	private final DnsConnecter dns;
 	private final HttpClient client;
 	
 	private final int maxRedirections;
@@ -18,15 +21,22 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	private final HttpRequest request;
 	private final HttpReceiver wrappee;
 	
-	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver wrappee) {
-		this(client, maxRedirections, 0, request, wrappee);
+	public RedirectHttpReceiver(DnsConnecter dns, HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver wrappee) {
+		this(dns, client, maxRedirections, 0, request, wrappee);
 	}
 	
-	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver wrappee) {
+	private RedirectHttpReceiver(DnsConnecter dns, HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver wrappee) {
+		if (dns == null) {
+			throw new NullPointerException("dns");
+		}
+		if (client == null) {
+			throw new NullPointerException("client");
+		}
 		if (wrappee == null) {
 			throw new NullPointerException("wrappee");
 		}
 		
+		this.dns = dns;
 		this.client = client;
 		this.maxRedirections = maxRedirections;
 		this.levelOfRedirect = levelOfRedirect;
@@ -35,7 +45,7 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	}
 
 	@Override
-	public HttpContentReceiver received(HttpResponse response) {
+	public HttpContentReceiver received(final HttpResponse response) {
 		if (levelOfRedirect < maxRedirections) {
 			String location = null;
 			for (String locationValue : response.headers.get(HttpHeaderKey.LOCATION)) {
@@ -43,10 +53,10 @@ final class RedirectHttpReceiver implements HttpReceiver {
 				break;
 			}
 			if (location != null) {
-				Address newAddress = request.address;
-				String newPath;
+				//%% Address newAddress = request.address;
+				final String newPath;
 				String l = null;
-				boolean secure = false;
+				final boolean secure;
 				int defaultPort = HttpSpecification.DEFAULT_PORT;
 				if (location.startsWith(HttpSpecification.SECURE_PROTOCOL)) {
 					l = location.substring(HttpSpecification.SECURE_PROTOCOL.length());
@@ -54,7 +64,11 @@ final class RedirectHttpReceiver implements HttpReceiver {
 					defaultPort = HttpSpecification.DEFAULT_SECURE_PORT;
 				} else if (location.startsWith(HttpSpecification.PROTOCOL)) {
 					l = location.substring(HttpSpecification.PROTOCOL.length());
+					secure = false;
+				} else {
+					secure = false;
 				}
+				
 				if (l != null) {
 					int i = l.indexOf(HttpSpecification.PATH_SEPARATOR);
 					if (i > 0) {
@@ -64,45 +78,74 @@ final class RedirectHttpReceiver implements HttpReceiver {
 						newPath = String.valueOf(HttpSpecification.PATH_SEPARATOR);
 					}
 					int j = l.indexOf(HttpSpecification.PORT_SEPARATOR);
+					final String newHost;
+					final int newPort;
 					if (j < 0) {
-						newAddress = new Address(l, defaultPort);
+						newHost = l;
+						newPort = defaultPort;
 					} else {
-						int newPort;
+						int p;
 						String portValue = l.substring(j + 1);
 						if (portValue.isEmpty()) {
-							newPort = defaultPort;
+							p = defaultPort;
 						} else {
 							try {
-								newPort = Integer.parseInt(portValue);
+								p = Integer.parseInt(portValue);
 							} catch (NumberFormatException e) {
 								LOGGER.debug("Bad location: {}", location);
-								return wrappee.received(response);
+								wrappee.received(response);
+								return new IgnoreContentHttpContentReceiver();
 							}
 						}
-						newAddress = new Address(l.substring(0, j), newPort);
+						newHost = l.substring(0, j);
+						newPort = p;
 					}
+					
+					dns.resolve(newHost, new DnsReceiver() {
+						@Override
+						public void failed(IOException e) {
+							LOGGER.debug("Unable to resolve: {}", newHost);
+							wrappee.received(response);
+						}
+						
+						@Override
+						public void received(byte[] ip) {
+							HttpRequest newRequest = new HttpRequest(new Address(ip, newPort), secure, request.method, newPath);
+							
+							HttpRequestBuilder b = client.request();
+							b.receive(new RedirectHttpReceiver(dns, client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
+							b.build(newRequest).finish();
+						}
+					});
+					
+					return new IgnoreContentHttpContentReceiver();
+
 				} else {
 					newPath = location;
+					
+					HttpRequest newRequest = new HttpRequest(request.address, secure, request.method, newPath);
+					
+					HttpRequestBuilder b = client.request();
+					b.receive(new RedirectHttpReceiver(dns, client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
+					b.build(newRequest).finish();
+					
+					return new IgnoreContentHttpContentReceiver();
 				}
-				
-				HttpRequest newRequest = new HttpRequest(newAddress, secure, request.method, newPath);
-				
-				HttpRequestBuilder b = client.request();
-				b.receive(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
-				b.build(newRequest).finish();
-				
-				return new HttpContentReceiver() {
-					@Override
-					public void received(ByteBuffer buffer) {
-					}
-					@Override
-					public void ended() {
-					}
-				};
 			}
 		}
 		
 		return wrappee.received(response);
+	}
+	
+	private static final class IgnoreContentHttpContentReceiver implements HttpContentReceiver {
+		public IgnoreContentHttpContentReceiver() {
+		}
+		@Override
+		public void ended() {
+		}
+		@Override
+		public void received(ByteBuffer buffer) {
+		}
 	}
 	
 	@Override

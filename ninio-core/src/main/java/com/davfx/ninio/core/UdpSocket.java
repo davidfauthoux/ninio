@@ -1,6 +1,7 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
@@ -130,7 +131,7 @@ public final class UdpSocket implements Connecter {
 									}
 
 									readBuffer.flip();
-									Address a = new Address(from.getHostString(), from.getPort());
+									Address a = new Address(from.getAddress().getAddress(), from.getPort());
 									callback.received(a, readBuffer);
 								} else if (key.isWritable()) {
 									while (true) {
@@ -150,10 +151,7 @@ public final class UdpSocket implements Connecter {
 										} else {
 											InetSocketAddress a;
 											try {
-												a = new InetSocketAddress(toWrite.address.host, toWrite.address.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test unresolved
-												if (a.isUnresolved()) {
-													throw new IOException("Unresolved address: " + toWrite.address);
-												}
+												a = new InetSocketAddress(InetAddress.getByAddress(toWrite.address.ip), toWrite.address.port);
 											} catch (IOException e) {
 												LOGGER.warn("Invalid address: {}", toWrite.address);
 												LOGGER.trace("Write failed", e);
@@ -198,11 +196,7 @@ public final class UdpSocket implements Connecter {
 						
 						if (bindAddress != null) {
 							try {
-								InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-								if (a.isUnresolved()) {
-									throw new IOException("Unresolved address: " + bindAddress);
-								}
-								channel.socket().bind(a);
+								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
 								disconnect(channel, selectionKey, callback);
 								throw new IOException("Could not bind to: " + bindAddress, e);

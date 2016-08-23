@@ -28,6 +28,8 @@ import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.TcpdumpSocket;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.core.UdpSocket;
+import com.davfx.ninio.dns.DnsClient;
+import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpSocket;
@@ -45,7 +47,8 @@ public final class ProxyServer implements Listening {
 			public Disconnectable create(final Queue queue) {
 				final Trust trust = new Trust();
 				final Executor executor = new SerialExecutor(ProxyServer.class);
-				final HttpConnecter httpClient = HttpClient.builder().with(executor).create(queue);
+				final DnsConnecter dnsClient = DnsClient.builder().with(executor).create(queue);
+				final HttpConnecter httpClient = HttpClient.builder().with(dnsClient).with(executor).create(queue);
 				
 				final ProxyServer.Builder proxyServerBuilder = ProxyServer.builder().with(executor).listening(new ProxyListening() {
 					@Override
@@ -178,8 +181,8 @@ public final class ProxyServer implements Listening {
 			private int readConnectionId = -1;
 			private int command = -1;
 
-			private int readHostLength = -1;
-			private String readHost = null;
+			private int readIpLength = -1;
+			private byte[] readIp = null;
 			private int readPort = -1;
 			private int readLength = -1;
 			private int readHeaderLength = -1;
@@ -230,6 +233,25 @@ public final class ProxyServer implements Listening {
 						String s = new String(readByteBuffer.array(), readByteBuffer.arrayOffset(), readByteBuffer.position(), Charsets.UTF_8);
 						readByteBuffer = null;
 						return s;
+					}
+				}
+			}
+			private byte[] readBytes(byte[] old, ByteBuffer receivedBuffer, int len) {
+				if (old != null) {
+					return old;
+				}
+				if (readByteBuffer == null) {
+					readByteBuffer = ByteBuffer.allocate(len);
+				}
+				while (true) {
+					if (!receivedBuffer.hasRemaining()) {
+						return null;
+					}
+					readByteBuffer.put(receivedBuffer.get());
+					if (readByteBuffer.position() == readByteBuffer.capacity()) {
+						byte[] b = readByteBuffer.array();
+						readByteBuffer = null;
+						return b;
 					}
 				}
 			}
@@ -292,12 +314,11 @@ public final class ProxyServer implements Listening {
 								b.flip();
 								proxyConnector.send(null, b, sendCallback);
 							} else {
-								byte[] hostAsBytes = receivedAddress.host.getBytes(Charsets.UTF_8);
-								ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + hostAsBytes.length + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
+								ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + receivedAddress.ip.length + Ints.BYTES + Ints.BYTES + receivedBuffer.remaining());
 								b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 								b.putInt(connectionId);
-								b.putInt(hostAsBytes.length);
-								b.put(hostAsBytes);
+								b.putInt(receivedAddress.ip.length);
+								b.put(receivedAddress.ip);
 								b.putInt(receivedAddress.port);
 								b.putInt(receivedBuffer.remaining());
 								b.put(receivedBuffer);
@@ -313,12 +334,12 @@ public final class ProxyServer implements Listening {
 					
 					switch (command) {
 					case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
-						readHostLength = readInt(readHostLength, receivedBuffer);
-						if (readHostLength < 0) {
+						readIpLength = readInt(readIpLength, receivedBuffer);
+						if (readIpLength < 0) {
 							return;
 						}
-						readHost = readString(readHost, receivedBuffer, readHostLength);
-						if (readHost == null) {
+						readIp = readBytes(readIp, receivedBuffer, readIpLength);
+						if (readIp == null) {
 							return;
 						}
 						readPort = readInt(readPort, receivedBuffer);
@@ -335,7 +356,7 @@ public final class ProxyServer implements Listening {
 						}
 						final ByteBuffer b = receivedBuffer.duplicate();
 						b.limit(b.position() + len);
-						final Address a = new Address(readHost, readPort);
+						final Address a = new Address(readIp, readPort);
 						proxyExecutor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -350,8 +371,8 @@ public final class ProxyServer implements Listening {
 						if (readLength == 0) {
 							readConnectionId = -1;
 							command = -1;
-							readHostLength = -1;
-							readHost = null;
+							readIpLength = -1;
+							readIp = null;
 							readPort = -1;
 							readLength = -1;
 						}
@@ -401,12 +422,12 @@ public final class ProxyServer implements Listening {
 						break;
 					}
 					case ProxyCommons.Commands.CONNECT_WITH_ADDRESS: {
-						readHostLength = readInt(readHostLength, receivedBuffer);
-						if (readHostLength < 0) {
+						readIpLength = readInt(readIpLength, receivedBuffer);
+						if (readIpLength < 0) {
 							return;
 						}
-						readHost = readString(readHost, receivedBuffer, readHostLength);
-						if (readHost == null) {
+						readIp = readBytes(readIp, receivedBuffer, readIpLength);
+						if (readIp == null) {
 							return;
 						}
 						readPort = readInt(readPort, receivedBuffer);
@@ -423,7 +444,7 @@ public final class ProxyServer implements Listening {
 						}
 						
 						final String header = readHeader;
-						final Address a = new Address(readHost, readPort);
+						final Address a = new Address(readIp, readPort);
 						proxyExecutor.execute(new Runnable() {
 							@Override
 							public void run() {
@@ -440,8 +461,8 @@ public final class ProxyServer implements Listening {
 						
 						readConnectionId = -1;
 						command = -1;
-						readHostLength = -1;
-						readHost = null;
+						readIpLength = -1;
+						readIp = null;
 						readPort = -1;
 						readLength = -1;
 						readHeaderLength = -1;

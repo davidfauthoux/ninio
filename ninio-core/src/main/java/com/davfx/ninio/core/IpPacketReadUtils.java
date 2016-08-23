@@ -1,8 +1,6 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
-import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.nio.ByteBuffer;
 import java.util.Date;
 
@@ -20,8 +18,8 @@ final class IpPacketReadUtils {
 		int firstByte = b.get() & 0xFF;
 		int ipVersion = firstByte >> 4;
 		int packetType;
-		String sourceIp;
-		String destinationIp;
+		byte[] sourceIp;
+		byte[] destinationIp;
 		int payloadLength;
 		if (ipVersion == 4) {
 			int headerLength = (firstByte & 0x0F) * 4;
@@ -39,12 +37,10 @@ final class IpPacketReadUtils {
 			packetType = protocol;
 			@SuppressWarnings("unused")
 			int checksum = b.getShort() & 0xFFFF;
-			byte[] sourceIpBytes = new byte[4];
-			b.get(sourceIpBytes);
-			sourceIp = Inet4Address.getByAddress(sourceIpBytes).getHostAddress();
-			byte[] destinationIpBytes = new byte[4];
-			b.get(destinationIpBytes);
-			destinationIp = Inet4Address.getByAddress(destinationIpBytes).getHostAddress();
+			sourceIp = new byte[4];
+			b.get(sourceIp);
+			destinationIp = new byte[4];
+			b.get(destinationIp);
 		} else if (ipVersion == 6) {
 			// traffic class (low bits) and flow label 
 			b.get(); b.get(); b.get();
@@ -54,12 +50,10 @@ final class IpPacketReadUtils {
 			@SuppressWarnings("unused")
 			int hopLimit = b.get() & 0xFF;
 
-			byte[] sourceIpBytes = new byte[16];
-			b.get(sourceIpBytes);
-			sourceIp = Inet6Address.getByAddress(sourceIpBytes).getHostAddress();
-			byte[] destinationIpBytes = new byte[16];
-			b.get(destinationIpBytes);
-			destinationIp = Inet6Address.getByAddress(destinationIpBytes).getHostAddress();
+			sourceIp = new byte[16];
+			b.get(sourceIp);
+			destinationIp = new byte[16];
+			b.get(destinationIp);
 		} else {
 			packetType = -1;
 			sourceIp = null;

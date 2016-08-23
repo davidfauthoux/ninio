@@ -1,6 +1,7 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -211,11 +212,7 @@ public final class TcpSocket implements Connecter {
 						
 						if (bindAddress != null) {
 							try {
-								InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-								if (a.isUnresolved()) {
-									throw new IOException("Unresolved address: " + bindAddress);
-								}
-								channel.socket().bind(a);
+								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
 								disconnect(channel, inboundKey, null, null);
 								throw new IOException("Could not bind to: " + bindAddress, e);
@@ -223,10 +220,7 @@ public final class TcpSocket implements Connecter {
 						}
 
 						try {
-							InetSocketAddress a = new InetSocketAddress(connectAddress.host, connectAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-							if (a.isUnresolved()) {
-								throw new IOException("Unresolved address: " + connectAddress);
-							}
+							InetSocketAddress a = new InetSocketAddress(InetAddress.getByAddress(connectAddress.ip), connectAddress.port);
 							LOGGER.trace("Connecting to: {}", a);
 							channel.connect(a);
 						} catch (IOException e) {

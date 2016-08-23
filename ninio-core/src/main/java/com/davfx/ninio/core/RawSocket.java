@@ -1,7 +1,6 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.ProtocolFamily;
 import java.net.StandardProtocolFamily;
 import java.nio.ByteBuffer;
@@ -90,8 +89,7 @@ public final class RawSocket implements Connecter {
 		
 		if (bindAddress != null) {
 			try {
-				InetAddress a = InetAddress.getByName(bindAddress.host); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-				s.bind(a);
+				s.bind(bindAddress.ip);
 			} catch (Exception ee) {
 				try {
 					s.close();
@@ -115,8 +113,8 @@ public final class RawSocket implements Connecter {
 					byte[] srcAddress = new byte[(family == StandardProtocolFamily.INET) ? 4 : 16];
 					try {
 						int r = s.read(recvData, 0, recvData.length, srcAddress);
-						final String host = InetAddress.getByAddress(srcAddress).getHostAddress();
-						LOGGER.debug("Received raw packet: {} bytes from: {}", r, host);
+						Address a = new Address(srcAddress, 0);
+						LOGGER.debug("Received raw packet: {} bytes from: {}", r, a);
 
 						final ByteBuffer b = ByteBuffer.wrap(recvData, 0, r);
 						if (family == StandardProtocolFamily.INET) {
@@ -124,7 +122,7 @@ public final class RawSocket implements Connecter {
 							b.position(headerLength);
 						}
 						
-						callback.received(new Address(host, 0), b);
+						callback.received(a, b);
 					} catch (Exception e) {
 						LOGGER.trace("Error, probably closed", e);
 						break;
@@ -144,9 +142,9 @@ public final class RawSocket implements Connecter {
 		try {
 			
 			while (buffer.hasRemaining()) {
-				int r = socket.write(InetAddress.getByName(address.host), buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
+				int r = socket.write(address.ip, buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining());
 				if (r == 0) {
-					throw new IOException("Error writing to: " + address.host);
+					throw new IOException("Error writing to: " + address);
 				}
 				buffer.position(buffer.position() + r);
 			}

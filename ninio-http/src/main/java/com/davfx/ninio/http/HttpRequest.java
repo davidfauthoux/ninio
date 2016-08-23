@@ -1,10 +1,14 @@
 package com.davfx.ninio.http;
 
+import java.io.IOException;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 
 import com.davfx.ninio.core.Address;
+import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.dns.DnsConnecter;
+import com.davfx.ninio.dns.DnsReceiver;
 import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -34,6 +38,81 @@ public final class HttpRequest {
 		return "[address=" + address + ", secure=" + secure + ", method=" + method + ", path=" + path + ", headers=" + headers + "]";
 	}
 	
+	public static interface ResolveCallback extends Failing {
+		void resolved(HttpRequest request);
+	}
+	
+	public static void resolve(DnsConnecter dns, String url, ResolveCallback callback) {
+		resolve(dns, url, HttpMethod.GET, ImmutableMultimap.<String, String>of(), callback);
+	}
+	public static void resolve(DnsConnecter dns, String url, final HttpMethod method, final ImmutableMultimap<String, String> headers, final ResolveCallback callback) {
+		String protocol;
+		final boolean secure;
+		int defaultPort;
+		if (url.startsWith(HttpSpecification.PROTOCOL)) {
+			protocol = HttpSpecification.PROTOCOL;
+			secure = false;
+			defaultPort = HttpSpecification.DEFAULT_PORT;
+		} else if (url.startsWith(HttpSpecification.SECURE_PROTOCOL)) {
+			protocol = HttpSpecification.SECURE_PROTOCOL;
+			secure = true;
+			defaultPort = HttpSpecification.DEFAULT_SECURE_PORT;
+		} else {
+			throw new IllegalArgumentException("URL must starts with " + HttpSpecification.PROTOCOL + " or " + HttpSpecification.SECURE_PROTOCOL);
+		}
+
+		int i = url.indexOf(HttpSpecification.PATH_SEPARATOR, protocol.length());
+		String a;
+		final String path;
+		if (i < 0) {
+			a = url.substring(protocol.length());
+			path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
+		} else {
+			a = url.substring(protocol.length(), i);
+			path = url.substring(i);
+		}
+		
+		int k = a.indexOf(HttpSpecification.PORT_SEPARATOR);
+		String host;
+		final String hostInHeaders;
+		final int port;
+		if (k < 0) {
+			host = a;
+			port = defaultPort;
+			hostInHeaders = host;
+		} else {
+			host = a.substring(0, k);
+			port = Integer.parseInt(a.substring(k + 1));
+			if (port == defaultPort) {
+				hostInHeaders = host;
+			} else {
+				hostInHeaders = host + HttpSpecification.PORT_SEPARATOR + port;
+			}
+		}
+		
+		dns.resolve(host, new DnsReceiver() {
+			@Override
+			public void failed(IOException e) {
+				callback.failed(e);
+			}
+			
+			@Override
+			public void received(byte[] ip) {
+				ImmutableMultimap<String, String> headersIncludingHost;
+				if (headers.containsKey(HttpHeaderKey.HOST)) {
+					headersIncludingHost = headers;
+				} else {
+					ImmutableMultimap.Builder<String, String> m = ImmutableMultimap.builder();
+					m.putAll(headers);
+					m.put(HttpHeaderKey.HOST, hostInHeaders);
+					headersIncludingHost = m.build();
+				}
+				callback.resolved(new HttpRequest(new Address(ip, port), secure, method, path, headersIncludingHost));
+			}
+		});
+	}
+	
+	/*%%
 	public static HttpRequest of(String url) {
 		return of(url, HttpMethod.GET, ImmutableMultimap.<String, String>of());
 	}
@@ -59,11 +138,11 @@ public final class HttpRequest {
 			int k = a.indexOf(':');
 			Address address;
 			if (k < 0) {
-				address = new Address(a, defaultPort);
+				address = Address.of(a, defaultPort);
 			} else {
 				String h = a.substring(0, k);
 				int p = Integer.parseInt(a.substring(k + 1));
-				address = new Address(h, p);
+				address = Address.of(h, p);
 			}
 			return new HttpRequest(address, secure, method, String.valueOf(HttpSpecification.PATH_SEPARATOR), headers);
 		} else {
@@ -71,15 +150,16 @@ public final class HttpRequest {
 			int k = a.indexOf(':');
 			Address address;
 			if (k < 0) {
-				address = new Address(a, defaultPort);
+				address = Address.of(a, defaultPort);
 			} else {
 				String h = a.substring(0, k);
 				int p = Integer.parseInt(a.substring(k + 1));
-				address = new Address(h, p);
+				address = Address.of(h, p);
 			}
 			return new HttpRequest(address, secure, method, url.substring(i), headers);
 		}
 	}
+	*/
 	
 	public static ImmutableList<String> path(String path) {
 		int i = path.indexOf(HttpSpecification.PARAMETERS_START);

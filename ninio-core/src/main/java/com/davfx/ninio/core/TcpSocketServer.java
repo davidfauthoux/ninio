@@ -1,6 +1,7 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -129,7 +130,7 @@ public final class TcpSocketServer implements Listener {
 									final InnerSocketContext context = new InnerSocketContext(outboundChannels);
 									context.currentChannel = outboundChannel;
 
-									final Address clientAddress = new Address(outboundChannel.socket().getInetAddress().getHostAddress(), outboundChannel.socket().getPort());
+									final Address clientAddress = new Address(outboundChannel.socket().getInetAddress().getAddress(), outboundChannel.socket().getPort());
 
 									final Connection connection = callback.connecting(new Connected() {
 										@Override
@@ -290,10 +291,7 @@ public final class TcpSocketServer implements Listener {
 						});
 
 						try {
-							InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-							if (a.isUnresolved()) {
-								throw new IOException("Unresolved address: " + bindAddress);
-							}
+							InetSocketAddress a = new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port);
 							LOGGER.debug("-> Bound on: {}", a);
 							serverChannel.socket().bind(a);
 							acceptSelectionKey.interestOps(acceptSelectionKey.interestOps() | SelectionKey.OP_ACCEPT);

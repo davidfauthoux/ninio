@@ -123,11 +123,7 @@ public final class TcpdumpSocket implements Connecter {
 			if (bindAddress == null) {
 				s = new DatagramSocket();
 			} else {
-				InetSocketAddress a = new InetSocketAddress(bindAddress.host, bindAddress.port); // Note this call blocks to resolve host (DNS resolution) //TODO Test with unresolved
-				if (a.isUnresolved()) {
-					throw new IOException("Unresolved address: " + bindAddress);
-				}
-				s = new DatagramSocket(a);
+				s = new DatagramSocket(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 			}
 			try {
 				s.setReceiveBufferSize(READ_BUFFER_SIZE);
@@ -282,7 +278,7 @@ public final class TcpdumpSocket implements Connecter {
 				throw new IOException("Closed");
 			}
 
-			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByName(address.host), address.port);
+			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByAddress(address.ip), address.port);
 			socket.send(packet);
 
 			callback.sent();

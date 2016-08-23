@@ -7,7 +7,7 @@
 		<version>3.0.2</version>
 	</parent>
 
-	<artifactId>ninio-proxy</artifactId>
+	<artifactId>ninio-dns</artifactId>
 
 	<packaging>bundle</packaging>
 
@@ -15,18 +15,6 @@
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.davfx.ninio</groupId>
-			<artifactId>ninio-ping</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.davfx.ninio</groupId>
-			<artifactId>ninio-dns</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.davfx.ninio</groupId>
-			<artifactId>ninio-http</artifactId>
 		</dependency>
 	</dependencies>
 </project>

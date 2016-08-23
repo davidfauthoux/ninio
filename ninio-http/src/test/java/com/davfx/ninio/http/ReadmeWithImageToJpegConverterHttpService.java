@@ -4,6 +4,8 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.dns.DnsClient;
+import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.HttpService;
 import com.davfx.ninio.http.service.controllers.ImageToJpegConverter;
@@ -14,9 +16,9 @@ public final class ReadmeWithImageToJpegConverterHttpService {
 	public static void main(String[] args) throws Exception {
 		int port = 8080;
 		try (Ninio ninio = Ninio.create()) {
-			try (HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class)))) {
+			try (DnsConnecter dns = ninio.create(DnsClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class))); HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class)))) {
 				Annotated.Builder a = Annotated.builder(HttpService.builder());
-				a.register(new ImageToJpegConverter(client));
+				a.register(new ImageToJpegConverter(dns, client));
 		
 				try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 					tcp.listen(HttpListening.builder().with(new SerialExecutor(ReadmeWithAnnotatedHttpService.class)).with(a.build()).build());

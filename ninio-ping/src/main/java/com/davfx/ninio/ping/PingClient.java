@@ -169,7 +169,7 @@ public final class PingClient implements PingConnecter {
 	}
 	
 	@Override
-	public Cancelable ping(final String host, final PingReceiver callback) {
+	public Cancelable ping(final byte[] ip, final PingReceiver callback) {
 		final IdManager idManager = new IdManager();
 		
 		executor.execute(new Runnable() {
@@ -217,7 +217,7 @@ public final class PingClient implements PingConnecter {
 				b.position(endPosition);
 				b.flip();
 				
-				connecter.send(new Address(host, 0), b, new Nop());
+				connecter.send(new Address(ip, 0), b, new Nop());
 			}
 		});
 		

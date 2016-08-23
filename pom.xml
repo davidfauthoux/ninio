@@ -160,6 +160,7 @@
 		<module>ninio-telnet</module>
 		<module>ninio-ssh</module>
 		<module>ninio-ping</module>
+		<module>ninio-dns</module>
 		<module>ninio-proxy</module>
 		<module>ninio-http</module>
 		<module>ninio-util</module>
@@ -241,6 +242,11 @@
 			<dependency>
 				<groupId>com.davfx.ninio</groupId>
 				<artifactId>ninio-ping</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-dns</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

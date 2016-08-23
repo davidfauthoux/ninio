@@ -23,6 +23,8 @@ import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitClosedConnection;
 import com.davfx.ninio.core.WaitConnectedConnection;
+import com.davfx.ninio.dns.DnsClient;
+import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -89,7 +91,7 @@ public class WebsocketClientServerTest {
 				Wait clientWaitClosing = new Wait();
 				final Wait clientWaitSending = new Wait();
 
-				try (HttpConnecter httpClient = ninio.create(HttpClient.builder().with(new SerialExecutor(WebsocketClientServerTest.class)))) {
+				try (DnsConnecter dns = ninio.create(DnsClient.builder().with(new SerialExecutor(HttpGetTest.class))); HttpConnecter httpClient = ninio.create(HttpClient.builder().with(dns).with(new SerialExecutor(WebsocketClientServerTest.class)))) {
 					try (Connecter client = ninio.create(WebsocketSocket.builder().with(httpClient).to(new Address(Address.LOCALHOST, port)))) {
 						client.connect(
 								new WaitConnectedConnection(clientWaitConnecting, 
