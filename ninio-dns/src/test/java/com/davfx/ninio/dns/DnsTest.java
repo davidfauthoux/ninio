@@ -1,6 +1,7 @@
 package com.davfx.ninio.dns;
 
 import java.io.IOException;
+import java.net.StandardProtocolFamily;
 import java.util.Arrays;
 
 import com.davfx.ninio.core.Address;
@@ -17,7 +18,7 @@ public class DnsTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<byte[], IOException> lock = new Lock<>();
 			
-			try (DnsConnecter client = DnsTimeout.wrap(1000d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
+			try (DnsConnecter client = DnsTimeout.wrap(1d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
 				client.connect(new DnsConnection() {
 					@Override
 					public void closed() {
@@ -30,7 +31,7 @@ public class DnsTest {
 					public void connected(Address address) {
 					}
 				});
-				client.request().resolve(host, null).receive(new DnsReceiver() {
+				client.request().resolve(host, StandardProtocolFamily.INET6).receive(new DnsReceiver() {
 					@Override
 					public void received(byte[] ip) {
 						lock.set(ip);

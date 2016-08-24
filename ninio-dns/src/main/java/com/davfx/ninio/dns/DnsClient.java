@@ -7,12 +7,10 @@ import java.net.StandardProtocolFamily;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
@@ -233,58 +231,28 @@ public final class DnsClient implements DnsConnecter {
 						return s.toString();
 					}
 					
-					private String readString(ByteBuffer packet, ByteBuffer buffer) {
-						if (buffer.remaining() > 1) {
-							int position = buffer.position();
-							int pointer = buffer.getShort() & 0xFFFF;
-							if ((pointer & 0xC000) == 0xC000) {
-								pointer &= 0x3FFF;
-								ByteBuffer bb = packet.duplicate();
-								bb.position(pointer);
-								return readString(packet, bb);
-							}
-							buffer.position(position);
-						}
-
-						int n = buffer.get() & 0xFF;
-						byte[] b = new byte[n];
-						buffer.get(b);
-
-						StringBuilder s = new StringBuilder();
-						s.append(new String(b, Charsets.UTF_8));
-
-						if (buffer.hasRemaining()) {
-							if (s.length() > 0) {
-								s.append('.');
-							}
-							s.append(readName(packet, buffer));
-						}
-						
-						return s.toString();
-					}
-					
 					@Override
 					public void run() {
 						ByteBuffer buffer = packet.duplicate();
 						
 						short instanceId = buffer.getShort();
-						@SuppressWarnings("unused")
 						int flags = buffer.getShort() & 0xFFFF;
 						int questions = buffer.getShort() & 0xFFFF;
 						int answers = buffer.getShort() & 0xFFFF;
 						int authorityRRs = buffer.getShort() & 0xFFFF;
 						int addtionalRRs = buffer.getShort() & 0xFFFF;
+						LOGGER.trace("flags={}, questions={}, answers={}, authorityRRs={}, addtionalRRs={}", flags, questions, answers, authorityRRs, addtionalRRs);
 
 						for (int i = 0; i < questions; i++) {
-							@SuppressWarnings("unused")
 							String questionName = readName(packet, buffer);
 							@SuppressWarnings("unused")
 							int type = buffer.getShort() & 0xFFFF;
 							@SuppressWarnings("unused")
 							int clazz = buffer.getShort() & 0xFFFF;
+							LOGGER.trace("Question#{}: {}", i, questionName);
 						}
 						
-						Set<String> nameServers = new HashSet<>();
+						List<String> nameServers = new LinkedList<>();
 						Map<String, List<byte[]>> ips4 = new HashMap<>();
 						Map<String, List<byte[]>> ips6 = new HashMap<>();
 						Map<String, String> nameToCnames = new HashMap<>();
@@ -298,7 +266,12 @@ public final class DnsClient implements DnsConnecter {
 							int n = buffer.getShort() & 0xFFFF;
 							byte[] b = new byte[n];
 							buffer.get(b);
+							LOGGER.trace("Answer#{}: {} ({} bytes)", i, name, b.length);
 							if (type == 0x1) {
+								try {
+									LOGGER.trace("A {}: {}", name, InetAddress.getByAddress(b));
+								} catch (UnknownHostException e) {
+								}
 								List<byte[]> l = ips4.get(name);
 								if (l == null) {
 									l = new LinkedList<>();
@@ -306,26 +279,30 @@ public final class DnsClient implements DnsConnecter {
 								}
 								l.add(b);
 							} else if (type == 0x1C) {
+								try {
+									LOGGER.trace("AAAA {}: {}", name, InetAddress.getByAddress(b));
+								} catch (UnknownHostException e) {
+								}
 								List<byte[]> l = ips6.get(name);
 								if (l == null) {
 									l = new LinkedList<>();
-									ips4.put(name, l);
+									ips6.put(name, l);
 								}
 								l.add(b);
 							} else if (type == 0x2) {
 								ByteBuffer bb = ByteBuffer.wrap(b);
-								String nsName = readString(packet, bb);
+								String nsName = readName(packet, bb);
+								LOGGER.trace("NS {}: {}", name, nsName);
 								nameServers.add(nsName);
 							} else if (type == 0x5) {
 								ByteBuffer bb = ByteBuffer.wrap(b);
-								String cname = readString(packet, bb);
+								String cname = readName(packet, bb);
 								nameToCnames.put(name, cname);
+								LOGGER.trace("CNAME {}: {}", name, cname);
 							} else if (type == 0x6) {
 								ByteBuffer bb = ByteBuffer.wrap(b);
-								@SuppressWarnings("unused")
-								String primaryNS = readString(packet, bb);
-								@SuppressWarnings("unused")
-								String adminMB = readString(packet, bb);
+								String primaryNS = readName(packet, bb);
+								String adminMB = readName(packet, bb);
 								@SuppressWarnings("unused")
 								long serialNumber = bb.getInt() & 0xFFFFFFFFL;
 								@SuppressWarnings("unused")
@@ -336,12 +313,13 @@ public final class DnsClient implements DnsConnecter {
 								long expirationLimit = bb.getInt() & 0xFFFFFFFFL;
 								@SuppressWarnings("unused")
 								long minimumTTL = bb.getInt() & 0xFFFFFFFFL;
+								LOGGER.trace("SOA {}: primaryNS={}, adminMB={}", name, primaryNS, adminMB);
+								//%% nameServers.add(primaryNS);
 							} else if (type == 0x15) {
 								ByteBuffer bb = ByteBuffer.wrap(b);
-								@SuppressWarnings("unused")
-								String mx = readString(packet, bb);
-								@SuppressWarnings("unused")
+								String mx = readName(packet, bb);
 								int preference = bb.getShort() & 0xFFFF;
+								LOGGER.trace("MX {}: ({}) {}", name, preference, mx);
 							} else {
 								// Ignored
 							}
@@ -441,7 +419,7 @@ public final class DnsClient implements DnsConnecter {
 			instances.clear();
 		}
 
-		public void handle(short instanceId, Set<String> nameServers, Map<String, List<byte[]>> ips4, Map<String, List<byte[]>> ips6, Map<String, String> nameToCnames) {
+		public void handle(short instanceId, List<String> nameServers, Map<String, List<byte[]>> ips4, Map<String, List<byte[]>> ips6, Map<String, String> nameToCnames) {
 			Instance i = instances.remove(instanceId);
 			if (i == null) {
 				return;
@@ -456,7 +434,8 @@ public final class DnsClient implements DnsConnecter {
 		
 		private DnsReceiver receiver;
 		
-		private final String host;
+		private String host;
+		//%% private String nsRequest = null;
 		private final ProtocolFamily family;
 		private Address dnsAddress;
 		public short instanceId = RequestIdProvider.IGNORE_ID;
@@ -498,7 +477,7 @@ public final class DnsClient implements DnsConnecter {
 				}
 			};
 			
-			List<String> split = Splitter.on('.').splitToList(host);
+			List<String> split = Splitter.on('.').splitToList(host); //%% (nsRequest == null) ? host : nsRequest);
 			List<byte[]> asBytes = new LinkedList<>();
 			int n = 0;
 			for (String s : split) {
@@ -518,7 +497,8 @@ public final class DnsClient implements DnsConnecter {
 				bb.put(b);
 			}
 			bb.put((byte) 0);
-			bb.putShort((short) ((family == StandardProtocolFamily.INET6) ? 0x1C : 0x1)); // Type 'A' or 'AAAA'
+			//%% bb.putShort((short) ((nsRequest == null) ? ((family == StandardProtocolFamily.INET6) ? 0x1C : 0x1) : 0xFF)); // Type 'A' or 'AAAA'
+			bb.putShort((short) ((family == null) ? 0xFF : ((family == StandardProtocolFamily.INET6) ? 0x1C : 0x1))); // Type 'A' or 'AAAA'
 			bb.putShort((short) 0x0001);
 			bb.flip();
 
@@ -540,28 +520,54 @@ public final class DnsClient implements DnsConnecter {
 			}
 			return l.get(random.nextInt(l.size()));
 		}
+		private byte[] get(Map<String, List<byte[]>> ips4, Map<String, List<byte[]>> ips6, String h) {
+			byte[] ip = get(ips4, h);
+			if (ip == null) {
+				ip = get(ips6, h);
+			}
+			return ip;
+		}
 		
-		private void handle(Set<String> nameServers, Map<String, List<byte[]>> ips4, Map<String, List<byte[]>> ips6, Map<String, String> nameToCnames) {
+		private void handle(List<String> nameServers, Map<String, List<byte[]>> ips4, Map<String, List<byte[]>> ips6, Map<String, String> nameToCnames) {
 			if (dnsAddress == null) {
 				return;
 			}
 			
+			/*%%
+			if (nsRequest != null) {
+				byte[] nsIp = get(ips4, nsRequest);
+				if (nsIp == null) {
+					nsIp = get(ips6, nsRequest);
+				}
+
+				nsRequest = null;
+				
+				if (nsIp == null) {
+					fail(new IOException("No follow-up name servers"));
+				} else {
+					instanceMapper.map(this);
+					dnsAddress = new Address(nsIp, DEFAULT_PORT);
+					write();
+				}
+
+				return;
+			}
+			*/
+			
 			String h = host;
+			boolean cnamed = false;
 			while (true) {
 				String hh = nameToCnames.get(h);
 				if (hh == null) {
 					break;
 				} else {
 					h = hh;
+					cnamed = true;
 				}
 			}
+			host = h;
 			
-			byte[] ip;
-			if (family == StandardProtocolFamily.INET6) {
-				ip = get(ips6, h);
-			} else {
-				ip = get(ips4, h);
-			}
+			byte[] ip = get(ips4, ips6, h);
 			
 			if (ip != null) {
 				dnsAddress = null;
@@ -570,21 +576,28 @@ public final class DnsClient implements DnsConnecter {
 				}
 				receiver = null;
 			} else if (nameServers.isEmpty()) {
-				fail(new IOException("No IP resolved"));
+				if (cnamed) {
+					instanceMapper.map(this);
+					write();
+				} else {
+					fail(new IOException("No IP resolved"));
+				}
 			} else {
 				List<byte[]> availableNameServers = new LinkedList<>();
 				for (String ns : nameServers) {
-					byte[] nsIp = get(ips6, ns);
-					if (nsIp == null) {
-						nsIp = get(ips4, ns);
-					}
-					
+					byte[] nsIp = get(ips4, ips6, ns);
 					if (nsIp != null) {
 						availableNameServers.add(nsIp);
 					}
 				}
 				if (availableNameServers.isEmpty()) {
+					//%% if (nameServers.isEmpty()) {
 					fail(new IOException("No follow-up name servers"));
+					/*%% } else {
+						instanceMapper.map(this);
+						nsRequest = nameServers.get(random.nextInt(nameServers.size()));
+						write();
+					}*/
 				} else {
 					instanceMapper.map(this);
 					dnsAddress = new Address(availableNameServers.get(random.nextInt(availableNameServers.size())), DEFAULT_PORT);
