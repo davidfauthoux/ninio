@@ -8,7 +8,7 @@ import com.typesafe.config.Config;
 
 public final class SerialExecutor implements Executor {
 	
-	private static final Config CONFIG = ConfigUtils.load(SerialExecutor.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.util.dependencies.Dependencies(), SerialExecutor.class);
 	private static final double TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD = ConfigUtils.getDuration(CONFIG, "executor.serial.autoshutdown");
 	
 	private final Class<?> clazz;

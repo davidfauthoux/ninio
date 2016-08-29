@@ -8,10 +8,16 @@ import org.assertj.core.api.Assertions;
 import org.assertj.core.util.Files;
 import org.junit.Test;
 
+import com.davfx.ninio.csv.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Charsets;
 
 public class CsvTest {
 
+	static {
+		ConfigUtils.load(new Dependencies(), CsvTest.class.getPackage().getName());
+	}
+	
 	@Test
 	public void test() throws Exception {
 		File dir = new File("test-csv");

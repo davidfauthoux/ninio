@@ -11,7 +11,7 @@ import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 final class ZlibCompressingConnected implements Connected {
-	private static final Config CONFIG = ConfigUtils.load(ZlibCompressingConnected.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.ssh.dependencies.Dependencies(), ZlibCompressingConnected.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("zlib.buffer").intValue();
 
 	private final Connected wrappee;

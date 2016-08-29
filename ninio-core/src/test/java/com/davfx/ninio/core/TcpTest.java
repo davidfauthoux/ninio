@@ -10,7 +10,6 @@ import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 
 public class TcpTest {
-
 	@Test
 	public void test() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();

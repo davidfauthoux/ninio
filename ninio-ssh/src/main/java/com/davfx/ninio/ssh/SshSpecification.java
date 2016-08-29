@@ -10,7 +10,7 @@ public final class SshSpecification {
 	private SshSpecification() {
 	}
 	
-	private static final Config CONFIG = ConfigUtils.load(SshSpecification.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.ssh.dependencies.Dependencies(), SshSpecification.class);
 	public static final Charset CHARSET = Charset.forName(CONFIG.getString("charset"));
 	public static final String EOL = "\n";
 	public static final int DEFAULT_PORT = 22;

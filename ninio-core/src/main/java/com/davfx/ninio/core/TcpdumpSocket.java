@@ -21,17 +21,17 @@ import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.typesafe.config.Config;
-import com.typesafe.config.ConfigException;
 
 public final class TcpdumpSocket implements Connecter {
 	
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder on(String interfaceId);
+		Builder mode(TcpdumpMode mode);
 		Builder rule(String rule);
 		Builder bind(Address bindAddress);
 	}
 
-	private static final Config CONFIG = ConfigUtils.load(TcpdumpSocket.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), TcpdumpSocket.class);
 
 	private static final String TCPDUMP_DEFAULT_INTERFACE_ID = CONFIG.getString("tcpdump.interface");
 	private static final String TCPDUMP_DEFAULT_RULE = CONFIG.getString("tcpdump.rule");
@@ -39,6 +39,7 @@ public final class TcpdumpSocket implements Connecter {
 	public static Builder builder() {
 		return new Builder() {
 			private String interfaceId = TCPDUMP_DEFAULT_INTERFACE_ID;
+			private TcpdumpMode mode = TcpdumpMode.RAW;
 			private String rule = TCPDUMP_DEFAULT_RULE;
 
 			private Address bindAddress = null;
@@ -46,6 +47,11 @@ public final class TcpdumpSocket implements Connecter {
 			@Override
 			public Builder on(String interfaceId) {
 				this.interfaceId = interfaceId;
+				return this;
+			}
+			@Override
+			public Builder mode(TcpdumpMode mode) {
+				this.mode = mode;
 				return this;
 			}
 			@Override
@@ -65,25 +71,13 @@ public final class TcpdumpSocket implements Connecter {
 				if (interfaceId == null) {
 					throw new NullPointerException("interfaceId");
 				}
-				return new TcpdumpSocket(interfaceId, rule, bindAddress);
+				return new TcpdumpSocket(interfaceId, mode, rule, bindAddress);
 			}
 		};
 	}
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpSocket.class);
 	
-	private static final boolean RAW;
-	static {
-		String mode = CONFIG.getString("tcpdump.mode");
-		LOGGER.debug("Tcpdump mode = {}", mode);
-		if (mode.equals("raw")) {
-			RAW = true;
-		} else if (mode.equals("hex")) {
-			RAW = false;
-		} else {
-			throw new ConfigException.BadValue("tcpdump.mode", "Invalid: " + mode + ", only 'raw' and 'hex' allowed");
-		}
-	}
 	private static final String TCPDUMP_COMMAND = CONFIG.getString("tcpdump.path");
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("tcpdump.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("tcpdump.datagram.write.size").intValue();
@@ -94,6 +88,7 @@ public final class TcpdumpSocket implements Connecter {
 	}
 	
 	private final String interfaceId;
+	private final TcpdumpMode mode;
 	private final String rule;
 	private final Address bindAddress;
 
@@ -101,8 +96,9 @@ public final class TcpdumpSocket implements Connecter {
 	private Process process = null;
 	private boolean closed = false;
 
-	private TcpdumpSocket(String interfaceId, String rule, Address bindAddress) { //, final boolean promiscuous) {
+	private TcpdumpSocket(String interfaceId, TcpdumpMode mode, String rule, Address bindAddress) { //, final boolean promiscuous) {
 		this.interfaceId = interfaceId;
+		this.mode = mode;
 		this.rule = rule;
 		this.bindAddress = bindAddress;
 	}
@@ -141,7 +137,7 @@ public final class TcpdumpSocket implements Connecter {
 		
 		//
 		
-		final TcpdumpReader tcpdumpReader = RAW ? new RawTcpdumpReader(interfaceId.equals("any")) : new HexTcpdumpReader();
+		final TcpdumpReader tcpdumpReader = (mode == TcpdumpMode.RAW) ? new RawTcpdumpReader(interfaceId.equals("any")) : new HexTcpdumpReader();
 		
 		File dir = new File(".");
 

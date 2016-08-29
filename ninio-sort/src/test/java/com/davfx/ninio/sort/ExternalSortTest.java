@@ -10,11 +10,17 @@ import java.util.concurrent.Executors;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
+import com.davfx.ninio.sort.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.google.common.base.Function;
 
 public class ExternalSortTest {
 
+	static {
+		ConfigUtils.load(new Dependencies(), ExternalSortTest.class.getPackage().getName());
+	}
+	
 	@Test
 	public void test() {
 		ExternalSort<String> sort = new ExternalSort<>(Executors.newFixedThreadPool(10), 10_000, new Comparator<String>() {

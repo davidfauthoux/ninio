@@ -1,4 +1,4 @@
-package com.davfx.ninio.extract;
+package com.davfx.ninio.string;
 
 import java.io.Reader;
 import java.io.StringReader;
@@ -8,10 +8,16 @@ import java.util.Map;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
+import com.davfx.ninio.string.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 
 public final class ExtractorTest {
+	static {
+		ConfigUtils.load(new Dependencies(), ExtractorTest.class.getPackage().getName());
+	}
+	
     @Test
     public void testFromString() throws Exception {
     	try (Reader r = new StringReader("Hello world, I'm happy. Hellu world, I'm hippo. Hellu world, I'm hippo.")) {

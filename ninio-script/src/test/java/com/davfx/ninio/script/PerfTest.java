@@ -11,7 +11,7 @@ import com.davfx.ninio.util.Lock;
 public class PerfTest {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(PerfTest.class);
-	
+
 	private static void evalSync(String name, boolean newScriptEveryTime) throws Exception {
 		long min = Long.MAX_VALUE;
 		for (int k = 0; k < 3; k++) {

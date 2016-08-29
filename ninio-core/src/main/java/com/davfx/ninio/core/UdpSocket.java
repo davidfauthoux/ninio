@@ -19,7 +19,7 @@ public final class UdpSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
-	private static final Config CONFIG = ConfigUtils.load(UdpSocket.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), UdpSocket.class);
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("datagram.write.buffer").longValue();
 
 	public static interface Builder extends NinioBuilder<Connecter> {

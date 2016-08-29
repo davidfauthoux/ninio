@@ -9,7 +9,6 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 
@@ -21,10 +20,6 @@ public class TcpdumpTest {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpdumpTest.class);
 	
-	static {
-		ConfigUtils.override("com.davfx.ninio.core.tcpdump.mode = hex"); // raw not working on Mac OS X
-	}
-	
 	@Test
 	public void test() throws Exception {
 		Lock<ByteBuffer, IOException> lock = new Lock<>();
@@ -33,7 +28,8 @@ public class TcpdumpTest {
 			int port = 8080;
 			Wait serverWaitConnecting = new Wait();
 			Wait serverWaitClosing = new Wait();
-			try (Connecter server = ninio.create(TcpdumpSocket.builder().on("lo0").rule("dst port " + port).bind(new Address(Address.ANY, port)))) {
+			// raw not working on Mac OS X
+			try (Connecter server = ninio.create(TcpdumpSocket.builder().on("lo0").mode(TcpdumpMode.HEX).rule("dst port " + port).bind(new Address(Address.ANY, port)))) {
 				server.connect(
 					new WaitConnectedConnection(serverWaitConnecting,
 					new WaitClosedConnection(serverWaitClosing,

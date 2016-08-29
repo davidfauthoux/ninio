@@ -25,7 +25,7 @@ public class HttpServiceInterceptorTest {
 	static {
 		System.setProperty("http.keepAlive", "false");
 	}
-
+	
 	public static final class TestInterceptorBeforeController implements HttpController {
 		@Route(method = HttpMethod.GET)
 		public Http checkMessage(@QueryParameter("check") String check) {

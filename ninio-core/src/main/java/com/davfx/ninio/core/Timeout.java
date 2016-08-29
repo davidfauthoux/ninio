@@ -17,7 +17,7 @@ public final class Timeout implements AutoCloseable {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Timeout.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(Timeout.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), Timeout.class);
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "timeout.precision");
 
 	private final Executor executor = new SerialExecutor(Timeout.class);

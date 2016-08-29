@@ -12,8 +12,6 @@ import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class SecureTest {
-
-	@Test
 	public void test() throws Exception {
 		final Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
 

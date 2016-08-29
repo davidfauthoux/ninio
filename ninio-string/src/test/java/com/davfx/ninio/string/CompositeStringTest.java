@@ -5,7 +5,14 @@ import java.util.Arrays;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
+import com.davfx.ninio.string.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
+
 public class CompositeStringTest {
+	static {
+		ConfigUtils.load(new Dependencies(), CompositeStringTest.class.getPackage().getName());
+	}
+	
 	@Test
 	public void testHuawei() throws Exception {
 		CompositeString.SubCompositeString c = new CompositeString("/", ":", ",", "=", true).on("eNB_666/Cell:a=aa,b=bb/TRX:c=cc");

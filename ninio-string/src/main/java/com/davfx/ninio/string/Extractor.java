@@ -1,4 +1,4 @@
-package com.davfx.ninio.extract;
+package com.davfx.ninio.string;
 
 import java.io.IOException;
 import java.io.Reader;

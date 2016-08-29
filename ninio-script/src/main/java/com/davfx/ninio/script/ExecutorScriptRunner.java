@@ -21,7 +21,7 @@ import com.typesafe.config.Config;
 public final class ExecutorScriptRunner implements ScriptRunner {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 
-	private static final Config CONFIG = ConfigUtils.load(ExecutorScriptRunner.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.script.dependencies.Dependencies(), ExecutorScriptRunner.class);
 	private static final String UNICITY_PREFIX = CONFIG.getString("unicity.prefix");
 	
 	private ScriptEngine scriptEngine;

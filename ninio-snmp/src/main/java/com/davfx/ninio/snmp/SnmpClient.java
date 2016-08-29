@@ -29,7 +29,7 @@ import com.typesafe.config.Config;
 public final class SnmpClient implements SnmpConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
-	private static final Config CONFIG = ConfigUtils.load(SnmpClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.snmp.dependencies.Dependencies(), SnmpClient.class);
 
 	public static final int DEFAULT_PORT = 161;
 

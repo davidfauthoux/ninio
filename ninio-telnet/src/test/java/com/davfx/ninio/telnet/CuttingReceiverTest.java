@@ -15,7 +15,6 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.InMemoryBuffers;
 
 public class CuttingReceiverTest {
-
 	private List<String> test(List<String> content, String prompt) {
 		final List<String> result = new LinkedList<>();
 		CuttingReceiver c = new CuttingReceiver(0, ByteBufferUtils.toByteBuffer(prompt), new Connection() {

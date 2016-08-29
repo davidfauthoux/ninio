@@ -21,7 +21,7 @@ import com.typesafe.config.Config;
 public final class TcpSocketServer implements Listener {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocketServer.class);
 
-	private static final Config CONFIG = ConfigUtils.load(TcpSocketServer.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), TcpSocketServer.class);
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "socket.timeout");
 

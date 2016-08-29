@@ -16,7 +16,7 @@ import com.typesafe.config.Config;
 
 final class GzipReader implements HttpContentReceiver {
 
-	private static final Config CONFIG = ConfigUtils.load(GzipReader.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), GzipReader.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("gzip.buffer").intValue();
 
 	static final int GZIP_MAGIC = 0x8b1f;

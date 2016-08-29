@@ -14,15 +14,7 @@
 	<dependencies>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>
-			<artifactId>ninio-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.davfx.ninio</groupId>
 			<artifactId>ninio-ping</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>com.davfx.ninio</groupId>
-			<artifactId>ninio-dns</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.davfx.ninio</groupId>

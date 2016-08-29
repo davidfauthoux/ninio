@@ -12,7 +12,7 @@ import com.typesafe.config.Config;
 
 final class GzipWriter implements HttpContentSender {
 	
-	private static final Config CONFIG = ConfigUtils.load(GzipReader.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), GzipReader.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("gzip.buffer").intValue();
 
 	private static final int OS_TYPE_UNKNOWN = 0xFF;

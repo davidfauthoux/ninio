@@ -3,8 +3,14 @@ package com.davfx.ninio.string;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
-public class StringTest {
+import com.davfx.ninio.string.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
 
+public class StringTest {
+	static {
+		ConfigUtils.load(new Dependencies(), StringTest.class.getPackage().getName());
+	}
+	
 	@Test
 	public void testAfter() {
 		StringHandler<String> h = new StringHandler<>();

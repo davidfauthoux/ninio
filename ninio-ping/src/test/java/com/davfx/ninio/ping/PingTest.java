@@ -11,7 +11,6 @@ import com.davfx.ninio.util.SerialExecutor;
 //mvn install dependency:copy-dependencies
 //sudo java -cp target/dependency/*:target/test-classes/:target/classes/ com.davfx.ninio.ping.PingTest
 public class PingTest {
-	
 	public static void main(String[] args) throws Exception {
 		byte[] pingHost = new byte[] { 8, 8, 8, 8 };
 		// ::1

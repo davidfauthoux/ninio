@@ -17,7 +17,7 @@ final class ZlibUncompressingConnection implements Connection {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ZlibUncompressingConnection.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(ZlibUncompressingConnection.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.ssh.dependencies.Dependencies(), ZlibUncompressingConnection.class);
 	private static final int BUFFER_SIZE = CONFIG.getBytes("zlib.buffer").intValue();
 
 	private final Inflater inflater = new Inflater();

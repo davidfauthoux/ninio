@@ -17,6 +17,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.TcpdumpMode;
 import com.davfx.ninio.core.TcpdumpSocket;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.http.HttpConnecter;
@@ -257,6 +258,7 @@ public final class ProxyClient implements ProxyProvider {
 	public TcpdumpSocket.Builder tcpdump() {
 		return new TcpdumpSocket.Builder() {
 			private String interfaceId = null;
+			private TcpdumpMode mode = null;
 			private String rule = null;
 			
 			@Override
@@ -270,6 +272,11 @@ public final class ProxyClient implements ProxyProvider {
 				return this;
 			}
 			@Override
+			public TcpdumpSocket.Builder mode(TcpdumpMode mode) {
+				this.mode = mode;
+				return this;
+			}
+			@Override
 			public TcpdumpSocket.Builder rule(String rule) {
 				this.rule = rule;
 				return this;
@@ -277,7 +284,7 @@ public final class ProxyClient implements ProxyProvider {
 			
 			@Override
 			public Connecter create(Queue queue) {
-				return createConnector(new ProxyHeader(ProxyCommons.Types.TCPDUMP, ImmutableMap.of("interfaceId", interfaceId, "rule", rule)), null);
+				return createConnector(new ProxyHeader(ProxyCommons.Types.TCPDUMP, ImmutableMap.of("interfaceId", interfaceId, "mode", mode.name(), "rule", rule)), null);
 			}
 		};
 	}

@@ -23,7 +23,7 @@ public final class FileHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(FileHandler.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(HttpListening.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpListening.class);
 	
 	private static final ImmutableMap<String, String> DEFAULT_CONTENT_TYPES;
 	static {

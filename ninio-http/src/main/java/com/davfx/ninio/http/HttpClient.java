@@ -31,7 +31,7 @@ import com.typesafe.config.Config;
 public final class HttpClient implements HttpConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(HttpClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpClient.class);
 	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("redirect.max");
 
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";

@@ -43,7 +43,7 @@ public final class Annotated {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Annotated.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(HttpListening.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpListening.class);
 	private static final String RESOURCES = CONFIG.getString("service.resources");
 	private static final String INDEX = CONFIG.getString("service.index");
 

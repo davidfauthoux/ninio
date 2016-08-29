@@ -34,7 +34,7 @@ import com.typesafe.config.ConfigException;
 public final class DnsClient implements DnsConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DnsClient.class);
 
-	private static final Config CONFIG = ConfigUtils.load(DnsClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.dns.dependencies.Dependencies(), DnsClient.class);
 
 	public static final int DEFAULT_PORT = 53;
 

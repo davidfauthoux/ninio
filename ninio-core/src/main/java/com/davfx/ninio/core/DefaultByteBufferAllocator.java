@@ -6,7 +6,7 @@ import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class DefaultByteBufferAllocator implements ByteBufferAllocator {
-	private static final Config CONFIG = ConfigUtils.load(DefaultByteBufferAllocator.class);
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), DefaultByteBufferAllocator.class);
 	private static final int DEFAULT_SIZE = CONFIG.getBytes("buffer.default").intValue();
 	
 	private final int size;

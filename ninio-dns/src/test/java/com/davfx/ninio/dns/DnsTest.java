@@ -7,10 +7,16 @@ import java.util.Arrays;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Timeout;
+import com.davfx.ninio.dns.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 
 public class DnsTest {
+	
+	static {
+		ConfigUtils.load(new Dependencies(), DnsTest.class.getPackage().getName());
+	}
 	
 	public static void main(String[] args) throws Exception {
 		String host = "google.com";

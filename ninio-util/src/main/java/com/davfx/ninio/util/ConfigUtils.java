@@ -37,7 +37,24 @@ public final class ConfigUtils {
 		return s.charAt(0);
 	}
 	
-	private static String loadConfig(Class<?> clazz, String resource, boolean warn) throws IOException {
+	//
+	
+	private static InputStream getResource(Dependencies dependencies, String resource) {
+		InputStream i = dependencies.getClass().getClassLoader().getResourceAsStream(resource + ".conf");
+		if (i == null) {
+			for (Dependencies d : dependencies.dependencies()) {
+				i = getResource(d, resource);
+				if (i != null) {
+					return i;
+				}
+			}
+			return null;
+		} else {
+			return i;
+		}
+	}
+
+	private static String loadConfig(Dependencies dependencies, String resource, boolean warn) throws IOException {
 		File rootDir = new File(".");
 		LOGGER.trace("Absolute path: {}", rootDir.getAbsolutePath());
 		InputStream i;
@@ -45,10 +62,11 @@ public final class ConfigUtils {
 		if (f.exists()) {
 			i = new FileInputStream(f);
 		} else {
-			i = clazz.getClassLoader().getResourceAsStream(resource + ".conf");
+			i = getResource(dependencies, resource);
 			if (i == null) {
 				if (warn) {
 					LOGGER.warn("Config file not found: {}", resource);
+					throw new RuntimeException("Config file not found: " + resource);
 				}
 				return "";
 			}
@@ -62,7 +80,7 @@ public final class ConfigUtils {
 				}
 				String l = line.trim();
 				if (l.startsWith("include ")) {
-					b.append(loadConfig(clazz, l.substring("include ".length()).trim(), true));
+					b.append(loadConfig(dependencies, l.substring("include ".length()).trim(), true));
 				} else {
 					b.append(line);
 				}
@@ -71,56 +89,89 @@ public final class ConfigUtils {
 		}
 	}
 
-	private static final List<String> staticOverride = new LinkedList<>();
-	
-	public static Config load(Class<?> clazz) {
-		return load(clazz, clazz.getPackage().getName()).getConfig(clazz.getPackage().getName());
+	public static final class Override {
+		private final List<String> override = new LinkedList<>();
+		public Override() {
+		}
+		
+		public Override add(String config) {
+			override.add(config);
+			return this;
+		}
+		public Override add(String key, String value) {
+			override.add(key + " = \"" + value.replace("\"", "\\\""));
+			return this;
+		}
 	}
 
-	public static Config load(Class<?> clazz, String resource) {
-		String r;
-		try {
-			r = loadConfig(clazz, resource, true);
-		} catch (Exception e) {
-			throw new RuntimeException("Could not load package config", e);
+	// Application conf (configure.conf is used over resource)
+	public static synchronized Config load(Dependencies dependencies, String resource) {
+		return load(dependencies, resource, new Override());
+	}
+	
+	private static void gatherDependencies(Dependencies dependencies, List<Dependencies> l) {
+		for (Dependencies d : dependencies.dependencies()) {
+			gatherDependencies(d, l);
+		}
+		if (!l.contains(dependencies)) {
+			l.add(dependencies);
+		}
+	}
+	
+	public static synchronized Config load(Dependencies dependencies, String resource, Override override) {
+		StringBuilder c = new StringBuilder();
+
+		List<Dependencies> l = new LinkedList<>();
+		gatherDependencies(dependencies, l);
+		for (Dependencies d : l) {
+			String packageName = d.getClass().getPackage().getName();
+			LOGGER.debug("Dependency conf: {}", packageName);
+			if (!packageName.endsWith(".dependencies")) {
+				throw new RuntimeException("Must ends with '.dependencies': " + packageName);
+			}
+			packageName = packageName.substring(0, packageName.length() - ".dependencies".length());
+			String r;
+			try {
+				r = loadConfig(d, packageName, true);
+			} catch (Exception e) {
+				throw new RuntimeException("Could not load package config", e);
+			}
+			c.append(r);
+		}
+		
+		if (resource != null) {
+			String r;
+			try {
+				r = loadConfig(dependencies, resource, true);
+			} catch (Exception e) {
+				throw new RuntimeException("Could not load package config", e);
+			}
+			c.append(r);
 		}
 
 		String a;
 		try {
-			a = loadConfig(clazz, "configure", false);
+			a = loadConfig(dependencies, "configure", false);
 		} catch (Exception e) {
 			throw new RuntimeException("Could not load application config", e);
 		}
-		
-		StringBuilder c = new StringBuilder();
-		c.append(r);
 		c.append('\n');
 		c.append(a);
-		synchronized (staticOverride) {
-			for (String o : staticOverride) {
-				c.append('\n');
-				c.append(o);
-			}
+
+		for (String o : override.override) {
+			c.append('\n');
+			c.append(o);
 		}
+
 		String conf = c.toString();
 
-		// LOGGER.trace("Config: \n{}\n", conf);
+		LOGGER.debug("Config: \n{}\n", conf);
 
 		return ConfigFactory.parseString(conf).resolve();
 	}
 
-	public static void override(String config) {
-		synchronized (staticOverride) {
-			staticOverride.add(config);
-		}
+	// Static conf, overriding is done with configure.conf
+	public static synchronized Config load(Dependencies dependencies, Class<?> clazz) {
+		return load(dependencies, null, new Override()).getConfig(clazz.getPackage().getName());
 	}
-	
-	/*%%
-	public static final Config load() {
-		return load("root");
-	}
-	public static final Config load(Class<?> clazz) {
-		return load(clazz, clazz.getPackage().getName());
-	}
-	*/
 }

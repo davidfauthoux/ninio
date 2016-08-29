@@ -25,6 +25,7 @@ import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.TcpSocketServer;
+import com.davfx.ninio.core.TcpdumpMode;
 import com.davfx.ninio.core.TcpdumpSocket;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.core.UdpSocket;
@@ -81,7 +82,7 @@ public final class ProxyServer implements Listening {
 							return UdpSocket.builder();
 						}
 						if (h.type.equals(ProxyCommons.Types.TCPDUMP)) {
-							return TcpdumpSocket.builder().on(h.parameters.get("interfaceId")).rule(h.parameters.get("rule"));
+							return TcpdumpSocket.builder().on(h.parameters.get("interfaceId")).mode(TcpdumpMode.valueOf(h.parameters.get("mode"))).rule(h.parameters.get("rule"));
 						}
 						if (h.type.equals(ProxyCommons.Types.SSL)) {
 							return new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);

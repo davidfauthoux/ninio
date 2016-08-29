@@ -30,7 +30,6 @@ import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class WebsocketClientServerTest {
-	
 	@Test
 	public void test() throws Exception {
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();

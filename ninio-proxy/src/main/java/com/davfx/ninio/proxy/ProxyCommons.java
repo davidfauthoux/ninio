@@ -14,7 +14,7 @@ interface ProxyCommons {
 	
 	final class Types {
 		
-		private static final Config CONFIG = ConfigUtils.load(ProxyCommons.class);
+		private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.proxy.dependencies.Dependencies(), ProxyCommons.class);
 		
 		public static final String TCP = CONFIG.getString("tcp");
 		public static final String SSL = CONFIG.getString("ssl");

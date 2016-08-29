@@ -10,4 +10,11 @@
 	<artifactId>ninio-string</artifactId>
 
 	<packaging>bundle</packaging>
+	
+	<dependencies>
+		<dependency>
+			<groupId>com.davfx.ninio</groupId>
+			<artifactId>ninio-util</artifactId>
+		</dependency>
+	</dependencies>
 </project>
