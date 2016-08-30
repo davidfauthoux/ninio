@@ -40,8 +40,10 @@ public final class ConfigUtils {
 	//
 	
 	private static InputStream getResource(Dependencies dependencies, String resource) {
+		LOGGER.debug("Getting resource: {} with {}", resource + ".conf", dependencies.getClass().getClassLoader());
 		InputStream i = dependencies.getClass().getClassLoader().getResourceAsStream(resource + ".conf");
 		if (i == null) {
+			LOGGER.debug("Getting resource: {} with {}", resource + ".conf --> null", dependencies.getClass().getClassLoader());
 			for (Dependencies d : dependencies.dependencies()) {
 				i = getResource(d, resource);
 				if (i != null) {

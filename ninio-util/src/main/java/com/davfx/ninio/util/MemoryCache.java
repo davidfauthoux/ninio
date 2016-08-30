@@ -1,8 +1,11 @@
 package com.davfx.ninio.util;
 
-import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.Map;
+
+import com.google.common.base.Function;
+import com.google.common.collect.Iterables;
 
 public final class MemoryCache<K, V> {
 	public static interface Builder<K, V> {
@@ -45,7 +48,7 @@ public final class MemoryCache<K, V> {
 
 	private final double expirationAfterAccess;
 	private final double expirationAfterWrite;
-	private final Map<K, Element<V>> map = new HashMap<>();
+	private final Map<K, Element<V>> map = new LinkedHashMap<>();
 	
 	private MemoryCache(double expirationAfterAccess, double expirationAfterWrite) {
 		this.expirationAfterAccess = expirationAfterAccess;
@@ -70,15 +73,23 @@ public final class MemoryCache<K, V> {
 	
 	public void put(K key, V value) {
 		double now = DateUtils.now();
+
 		Element<V> e = new Element<>(value);
 		e.writeTimestamp = now;
 		e.accessTimestamp = now;
+		
+		map.remove(key);
 		map.put(key, e);
 	}
 	
 	public V get(K key) {
+		Element<V> e = map.remove(key);
+		if (e == null) {
+			return null;
+		}
+
 		double now = DateUtils.now();
-		Element<V> e = map.get(key);
+		
 		if (expirationAfterAccess > 0d) {
 			if ((now - e.accessTimestamp) >= expirationAfterAccess) {
 				map.remove(key);
@@ -91,7 +102,9 @@ public final class MemoryCache<K, V> {
 				return null;
 			}
 		}
+		
 		e.accessTimestamp = now;
+		map.put(key, e);
 		return e.v;
 	}
 
@@ -103,7 +116,7 @@ public final class MemoryCache<K, V> {
 		map.clear();
 	}
 	
-	public Iterable<K> keys() {
+	private void check() {
 		double now = DateUtils.now();
 
 		if (expirationAfterAccess > 0d) {
@@ -122,7 +135,20 @@ public final class MemoryCache<K, V> {
 				}
 			}
 		}
-
+	}
+	
+	public Iterable<K> keys() {
+		check();
 		return map.keySet();
+	}
+
+	public Iterable<V> values() {
+		check();
+		return Iterables.transform(map.values(), new Function<Element<V>, V>() {
+			@Override
+			public V apply(Element<V> e) {
+				return e.v;
+			}
+		});
 	}
 }
