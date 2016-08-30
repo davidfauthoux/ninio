@@ -9,14 +9,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.util.DateUtils;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import com.davfx.ninio.util.MemoryCache;
 
 public final class SqliteCache {
 	
@@ -80,7 +77,7 @@ public final class SqliteCache {
 		private final Interpreter<T> interpreter;
 		private final double expiration;
 		private final java.sql.Connection sqlConnection;
-		private final Cache<Address, CacheByAddress<T>> cacheByDestinationAddress;
+		private final MemoryCache<Address, CacheByAddress<T>> cacheByDestinationAddress;
 		private Connection connectCallback = null;
 
 		public InnerConnecter(File database, double expiration, Interpreter<T> interpreter, Connecter wrappee) {
@@ -88,7 +85,7 @@ public final class SqliteCache {
 			this.interpreter = interpreter;
 			this.wrappee = wrappee;
 			
-			cacheByDestinationAddress = cacheMapExpiringAfterAccess(expiration);
+			cacheByDestinationAddress = MemoryCache.<Address, CacheByAddress<T>> builder().expireAfterAccess(expiration).build();
 			
 			File databaseFile;
 			if (database == null) {
@@ -150,28 +147,31 @@ public final class SqliteCache {
 					String key;
 					List<T> to;
 					synchronized (cacheByDestinationAddress) {
-						CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
+						CacheByAddress<T> cache = cacheByDestinationAddress.get(address);
 						if (cache == null) {
 							LOGGER.trace("No cache (address = {})", address);
 							return;
 						}
 						
-						key = cache.subToKey.getIfPresent(sub);
+						key = cache.subToKey.get(sub);
 						if (key == null) {
-							LOGGER.trace("No key (address = {}, sub = {}) - {}", address, sub, cache.subToKey.asMap());
+							LOGGER.trace("No key (address = {}, sub = {}) - {}", address, sub, cache.subToKey);
 							return;
 						}
 	
-						cache.subToKey.invalidate(sub);
+						cache.subToKey.remove(sub);
 	
-						Cache<T, Double> subs = cache.requestsByKey.getIfPresent(key);
+						MemoryCache<T, Void> subs = cache.requestsByKey.get(key);
 						if (subs == null) {
 							LOGGER.trace("No corresponding subs (address = {}, sub = {}, key = {})", address, sub, key);
 							return;
 						}
 						
-						to = new LinkedList<>(subs.asMap().keySet());
-						subs.invalidateAll();
+						to = new LinkedList<>();
+						for (T k : subs.keys()) {
+							to.add(k);
+						}
+						subs.clear();
 					}
 
 					for (T s : to) {
@@ -234,8 +234,6 @@ public final class SqliteCache {
 				return;
 			}
 
-			double now = DateUtils.now();
-			
 			Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
 			if (context == null) {
 				sendCallback.failed(new IOException("Invalid request: " + address));
@@ -247,29 +245,29 @@ public final class SqliteCache {
 			synchronized (cacheByDestinationAddress) {
 				callback = connectCallback;
 				
-				CacheByAddress<T> cache = cacheByDestinationAddress.getIfPresent(address);
+				CacheByAddress<T> cache = cacheByDestinationAddress.get(address);
 				if (cache == null) {
 					LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
 					cache = new CacheByAddress<T>(expiration);
 					cacheByDestinationAddress.put(address, cache);
 				}
 	
-				Cache<T, Double> subs = cache.requestsByKey.getIfPresent(context.key);
+				MemoryCache<T, Void> subs = cache.requestsByKey.get(context.key);
 				if (subs == null) {
-					subs = cacheMapExpiringAfterWrite(expiration);
+					subs = MemoryCache.<T, Void> builder().expireAfterWrite(expiration).build();
 					cache.requestsByKey.put(context.key, subs);
 	
-					subs.put(context.sub, now);
+					subs.put(context.sub, null);
 					cache.subToKey.put(context.sub, context.key);
 
 					send = true;
-					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
+					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				} else {
-					subs.put(context.sub, now);
+					subs.put(context.sub, null);
 					cache.subToKey.put(context.sub, context.key);
 
 					send = false;
-					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey.asMap());
+					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				}
 			}
 
@@ -333,18 +331,11 @@ public final class SqliteCache {
 	}
 	
 	private static final class CacheByAddress<T> {
-		public final Cache<String, Cache<T, Double>> requestsByKey;
-		public final Cache<T, String> subToKey;
+		public final MemoryCache<String, MemoryCache<T, Void>> requestsByKey;
+		public final MemoryCache<T, String> subToKey;
 		public CacheByAddress(double expiration) {
-			requestsByKey = cacheMapExpiringAfterAccess(expiration);
-			subToKey = cacheMapExpiringAfterWrite(expiration);
+			requestsByKey = MemoryCache.<String, MemoryCache<T, Void>> builder().expireAfterAccess(expiration).build();
+			subToKey = MemoryCache.<T, String> builder().expireAfterWrite(expiration).build();
 		}
-	}
-
-	private static <T, U> Cache<T, U> cacheMapExpiringAfterAccess(double expiration) {
-		return ((expiration == 0d) ? CacheBuilder.newBuilder() : CacheBuilder.newBuilder().expireAfterAccess((long) (expiration * 1000d), TimeUnit.MILLISECONDS)).build();
-	}
-	private static <T, U> Cache<T, U> cacheMapExpiringAfterWrite(double expiration) {
-		return ((expiration == 0d) ? CacheBuilder.newBuilder() : CacheBuilder.newBuilder().expireAfterWrite((long) (expiration * 1000d), TimeUnit.MILLISECONDS)).build();
 	}
 }

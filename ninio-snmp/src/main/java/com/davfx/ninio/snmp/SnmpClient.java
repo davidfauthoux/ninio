@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,8 +21,7 @@ import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.ConfigUtils;
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
+import com.davfx.ninio.util.MemoryCache;
 import com.typesafe.config.Config;
 
 public final class SnmpClient implements SnmpConnecter {
@@ -75,7 +73,7 @@ public final class SnmpClient implements SnmpConnecter {
 	private final InstanceMapper instanceMapper;
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final Cache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = CacheBuilder.newBuilder().expireAfterAccess((long) (AUTH_ENGINES_CACHE_DURATION * 1000d), TimeUnit.MILLISECONDS).build();
+	private final MemoryCache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Address, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
 
 	private SnmpClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
@@ -130,7 +128,7 @@ public final class SnmpClient implements SnmpConnecter {
 					@Override
 					public void run() {
 						if (s != null) {
-							authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+							authRemoteEnginePendingRequestManager = authRemoteEngines.get(address);
 							if (authRemoteEnginePendingRequestManager == null) {
 								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
 								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
@@ -181,7 +179,7 @@ public final class SnmpClient implements SnmpConnecter {
 						int errorStatus;
 						int errorIndex;
 						Iterable<SnmpResult> results;
-						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.getIfPresent(address);
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.get(address);
 						boolean ready;
 						if (authRemoteEnginePendingRequestManager != null) {
 							ready = authRemoteEnginePendingRequestManager.isReady();
