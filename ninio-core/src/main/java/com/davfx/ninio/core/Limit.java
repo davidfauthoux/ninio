@@ -29,18 +29,12 @@ public final class Limit {
 		}
 	}
 
-	private final int max;
-	
 	private long nextId = 0L;
 	private final Map<Long, Task> tasks = new LinkedHashMap<>();
 	
 	private int currentlyRunning = 0;
 	
-	public Limit(int max) {
-		if (max < 0) {
-			throw new IllegalArgumentException();
-		}
-		this.max = max;
+	public Limit() {
 	}
 	
 	public static interface Manager {
@@ -48,8 +42,8 @@ public final class Limit {
 		void cancel();
 	}
 	
-	public Manager inc() {
-		if (max == 0) {
+	public Manager inc(final int max) {
+		if (max <= 0) {
 			return new Manager() {
 				@Override
 				public void cancel() {

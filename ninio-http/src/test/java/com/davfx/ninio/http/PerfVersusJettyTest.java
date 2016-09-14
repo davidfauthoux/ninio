@@ -100,14 +100,14 @@ public class PerfVersusJettyTest {
 	private static final com.davfx.ninio.http.HttpConnecter ninioClient;
 	private static final Timeout timeout = new Timeout();
 	private static final Executor executor = new SerialExecutor(HttpGetTest.class);
-	private static final Limit limit = new Limit(10);
+	private static final Limit limit = new Limit();
 	static {
 		ninioClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor));
 	}
 
 	private static String getNinio(int port) throws Exception {
 		final Lock<String, IOException> lock = new Lock<>();
-		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, ninioClient.request()));
+		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, 10, ninioClient.request()));
 		HttpContentSender s = b.build(new HttpRequest(new Address(Address.LOCALHOST, port), false, HttpMethod.GET, path(), ImmutableMultimap.<String, String>of(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY, HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)));
 		b.receive(new HttpReceiver() {
 			@Override

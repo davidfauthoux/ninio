@@ -4,9 +4,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.typesafe.config.Config;
 
 public final class SerialExecutor implements Executor {
+	
+	private static final Logger LOGGER = LoggerFactory.getLogger(SerialExecutor.class);
 	
 	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.util.dependencies.Dependencies(), SerialExecutor.class);
 	private static final double TIMEOUT_TO_SHUTDOWN_INTERNAL_THREAD = ConfigUtils.getDuration(CONFIG, "executor.serial.autoshutdown");
@@ -54,10 +59,18 @@ public final class SerialExecutor implements Executor {
 								}
 							}
 							
-							lastRunnable.run();
+							try {
+								lastRunnable.run();
+							} catch (Throwable t) {
+								LOGGER.error("Error in threaded task", t);
+							}
 							if (listToExecute != null) {
 								for (Runnable r : listToExecute) {
-									r.run();
+									try {
+										r.run();
+									} catch (Throwable t) {
+										LOGGER.error("Error in threaded task", t);
+									}
 								}
 							}
 						}

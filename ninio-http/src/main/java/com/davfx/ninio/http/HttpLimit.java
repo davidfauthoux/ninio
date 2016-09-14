@@ -10,7 +10,7 @@ public final class HttpLimit {
 	private HttpLimit() {
 	}
 	
-	public static HttpRequestBuilder wrap(final Limit l, final HttpRequestBuilder wrappee) {
+	public static HttpRequestBuilder wrap(final Limit l, final int max, final HttpRequestBuilder wrappee) {
 		return new HttpRequestBuilder() {
 			@Override
 			public HttpRequestBuilder maxRedirections(int maxRedirections) {
@@ -23,7 +23,7 @@ public final class HttpLimit {
 
 			@Override
 			public HttpRequestBuilderHttpContentSender build(HttpRequest request) {
-				m = l.inc();
+				m = l.inc(max);
 				final HttpContentSender s = wrappee.build(request);
 
 				sender = new HttpContentSender() {
