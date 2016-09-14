@@ -36,6 +36,7 @@ public final class DnsClient implements DnsConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DnsClient.class);
 
 	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.dns.dependencies.Dependencies(), DnsClient.class);
+	private static final boolean SYSTEM = CONFIG.getBoolean("system");
 	private static final ImmutableMap<String, String> HOSTS4;
 	private static final ImmutableMap<String, String> HOSTS6;
 	static {
@@ -156,6 +157,15 @@ public final class DnsClient implements DnsConnecter {
 						parsedIp = InetAddresses.forString(host).getAddress();
 					} catch (IllegalArgumentException e) {
 						parsedIp = null;
+					}
+
+					if ((parsedIp == null) && SYSTEM) {
+						LOGGER.info("Sync resolution: {}", host);
+						try {
+							parsedIp = InetAddress.getByName(host).getAddress();
+						} catch (UnknownHostException e) {
+							parsedIp = null;
+						}
 					}
 				}
 				
