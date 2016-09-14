@@ -96,7 +96,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 			}
 		});
 		
-		connection.connected(request.address);
+		connection.connected(null);
 
 		receiver = new WebsocketFrameReader(connection, sender);
 	}

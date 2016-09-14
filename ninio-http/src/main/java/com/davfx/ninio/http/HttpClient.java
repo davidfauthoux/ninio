@@ -2,9 +2,11 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
 
@@ -21,6 +23,7 @@ import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.dns.DnsConnecter;
+import com.davfx.ninio.dns.DnsReceiver;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
@@ -101,58 +104,74 @@ public final class HttpClient implements HttpConnecter {
 	private final TcpSocket.Builder connectorFactory;
 	private final TcpSocket.Builder secureConnectorFactory;
 	
+	private static final class DeferredConnecter implements Connecter {
+		private static final class ToSend {
+			public final Address address;
+			public final ByteBuffer buffer;
+			public final SendCallback callback;
+			public ToSend(Address address, ByteBuffer buffer, SendCallback callback) {
+				this.address = address;
+				this.buffer = buffer;
+				this.callback = callback;
+			}
+		}
+
+		private List<ToSend> toSend = new LinkedList<>();
+		private Connecter connecter = null;
+		
+		@Override
+		public void send(Address address, ByteBuffer buffer, SendCallback callback) {
+			if (toSend == null) {
+				if (connecter == null) {
+					callback.failed(new IOException("Closed"));
+				} else {
+					connecter.send(address, buffer, callback);
+				}
+			} else {
+				toSend.add(new ToSend(address, buffer, callback));
+			}
+		}
+		@Override
+		public void close() {
+			if (toSend != null) {
+				for (ToSend s : toSend) {
+					s.callback.failed(new IOException("Closed"));
+				}
+				toSend = null;
+			}
+			connecter = null;
+		}
+
+		@Override
+		public void connect(Connection callback) {
+		}
+		
+		public void set(Connecter connecter) {
+			this.connecter = connecter;
+
+			for (ToSend s : toSend) {
+				connecter.send(s.address, s.buffer, s.callback);
+			}
+			toSend = null;
+		}
+	}
+	
 	private static final class ReusableConnector {
-		public Connecter connecting;
-		public final Address address;
-		public final boolean secure;
+		public final DeferredConnecter connecting = new DeferredConnecter();
+		
+		public final HttpRequestAddress address;
 
 		public boolean reusable = true;
 
 		private Connection receiver = null;
 		private final Deque<Connection> nextReceivers = new LinkedList<>();
 		
-		public ReusableConnector(Address address, boolean secure) {
+		public ReusableConnector(HttpRequestAddress address) {
 			this.address = address;
-			this.secure = secure;
 		}
 		
-		public void launch(final Executor executor, TcpSocket.Builder factory, Queue queue, final Runnable onClose) {
-			connecting = factory.create(queue);
-			
-			connecting.connect(new Connection() {
-				@Override
-				public void received(Address address, final ByteBuffer buffer) {
-					executor.execute(new Runnable() {
-						@Override
-						public void run() {
-							while (buffer.hasRemaining()) {
-								if (receiver == null) {
-									break;
-								}
-								receiver.received(null, buffer);
-							}
-						}
-					});
-				}
-				
-				@Override
-				public void connected(Address address) {
-				}
-				
-				@Override
-				public void closed() {
-					executor.execute(new Runnable() {
-						@Override
-						public void run() {
-							if (receiver != null) {
-								receiver.closed();
-							}
-
-							onClose.run();
-						}
-					});
-				}
-
+		public void launch(final Executor executor, DnsConnecter dns, final TcpSocket.Builder connectorFactory, final TcpSocket.Builder secureConnectorFactory, final Queue queue, final Runnable onClose) {
+			dns.request().resolve(address.host, null).receive(new DnsReceiver() {
 				@Override
 				public void failed(final IOException ioe) {
 					executor.execute(new Runnable() {
@@ -163,6 +182,74 @@ public final class HttpClient implements HttpConnecter {
 							}
 
 							onClose.run();
+						}
+					});
+				}
+				
+				@Override
+				public void received(final byte[] ip) {
+					executor.execute(new Runnable() {
+						@Override
+						public void run() {
+							if (connecting.toSend == null) {
+								onClose.run();
+								return;
+							}
+		
+							TcpSocket.Builder factory = address.secure ? secureConnectorFactory : connectorFactory;
+							factory.to(new Address(ip, address.port));
+		
+							Connecter c = factory.create(queue);
+							c.connect(new Connection() {
+								@Override
+								public void received(Address address, final ByteBuffer buffer) {
+									executor.execute(new Runnable() {
+										@Override
+										public void run() {
+											while (buffer.hasRemaining()) {
+												if (receiver == null) {
+													break;
+												}
+												receiver.received(null, buffer);
+											}
+										}
+									});
+								}
+								
+								@Override
+								public void connected(Address address) {
+								}
+								
+								@Override
+								public void closed() {
+									executor.execute(new Runnable() {
+										@Override
+										public void run() {
+											if (receiver != null) {
+												receiver.closed();
+											}
+		
+											onClose.run();
+										}
+									});
+								}
+		
+								@Override
+								public void failed(final IOException ioe) {
+									executor.execute(new Runnable() {
+										@Override
+										public void run() {
+											if (receiver != null) {
+												receiver.failed(ioe);
+											}
+		
+											onClose.run();
+										}
+									});
+								}
+							});
+							
+							connecting.set(c);
 						}
 					});
 				}
@@ -403,7 +490,7 @@ public final class HttpClient implements HttpConnecter {
 							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
 								long reusedId = e.getKey();
 								ReusableConnector reusedConnector = e.getValue();
-								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address) && (reusedConnector.secure == request.secure)) {
+								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address)) {
 									id = reusedId;
 	
 									LOGGER.trace("Recycling connection (id = {})", id);
@@ -423,9 +510,9 @@ public final class HttpClient implements HttpConnecter {
 	
 							LOGGER.trace("Creating a new connection (id = {})", id);
 	
-							reusableConnector = new ReusableConnector(request.address, request.secure);
+							reusableConnector = new ReusableConnector(request.address);
 							reusableConnectors.put(id, reusableConnector);
-							reusableConnector.launch(executor, request.secure ? secureConnectorFactory.to(request.address) : connectorFactory.to(request.address), queue, new Runnable() {
+							reusableConnector.launch(executor, dns, connectorFactory, secureConnectorFactory, queue, new Runnable() {
 								@Override
 								public void run() {
 									LOGGER.trace("Connection removed (id = {})", id);
@@ -438,7 +525,7 @@ public final class HttpClient implements HttpConnecter {
 	
 						//
 						
-						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(dns, HttpClient.this, thisMaxRedirections, request, new HttpReceiver() {
+						final HttpReceiver redirectingReceiver = new RedirectHttpReceiver(HttpClient.this, thisMaxRedirections, request, new HttpReceiver() {
 							@Override
 							public HttpContentReceiver received(HttpResponse response) {
 								return callback.received(response);
@@ -657,10 +744,23 @@ public final class HttpClient implements HttpConnecter {
 						
 						reusableConnector.connecting.send(null, LineReader.toBuffer(request.method.toString() + HttpSpecification.START_LINE_SEPARATOR + request.path + HttpSpecification.START_LINE_SEPARATOR + HttpSpecification.HTTP_VERSION_PREFIX + requestVersion.toString()), sendCallback);
 
-						for (Map.Entry<String, String> h : completedHeaders.entries()) {
-							String k = h.getKey();
-							String v = h.getValue();
-							reusableConnector.connecting.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v), sendCallback);
+						for (Map.Entry<String, Collection<String>> e : completedHeaders.asMap().entrySet()) {
+							String k = e.getKey();
+							boolean onlyFirst =
+									k.equals(HttpHeaderKey.CONTENT_LENGTH) ||
+									k.equals(HttpHeaderKey.TRANSFER_ENCODING) ||
+									k.equals(HttpHeaderKey.HOST) ||
+									k.equals(HttpHeaderKey.CONNECTION) ||
+									k.equals(HttpHeaderKey.CONTENT_LENGTH) ||
+									k.equals(HttpHeaderKey.CONTENT_LENGTH) ||
+									k.equals(HttpHeaderKey.CONTENT_LENGTH);
+
+							for (String v : e.getValue()) {
+								reusableConnector.connecting.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v), sendCallback);
+								if (onlyFirst) {
+									break;
+								}
+							}
 						}
 						
 						reusableConnector.connecting.send(null, emptyLineByteBuffer.duplicate(), sendCallback);

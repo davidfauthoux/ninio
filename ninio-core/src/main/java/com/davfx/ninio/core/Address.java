@@ -19,7 +19,7 @@ public final class Address {
 		this.port = port;
 	}
 	
-	private static String ipToString(byte[] ip) {
+	public static String ipToString(byte[] ip) {
 		try {
 			return InetAddress.getByAddress(ip).getHostAddress();
 		} catch (UnknownHostException e) {

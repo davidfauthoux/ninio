@@ -1,14 +1,9 @@
 package com.davfx.ninio.http;
 
-import java.io.IOException;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.Failing;
-import com.davfx.ninio.dns.DnsConnecter;
-import com.davfx.ninio.dns.DnsReceiver;
 import com.google.common.base.Optional;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
@@ -16,28 +11,27 @@ import com.google.common.collect.ImmutableMultimap;
 
 public final class HttpRequest {
 	
-	public final Address address;
-	public final boolean secure;
+	public final HttpRequestAddress address;
 	public final HttpMethod method;
 	public final String path;
 	public final ImmutableMultimap<String, String> headers;
 	
-	public HttpRequest(Address address, boolean secure, HttpMethod method, String path, ImmutableMultimap<String, String> headers) {
+	public HttpRequest(HttpRequestAddress address, HttpMethod method, String path, ImmutableMultimap<String, String> headers) {
 		this.address = address;
-		this.secure = secure;
 		this.method = method;
 		this.path = path;
 		this.headers = headers;
 	}
-	public HttpRequest(Address address, boolean secure, HttpMethod method, String path) {
-		this(address, secure, method, path, ImmutableMultimap.<String, String>of());
+	public HttpRequest(HttpRequestAddress address, HttpMethod method, String path) {
+		this(address, method, path, ImmutableMultimap.<String, String>of());
 	}
 	
 	@Override
 	public String toString() {
-		return "[address=" + address + ", secure=" + secure + ", method=" + method + ", path=" + path + ", headers=" + headers + "]";
+		return "[address=" + address + ", method=" + method + ", path=" + path + ", headers=" + headers + "]";
 	}
 	
+	/*%%
 	public static interface ResolveCallback extends Failing {
 		void resolved(HttpRequest request);
 	}
@@ -46,51 +40,9 @@ public final class HttpRequest {
 		resolve(dns, url, HttpMethod.GET, ImmutableMultimap.<String, String>of(), callback);
 	}
 	public static void resolve(DnsConnecter dns, String url, final HttpMethod method, final ImmutableMultimap<String, String> headers, final ResolveCallback callback) {
-		String protocol;
-		final boolean secure;
-		int defaultPort;
-		if (url.startsWith(HttpSpecification.PROTOCOL)) {
-			protocol = HttpSpecification.PROTOCOL;
-			secure = false;
-			defaultPort = HttpSpecification.DEFAULT_PORT;
-		} else if (url.startsWith(HttpSpecification.SECURE_PROTOCOL)) {
-			protocol = HttpSpecification.SECURE_PROTOCOL;
-			secure = true;
-			defaultPort = HttpSpecification.DEFAULT_SECURE_PORT;
-		} else {
-			throw new IllegalArgumentException("URL must starts with " + HttpSpecification.PROTOCOL + " or " + HttpSpecification.SECURE_PROTOCOL);
-		}
-
-		int i = url.indexOf(HttpSpecification.PATH_SEPARATOR, protocol.length());
-		String a;
-		final String path;
-		if (i < 0) {
-			a = url.substring(protocol.length());
-			path = String.valueOf(HttpSpecification.PATH_SEPARATOR);
-		} else {
-			a = url.substring(protocol.length(), i);
-			path = url.substring(i);
-		}
+		final UrlUtils.ParsedUrl parsedUrl = UrlUtils.parse(url);
 		
-		int k = a.indexOf(HttpSpecification.PORT_SEPARATOR);
-		String host;
-		final String hostInHeaders;
-		final int port;
-		if (k < 0) {
-			host = a;
-			port = defaultPort;
-			hostInHeaders = host;
-		} else {
-			host = a.substring(0, k);
-			port = Integer.parseInt(a.substring(k + 1));
-			if (port == defaultPort) {
-				hostInHeaders = host;
-			} else {
-				hostInHeaders = host + HttpSpecification.PORT_SEPARATOR + port;
-			}
-		}
-		
-		dns.request().resolve(host, null).receive(new DnsReceiver() {
+		dns.request().resolve(parsedUrl.host, null).receive(new DnsReceiver() {
 			@Override
 			public void failed(IOException e) {
 				callback.failed(e);
@@ -98,19 +50,11 @@ public final class HttpRequest {
 			
 			@Override
 			public void received(byte[] ip) {
-				ImmutableMultimap<String, String> headersIncludingHost;
-				if (headers.containsKey(HttpHeaderKey.HOST)) {
-					headersIncludingHost = headers;
-				} else {
-					ImmutableMultimap.Builder<String, String> m = ImmutableMultimap.builder();
-					m.putAll(headers);
-					m.put(HttpHeaderKey.HOST, hostInHeaders);
-					headersIncludingHost = m.build();
-				}
-				callback.resolved(new HttpRequest(new Address(ip, port), secure, method, path, headersIncludingHost));
+				callback.resolved(new HttpRequest(new Address(ip, parsedUrl.port), parsedUrl.secure, method, parsedUrl.path, UrlUtils.merge(headers, parsedUrl.headers)));
 			}
 		});
 	}
+	*/
 	
 	/*%%
 	public static HttpRequest of(String url) {

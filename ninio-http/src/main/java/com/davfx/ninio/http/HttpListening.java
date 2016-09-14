@@ -277,7 +277,7 @@ public final class HttpListening implements Listening {
 						if (line.isEmpty()) {
 							requestHeadersRead = true;
 
-							final HttpContentReceiver h = listeningHandler.handle(new HttpRequest(from, secure, requestMethod, requestPath, ImmutableMultimap.copyOf(requestHeaders)), new HttpListeningHandler.HttpResponseSender() {
+							final HttpContentReceiver h = listeningHandler.handle(new HttpRequest(new HttpRequestAddress(Address.ipToString(from.ip), from.port, secure), requestMethod, requestPath, ImmutableMultimap.copyOf(requestHeaders)), new HttpListeningHandler.HttpResponseSender() {
 								private boolean responseKeepAlive;
 								private HttpContentSender sender = null;
 								

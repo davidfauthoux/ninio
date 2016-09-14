@@ -78,7 +78,7 @@ public final class HttpSocket implements Connecter {
 	private HttpSocket(final Queue queue, HttpConnecter httpClient, String path, final Address connectAddress) {
 		this.queue = queue;
 		
-		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()
+		HttpRequest request = new HttpRequest(new HttpRequestAddress(Address.ipToString(connectAddress.ip), connectAddress.port, false), HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()
 			// GZIP deflate cannot stream/flush
 			.put(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)
 			.put(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY)

@@ -108,7 +108,7 @@ public class PerfVersusJettyTest {
 	private static String getNinio(int port) throws Exception {
 		final Lock<String, IOException> lock = new Lock<>();
 		HttpRequestBuilder b = HttpTimeout.wrap(timeout, 1d, HttpLimit.wrap(limit, 10, ninioClient.request()));
-		HttpContentSender s = b.build(new HttpRequest(new Address(Address.LOCALHOST, port), false, HttpMethod.GET, path(), ImmutableMultimap.<String, String>of(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY, HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)));
+		HttpContentSender s = b.build(new HttpRequest(new HttpRequestAddress("localhost", port, false), HttpMethod.GET, path(), ImmutableMultimap.<String, String>of(HttpHeaderKey.ACCEPT_ENCODING, HttpHeaderValue.IDENTITY, HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.IDENTITY)));
 		b.receive(new HttpReceiver() {
 			@Override
 			public HttpContentReceiver received(HttpResponse response) {

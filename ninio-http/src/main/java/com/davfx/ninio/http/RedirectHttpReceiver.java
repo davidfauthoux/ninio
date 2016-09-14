@@ -6,14 +6,9 @@ import java.nio.ByteBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.Address;
-import com.davfx.ninio.dns.DnsConnecter;
-import com.davfx.ninio.dns.DnsReceiver;
-
 final class RedirectHttpReceiver implements HttpReceiver {
 	private static final Logger LOGGER = LoggerFactory.getLogger(RedirectHttpReceiver.class);
 
-	private final DnsConnecter dns;
 	private final HttpClient client;
 	
 	private final int maxRedirections;
@@ -21,14 +16,11 @@ final class RedirectHttpReceiver implements HttpReceiver {
 	private final HttpRequest request;
 	private final HttpReceiver wrappee;
 	
-	public RedirectHttpReceiver(DnsConnecter dns, HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver wrappee) {
-		this(dns, client, maxRedirections, 0, request, wrappee);
+	public RedirectHttpReceiver(HttpClient client, int maxRedirections, HttpRequest request, HttpReceiver wrappee) {
+		this(client, maxRedirections, 0, request, wrappee);
 	}
 	
-	private RedirectHttpReceiver(DnsConnecter dns, HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver wrappee) {
-		if (dns == null) {
-			throw new NullPointerException("dns");
-		}
+	private RedirectHttpReceiver(HttpClient client, int maxRedirections, int levelOfRedirect, HttpRequest request, HttpReceiver wrappee) {
 		if (client == null) {
 			throw new NullPointerException("client");
 		}
@@ -36,7 +28,6 @@ final class RedirectHttpReceiver implements HttpReceiver {
 			throw new NullPointerException("wrappee");
 		}
 		
-		this.dns = dns;
 		this.client = client;
 		this.maxRedirections = maxRedirections;
 		this.levelOfRedirect = levelOfRedirect;
@@ -53,20 +44,23 @@ final class RedirectHttpReceiver implements HttpReceiver {
 				break;
 			}
 			if (location != null) {
-				//%% Address newAddress = request.address;
-				final String newPath;
-				String l = null;
-				final boolean secure;
+				String newHost;
+				int newPort;
+				boolean newSecure;
+				String newPath;
+
+				String l;
 				int defaultPort = HttpSpecification.DEFAULT_PORT;
 				if (location.startsWith(HttpSpecification.SECURE_PROTOCOL)) {
 					l = location.substring(HttpSpecification.SECURE_PROTOCOL.length());
-					secure = true;
+					newSecure = true;
 					defaultPort = HttpSpecification.DEFAULT_SECURE_PORT;
 				} else if (location.startsWith(HttpSpecification.PROTOCOL)) {
 					l = location.substring(HttpSpecification.PROTOCOL.length());
-					secure = false;
+					newSecure = false;
 				} else {
-					secure = false;
+					l = null;
+					newSecure = request.address.secure;
 				}
 				
 				if (l != null) {
@@ -78,8 +72,6 @@ final class RedirectHttpReceiver implements HttpReceiver {
 						newPath = String.valueOf(HttpSpecification.PATH_SEPARATOR);
 					}
 					int j = l.indexOf(HttpSpecification.PORT_SEPARATOR);
-					final String newHost;
-					final int newPort;
 					if (j < 0) {
 						newHost = l;
 						newPort = defaultPort;
@@ -101,36 +93,19 @@ final class RedirectHttpReceiver implements HttpReceiver {
 						newPort = p;
 					}
 					
-					dns.request().resolve(newHost, null).receive(new DnsReceiver() {
-						@Override
-						public void failed(IOException e) {
-							LOGGER.debug("Unable to resolve: {}", newHost);
-							wrappee.received(response);
-						}
-						
-						@Override
-						public void received(byte[] ip) {
-							HttpRequest newRequest = new HttpRequest(new Address(ip, newPort), secure, request.method, newPath);
-							
-							HttpRequestBuilder b = client.request();
-							b.receive(new RedirectHttpReceiver(dns, client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
-							b.build(newRequest).finish();
-						}
-					});
-					
-					return new IgnoreContentHttpContentReceiver();
-
 				} else {
+					newHost = request.address.host;
+					newPort = request.address.port;
 					newPath = location;
-					
-					HttpRequest newRequest = new HttpRequest(request.address, secure, request.method, newPath);
-					
-					HttpRequestBuilder b = client.request();
-					b.receive(new RedirectHttpReceiver(dns, client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
-					b.build(newRequest).finish();
-					
-					return new IgnoreContentHttpContentReceiver();
 				}
+				
+				HttpRequest newRequest = new HttpRequest(new HttpRequestAddress(newHost, newPort, newSecure), request.method, newPath);
+				
+				HttpRequestBuilder b = client.request();
+				b.receive(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee));
+				b.build(newRequest).finish();
+
+				return new IgnoreContentHttpContentReceiver();
 			}
 		}
 		

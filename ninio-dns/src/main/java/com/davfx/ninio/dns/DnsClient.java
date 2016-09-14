@@ -26,6 +26,7 @@ import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.net.InetAddresses;
 import com.google.common.primitives.Shorts;
 import com.typesafe.config.Config;
@@ -35,6 +36,24 @@ public final class DnsClient implements DnsConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DnsClient.class);
 
 	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.dns.dependencies.Dependencies(), DnsClient.class);
+	private static final ImmutableMap<String, String> HOSTS4;
+	private static final ImmutableMap<String, String> HOSTS6;
+	static {
+		{
+			ImmutableMap.Builder<String, String> m = ImmutableMap.builder();
+			for (Config c : CONFIG.getConfigList("hosts.v4")) {
+				m.put(c.getString("host"), c.getString("ip"));
+			}
+			HOSTS4 = m.build();
+		}
+		{
+			ImmutableMap.Builder<String, String> m = ImmutableMap.builder();
+			for (Config c : CONFIG.getConfigList("hosts.v6")) {
+				m.put(c.getString("host"), c.getString("ip"));
+			}
+			HOSTS6 = m.build();
+		}
+	}
 
 	public static final int DEFAULT_PORT = 53;
 
@@ -118,18 +137,26 @@ public final class DnsClient implements DnsConnecter {
 					throw new IllegalStateException();
 				}
 
-				if (host.equals("localhost")) {
-					if (family == StandardProtocolFamily.INET6) {
-						host = "::1";
-					} else {
-						host = "127.0.0.1";
+				if (family == StandardProtocolFamily.INET6) {
+					String r = HOSTS6.get(host);
+					if (r != null) {
+						host = r;
+					}
+				} else {
+					String r = HOSTS4.get(host);
+					if (r != null) {
+						host = r;
 					}
 				}
-				
-				try {
-					parsedIp = InetAddresses.forString(host).getAddress();
-				} catch (IllegalArgumentException e) {
-					parsedIp = null;
+
+				if (host == null) {
+					parsedIp = new byte[] { };
+				} else {
+					try {
+						parsedIp = InetAddresses.forString(host).getAddress();
+					} catch (IllegalArgumentException e) {
+						parsedIp = null;
+					}
 				}
 				
 				if (parsedIp == null) {

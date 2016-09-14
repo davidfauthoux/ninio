@@ -84,7 +84,7 @@ public final class WebsocketSocket implements Connecter {
 	private WebsocketSocket(final Queue queue, HttpConnecter httpClient, String path, final Address connectAddress) {
 		this.queue = queue;
 		
-		HttpRequest request = new HttpRequest(connectAddress, false, HttpMethod.GET, path, ImmutableMultimap.<String, String>builder()
+		HttpRequest request = new HttpRequest(new HttpRequestAddress(Address.ipToString(connectAddress.ip), connectAddress.port, false), HttpMethod.GET, path, ImmutableMultimap.<String, String>builder()
 			.put("Sec-WebSocket-Key", BaseEncoding.base64().encode(String.valueOf(RANDOM.nextLong()).getBytes(Charsets.UTF_8)))
 			.put("Sec-WebSocket-Version", "13")
 			.put("Connection", "Upgrade")
