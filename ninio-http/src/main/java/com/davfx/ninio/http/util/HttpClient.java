@@ -219,6 +219,10 @@ public final class HttpClient implements AutoCloseable {
 			headers.put(key, value);
 			return this;
 		}
+		public Request headers(ImmutableMultimap<String, String> headers) {
+			this.headers.putAll(headers);
+			return this;
+		}
 		public Request receive(HttpReceiver receiver) {
 			this.receiver = receiver;
 			return this;
@@ -259,6 +263,26 @@ public final class HttpClient implements AutoCloseable {
 	        HttpRequestBuilder requestReceiverBuilder = httpClient.request();
 
 	        HttpRequest httpRequest = new HttpRequest(new HttpRequestAddress(host, port, secure), HttpMethod.POST, path, UrlUtils.merge(headers.build(), ImmutableMultimap.of(HttpHeaderKey.HOST, host)));
+	        
+	        return HttpTimeout.wrap(timeoutManager, timeout, HttpLimit.wrap(limitManager, limit, requestReceiverBuilder))
+				.build(httpRequest)
+				.receive(receiver);
+		}
+
+		public HttpContentSender send(HttpMethod method) {
+			if (host == null) {
+				throw new NullPointerException("host");
+			}
+			if (receiver == null) {
+				throw new NullPointerException("receiver");
+			}
+			if (port < 0) {
+				port = secure ? HttpSpecification.DEFAULT_SECURE_PORT : HttpSpecification.DEFAULT_PORT;
+			}
+			
+	        HttpRequestBuilder requestReceiverBuilder = httpClient.request();
+
+	        HttpRequest httpRequest = new HttpRequest(new HttpRequestAddress(host, port, secure), method, path, UrlUtils.merge(headers.build(), ImmutableMultimap.of(HttpHeaderKey.HOST, host)));
 	        
 	        return HttpTimeout.wrap(timeoutManager, timeout, HttpLimit.wrap(limitManager, limit, requestReceiverBuilder))
 				.build(httpRequest)
