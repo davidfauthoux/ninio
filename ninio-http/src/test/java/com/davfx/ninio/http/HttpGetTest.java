@@ -20,7 +20,6 @@ import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.dns.DnsClient;
 import com.davfx.ninio.dns.DnsConnecter;
-import com.davfx.ninio.dns.DnsTimeout;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
@@ -111,7 +110,7 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> getRequest(DnsConnecter dns, final HttpConnecter client, final Timeout timeout, final Limit limit, String url, final boolean keepAlive) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpRequest.resolve(DnsTimeout.wrap(1d, dns), url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE), new HttpRequest.ResolveCallback() {
+		HttpRequest.resolve(dns, url, HttpMethod.GET, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE), new HttpRequest.ResolveCallback() {
 			@Override
 			public void failed(IOException e) {
 				lock.fail(e);
@@ -155,7 +154,7 @@ public class HttpGetTest {
 	
 	private static Lock<Object, IOException> postRequest(DnsConnecter dns, final HttpConnecter client, final Timeout timeout, final Limit limit, String url, final boolean keepAlive, final String post) throws IOException {
 		final Lock<Object, IOException> lock = new Lock<>();
-		HttpRequest.resolve(DnsTimeout.wrap(1d, dns), url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE), new HttpRequest.ResolveCallback() {
+		HttpRequest.resolve(dns, url, HttpMethod.POST, keepAlive ? ImmutableMultimap.<String, String>of() : ImmutableMultimap.of(HttpHeaderKey.CONNECTION, HttpHeaderValue.CLOSE), new HttpRequest.ResolveCallback() {
 			@Override
 			public void failed(IOException e) {
 				lock.fail(e);

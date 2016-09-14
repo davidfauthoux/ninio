@@ -464,7 +464,7 @@ public final class HttpListening implements Listening {
 							};
 							
 							boolean headerKeepAlive = (requestVersion == HttpVersion.HTTP11);
-							boolean automaticallySetContentLength = headerKeepAlive;
+							boolean automaticallySetContentLength = true;
 							for (String connectionValue : requestHeaders.get(HttpHeaderKey.CONNECTION)) {
 								if (connectionValue.equalsIgnoreCase(HttpHeaderValue.CLOSE)) {
 									headerKeepAlive = false;
@@ -473,6 +473,7 @@ public final class HttpListening implements Listening {
 								} else {
 									automaticallySetContentLength = false;
 								}
+								break;
 							}
 							requestKeepAlive = headerKeepAlive;
 							LOGGER.debug("Request keep alive: {}", requestKeepAlive);
@@ -512,6 +513,7 @@ public final class HttpListening implements Listening {
 									LOGGER.debug("Request is chunked");
 									handler = new ChunkedReader(failing, handler);
 								}
+								break;
 							}
 			
 							boolean headerAcceptGzip = false;

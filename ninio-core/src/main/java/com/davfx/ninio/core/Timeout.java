@@ -63,6 +63,10 @@ public final class Timeout implements AutoCloseable {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				if (closed) {
+					return;
+				}
+				
 				try {
 					Thread.sleep((long) (PRECISION * 1000d));
 				} catch (InterruptedException ie) {
@@ -78,6 +82,10 @@ public final class Timeout implements AutoCloseable {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
+				if (closed) {
+					return;
+				}
+				
 				double now = DateUtils.now();
 
 				Iterator<Task> i = tasks.values().iterator();
