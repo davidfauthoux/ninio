@@ -25,54 +25,57 @@ public final class DnsTimeout {
 			
 			@Override
 			public DnsRequestBuilder request() {
-				final DnsRequestBuilder builder = wrappee.request();
-				return new DnsRequestBuilder() {
-					private Timeout.Manager m;
-					private Cancelable cancelable;
+				return wrap(t, timeout, wrappee.request());
+			}
+		};
+	}
+	
+	public static DnsRequestBuilder wrap(final Timeout t, final double timeout, final DnsRequestBuilder wrappee) {
+		return new DnsRequestBuilder() {
+			private Timeout.Manager m;
+			private Cancelable cancelable;
 
+			@Override
+			public SnmpRequestBuilderCancelable resolve(String host, ProtocolFamily family) {
+				m = t.set(timeout);
+				
+				final Cancelable c = wrappee.resolve(host, family);
+
+				cancelable = new Cancelable() {
 					@Override
-					public SnmpRequestBuilderCancelable resolve(String host, ProtocolFamily family) {
-						m = t.set(timeout);
-						
-						final Cancelable c = builder.resolve(host, family);
-
-						cancelable = new Cancelable() {
-							@Override
-							public void cancel() {
-								m.cancel();
-								c.cancel();
-							}
-						};
-						
-						return new DnsRequestBuilderCancelableImpl(this, cancelable);
-					}
-
-					@Override
-					public Cancelable receive(final DnsReceiver callback) {
-						builder.receive(new DnsReceiver() {
-							@Override
-							public void failed(IOException ioe) {
-								m.cancel();
-								callback.failed(ioe);
-							}
-							
-							@Override
-							public void received(byte[] ip) {
-								m.cancel();
-								callback.received(ip);
-							}
-						});
-
-						m.run(new Runnable() {
-							@Override
-							public void run() {
-								callback.failed(new IOException("Timeout"));
-							}
-						});
-
-						return cancelable;
+					public void cancel() {
+						m.cancel();
+						c.cancel();
 					}
 				};
+				
+				return new DnsRequestBuilderCancelableImpl(this, cancelable);
+			}
+
+			@Override
+			public Cancelable receive(final DnsReceiver callback) {
+				wrappee.receive(new DnsReceiver() {
+					@Override
+					public void failed(IOException ioe) {
+						m.cancel();
+						callback.failed(ioe);
+					}
+					
+					@Override
+					public void received(byte[] ip) {
+						m.cancel();
+						callback.received(ip);
+					}
+				});
+
+				m.run(new Runnable() {
+					@Override
+					public void run() {
+						callback.failed(new IOException("Timeout"));
+					}
+				});
+
+				return cancelable;
 			}
 		};
 	}

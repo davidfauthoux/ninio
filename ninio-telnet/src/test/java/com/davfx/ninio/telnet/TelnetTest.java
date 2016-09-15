@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferUtils;
 import com.davfx.ninio.core.Connected;
+import com.davfx.ninio.core.ConnectingClosingFailing;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.Listener;
@@ -120,33 +121,9 @@ public class TelnetTest {
 				
 				final Wait clientWaitClientConnecting = new Wait();
 				final Wait clientWaitClientClosing = new Wait();
-				try (CutOnPromptClient c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class))
+				try (final CutOnPromptClient c = ninio.create(CutOnPromptClient.builder().with(new SerialExecutor(CutOnPromptClient.class))
 					.with(TelnetClient.builder().with(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))))) {
-					c.connect(new CutOnPromptClientHandler() {
-						@Override
-						public void connected(final CutOnPromptClientWriter write) {
-							write.write("Hello", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
-								@Override
-								public void received(String result) {
-									lock0.set(result);
-									LOGGER.debug("---------------> ***{}***", result);
-									write.write("Hello again", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
-										@Override
-										public void received(String result) {
-											LOGGER.debug("---------------> ***{}***", result);
-											lock1.set(result);
-											write.write("Bye", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
-												@Override
-												public void received(String result) {
-													LOGGER.debug("---------------> ***{}***", result);
-												}
-											});
-										}
-									});
-								}
-							});
-						}
-					
+					c.connect(new ConnectingClosingFailing() {
 						@Override
 						public void connected(Address address) {
 							clientWaitClientConnecting.run();
@@ -160,6 +137,28 @@ public class TelnetTest {
 							lock.fail(e);
 						}
 					});
+
+					c.write("Hello", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
+						@Override
+						public void received(String result) {
+							lock0.set(result);
+							LOGGER.debug("---------------> ***{}***", result);
+							c.write("Hello again", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
+								@Override
+								public void received(String result) {
+									LOGGER.debug("---------------> ***{}***", result);
+									lock1.set(result);
+									c.write("Bye", TelnetSpecification.EOL, new CutOnPromptClientReceiver() {
+										@Override
+										public void received(String result) {
+											LOGGER.debug("---------------> ***{}***", result);
+										}
+									});
+								}
+							});
+						}
+					});
+
 					clientWaitClientConnecting.waitFor();
 					serverWaitClientConnecting.waitFor();
 					

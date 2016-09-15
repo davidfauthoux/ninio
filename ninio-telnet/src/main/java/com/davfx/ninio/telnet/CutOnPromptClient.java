@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
+import com.davfx.ninio.core.ConnectingClosingFailing;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.InMemoryBuffers;
@@ -145,7 +146,7 @@ public final class CutOnPromptClient implements Disconnectable {
 		this.limit = limit;
 	}
 	
-	public void connect(final CutOnPromptClientHandler handler) {
+	public void connect(final ConnectingClosingFailing handler) {
 		executor.execute(new Runnable() {
 			@Override
 			public void run() {
@@ -181,42 +182,6 @@ public final class CutOnPromptClient implements Disconnectable {
 					}
 					@Override
 					public void connected(Address address) {
-						handler.connected(new CutOnPromptClientWriter() {
-							@Override
-							public void close() {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										connecter.close();
-									}
-								});
-							}
-							
-							@Override
-							public void write(final String command, final String prompt, final CutOnPromptClientReceiver receiveCallback) {
-								executor.execute(new Runnable() {
-									@Override
-									public void run() {
-										LOGGER.trace("Sending command: {}, with prompt: {}", command, prompt);
-										cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(charset)));
-										currentReceiveCallback = receiveCallback;
-										if (command != null) {
-											connecter.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new SendCallback() {
-												@Override
-												public void sent() {
-												}
-												@Override
-												public void failed(IOException ioe) {
-													connecter.close();
-													handler.failed(ioe);
-												}
-											});
-										}
-									}
-								});
-							}
-						});
-						
 						handler.connected(address);
 					}
 				});
@@ -226,6 +191,28 @@ public final class CutOnPromptClient implements Disconnectable {
 		});
 	}
 	
+	public void write(final String command, final String prompt, final CutOnPromptClientReceiver receiveCallback) {
+		executor.execute(new Runnable() {
+			@Override
+			public void run() {
+				LOGGER.trace("Sending command: {}, with prompt: {}", command, prompt);
+				cuttingReceiver.on(ByteBuffer.wrap(prompt.getBytes(charset)));
+				currentReceiveCallback = receiveCallback;
+				if (command != null) {
+					connecter.send(null, ByteBuffer.wrap((command + endOfLine).getBytes(charset)), new SendCallback() {
+						@Override
+						public void sent() {
+						}
+						@Override
+						public void failed(IOException ioe) {
+							connecter.close();
+						}
+					});
+				}
+			}
+		});
+	}
+
 	@Override
 	public void close() {
 		executor.execute(new Runnable() {

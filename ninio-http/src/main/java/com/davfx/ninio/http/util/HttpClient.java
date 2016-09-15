@@ -1,7 +1,6 @@
 package com.davfx.ninio.http.util;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Map;
 
@@ -9,10 +8,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
-import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.dns.DnsConnection;
@@ -64,12 +61,7 @@ public final class HttpClient implements AutoCloseable {
 			}
 		});
 
-		httpClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor).with(dnsClient).with(TcpSocket.builder().with(new ByteBufferAllocator() {
-			@Override
-			public ByteBuffer allocate() {
-				return ByteBuffer.allocate(1024);
-			}
-		})));
+		httpClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor).with(dnsClient));
 	}
 	
 	/*%%
