@@ -18,7 +18,7 @@ public final class ReadmeWithImageToJpegConverterHttpService {
 		try (Ninio ninio = Ninio.create()) {
 			try (DnsConnecter dns = ninio.create(DnsClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class))); HttpConnecter client = ninio.create(HttpClient.builder().with(new SerialExecutor(ReadmeWithImageToJpegConverterHttpService.class)))) {
 				Annotated.Builder a = Annotated.builder(HttpService.builder());
-				a.register(new ImageToJpegConverter(client));
+				a.register(null, new ImageToJpegConverter(client));
 		
 				try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 					tcp.listen(HttpListening.builder().with(new SerialExecutor(ReadmeWithAnnotatedHttpService.class)).with(a.build()).build());

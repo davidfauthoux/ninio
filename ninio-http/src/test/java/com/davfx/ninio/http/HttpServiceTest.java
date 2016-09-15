@@ -207,8 +207,8 @@ public class HttpServiceTest {
 			try (Disconnectable server = TestUtils.routedServer(ninio, 8081, 8080, new TestUtils.Visitor() {
 				@Override
 				public void visit(Builder builder) {
-					builder.register(TestGetWithHostFilterController.class);
-					builder.register(TestGetWithHostFilterController2.class);
+					builder.register(null, TestGetWithHostFilterController.class);
+					builder.register(null, TestGetWithHostFilterController2.class);
 				}
 			})) {
 				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/getfilterbyheader/hello?message=world")).isEqualTo("text/plain; charset=UTF-8/GET hello:world 127.0.0.1:8080\n");
@@ -313,4 +313,26 @@ public class HttpServiceTest {
 			}
 		}
 	}
+	
+	@Path("/get")
+	public static final class TestGetWithRootPathController implements HttpController {
+		@Route(method = HttpMethod.GET, path = "/hello")
+		public Http echo(@QueryParameter("message") String message) {
+			return Http.ok().content("GET hello:" + message);
+		}
+	}
+	@Test
+	public void testGetWithRootPath() throws Exception {
+		try (Ninio ninio = Ninio.create()) {
+			try (Disconnectable server = TestUtils.server(ninio, 8080, new TestUtils.Visitor() {
+				@Override
+				public void visit(Builder builder) {
+					builder.register("/root", TestGetWithRootPathController.class);
+				}
+			})) {
+				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/root/get/hello?message=world")).isEqualTo("text/plain; charset=UTF-8/GET hello:world\n");
+			}
+		}
+	}
+
 }

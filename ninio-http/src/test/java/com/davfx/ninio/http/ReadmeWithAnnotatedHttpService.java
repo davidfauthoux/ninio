@@ -130,7 +130,7 @@ public final class ReadmeWithAnnotatedHttpService {
 			Annotated.Builder a = Annotated.builder(HttpService.builder());
 			for (Class<?> clazz : ReadmeWithAnnotatedHttpService.class.getDeclaredClasses()) {
 				if (Arrays.asList(clazz.getInterfaces()).contains(HttpController.class)) {
-					a.register((Class<? extends HttpController>) clazz);
+					a.register(null, (Class<? extends HttpController>) clazz);
 				}
 			}
 	

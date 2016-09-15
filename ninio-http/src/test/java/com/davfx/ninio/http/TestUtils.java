@@ -48,7 +48,7 @@ class TestUtils {
 		}
 		@Override
 		public void visit(Builder builder) {
-			builder.register(clazz);
+			builder.register(null, clazz);
 		}
 	}
 	static final class InterceptorControllerVisitor implements Visitor {
@@ -61,7 +61,7 @@ class TestUtils {
 		@Override
 		public void visit(Builder builder) {
 			builder.intercept(iclazz);
-			builder.register(clazz);
+			builder.register(null, clazz);
 		}
 	}
 	

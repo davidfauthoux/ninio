@@ -216,7 +216,7 @@ public class PerfVersusJettyTest {
 		private final Listener server;
 		public NinioServer2() {
 			Annotated.Builder a = Annotated.builder(HttpService.builder());
-			a.register(new TestGetWithQueryParameterController());
+			a.register(null, new TestGetWithQueryParameterController());
 
 			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)));
 			server.listen(HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build());

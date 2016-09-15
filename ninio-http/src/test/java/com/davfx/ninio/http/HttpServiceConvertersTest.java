@@ -130,7 +130,7 @@ public class HttpServiceConvertersTest {
 				@Override
 				public void visit(Annotated.Builder builder) {
 					builder.parameters(A.class, new AConverter());
-					builder.register(TestGetWithConverterController.class);
+					builder.register(null, TestGetWithConverterController.class);
 				}
 			})) {
 				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=aaa")).isEqualTo("text/plain; charset=UTF-8/GET hello:_aaa_\n");
@@ -144,7 +144,7 @@ public class HttpServiceConvertersTest {
 				@Override
 				public void visit(Annotated.Builder builder) {
 					builder.parameters(A.class);
-					builder.register(TestGetWithConverterController.class);
+					builder.register(null, TestGetWithConverterController.class);
 				}
 			})) {
 				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=aaa")).isEqualTo("text/plain; charset=UTF-8/GET hello:_aaa_\n");
@@ -177,7 +177,7 @@ public class HttpServiceConvertersTest {
 							return l;
 						}
 					});
-					builder.register(TestGetWithListConverterController.class);
+					builder.register(null, TestGetWithListConverterController.class);
 				}
 			})) {
 				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=['a','a','a']")).isEqualTo("text/plain; charset=UTF-8/GET hello:[_a_, _a_, _a_]\n");
@@ -235,7 +235,7 @@ public class HttpServiceConvertersTest {
 							return l;
 						}
 					});
-					builder.register(TestGetWithTwoListConverterController.class);
+					builder.register(null, TestGetWithTwoListConverterController.class);
 				}
 			})) {
 				Assertions.assertThat(TestUtils.get("http://127.0.0.1:8080/get/hello?p=['a','a','a']&q=['b']")).isEqualTo("text/plain; charset=UTF-8/GET hello:[_a_, _a_, _a_][^b^]\n");

@@ -53,8 +53,8 @@ public final class Annotated {
 		<T> Builder parameters(final Class<T> clazz);
 		Builder intercept(Class<? extends HttpController> clazz);
 		Builder intercept(HttpController controller);
-		Builder register(Class<? extends HttpController> clazz);
-		Builder register(HttpController controller);
+		Builder register(String path, Class<? extends HttpController> clazz);
+		Builder register(String path, HttpController controller);
 	}
 	
 	private static final class StringPattern {
@@ -100,6 +100,15 @@ public final class Annotated {
 			}
 		}
 		return buildStringPatternList(l);
+	}
+
+	private static final class RegisteredElement {
+		public final String path;
+		public final HttpController controller;
+		public RegisteredElement(String path, HttpController controller) {
+			this.path = path;
+			this.controller = controller;
+		}
 	}
 
 	public static Builder builder(final HttpService.Builder wrappee) {
@@ -162,7 +171,7 @@ public final class Annotated {
 				}));
 			}
 			private final List<HttpController> interceptControllers = new LinkedList<>();
-			private final List<HttpController> registerControllers = new LinkedList<>();
+			private final List<RegisteredElement> registerControllers = new LinkedList<>();
 			
 			@Override
 			public HttpService.Builder register(HttpServiceHandler handler) {
@@ -223,13 +232,13 @@ public final class Annotated {
 			}
 			
 			@Override
-			public Builder register(Class<? extends HttpController> clazz) {
-				return register(newInstance(clazz));
+			public Builder register(String path, Class<? extends HttpController> clazz) {
+				return register(path, newInstance(clazz));
 			}
 			
 			@Override
-			public Builder register(HttpController controller) {
-				registerControllers.add(controller);
+			public Builder register(String path, HttpController controller) {
+				registerControllers.add(new RegisteredElement(path, controller));
 				return this;
 			}
 			
@@ -244,13 +253,23 @@ public final class Annotated {
 					allInterceptHandlers.addAll(createInterceptHandlers(stringConverters, controller));
 				}
 				
-				for (final HttpController controller : registerControllers) {
+				for (RegisteredElement registeredElement : registerControllers) {
+					final HttpController controller = registeredElement.controller;
+					String rootPathSuffix = registeredElement.path;
+					
 					final List<StringPattern> controllerHeaders = buildStringPatternList(controller.getClass());
 					
 					Path controllerPath = controller.getClass().getAnnotation(Path.class);
 					String controllerPathSuffix = (controllerPath == null) ? null : controllerPath.value();
 
 					final List<PathComponent> controllerRoutePathComponents = new LinkedList<>();
+					if (rootPathSuffix != null) {
+						int controllerRoutePathVariableIndex = 0;
+						for (String p : HttpRequest.path(rootPathSuffix)) {
+							controllerRoutePathComponents.add(PathComponent.of(p, controllerRoutePathVariableIndex));
+							controllerRoutePathVariableIndex++;
+						}
+					}
 					if (controllerPathSuffix != null) {
 						int controllerRoutePathVariableIndex = 0;
 						for (String p : HttpRequest.path(controllerPathSuffix)) {
@@ -314,6 +333,12 @@ public final class Annotated {
 							
 							final List<PathComponent> routePathComponents = new LinkedList<>();
 							int routePathVariableIndex = 0;
+							if (rootPathSuffix != null) {
+								for (String p : HttpRequest.path(rootPathSuffix)) {
+									routePathComponents.add(PathComponent.of(p, routePathVariableIndex));
+									routePathVariableIndex++;
+								}
+							}
 							if (controllerPathSuffix != null) {
 								for (String p : HttpRequest.path(controllerPathSuffix)) {
 									routePathComponents.add(PathComponent.of(p, routePathVariableIndex));
@@ -328,6 +353,9 @@ public final class Annotated {
 							}
 		
 							ImmutableMultimap.Builder<String, Optional<String>> pathParametersBuilder = ImmutableMultimap.builder();
+							if (rootPathSuffix != null) {
+								pathParametersBuilder.putAll(HttpRequest.parameters(rootPathSuffix));
+							}
 							if (controllerPathSuffix != null) {
 								pathParametersBuilder.putAll(HttpRequest.parameters(controllerPathSuffix));
 							}

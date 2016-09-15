@@ -27,7 +27,7 @@ public final class Main {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
 				tcp.listen(HttpListening.builder()
 							.with(new SerialExecutor(Main.class))
-							.with(Annotated.builder(HttpService.builder()).register(new FileAssets(dir, "index.html")).build()).build());
+							.with(Annotated.builder(HttpService.builder()).register(null, new FileAssets(dir, "index.html")).build()).build());
 				new Wait().waitFor();
 			}
 		}
