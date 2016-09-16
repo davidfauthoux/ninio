@@ -201,6 +201,7 @@ public final class HttpService implements HttpListeningHandler {
 									break;
 								}
 							} catch (Exception e) {
+								LOGGER.error("Http service error", e);
 								r = null;
 								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
 								sender.send(ByteBuffer.wrap(e.getMessage().getBytes(Charsets.UTF_8)), new Nop());

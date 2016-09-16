@@ -74,12 +74,16 @@ public final class HttpTimeout {
 							@Override
 							public void received(ByteBuffer buffer) {
 								m.reset();
-								r.received(buffer);
+								if (r != null) {
+									r.received(buffer);
+								}
 							}
 							@Override
 							public void ended() {
 								m.cancel();
-								r.ended();
+								if (r != null) {
+									r.ended();
+								}
 							}
 						};
 					}

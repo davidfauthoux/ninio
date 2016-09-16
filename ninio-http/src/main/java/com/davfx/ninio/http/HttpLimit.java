@@ -79,12 +79,16 @@ public final class HttpLimit {
 						return new HttpContentReceiver() {
 							@Override
 							public void received(ByteBuffer buffer) {
-								r.received(buffer);
+								if (r != null) {
+									r.received(buffer);
+								}
 							}
 							@Override
 							public void ended() {
 								m.cancel();
-								r.ended();
+								if (r != null) {
+									r.ended();
+								}
 							}
 						};
 					}
