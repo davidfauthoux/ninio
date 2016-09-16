@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.http.HttpListening;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.http.service.HttpController.Http;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Joiner;
@@ -21,7 +22,7 @@ public final class ResourcesHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ResourcesHandler.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpListening.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpListening.class.getPackage().getName());
 	
 	private static final ImmutableMap<String, String> DEFAULT_CONTENT_TYPES;
 	static {

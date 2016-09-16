@@ -173,7 +173,7 @@ public final class ConfigUtils {
 	}
 
 	// Static conf, overriding is done with configure.conf
-	public static synchronized Config load(Dependencies dependencies, Class<?> clazz) {
-		return load(dependencies, null, new Override()).getConfig(clazz.getPackage().getName());
+	public static synchronized Config load(Dependencies dependencies) {
+		return load(dependencies, null, new Override());
 	}
 }

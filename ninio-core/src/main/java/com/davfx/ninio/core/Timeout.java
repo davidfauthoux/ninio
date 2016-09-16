@@ -8,6 +8,7 @@ import java.util.concurrent.Executor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.DateUtils;
 import com.davfx.ninio.util.SerialExecutor;
@@ -17,7 +18,7 @@ public final class Timeout implements AutoCloseable {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(Timeout.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), Timeout.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(Timeout.class.getPackage().getName());
 	private static final double PRECISION = ConfigUtils.getDuration(CONFIG, "timeout.precision");
 
 	private final Executor executor = new SerialExecutor(Timeout.class);

@@ -7,12 +7,13 @@ import java.util.zip.Deflater;
 
 import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 final class GzipWriter implements HttpContentSender {
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), GzipReader.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(GzipReader.class.getPackage().getName());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("gzip.buffer").intValue();
 
 	private static final int OS_TYPE_UNKNOWN = 0xFF;

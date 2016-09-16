@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -19,7 +20,7 @@ public final class TcpSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocket.class);
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), TcpSocket.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(TcpSocket.class.getPackage().getName());
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("socket.write.buffer").longValue();
 	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "socket.timeout");
 

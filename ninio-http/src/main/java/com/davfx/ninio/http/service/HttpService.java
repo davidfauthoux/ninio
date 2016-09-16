@@ -26,6 +26,7 @@ import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpStatus;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.http.service.HttpController.HttpAsyncOutput;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
@@ -42,7 +43,7 @@ public final class HttpService implements HttpListeningHandler {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpService.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpListening.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpListening.class.getPackage().getName());
 	private static final int DEFAULT_THREADS = CONFIG.getInt("service.threads");
 	private static final int STREAMING_BUFFER_SIZE = CONFIG.getBytes("service.stream.buffer").intValue();
 	private static final long SENDING_LIMIT = CONFIG.getBytes("service.produce.limit").longValue();

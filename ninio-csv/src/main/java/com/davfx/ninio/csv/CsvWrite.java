@@ -8,12 +8,13 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.Charset;
 
+import com.davfx.ninio.csv.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class CsvWrite {
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.csv.dependencies.Dependencies(), CsvWrite.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(CsvWrite.class.getPackage().getName());
 	private static final Charset DEFAULT_CHARSET = Charset.forName(CONFIG.getString("charset"));
 	private static final char DEFAULT_DELIMITER = ConfigUtils.getChar(CONFIG, "delimiter");
 	private static final char DEFAULT_QUOTE = ConfigUtils.getChar(CONFIG, "quote");

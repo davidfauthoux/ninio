@@ -25,6 +25,7 @@ import com.davfx.ninio.http.HttpRequestBuilder;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpTimeout;
 import com.davfx.ninio.http.UrlUtils;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.collect.ImmutableMultimap;
@@ -33,7 +34,7 @@ import com.typesafe.config.Config;
 public final class HttpClient implements AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), com.davfx.ninio.http.HttpClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(com.davfx.ninio.http.HttpClient.class.getPackage().getName());
 	private static final double DEFAULT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "default.timeout");
 	private static final int DEFAULT_LIMIT = CONFIG.getInt("default.limit");
 

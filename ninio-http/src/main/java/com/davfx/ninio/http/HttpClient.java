@@ -24,6 +24,7 @@ import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.dns.DnsReceiver;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.HashMultimap;
@@ -34,7 +35,7 @@ import com.typesafe.config.Config;
 public final class HttpClient implements HttpConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpClient.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpClient.class.getPackage().getName());
 	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("redirect.max");
 
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";

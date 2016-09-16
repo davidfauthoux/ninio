@@ -16,6 +16,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Joiner;
@@ -31,7 +32,7 @@ public final class TcpdumpSocket implements Connecter {
 		Builder bind(Address bindAddress);
 	}
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), TcpdumpSocket.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(TcpdumpSocket.class.getPackage().getName());
 
 	private static final String TCPDUMP_DEFAULT_INTERFACE_ID = CONFIG.getString("tcpdump.interface");
 	private static final String TCPDUMP_DEFAULT_RULE = CONFIG.getString("tcpdump.rule");

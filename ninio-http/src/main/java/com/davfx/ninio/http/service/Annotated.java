@@ -19,6 +19,7 @@ import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.HttpMethod;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpStatus;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.http.service.HttpController.Http;
 import com.davfx.ninio.http.service.HttpController.HttpWrap;
 import com.davfx.ninio.http.service.annotations.Assets;
@@ -43,7 +44,7 @@ public final class Annotated {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Annotated.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpListening.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpListening.class.getPackage().getName());
 	private static final String RESOURCES = CONFIG.getString("service.resources");
 	private static final String INDEX = CONFIG.getString("service.index");
 

@@ -7,11 +7,12 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
+import com.davfx.ninio.ssh.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 final class ZlibCompressingConnected implements Connected {
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.ssh.dependencies.Dependencies(), ZlibCompressingConnected.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(ZlibCompressingConnected.class.getPackage().getName());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("zlib.buffer").intValue();
 
 	private final Connected wrappee;

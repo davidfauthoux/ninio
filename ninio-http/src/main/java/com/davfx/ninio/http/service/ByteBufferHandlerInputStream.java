@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.http.HttpContentReceiver;
 import com.davfx.ninio.http.HttpListening;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -17,7 +18,7 @@ public final class ByteBufferHandlerInputStream extends InputStream {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByteBufferHandlerInputStream.class);
 	
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), HttpListening.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpListening.class.getPackage().getName());
 	private static final int POST_LIMIT = CONFIG.getBytes("service.post.limit").intValue();
 
 	private final Deque<ByteBuffer> buffers = new LinkedList<>();

@@ -20,6 +20,7 @@ import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
+import com.davfx.ninio.snmp.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.MemoryCache;
 import com.typesafe.config.Config;
@@ -27,7 +28,7 @@ import com.typesafe.config.Config;
 public final class SnmpClient implements SnmpConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.snmp.dependencies.Dependencies(), SnmpClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(SnmpClient.class.getPackage().getName());
 
 	public static final int DEFAULT_PORT = 161;
 

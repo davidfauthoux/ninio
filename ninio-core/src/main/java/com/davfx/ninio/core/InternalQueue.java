@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
@@ -20,7 +21,7 @@ import com.typesafe.config.Config;
 final class InternalQueue implements Queue, AutoCloseable {
 	private static final Logger LOGGER = LoggerFactory.getLogger(InternalQueue.class);
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), TcpSocket.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(TcpSocket.class.getPackage().getName());
 	private static final double WAIT_ON_ERROR = ConfigUtils.getDuration(CONFIG, "queue.waitOnError");
 	private static final double WAIT_ON_CLOSE = ConfigUtils.getDuration(CONFIG, "queue.waitOnClose");
 

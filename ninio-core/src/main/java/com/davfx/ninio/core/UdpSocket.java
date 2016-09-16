@@ -12,6 +12,7 @@ import java.util.LinkedList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
@@ -19,7 +20,7 @@ public final class UdpSocket implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.core.dependencies.Dependencies(), UdpSocket.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(UdpSocket.class.getPackage().getName());
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("datagram.write.buffer").longValue();
 
 	public static interface Builder extends NinioBuilder<Connecter> {

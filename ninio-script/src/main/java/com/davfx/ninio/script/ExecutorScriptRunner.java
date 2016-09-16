@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory;
+import com.davfx.ninio.script.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
 import com.typesafe.config.Config;
@@ -21,7 +22,7 @@ import com.typesafe.config.Config;
 public final class ExecutorScriptRunner implements ScriptRunner {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ExecutorScriptRunner.class);
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.script.dependencies.Dependencies(), ExecutorScriptRunner.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(ExecutorScriptRunner.class.getPackage().getName());
 	private static final String UNICITY_PREFIX = CONFIG.getString("unicity.prefix");
 	
 	private ScriptEngine scriptEngine;

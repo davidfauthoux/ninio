@@ -23,6 +23,7 @@ import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
+import com.davfx.ninio.dns.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.base.Charsets;
 import com.google.common.base.Splitter;
@@ -35,7 +36,7 @@ import com.typesafe.config.ConfigException;
 public final class DnsClient implements DnsConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(DnsClient.class);
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.dns.dependencies.Dependencies(), DnsClient.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(DnsClient.class.getPackage().getName());
 	private static final boolean SYSTEM = CONFIG.getBoolean("system");
 	private static final ImmutableMap<String, String> HOSTS4;
 	private static final ImmutableMap<String, String> HOSTS6;

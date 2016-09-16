@@ -11,12 +11,13 @@ import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
 import com.davfx.ninio.core.Failing;
+import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 final class GzipReader implements HttpContentReceiver {
 
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.http.dependencies.Dependencies(), GzipReader.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(GzipReader.class.getPackage().getName());
 	private static final int BUFFER_SIZE = CONFIG.getBytes("gzip.buffer").intValue();
 
 	static final int GZIP_MAGIC = 0x8b1f;

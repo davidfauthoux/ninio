@@ -2,11 +2,12 @@ package com.davfx.ninio.ssh;
 
 import java.nio.ByteBuffer;
 
+import com.davfx.ninio.ssh.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
 public final class SshPacketBuilder {
-	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.ssh.dependencies.Dependencies(), SshPacketBuilder.class);
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(SshPacketBuilder.class.getPackage().getName());
 	private static final int MAX_PACKET_SIZE = CONFIG.getBytes("buffer.max").intValue();
 
 	private ByteBuffer buffer = ByteBuffer.allocate(MAX_PACKET_SIZE);
