@@ -284,7 +284,7 @@ public final class Annotated {
 						fallback = new HttpServiceHandler() {
 							@Override
 							public Http handle(HttpServiceRequest request, HttpPost post) throws Exception {
-								LOGGER.debug("No assets for: {}", request);
+								LOGGER.trace("No assets for: {}", request);
 								return null;
 							}
 						};
@@ -297,7 +297,7 @@ public final class Annotated {
 									return null;
 								}
 								
-								LOGGER.debug("Checking assets for: {} (path = {})", request.path, controllerRoutePathComponents);
+								LOGGER.trace("Checking assets for: {} (path = {})", request.path, controllerRoutePathComponents);
 								if (!filterPath(request.path, controllerRoutePathComponents)) {
 									return null;
 								}

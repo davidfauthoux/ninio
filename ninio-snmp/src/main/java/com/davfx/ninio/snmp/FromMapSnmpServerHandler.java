@@ -27,14 +27,20 @@ public final class FromMapSnmpServerHandler implements SnmpServerHandler {
 	
 	@Override
 	public void connected(Address address) {
-		wrappee.connected(address);
+		if (wrappee != null) {
+			wrappee.connected(address);
+		}
 	}
 	@Override
 	public void closed() {
-		wrappee.closed();
+		if (wrappee != null) {
+			wrappee.closed();
+		}
 	}
 	@Override
 	public void failed(IOException ioe) {
-		wrappee.failed(ioe);
+		if (wrappee != null) {
+			wrappee.failed(ioe);
+		}
 	}
 }

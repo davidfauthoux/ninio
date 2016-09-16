@@ -15,6 +15,7 @@ import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory
 import com.davfx.ninio.script.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
+import com.google.common.collect.ImmutableMap;
 import com.typesafe.config.Config;
 
 //import lu.flier.script.V8ScriptEngineFactory;
@@ -233,7 +234,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 		}
 		
 		@Override
-		public void eval(final String script, final Map<String, ?> parameters, final End end) {
+		public void eval(final String script, final ImmutableMap<String, ScriptParameter> parameters, final End end) {
 			doExecute(new Runnable() {
 				@Override
 				public void run() {
@@ -258,7 +259,10 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 						.append(UNICITY_PREFIX).append("$ || {}");
 					if (parameters != null) {
 						for (String p : parameters.keySet()) {
-							b.append(", ").append(UNICITY_PREFIX).append(p);
+							b.append(", (function() {\n"
+								+ "var ").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("p = ").append(UNICITY_PREFIX).append(p).append(";\n"
+								+ "return " + UNICITY_PREFIX + "tojs(").append(UNICITY_PREFIX).append(UNICITY_PREFIX).append("p);\n"
+							+ "})()\n");
 						}
 					}
 					for (String f : syncFunctions.keySet()) {
@@ -292,8 +296,8 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 								scriptEngine.put(UNICITY_PREFIX + "$", context);
 								scriptEngine.put(UNICITY_PREFIX + "endManager", endManager);
 								if (parameters != null) {
-									for (Map.Entry<String, ?> e : parameters.entrySet()) {
-										scriptEngine.put(UNICITY_PREFIX + e.getKey(), e.getValue());
+									for (Map.Entry<String, ScriptParameter> e : parameters.entrySet()) {
+										scriptEngine.put(UNICITY_PREFIX + e.getKey(), builder.fromJava(e.getValue().build(builder)));
 									}
 								}
 								for (Map.Entry<String, SyncInternal> e : syncFunctions.entrySet()) {

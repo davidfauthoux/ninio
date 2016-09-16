@@ -1,6 +1,6 @@
 package com.davfx.ninio.script;
 
-import java.util.Map;
+import com.google.common.collect.ImmutableMap;
 
 public interface ScriptRunner {
 	interface End {
@@ -19,7 +19,7 @@ public interface ScriptRunner {
 		void register(String function, SyncScriptFunction syncFunction);
 		void register(String function, AsyncScriptFunction asyncFunction);
 
-		void eval(String script, Map<String, ?> parameters, End end);
+		void eval(String script, ImmutableMap<String, ScriptParameter> parameters, End end);
 
 		Engine sub();
 	}

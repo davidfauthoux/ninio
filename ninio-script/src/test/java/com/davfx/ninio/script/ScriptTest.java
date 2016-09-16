@@ -320,7 +320,12 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("var echoed = syncEcho({'c':a, 'd':('' + (b+1))});", ImmutableMap.of("a", "aa", "b", 1.23d), new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("var echoed = syncEcho({'c':a, 'd':('' + (b.b+1))});", ImmutableMap.of("a", new ScriptParameterString("aa"), "b", new ScriptParameter() {
+			@Override
+			public ScriptElement build(ScriptElementBuilder builder) {
+				return builder.object().put("b", builder.number(1.23d)).build();
+			}
+		}), new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor()).isEqualTo("aa/2.23");
 		wait.waitFor();
@@ -346,7 +351,12 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("asyncEcho({'c':a, 'd':('' + (b+1))});", ImmutableMap.of("a", "aa", "b", 1.23d), new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("java.lang.System.out.println((typeof b) + ' b='+b);java.lang.System.out.println('b.b='+b.b);asyncEcho({'c':a, 'd':('' + (b['b']+1))});", ImmutableMap.of("a", new ScriptParameterString("aa"), "b", new ScriptParameter() {
+			@Override
+			public ScriptElement build(ScriptElementBuilder builder) {
+				return builder.object().put("b", builder.number(1.23d)).build();
+			}
+		}), new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor()).isEqualTo("aa/2.23");
 		wait.waitFor();

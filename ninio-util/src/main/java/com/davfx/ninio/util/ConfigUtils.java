@@ -40,10 +40,10 @@ public final class ConfigUtils {
 	//
 	
 	private static InputStream getResource(Dependencies dependencies, String resource) {
-		LOGGER.debug("Getting resource: {} with {}", resource + ".conf", dependencies.getClass().getClassLoader());
+		LOGGER.trace("Getting resource: {} with {}", resource + ".conf", dependencies.getClass().getClassLoader());
 		InputStream i = dependencies.getClass().getClassLoader().getResourceAsStream(resource + ".conf");
 		if (i == null) {
-			LOGGER.debug("Getting resource: {} with {}", resource + ".conf --> null", dependencies.getClass().getClassLoader());
+			LOGGER.trace("Getting resource: {} with {}", resource + ".conf --> null", dependencies.getClass().getClassLoader());
 			for (Dependencies d : dependencies.dependencies()) {
 				i = getResource(d, resource);
 				if (i != null) {
@@ -127,7 +127,7 @@ public final class ConfigUtils {
 		gatherDependencies(dependencies, l);
 		for (Dependencies d : l) {
 			String packageName = d.getClass().getPackage().getName();
-			LOGGER.debug("Dependency conf: {}", packageName);
+			LOGGER.trace("Dependency conf: {}", packageName);
 			if (!packageName.endsWith(".dependencies")) {
 				throw new RuntimeException("Must ends with '.dependencies': " + packageName);
 			}
@@ -167,7 +167,7 @@ public final class ConfigUtils {
 
 		String conf = c.toString();
 
-		LOGGER.debug("Config: \n{}\n", conf);
+		LOGGER.trace("Config: \n{}\n", conf);
 
 		return ConfigFactory.parseString(conf).resolve();
 	}
