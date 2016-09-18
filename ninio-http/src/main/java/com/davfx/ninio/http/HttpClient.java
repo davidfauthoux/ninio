@@ -487,7 +487,7 @@ public final class HttpClient implements HttpConnecter {
 						}
 						
 						if (requestKeepAlive) {
-							LOGGER.trace("Connections = {}", reusableConnectors);
+							//%% LOGGER.trace("Connections = {}", reusableConnectors);
 							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
 								long reusedId = e.getKey();
 								ReusableConnector reusedConnector = e.getValue();
@@ -731,7 +731,7 @@ public final class HttpClient implements HttpConnecter {
 							}
 						});
 						
-						LOGGER.trace("Sending request: {} (complete headers = {})", request, completedHeaders);
+						LOGGER.trace("Sending request: {}", request); //%% (complete headers = {})", request, completedHeaders);
 						
 						SendCallback sendCallback = new SendCallback() {
 							@Override
