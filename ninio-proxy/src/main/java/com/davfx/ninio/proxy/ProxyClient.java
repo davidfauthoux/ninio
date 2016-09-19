@@ -639,7 +639,9 @@ public final class ProxyClient implements ProxyProvider {
 				SendCallback sendCallback = new SendCallback() {
 					@Override
 					public void failed(IOException e) {
-						proxyConnector.close();
+						if (proxyConnector != null) {
+							proxyConnector.close();
+						}
 					}
 					@Override
 					public void sent() {
@@ -723,7 +725,9 @@ public final class ProxyClient implements ProxyProvider {
 					SendCallback sendCallback = new SendCallback() {
 						@Override
 						public void failed(IOException e) {
-							proxyConnector.close();
+							if (proxyConnector != null) {
+								proxyConnector.close();
+							}
 						}
 						@Override
 						public void sent() {
