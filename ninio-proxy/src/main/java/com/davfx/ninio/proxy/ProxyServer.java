@@ -206,16 +206,16 @@ public final class ProxyServer implements Listening {
 					readByteBuffer = ByteBuffer.allocate(Ints.BYTES);
 				}
 				while (true) {
-					if (!receivedBuffer.hasRemaining()) {
-						return -1;
-					}
-					readByteBuffer.put(receivedBuffer.get());
 					if (readByteBuffer.position() == readByteBuffer.capacity()) {
 						readByteBuffer.flip();
 						int i = readByteBuffer.getInt();
 						readByteBuffer = null;
 						return i;
 					}
+					if (!receivedBuffer.hasRemaining()) {
+						return -1;
+					}
+					readByteBuffer.put(receivedBuffer.get());
 				}
 			}
 			private String readString(String old, ByteBuffer receivedBuffer, int len) {
@@ -226,15 +226,15 @@ public final class ProxyServer implements Listening {
 					readByteBuffer = ByteBuffer.allocate(len);
 				}
 				while (true) {
-					if (!receivedBuffer.hasRemaining()) {
-						return null;
-					}
-					readByteBuffer.put(receivedBuffer.get());
 					if (readByteBuffer.position() == readByteBuffer.capacity()) {
 						String s = new String(readByteBuffer.array(), readByteBuffer.arrayOffset(), readByteBuffer.position(), Charsets.UTF_8);
 						readByteBuffer = null;
 						return s;
 					}
+					if (!receivedBuffer.hasRemaining()) {
+						return null;
+					}
+					readByteBuffer.put(receivedBuffer.get());
 				}
 			}
 			private byte[] readBytes(byte[] old, ByteBuffer receivedBuffer, int len) {
@@ -245,15 +245,15 @@ public final class ProxyServer implements Listening {
 					readByteBuffer = ByteBuffer.allocate(len);
 				}
 				while (true) {
-					if (!receivedBuffer.hasRemaining()) {
-						return null;
-					}
-					readByteBuffer.put(receivedBuffer.get());
 					if (readByteBuffer.position() == readByteBuffer.capacity()) {
 						byte[] b = readByteBuffer.array();
 						readByteBuffer = null;
 						return b;
 					}
+					if (!receivedBuffer.hasRemaining()) {
+						return null;
+					}
+					readByteBuffer.put(receivedBuffer.get());
 				}
 			}
 			
