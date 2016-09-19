@@ -757,6 +757,7 @@ public final class HttpClient implements HttpConnecter {
 									k.equals(HttpHeaderKey.CONTENT_LENGTH);
 
 							for (String v : e.getValue()) {
+								LOGGER.trace("Sending request header: {} = {}", k, v);
 								reusableConnector.connecting.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v), sendCallback);
 								if (onlyFirst) {
 									break;
