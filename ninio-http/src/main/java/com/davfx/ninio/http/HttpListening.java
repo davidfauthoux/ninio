@@ -500,7 +500,7 @@ public final class HttpListening implements Listening {
 							for (String contentLengthValue : requestHeaders.get(HttpHeaderKey.CONTENT_LENGTH)) {
 								try {
 									long headerContentLength = Long.parseLong(contentLengthValue);
-									LOGGER.info("Request content length: {}", headerContentLength);
+									LOGGER.trace("Request content length: {}", headerContentLength);
 									handler = new ContentLengthReader(headerContentLength, failing, handler);
 								} catch (NumberFormatException e) {
 									LOGGER.error("Invalid Content-Length: {}", contentLengthValue);

@@ -29,7 +29,7 @@ public final class Oid implements Comparable<Oid> {
 	}
 
 	public Oid sub(Oid child) {
-		if (child.raw.length <= raw.length) {
+		if (child.raw.length < raw.length) {
 			return null;
 		}
 		for (int i = 0; i < raw.length; i++) {
