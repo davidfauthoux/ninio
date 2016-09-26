@@ -15,7 +15,6 @@ import com.davfx.ninio.script.com.sun.script.javascript.RhinoScriptEngineFactory
 import com.davfx.ninio.script.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
-import com.google.common.collect.ImmutableMap;
 import com.typesafe.config.Config;
 
 //import lu.flier.script.V8ScriptEngineFactory;
@@ -193,6 +192,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 		private Map<String, Object> context = null;
 		private final Map<String, SyncInternal> syncFunctions = new HashMap<>();
 		private final Map<String, AsyncInternal> asyncFunctions = new HashMap<>();
+		private final Map<String, ScriptParameter> parameters = new HashMap<>();
 		
 		public InnerEngine(final InnerEngine parent) {
 			if (parent != null) {
@@ -232,9 +232,18 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 				}
 			});
 		}
+		@Override
+		public void register(final String name, final ScriptParameter value) {
+			doExecute(new Runnable() {
+				@Override
+				public void run() {
+					parameters.put(name, value);
+				}
+			});
+		}
 		
 		@Override
-		public void eval(final String script, final ImmutableMap<String, ScriptParameter> parameters, final End end) {
+		public void eval(final String script, final End end) {
 			doExecute(new Runnable() {
 				@Override
 				public void run() {
@@ -297,7 +306,8 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 								scriptEngine.put(UNICITY_PREFIX + "endManager", endManager);
 								if (parameters != null) {
 									for (Map.Entry<String, ScriptParameter> e : parameters.entrySet()) {
-										scriptEngine.put(UNICITY_PREFIX + e.getKey(), builder.fromJava(e.getValue().build(builder)));
+										ScriptParameter v = e.getValue();
+										scriptEngine.put(UNICITY_PREFIX + e.getKey(), builder.fromJava((v == null) ? null : v.build(builder)));
 									}
 								}
 								for (Map.Entry<String, SyncInternal> e : syncFunctions.entrySet()) {

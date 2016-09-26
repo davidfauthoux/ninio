@@ -5,7 +5,6 @@ import org.junit.Test;
 
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
-import com.google.common.collect.ImmutableMap;
 
 public class ScriptTest {
 
@@ -25,7 +24,7 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("syncEcho('aaa');", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("syncEcho('aaa');", new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aaa");
 		wait.waitFor();
@@ -42,7 +41,7 @@ public class ScriptTest {
 			engine.register("syncEcho0", new SyncScriptFunction() {
 				@Override
 				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
-					lock.set(builder.undefined());
+					lock.set(null);
 					return request;
 				}
 			});
@@ -56,9 +55,9 @@ public class ScriptTest {
 
 			Wait wait = new Wait();
 			ScriptRunner.Engine subEngine = engine.sub();
-			subEngine.eval("syncEcho0('aaa');", null, new WaitLockScriptRunnerEnd(wait, lock));
+			subEngine.eval("syncEcho0('aaa');", new WaitLockScriptRunnerEnd(wait, lock));
 			
-			Assertions.assertThat(lock.waitFor().isUndefined()).isTrue();
+			Assertions.assertThat(lock.waitFor()).isNull();
 			wait.waitFor();
 		}
 		{
@@ -67,7 +66,7 @@ public class ScriptTest {
 			engine.register("syncEcho0", new SyncScriptFunction() {
 				@Override
 				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
-					lock.set(builder.undefined());
+					lock.set(null);
 					return request;
 				}
 			});
@@ -81,9 +80,9 @@ public class ScriptTest {
 
 			Wait wait = new Wait();
 			ScriptRunner.Engine subEngine = engine.sub();
-			subEngine.eval("syncEcho1('aaa');", null, new WaitLockScriptRunnerEnd(wait, lock));
+			subEngine.eval("syncEcho1('aaa');", new WaitLockScriptRunnerEnd(wait, lock));
 			
-			Assertions.assertThat(lock.waitFor().isUndefined()).isFalse();
+			Assertions.assertThat(lock.waitFor()).isNotNull();
 			wait.waitFor();
 		}
 		{
@@ -92,7 +91,7 @@ public class ScriptTest {
 			engine.register("syncEcho0", new SyncScriptFunction() {
 				@Override
 				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
-					lock.set(builder.undefined());
+					lock.set(null);
 					return request;
 				}
 			});
@@ -106,9 +105,9 @@ public class ScriptTest {
 
 			Wait wait = new Wait();
 			ScriptRunner.Engine subEngine = engine.sub();
-			subEngine.eval("syncEcho1(null);", null, new WaitLockScriptRunnerEnd(wait, lock));
+			subEngine.eval("syncEcho1(null);", new WaitLockScriptRunnerEnd(wait, lock));
 			
-			Assertions.assertThat(lock.waitFor().isUndefined()).isTrue();
+			Assertions.assertThat(lock.waitFor()).isNull();
 			wait.waitFor();
 		}
 		{
@@ -117,7 +116,7 @@ public class ScriptTest {
 			engine.register("syncEcho0", new SyncScriptFunction() {
 				@Override
 				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
-					lock.set(builder.undefined());
+					lock.set(null);
 					return request;
 				}
 			});
@@ -131,9 +130,9 @@ public class ScriptTest {
 
 			Wait wait = new Wait();
 			ScriptRunner.Engine subEngine = engine.sub();
-			subEngine.eval("syncEcho1(undefined);", null, new WaitLockScriptRunnerEnd(wait, lock));
+			subEngine.eval("syncEcho1(undefined);", new WaitLockScriptRunnerEnd(wait, lock));
 			
-			Assertions.assertThat(lock.waitFor().isUndefined()).isTrue();
+			Assertions.assertThat(lock.waitFor()).isNull();
 			wait.waitFor();
 		}
 		{
@@ -142,7 +141,7 @@ public class ScriptTest {
 			engine.register("syncEcho0", new SyncScriptFunction() {
 				@Override
 				public ScriptElement call(ScriptElement request, ScriptElementBuilder builder) {
-					lock.set(builder.undefined());
+					lock.set(null);
 					return request;
 				}
 			});
@@ -156,9 +155,9 @@ public class ScriptTest {
 
 			Wait wait = new Wait();
 			ScriptRunner.Engine subEngine = engine.sub();
-			subEngine.eval("syncEcho1('');", null, new WaitLockScriptRunnerEnd(wait, lock));
+			subEngine.eval("syncEcho1('');", new WaitLockScriptRunnerEnd(wait, lock));
 			
-			Assertions.assertThat(lock.waitFor().isUndefined()).isFalse();
+			Assertions.assertThat(lock.waitFor()).isNotNull();
 			wait.waitFor();
 		}
 	}
@@ -188,7 +187,7 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("var echoed = syncEcho2(syncEcho1({'message':'bb'}));", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("var echoed = syncEcho2(syncEcho1({'message':'bb'}));", new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("bb");
 		wait.waitFor();
@@ -223,7 +222,7 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("syncEcho2(syncEcho1(['aa', 'bb'])[2]);", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("syncEcho2(syncEcho1(['aa', 'bb'])[2]);", new WaitLockScriptRunnerEnd(wait, lock));
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("+");
 		wait.waitFor();
 	}
@@ -251,7 +250,7 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("asyncEcho('aaa', syncEcho);", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("asyncEcho('aaa', syncEcho);", new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aaa");
 		wait.waitFor();
@@ -274,7 +273,7 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("var echoed = syncEcho({'d':1.23});", null, new WaitLockScriptRunnerEnd(wait, lock));
+		subEngine.eval("var echoed = syncEcho({'d':1.23});", new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor()).isEqualTo(1.23d);
 		wait.waitFor();
@@ -286,7 +285,7 @@ public class ScriptTest {
 		final Lock<String, Exception> lock = new Lock<>();
 		
 		ScriptRunner.Engine engine = runner.engine();
-		engine.eval("err;", null, new ScriptRunner.End() {
+		engine.eval("err;", new ScriptRunner.End() {
 			@Override
 			public void failed(Exception e) {
 				lock.set(e.getMessage());
@@ -320,12 +319,14 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("var echoed = syncEcho({'c':a, 'd':('' + (b.b+1))});", ImmutableMap.of("a", new ScriptParameterString("aa"), "b", new ScriptParameter() {
+		subEngine.register("a", new ScriptParameterString("aa"));
+		subEngine.register("b", new ScriptParameter() {
 			@Override
 			public ScriptElement build(ScriptElementBuilder builder) {
 				return builder.object().put("b", builder.number(1.23d)).build();
 			}
-		}), new WaitLockScriptRunnerEnd(wait, lock));
+		});
+		subEngine.eval("var echoed = syncEcho({'c':a, 'd':('' + (b.b+1))});", new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor()).isEqualTo("aa/2.23");
 		wait.waitFor();
@@ -351,12 +352,14 @@ public class ScriptTest {
 		});
 		
 		ScriptRunner.Engine subEngine = engine.sub();
-		subEngine.eval("java.lang.System.out.println((typeof b) + ' b='+b);java.lang.System.out.println('b.b='+b.b);asyncEcho({'c':a, 'd':('' + (b['b']+1))});", ImmutableMap.of("a", new ScriptParameterString("aa"), "b", new ScriptParameter() {
+		subEngine.register("a", new ScriptParameterString("aa"));
+		subEngine.register("b", new ScriptParameter() {
 			@Override
 			public ScriptElement build(ScriptElementBuilder builder) {
 				return builder.object().put("b", builder.number(1.23d)).build();
 			}
-		}), new WaitLockScriptRunnerEnd(wait, lock));
+		});
+		subEngine.eval("java.lang.System.out.println((typeof b) + ' b='+b);java.lang.System.out.println('b.b='+b.b);asyncEcho({'c':a, 'd':('' + (b['b']+1))});", new WaitLockScriptRunnerEnd(wait, lock));
 		
 		Assertions.assertThat(lock.waitFor()).isEqualTo("aa/2.23");
 		wait.waitFor();
@@ -378,12 +381,12 @@ public class ScriptTest {
 
 		{
 			Wait wait = new Wait();
-			engine.eval("var a = 'aa';", null, new WaitLockScriptRunnerEnd(wait, lock));
+			engine.eval("var a = 'aa';", new WaitLockScriptRunnerEnd(wait, lock));
 			wait.waitFor();
 		}
 		{
 			Wait wait = new Wait();
-			engine.eval("syncEcho(a);", null, new WaitLockScriptRunnerEnd(wait, lock));
+			engine.eval("syncEcho(a);", new WaitLockScriptRunnerEnd(wait, lock));
 			wait.waitFor();
 		}
 		
@@ -410,12 +413,12 @@ public class ScriptTest {
 
 		{
 			Wait wait = new Wait();
-			engine.eval("$.a = 'aa';", null, new WaitLockScriptRunnerEnd(wait, lock));
+			engine.eval("$.a = 'aa';", new WaitLockScriptRunnerEnd(wait, lock));
 			wait.waitFor();
 		}
 		{
 			Wait wait = new Wait();
-			engine.eval("syncEcho($.a);", null, new WaitLockScriptRunnerEnd(wait, lock));
+			engine.eval("syncEcho($.a);", new WaitLockScriptRunnerEnd(wait, lock));
 			wait.waitFor();
 		}
 		
@@ -443,7 +446,7 @@ public class ScriptTest {
 		});
 
 		Wait wait = new Wait();
-		engine.eval("syncEcho2(syncEcho1('aa')['a']);", null, new WaitLockScriptRunnerEnd(wait, lock));
+		engine.eval("syncEcho2(syncEcho1('aa')['a']);", new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
@@ -470,7 +473,7 @@ public class ScriptTest {
 		});
 
 		Wait wait = new Wait();
-		engine.eval("asyncEcho1('aa', function(r) { syncEcho2(r['a']); });", null, new WaitLockScriptRunnerEnd(wait, lock));
+		engine.eval("asyncEcho1('aa', function(r) { syncEcho2(r['a']); });", new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
@@ -513,7 +516,7 @@ public class ScriptTest {
 				+ "}"
 			+ "}"
 			+ "};"
-			+ "asyncEcho1('aa', function(r) { each(r, function(v, k) { syncEcho2(v); }); });", null, new WaitLockScriptRunnerEnd(wait, lock));
+			+ "asyncEcho1('aa', function(r) { each(r, function(v, k) { syncEcho2(v); }); });", new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");
@@ -557,7 +560,7 @@ public class ScriptTest {
 				+ "}"
 			+ "}"
 			+ "};"
-			+ "asyncEcho1('aa', function(r) { each(r, function(v, k) { syncEcho2(v); }); });", null, new WaitLockScriptRunnerEnd(wait, lock));
+			+ "asyncEcho1('aa', function(r) { each(r, function(v, k) { syncEcho2(v); }); });", new WaitLockScriptRunnerEnd(wait, lock));
 		wait.waitFor();
 		
 		Assertions.assertThat(lock.waitFor().asString().value()).isEqualTo("aa");

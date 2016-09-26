@@ -7,6 +7,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Iterators;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.google.gson.JsonPrimitive;
@@ -39,11 +40,6 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 				throw new IllegalArgumentException();
 			}
 			this.value = value;
-		}
-		
-		@Override
-		public boolean isUndefined() {
-			return false;
 		}
 		
 		@Override
@@ -91,11 +87,6 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 		}
 		
 		@Override
-		public boolean isUndefined() {
-			return false;
-		}
-		
-		@Override
 		public ScriptString asString() {
 			return new InternalScriptString(value);
 		}
@@ -140,11 +131,6 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 		}
 		
 		@Override
-		public boolean isUndefined() {
-			return false;
-		}
-		
-		@Override
 		public ScriptString asString() {
 			return null;
 		}
@@ -166,7 +152,14 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 		
 		@Override
 		public ScriptElement get(String key) {
-			return new InternalScriptElement(value.get(key));
+			JsonElement e = value.get(key);
+			if (e == null) {
+				return null;
+			}
+			if (e.isJsonNull()) {
+				return null;
+			}
+			return new InternalScriptElement(e);
 		}
 		@Override
 		public Iterable<Entry> entries() {
@@ -176,7 +169,11 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 					return new Entry() {
 						@Override
 						public ScriptElement value() {
-							return new InternalScriptElement(input.getValue());
+							JsonElement v = input.getValue();
+							if (v.isJsonNull()) {
+								return null;
+							}
+							return new InternalScriptElement(v);
 						}
 						@Override
 						public String key() {
@@ -207,11 +204,6 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 		}
 		
 		@Override
-		public boolean isUndefined() {
-			return false;
-		}
-		
-		@Override
 		public ScriptString asString() {
 			return null;
 		}
@@ -236,6 +228,9 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 			return Iterators.transform(value.iterator(), new Function<JsonElement, ScriptElement>() {
 				@Override
 				public ScriptElement apply(JsonElement input) {
+					if (input.isJsonNull()) {
+						return null;
+					}
 					return new InternalScriptElement(input);
 				}
 			});
@@ -255,14 +250,6 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 		private final JsonElement value;
 		public InternalScriptElement(JsonElement value) {
 			this.value = value;
-		}
-		
-		@Override
-		public boolean isUndefined() {
-			if (value == null) {
-				return true;
-			}
-			return false; // value.isJsonNull();
 		}
 		
 		@Override
@@ -299,10 +286,20 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 
 	@Override
 	public ScriptElement toJava(Object o) {
-		return new InternalScriptElement((o == null) ? null : new JsonParser().parse((String) o));
+		if (o == null) {
+			return null;
+		}
+		JsonElement e = new JsonParser().parse((String) o);
+		if (e.isJsonNull()) {
+			return null;
+		}
+		return new InternalScriptElement(e);
 	}
 	@Override
 	public Object fromJava(ScriptElement o) {
+		if (o == null) {
+			return null;
+		}
 		JsonElement js = ((JsonConvertingBuilder.Internal) o).toJs();
 		if (js == null) {
 			return null;
@@ -310,10 +307,6 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 		return js.toString();
 	}
 	
-	@Override
-	public ScriptElement undefined() {
-		return new InternalScriptElement(null);
-	}
 	@Override
 	public ScriptElement string(String value) {
 		return new InternalScriptString(new JsonPrimitive(value));
@@ -328,7 +321,7 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 			private final JsonObject o = new JsonObject();
 			@Override
 			public ScriptObjectBuilder put(String key, ScriptElement value) {
-				o.add(key, ((JsonConvertingBuilder.Internal) value).toJs());
+				o.add(key, (value == null) ? JsonNull.INSTANCE : ((JsonConvertingBuilder.Internal) value).toJs());
 				return this;
 			}
 			
@@ -344,7 +337,7 @@ final class JsonConvertingBuilder implements ConvertingBuilder {
 			private final JsonArray o = new JsonArray();
 			@Override
 			public ScriptArrayBuilder add(ScriptElement value) {
-				o.add(((JsonConvertingBuilder.Internal) value).toJs());
+				o.add((value == null) ? JsonNull.INSTANCE : ((JsonConvertingBuilder.Internal) value).toJs());
 				return this;
 			}
 			

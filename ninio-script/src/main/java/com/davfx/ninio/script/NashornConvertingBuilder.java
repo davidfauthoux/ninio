@@ -56,11 +56,6 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 		}
 		
 		@Override
-		public boolean isUndefined() {
-			return false;
-		}
-		
-		@Override
 		public ScriptString asString() {
 			return this;
 		}
@@ -99,11 +94,6 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 		private final double value;
 		public InternalScriptNumber(double value) {
 			this.value = value;
-		}
-		
-		@Override
-		public boolean isUndefined() {
-			return false;
 		}
 		
 		@Override
@@ -151,11 +141,6 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 		}
 		
 		@Override
-		public boolean isUndefined() {
-			return false;
-		}
-		
-		@Override
 		public ScriptString asString() {
 			return null;
 		}
@@ -177,7 +162,11 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 		
 		@Override
 		public ScriptElement get(String key) {
-			return new InternalScriptElement(value.get(key));
+			Object e = value.get(key);
+			if (e == null) {
+				return null;
+			}
+			return new InternalScriptElement(e);
 		}
 		@Override
 		public Iterable<Entry> entries() {
@@ -187,7 +176,11 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 					return new Entry() {
 						@Override
 						public ScriptElement value() {
-							return new InternalScriptElement(input.getValue());
+							Object v = input.getValue();
+							if (v == null) {
+								return null;
+							}
+							return new InternalScriptElement(v);
 						}
 						@Override
 						public String key() {
@@ -215,11 +208,6 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 				throw new NullPointerException();
 			}
 			this.value = value;
-		}
-		
-		@Override
-		public boolean isUndefined() {
-			return false;
 		}
 		
 		@Override
@@ -251,7 +239,11 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 					String key = input.getKey();
 					if (key.equals(String.valueOf(index))) {
 						index++;
-						return new InternalScriptElement(input.getValue());
+						Object v = input.getValue();
+						if (v == null) {
+							return null;
+						}
+						return new InternalScriptElement(v);
 					}
 					return null;
 				}
@@ -277,11 +269,6 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 		private final Object value;
 		public InternalScriptElement(Object value) {
 			this.value = value;
-		}
-		
-		@Override
-		public boolean isUndefined() {
-			return (value == null);
 		}
 		
 		@Override
@@ -324,17 +311,19 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 
 	@Override
 	public ScriptElement toJava(Object o) {
+		if (o == null) {
+			return null;
+		}
 		return new InternalScriptElement(o);
 	}
 	@Override
 	public Object fromJava(ScriptElement o) {
+		if (o == null) {
+			return null;
+		}
 		return ((NashornConvertingBuilder.Internal) o).toJs();
 	}
 	
-	@Override
-	public ScriptElement undefined() {
-		return new InternalScriptElement(null);
-	}
 	@Override
 	public ScriptElement string(String value) {
 		return new InternalScriptString(value);
@@ -349,7 +338,7 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 			private final Map<String, Object> o = new HashMap<>();
 			@Override
 			public ScriptObjectBuilder put(String key, ScriptElement value) {
-				o.put(key, ((NashornConvertingBuilder.Internal) value).toJs());
+				o.put(key, (value == null) ? null : ((NashornConvertingBuilder.Internal) value).toJs());
 				return this;
 			}
 			
@@ -365,7 +354,7 @@ final class NashornConvertingBuilder implements ConvertingBuilder {
 			private final Map<String, Object> o = new LinkedHashMap<>();
 			@Override
 			public ScriptArrayBuilder add(ScriptElement value) {
-				o.put(String.valueOf(o.size()), ((NashornConvertingBuilder.Internal) value).toJs());
+				o.put(String.valueOf(o.size()), (value == null) ? null : ((NashornConvertingBuilder.Internal) value).toJs());
 				return this;
 			}
 			

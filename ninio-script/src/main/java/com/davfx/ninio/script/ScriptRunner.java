@@ -1,7 +1,5 @@
 package com.davfx.ninio.script;
 
-import com.google.common.collect.ImmutableMap;
-
 public interface ScriptRunner {
 	interface End {
 		void failed(Exception e);
@@ -18,8 +16,9 @@ public interface ScriptRunner {
 	interface Engine {
 		void register(String function, SyncScriptFunction syncFunction);
 		void register(String function, AsyncScriptFunction asyncFunction);
+		void register(String name, ScriptParameter value);
 
-		void eval(String script, ImmutableMap<String, ScriptParameter> parameters, End end);
+		void eval(String script, End end);
 
 		Engine sub();
 	}

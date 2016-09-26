@@ -29,7 +29,7 @@ public class PerfTest {
 						return request;
 					}
 				});
-				engine.eval((newScriptEveryTime ? "var i" + i + " = 0;" : "") + " syncEcho({'message':'bb'});", null, new ScriptRunner.End() {
+				engine.eval((newScriptEveryTime ? "var i" + i + " = 0;" : "") + " syncEcho({'message':'bb'});", new ScriptRunner.End() {
 					@Override
 					public void failed(Exception e) {
 						lock.fail(e);
