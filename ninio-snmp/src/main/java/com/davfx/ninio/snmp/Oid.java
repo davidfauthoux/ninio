@@ -6,22 +6,22 @@ import java.util.List;
 import com.google.common.base.Splitter;
 
 public final class Oid implements Comparable<Oid> {
-	public final int[] raw;
+	public final long[] raw;
 
 	public Oid(String dotNotation) {
 		List<String> s = Splitter.on('.').splitToList(dotNotation);
 		//%% if (s.size() < 2) {
 		//%% throw new IllegalArgumentException();
 		//%% }
-		raw = new int[s.size()];
+		raw = new long[s.size()];
 		int i = 0;
 		for (String e : s) {
-			raw[i] = Integer.parseInt(e);
+			raw[i] = Long.parseLong(e);
 			i++;
 		}
 	}
 
-	public Oid(int[] raw) {
+	public Oid(long[] raw) {
 		//%% if (raw.length < 2) {
 		//%% throw new IllegalArgumentException();
 		//%% }
@@ -37,13 +37,13 @@ public final class Oid implements Comparable<Oid> {
 				return null;
 			}
 		}
-		int[] r = new int[child.raw.length - raw.length];
+		long[] r = new long[child.raw.length - raw.length];
 		System.arraycopy(child.raw, raw.length, r, 0, r.length);
 		return new Oid(r);
 	}
 
 	public Oid append(Oid suffix) {
-		int[] r = new int[raw.length + suffix.raw.length];
+		long[] r = new long[raw.length + suffix.raw.length];
 		System.arraycopy(raw, 0, r, 0, raw.length);
 		System.arraycopy(suffix.raw, 0, r, raw.length, suffix.raw.length);
 		return new Oid(r);
@@ -57,7 +57,7 @@ public final class Oid implements Comparable<Oid> {
 	@Override
 	public String toString() {
 		StringBuilder b = new StringBuilder();
-		for (int e : raw) {
+		for (long e : raw) {
 			if (b.length() > 0) {
 				b.append('.');
 			}
@@ -95,11 +95,11 @@ public final class Oid implements Comparable<Oid> {
 	
 	@Override
 	public int compareTo(Oid handledOid) {
-		int[] handledOidRaw = handledOid.raw;
+		long[] handledOidRaw = handledOid.raw;
 		int i = 0;
 		while ((i < raw.length) && (i < handledOidRaw.length)) {
-			int o = raw[i];
-			int h = handledOidRaw[i];
+			long o = raw[i];
+			long h = handledOidRaw[i];
 			if (h > o) {
 				return -1;
 			}

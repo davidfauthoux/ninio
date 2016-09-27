@@ -108,7 +108,7 @@ public final class BerWriter {
 		buffer.put((byte) BerConstants.OID);
 		willWriteLength();
 
-		int[] raw = oid.raw;
+		long[] raw = oid.raw;
 
 		if (raw.length < 2) {
 			throw new IllegalArgumentException();
@@ -117,7 +117,7 @@ public final class BerWriter {
 		buffer.put((byte) ((raw[1] + (raw[0] * 40)) & 0xFF));
 
 		for (int i = 2; i < raw.length; i++) {
-			int value = raw[i];
+			long value = raw[i];
 
 			int mask = ~0x80;
 			int bits = 0;
@@ -131,7 +131,7 @@ public final class BerWriter {
 			}
 
 			while (bits >= 0) {
-				int b = (value >>> bits) & ~0x80;
+				long b = (value >>> bits) & ~0x80;
 				if (bits > 0) {
 					b |= 0x80; // Continuation bit
 				}

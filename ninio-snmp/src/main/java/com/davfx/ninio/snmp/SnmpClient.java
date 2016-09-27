@@ -250,7 +250,7 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	private static final class AuthRemoteEnginePendingRequestManager {
-		private static final Oid DISCOVER_OID = new Oid(new int[] { 1, 1 });
+		private static final Oid DISCOVER_OID = new Oid(new long[] { 1L, 1L });
 		
 		public static final class PendingRequest {
 			public final int request;

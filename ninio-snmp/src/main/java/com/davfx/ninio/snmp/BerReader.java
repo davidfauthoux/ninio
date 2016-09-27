@@ -117,8 +117,8 @@ public final class BerReader {
 		return doReadInteger(buffer, length);
 	}
 
-	private static int[] doReadOid(ByteBuffer buffer, int length) throws IOException {
-		List<Integer> values = new LinkedList<Integer>();
+	private static long[] doReadOid(ByteBuffer buffer, int length) throws IOException {
+		List<Long> values = new LinkedList<>();
 
 		if (length == 0) {
 			throw new IOException("Invalid OID");
@@ -126,12 +126,12 @@ public final class BerReader {
 
 		int b = buffer.get() & 0xFF;
 
-		values.add(b / 40);
-		values.add(b % 40);
+		values.add(b / 40L);
+		values.add(b % 40L);
 
 		length--;
 
-		int value = 0;
+		long value = 0;
 		while (length > 0) {
 			b = buffer.get() & 0xFF;
 
@@ -140,15 +140,15 @@ public final class BerReader {
 
 			if ((b & 0x80) == 0) {
 				values.add(value);
-				value = 0;
+				value = 0L;
 			}
 
 			length--;
 		}
 
-		int[] v = new int[values.size()];
+		long[] v = new long[values.size()];
 		int i = 0;
-		for (int val : values) {
+		for (long val : values) {
 			v[i] = val;
 			i++;
 		}
