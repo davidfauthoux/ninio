@@ -31,6 +31,9 @@
 		<url>https://github.com/davidfauthoux/ninio.git</url>
 	</scm>
 
+	<!-- mvn deploy -Prelease -->
+	<!-- or -->
+	<!-- mvn deploy -Plo -->
 	<profiles>
 		<profile>
 			<id>release</id>
@@ -90,32 +93,31 @@
 					</plugin>
 				</plugins>
 			</build>
+			<distributionManagement>
+				<snapshotRepository>
+					<id>ossrh</id>
+					<url>https://oss.sonatype.org/content/repositories/snapshots</url>
+				</snapshotRepository>
+				<repository>
+					<id>ossrh</id>
+					<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
+				</repository>
+			</distributionManagement>
+		</profile>
+		<profile>
+			<id>lo</id>
+			<distributionManagement>
+				<repository>
+					<id>nexus</id>
+					<url>http://172.17.10.31:8081/nexus/content/repositories/releases</url>
+				</repository>
+				<snapshotRepository>
+					<id>nexus</id>
+					<url>http://172.17.10.31:8081/nexus/content/repositories/snapshots</url>
+				</snapshotRepository>
+			</distributionManagement>
 		</profile>
 	</profiles>
-
-	<distributionManagement>
-		<snapshotRepository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/content/repositories/snapshots</url>
-		</snapshotRepository>
-		<repository>
-			<id>ossrh</id>
-			<url>https://oss.sonatype.org/service/local/staging/deploy/maven2/</url>
-		</repository>
-	</distributionManagement>
-
-	<!-- TODO Remove - - >
-	<distributionManagement>
-		<repository>
-			<id>nexus</id>
-			<url>http://172.17.10.31:8081/nexus/content/repositories/releases</url>
-		</repository>
-		<snapshotRepository>
-			<id>nexus</id>
-			<url>http://172.17.10.31:8081/nexus/content/repositories/snapshots</url>
-		</snapshotRepository>
-	</distributionManagement>
-	-->
 
 	<properties>
 		<jdk.version>1.7</jdk.version>
