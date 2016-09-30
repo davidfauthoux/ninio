@@ -33,23 +33,20 @@ public final class DnsTimeout {
 	public static DnsRequestBuilder wrap(final Timeout t, final double timeout, final DnsRequestBuilder wrappee) {
 		return new DnsRequestBuilder() {
 			private Timeout.Manager m;
-			private Cancelable cancelable;
+			private Cancelable c;
 
 			@Override
 			public SnmpRequestBuilderCancelable resolve(String host, ProtocolFamily family) {
 				m = t.set(timeout);
-				
-				final Cancelable c = wrappee.resolve(host, family);
+				c = wrappee.resolve(host, family);
 
-				cancelable = new Cancelable() {
+				return new DnsRequestBuilderCancelableImpl(this, new Cancelable() {
 					@Override
 					public void cancel() {
 						m.cancel();
 						c.cancel();
 					}
-				};
-				
-				return new DnsRequestBuilderCancelableImpl(this, cancelable);
+				});
 			}
 
 			@Override
@@ -71,11 +68,18 @@ public final class DnsTimeout {
 				m.run(new Runnable() {
 					@Override
 					public void run() {
+						c.cancel();
 						callback.failed(new IOException("Timeout"));
 					}
 				});
 
-				return cancelable;
+				return new Cancelable() {
+					@Override
+					public void cancel() {
+						m.cancel();
+						c.cancel();
+					}
+				};
 			}
 		};
 	}

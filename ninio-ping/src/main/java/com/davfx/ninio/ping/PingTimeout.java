@@ -25,12 +25,6 @@ public final class PingTimeout {
 			@Override
 			public Cancelable ping(byte[] ip, final PingReceiver receiver) {
 				final Timeout.Manager m = t.set(timeout);
-				m.run(new Runnable() {
-					@Override
-					public void run() {
-						receiver.failed(new IOException("Timeout"));
-					}
-				});
 
 				final Cancelable cancelable = wrappee.ping(ip, new PingReceiver() {
 					@Override
@@ -45,6 +39,14 @@ public final class PingTimeout {
 					}
 				});
 				
+				m.run(new Runnable() {
+					@Override
+					public void run() {
+						cancelable.cancel();
+						receiver.failed(new IOException("Timeout"));
+					}
+				});
+
 				return new Cancelable() {
 					@Override
 					public void cancel() {

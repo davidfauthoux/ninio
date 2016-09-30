@@ -45,23 +45,20 @@ public final class SnmpTimeout {
 			}
 			
 			private Timeout.Manager m;
-			private Cancelable cancelable;
+			private Cancelable c;
 
 			@Override
 			public SnmpRequestBuilderCancelable build(Address address, Oid oid) {
 				m = t.set(timeout);
+				c = wrappee.build(address, oid);
 				
-				final Cancelable c = wrappee.build(address, oid);
-
-				cancelable = new Cancelable() {
+				return new SnmpRequestBuilderCancelableImpl(this, new Cancelable() {
 					@Override
 					public void cancel() {
 						m.cancel();
 						c.cancel();
 					}
-				};
-				
-				return new SnmpRequestBuilderCancelableImpl(this, cancelable);
+				});
 			}
 
 			@Override
@@ -88,11 +85,18 @@ public final class SnmpTimeout {
 				m.run(new Runnable() {
 					@Override
 					public void run() {
+						c.cancel();
 						callback.failed(new IOException("Timeout"));
 					}
 				});
 
-				return cancelable;
+				return new Cancelable() {
+					@Override
+					public void cancel() {
+						m.cancel();
+						c.cancel();
+					}
+				};
 			}
 		};
 	}
