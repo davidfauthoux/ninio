@@ -129,83 +129,72 @@ public final class DnsClient implements DnsConnecter {
 	public DnsRequestBuilder request() {
 		return new DnsRequestBuilder() {
 			private Instance instance = null;
-			private byte[] parsedIp = null;
-			private boolean receiverSet = false;
-			private Cancelable cancelable = null;
+			private String host;
+			private ProtocolFamily family;
 			
 			@Override
-			public SnmpRequestBuilderCancelable resolve(String host, ProtocolFamily family) {
-				if (cancelable != null) {
-					throw new IllegalStateException();
-				}
-
-				if (family == StandardProtocolFamily.INET6) {
-					String r = HOSTS6.get(host);
-					if (r != null) {
-						host = r;
-					}
-				} else {
-					String r = HOSTS4.get(host);
-					if (r != null) {
-						host = r;
-					}
-				}
-
-				if (host == null) {
-					parsedIp = new byte[] { };
-				} else {
-					try {
-						parsedIp = InetAddresses.forString(host).getAddress();
-					} catch (IllegalArgumentException e) {
-						parsedIp = null;
-					}
-
-					if ((parsedIp == null) && SYSTEM) {
-						LOGGER.info("Sync resolution: {}", host);
-						try {
-							parsedIp = InetAddress.getByName(host).getAddress();
-						} catch (UnknownHostException e) {
-							parsedIp = null;
-						}
-					}
-				}
-				
-				if (parsedIp == null) {
-					instance = new Instance(connecter, dnsAddress, instanceMapper, host, family);
-				}
-
-				cancelable = new Cancelable() {
-					@Override
-					public void cancel() {
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								if (instance != null) {
-									instance.cancel();
-								}
-							}
-						});
-					}
-				};
-				
-				return new DnsRequestBuilderCancelableImpl(this, cancelable);
+			public DnsRequestBuilder resolve(String host, ProtocolFamily family) {
+				this.host = host;
+				this.family = family;
+				return this;
 			}
 
-			@Override
-			public Cancelable receive(final DnsReceiver c) {
-				if (cancelable == null) {
-					throw new IllegalStateException();
-				}
-				if (receiverSet) {
-					throw new IllegalStateException();
-				}
-				
-				receiverSet = true;
-				
+			public void cancel() {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						if (parsedIp != null) {
+						if (instance != null) {
+							instance.cancel();
+						}
+					}
+				});
+			}
+			
+			@Override
+			public Cancelable receive(final DnsReceiver c) {
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						if (instance != null) {
+							throw new IllegalStateException();
+						}
+
+						if (family == StandardProtocolFamily.INET6) {
+							String r = HOSTS6.get(host);
+							if (r != null) {
+								host = r;
+							}
+						} else {
+							String r = HOSTS4.get(host);
+							if (r != null) {
+								host = r;
+							}
+						}
+
+						byte[] parsedIp;
+						
+						if (host == null) {
+							parsedIp = new byte[] { };
+						} else {
+							try {
+								parsedIp = InetAddresses.forString(host).getAddress();
+							} catch (IllegalArgumentException e) {
+								parsedIp = null;
+							}
+
+							if ((parsedIp == null) && SYSTEM) {
+								LOGGER.info("Sync resolution: {}", host);
+								try {
+									parsedIp = InetAddress.getByName(host).getAddress();
+								} catch (UnknownHostException e) {
+									parsedIp = null;
+								}
+							}
+						}
+						
+						if (parsedIp == null) {
+							instance = new Instance(connecter, dnsAddress, instanceMapper, host, family);
+						} else {
 							c.received(parsedIp);
 							return;
 						}
@@ -215,7 +204,7 @@ public final class DnsClient implements DnsConnecter {
 					}
 				});
 
-				return cancelable;
+				return this;
 			}
 		};
 	}
@@ -370,17 +359,23 @@ public final class DnsClient implements DnsConnecter {
 			
 			@Override
 			public void failed(IOException ioe) {
-				callback.failed(ioe);
+				if (callback != null) {
+					callback.failed(ioe);
+				}
 			}
 			
 			@Override
 			public void connected(Address address) {
-				callback.connected(address);
+				if (callback != null) {
+					callback.connected(address);
+				}
 			}
 			
 			@Override
 			public void closed() {
-				callback.closed();
+				if (callback != null) {
+					callback.closed();
+				}
 			}
 		});
 	}

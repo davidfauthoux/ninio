@@ -2,13 +2,11 @@ package com.davfx.ninio.snmp;
 
 import com.davfx.ninio.core.Address;
 
-public interface SnmpRequestBuilder {
+public interface SnmpRequestBuilder extends Cancelable {
 	SnmpRequestBuilder community(String community);
 	SnmpRequestBuilder auth(AuthRemoteSpecification authRemoteSpecification);
 
-	interface SnmpRequestBuilderCancelable extends SnmpRequestBuilder, Cancelable {
-	}
-	
-	SnmpRequestBuilderCancelable build(Address address, Oid oid);
+	SnmpRequestBuilder build(Address address, Oid oid);
+	SnmpRequestBuilder trap(Oid oid, String value);
 	Cancelable receive(SnmpReceiver callback);
 }

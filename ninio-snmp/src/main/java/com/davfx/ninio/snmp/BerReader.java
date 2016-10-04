@@ -190,7 +190,7 @@ public final class BerReader {
 
 	public int beginReadSequence() throws IOException {
 		int type = buffer.get() & 0xFF;
-		if ((type != BerConstants.SEQUENCE) && (type != BerConstants.RESPONSE) && (type != BerConstants.REPORT) && (type != BerConstants.GET) && (type != BerConstants.GETNEXT) && (type != BerConstants.GETBULK))  {
+		if ((type & BerConstants.ASN_CONSTRUCTOR) != BerConstants.ASN_CONSTRUCTOR) {
 			throw new IOException("Wrong ASN.1 type. Not a sequence: " + type);
 		}
 		int length = doReadLength(buffer);

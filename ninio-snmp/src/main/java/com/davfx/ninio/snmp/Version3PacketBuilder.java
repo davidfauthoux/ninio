@@ -1,8 +1,23 @@
 package com.davfx.ninio.snmp;
 
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 
 public final class Version3PacketBuilder {
+	private static interface Value {
+		BerPacket ber();
+	}
+	
+	private static final class OidValue {
+		public final Oid oid;
+		public final Value value;
+		public OidValue(Oid oid, Value value) {
+			this.oid = oid;
+			this.value = value;
+		}
+	}
+	
 	private final ByteBuffer buffer;
 
 	private static final class AuthBerPacket implements BerPacket {
@@ -51,7 +66,7 @@ public final class Version3PacketBuilder {
 		}
 	}
 
-	private Version3PacketBuilder(AuthRemoteEngine authEngine, int requestId, Oid oid, int type, int bulkLength) {
+	private Version3PacketBuilder(AuthRemoteEngine authEngine, int requestId, int type, int bulkLength, Iterable<OidValue> oidValues) {
 		authEngine.renewTime();
 		
 		boolean encrypt = false;
@@ -86,6 +101,13 @@ public final class Version3PacketBuilder {
 				.add(auth)
 				.add(priv)));
 
+		SequenceBerPacket seq = new SequenceBerPacket(BerConstants.SEQUENCE);
+		for (OidValue oidValue : oidValues) {
+			seq.add(new SequenceBerPacket(BerConstants.SEQUENCE)
+						.add(new OidBerPacket(oidValue.oid))
+						.add(oidValue.value.ber()));
+		}
+
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
 			.add(new BytesBerPacket(ByteBuffer.wrap(authEngine.getId())))
 			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
@@ -94,9 +116,7 @@ public final class Version3PacketBuilder {
 				.add(new IntegerBerPacket(0))
 				.add(new IntegerBerPacket(bulkLength))
 				.add(new SequenceBerPacket(BerConstants.SEQUENCE)
-					.add(new SequenceBerPacket(BerConstants.SEQUENCE)
-						.add(new OidBerPacket(oid))
-						.add(new NullBerPacket()))));
+					.add(seq)));
 
 		if (encrypt) {
 			ByteBuffer decryptedBuffer = ByteBuffer.allocate(BerPacketUtils.typeAndLengthBufferLength(pduPacket.lengthBuffer()) + pduPacket.length());
@@ -125,14 +145,50 @@ public final class Version3PacketBuilder {
 		buffer.position(p);
 	}
 
+	private static Iterable<OidValue> single(Oid oid) {
+		List<OidValue> l = new LinkedList<>();
+		l.add(new OidValue(oid, new Value() {
+			@Override
+			public BerPacket ber() {
+				return new NullBerPacket();
+			}
+		}));
+		return l;
+	}
+	
 	public static Version3PacketBuilder getBulk(AuthRemoteEngine authEngine, int requestId, Oid oid, int bulkLength) {
-		return new Version3PacketBuilder(authEngine, requestId, oid, BerConstants.GETBULK, bulkLength);
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETBULK, bulkLength, single(oid));
 	}
 	public static Version3PacketBuilder get(AuthRemoteEngine authEngine, int requestId, Oid oid) {
-		return new Version3PacketBuilder(authEngine, requestId, oid, BerConstants.GET, 0);
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GET, 0, single(oid));
 	}
 	public static Version3PacketBuilder getNext(AuthRemoteEngine authEngine, int requestId, Oid oid) {
-		return new Version3PacketBuilder(authEngine, requestId, oid, BerConstants.GETNEXT, 0);
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETNEXT, 0, single(oid));
+	}
+
+	public static Version3PacketBuilder trap(AuthRemoteEngine authEngine, int requestId, final Oid trapOid, Iterable<SnmpResult> oidValues) {
+		List<OidValue> l = new LinkedList<>();
+		l.add(new OidValue(BerConstants.TIMESTAMP_OID, new Value() {
+			@Override
+			public BerPacket ber() {
+				return new IntegerBerPacket((int) (System.currentTimeMillis() / 10L));
+			}
+		}));
+		l.add(new OidValue(BerConstants.TRAP_OID, new Value() {
+			@Override
+			public BerPacket ber() {
+				return new OidBerPacket(trapOid);
+			}
+		}));
+		for (final SnmpResult oidValue : oidValues) {
+			l.add(new OidValue(oidValue.oid, new Value() {
+				@Override
+				public BerPacket ber() {
+					return new BytesBerPacket(BerPacketUtils.bytes(oidValue.value));
+				}
+			}));
+		}
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.TRAP, 0, l);
 	}
 
 	public ByteBuffer getBuffer() {

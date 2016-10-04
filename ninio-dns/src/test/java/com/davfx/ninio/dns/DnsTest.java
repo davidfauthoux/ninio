@@ -24,7 +24,7 @@ public class DnsTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<byte[], IOException> lock = new Lock<>();
 			
-			try (DnsConnecter client = DnsTimeout.wrap(1d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
+			try (DnsConnecter client = DnsTimeout.wrap(10d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
 				client.connect(new DnsConnection() {
 					@Override
 					public void closed() {

@@ -44,8 +44,11 @@ public final class BerConstants {
 	public static final int GET = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x0);
 	public static final int GETNEXT = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x1);
 	public static final int RESPONSE = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x2);
-	public static final int REPORT = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x8);
+	public static final int SET = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x3);
 	public static final int GETBULK = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x5);
+	public static final int INFORM = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x6);
+	public static final int TRAP = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x7);
+	public static final int REPORT = (ASN_CONTEXT | ASN_CONSTRUCTOR | 0x8);
 
 	/*%%%%%%%%%%%%
 	 * Not used for now public static final int NOSUCHOBJECT = 0x80; public static final int NOSUCHINSTANCE = 0x81; public static final int ENDOFMIBVIEW = 0x82;
@@ -71,4 +74,7 @@ public final class BerConstants {
 	 */
 	
 	public static final int NO_SUCH_NAME_ERROR = 2;
+	
+	public static final Oid TIMESTAMP_OID = new Oid("1.3.6.1.2.1.1.3.0");
+	public static final Oid TRAP_OID = new Oid("1.3.6.1.6.3.1.1.4.1.0");
 }

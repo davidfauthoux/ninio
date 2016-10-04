@@ -31,6 +31,7 @@ public final class SnmpClient implements SnmpConnecter {
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(SnmpClient.class.getPackage().getName());
 
 	public static final int DEFAULT_PORT = 161;
+	public static final int DEFAULT_TRAP_PORT = 162;
 
 	private static final int BULK_SIZE = CONFIG.getInt("bulkSize");
 	// private static final int GET_LIMIT = CONFIG.getInt("getLimit");
@@ -87,6 +88,9 @@ public final class SnmpClient implements SnmpConnecter {
 		return new SnmpRequestBuilder() {
 			private String community = null;
 			private AuthRemoteSpecification authRemoteSpecification = null;
+			private Address address;
+			private Oid oid;
+			private List<SnmpResult> trap = null;
 			
 			@Override
 			public SnmpRequestBuilder community(String community) {
@@ -100,70 +104,66 @@ public final class SnmpClient implements SnmpConnecter {
 			}
 			
 			private Instance instance = null;
-			private boolean receiverSet = false;
-			private Cancelable cancelable = null;
-			private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
 			
 			@Override
-			public SnmpRequestBuilderCancelable build(final Address address, Oid oid) {
-				if (cancelable != null) {
-					throw new IllegalStateException();
-				}
-				
-				instance = new Instance(connecter, instanceMapper, oid, address, community);
-
-				cancelable = new Cancelable() {
-					@Override
-					public void cancel() {
-						executor.execute(new Runnable() {
-							@Override
-							public void run() {
-								instance.cancel();
-							}
-						});
-					}
-				};
-				
-				final AuthRemoteSpecification s = authRemoteSpecification;
+			public SnmpRequestBuilder build(Address address, Oid oid) {
+				this.address = address;
+				this.oid = oid;
+				return this;
+			}
+			
+			@Override
+			public void cancel() {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						if (s != null) {
-							authRemoteEnginePendingRequestManager = authRemoteEngines.get(address);
-							if (authRemoteEnginePendingRequestManager == null) {
-								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-								authRemoteEngines.put(address, authRemoteEnginePendingRequestManager);
-							}
-							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, address, connecter);
+						if (instance != null) {
+							instance.cancel();
 						}
 					}
 				});
-
-
-				return new SnmpRequestBuilderCancelableImpl(this, cancelable);
+			}
+			
+			@Override
+			public SnmpRequestBuilder trap(Oid oid, String value) {
+				if (trap == null) {
+					trap = new LinkedList<>();
+				}
+				trap.add(new SnmpResult(oid, value));
+				return this;
 			}
 
 			@Override
-			public Cancelable receive(final SnmpReceiver c) {
-				if (cancelable == null) {
-					throw new IllegalStateException();
-				}
-				if (receiverSet) {
-					throw new IllegalStateException();
-				}
-				
-				receiverSet = true;
-				
+			public Cancelable receive(final SnmpReceiver r) {
+				final AuthRemoteSpecification s = authRemoteSpecification;
+				final Oid o = oid;
+				final Address a = address;
+				final String c = community;
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						instance.receiver = c;
+						if (instance != null) {
+							throw new IllegalStateException();
+						}
+						
+						instance = new Instance(connecter, instanceMapper, o, a, c, trap);
+
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
+						if (s != null) {
+							authRemoteEnginePendingRequestManager = authRemoteEngines.get(a);
+							if (authRemoteEnginePendingRequestManager == null) {
+								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
+								authRemoteEngines.put(a, authRemoteEnginePendingRequestManager);
+							}
+							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, a, connecter);
+						}
+
+						instance.receiver = r;
 						instance.authRemoteEnginePendingRequestManager = authRemoteEnginePendingRequestManager;
 						instance.launch();
 					}
 				});
-
-				return cancelable;
+				return this;
 			}
 		};
 	}
@@ -222,17 +222,23 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			@Override
 			public void failed(IOException ioe) {
-				callback.failed(ioe);
+				if (callback != null) {
+					callback.failed(ioe);
+				}
 			}
 			
 			@Override
 			public void connected(Address address) {
-				callback.connected(address);
+				if (callback != null) {
+					callback.connected(address);
+				}
 			}
 			
 			@Override
 			public void closed() {
-				callback.closed();
+				if (callback != null) {
+					callback.closed();
+				}
 			}
 		});
 	}
@@ -256,12 +262,14 @@ public final class SnmpClient implements SnmpConnecter {
 			public final int request;
 			public final int instanceId;
 			public final Oid oid;
+			public final List<SnmpResult> trap;
 			public final SendCallback sendCallback;
 
-			public PendingRequest(int request, int instanceId, Oid oid, SendCallback sendCallback) {
+			public PendingRequest(int request, int instanceId, Oid oid, List<SnmpResult> trap, SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
+				this.trap = trap;
 				this.sendCallback = sendCallback;
 			}
 		}
@@ -350,6 +358,14 @@ public final class SnmpClient implements SnmpConnecter {
 						connector.send(address, b, r.sendCallback);
 					}
 					break;
+				case BerConstants.TRAP:
+					{
+						Version3PacketBuilder builder = Version3PacketBuilder.trap(engine, r.instanceId, r.oid, r.trap);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing TRAP v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
+						connector.send(address, b, r.sendCallback);
+					}
+				break;
 				default:
 					break;
 				}
@@ -450,14 +466,16 @@ public final class SnmpClient implements SnmpConnecter {
 		private final Oid initialRequestOid;
 		private Oid requestOid;
 		// private int countResults = 0;
-		private int shouldRepeatWhat = BerConstants.GET;
+		private int shouldRepeatWhat;
 		public int instanceId = RequestIdProvider.IGNORE_ID;
 
 		private final Address address;
 		private final String community;
 		private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
+		
+		private final List<SnmpResult> trap;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, String community) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, String community, List<SnmpResult> trap) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
@@ -466,11 +484,17 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			this.address = address;
 			this.community = community;
+			
+			this.trap = trap;
 		}
 		
 		public void launch() {
-			instanceMapper.map(this);
-			shouldRepeatWhat = BerConstants.GET;
+			if (trap == null) {
+				instanceMapper.map(this);
+				shouldRepeatWhat = BerConstants.GET;
+			} else {
+				shouldRepeatWhat = BerConstants.TRAP;
+			}
 			write();
 		}
 		
@@ -521,11 +545,18 @@ public final class SnmpClient implements SnmpConnecter {
 					connector.send(address, b, sendCallback);
 					break;
 				}
+				case BerConstants.TRAP: {
+					Version2cPacketBuilder builder = Version2cPacketBuilder.trap(community, instanceId, requestOid, trap);
+					ByteBuffer b = builder.getBuffer();
+					LOGGER.trace("Writing TRAP: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+					connector.send(address, b, sendCallback);
+					break;
+				}
 				default:
 					break;
 				}
 			} else {
-				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(shouldRepeatWhat, instanceId, requestOid, sendCallback));
+				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(shouldRepeatWhat, instanceId, requestOid, trap, sendCallback));
 				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 			}
 		}
