@@ -412,7 +412,9 @@ public final class TcpSocketServer implements Listener {
 			if (!closed) {
 				closed = true;
 				
-				connection.closed();
+				if (connection != null) {
+					connection.closed();
+				}
 			}
 		}
 	}
