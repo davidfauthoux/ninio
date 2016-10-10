@@ -134,13 +134,18 @@ public final class HttpClient implements HttpConnecter {
 		}
 		@Override
 		public void close() {
+			List<ToSend> callbacks = null;
 			if (toSend != null) {
-				for (ToSend s : toSend) {
-					s.callback.failed(new IOException("Closed"));
-				}
+				callbacks = toSend;
 				toSend = null;
 			}
 			connecter = null;
+			
+			if (callbacks != null) {
+				for (ToSend s : callbacks) {
+					s.callback.failed(new IOException("Closed"));
+				}
+			}
 		}
 
 		@Override
@@ -165,7 +170,7 @@ public final class HttpClient implements HttpConnecter {
 		public boolean reusable = true;
 
 		private Connection receiver = null;
-		private final Deque<Connection> nextReceivers = new LinkedList<>();
+		private Deque<Connection> nextReceivers = new LinkedList<>();
 		
 		public ReusableConnector(HttpRequestAddress address) {
 			this.address = address;
@@ -258,25 +263,32 @@ public final class HttpClient implements HttpConnecter {
 		}
 		
 		public void failAllNext(IOException ioe) {
-			IOException e = new IOException("Error in pipeline", ioe);
-			for (Connection r : nextReceivers) {
-				r.failed(e);
-			}
-			nextReceivers.clear();
+			Deque<Connection> nr = nextReceivers;
+			nextReceivers = null;
+			
 			receiver = null;
 			connecting.close();
+
+			if (nr != null) {
+				IOException e = new IOException("Error in pipeline", ioe);
+				for (Connection r : nr) {
+					r.failed(e);
+				}
+			}
 		}
 		
 		public void push(Connection receiver) {
 			if (this.receiver == null) {
 				this.receiver = receiver;
 			} else {
-				nextReceivers.addLast(receiver);
+				if (nextReceivers != null) {
+					nextReceivers.addLast(receiver);
+				}
 			}
 		}
 		
 		public void pop() {
-			if (!nextReceivers.isEmpty()) {
+			if ((nextReceivers != null) && !nextReceivers.isEmpty()) {
 				LOGGER.trace("To next receiver");
 				receiver = nextReceivers.removeFirst();
 			} else {
