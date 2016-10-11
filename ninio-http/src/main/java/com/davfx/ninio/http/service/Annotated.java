@@ -118,55 +118,55 @@ public final class Annotated {
 			{
 				stringConverters.add(new ConverterElement<Boolean>(Boolean.class, new ParameterConverter<Boolean>() {
 					@Override
-					public Boolean of(String s) throws Exception {
+					public Boolean of(String s) {
 						return Boolean.parseBoolean(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Byte>(Byte.class, new ParameterConverter<Byte>() {
 					@Override
-					public Byte of(String s) throws Exception {
+					public Byte of(String s) {
 						return Byte.parseByte(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Short>(Short.class, new ParameterConverter<Short>() {
 					@Override
-					public Short of(String s) throws Exception {
+					public Short of(String s) {
 						return Short.parseShort(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Integer>(Integer.class, new ParameterConverter<Integer>() {
 					@Override
-					public Integer of(String s) throws Exception {
+					public Integer of(String s) {
 						return Integer.parseInt(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Long>(Long.class, new ParameterConverter<Long>() {
 					@Override
-					public Long of(String s) throws Exception {
+					public Long of(String s) {
 						return Long.parseLong(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Character>(Character.class, new ParameterConverter<Character>() {
 					@Override
-					public Character of(String s) throws Exception {
+					public Character of(String s) {
 						return s.charAt(0);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Float>(Float.class, new ParameterConverter<Float>() {
 					@Override
-					public Float of(String s) throws Exception {
+					public Float of(String s) {
 						return Float.parseFloat(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Double>(Double.class, new ParameterConverter<Double>() {
 					@Override
-					public Double of(String s) throws Exception {
+					public Double of(String s) {
 						return Double.parseDouble(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<String>(String.class, new ParameterConverter<String>() {
 					@Override
-					public String of(String s) throws Exception {
+					public String of(String s) {
 						return s;
 					}
 				}));
@@ -211,8 +211,13 @@ public final class Annotated {
 				}
 				stringConverters.add(new ConverterElement<>(clazz, new ParameterConverter<T>() {
 					@Override
-					public T of(String s) throws Exception {
-						Object r = m.invoke(null, s);
+					public T of(String s) {
+						Object r;
+						try {
+							r = m.invoke(null, s);
+						} catch (Exception e) {
+							throw new RuntimeException(e);
+						}
 						@SuppressWarnings("unchecked")
 						T t = (T) r;
 						return t;

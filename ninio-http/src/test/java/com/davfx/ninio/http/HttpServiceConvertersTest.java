@@ -112,7 +112,7 @@ public class HttpServiceConvertersTest {
 	}
 	private static final class AConverter implements ParameterConverter<A> {
 		@Override
-		public A of(String s) throws Exception {
+		public A of(String s) {
 			return A.of(s);
 		}
 	}
@@ -169,7 +169,7 @@ public class HttpServiceConvertersTest {
 						private static final long serialVersionUID = 1L;
 					}, new ParameterConverter<List<A>>() {
 						@Override
-						public List<A> of(String s) throws Exception {
+						public List<A> of(String s) {
 							List<A> l = new LinkedList<>();
 							for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
 								l.add(A.of(e.getAsString()));
@@ -215,7 +215,7 @@ public class HttpServiceConvertersTest {
 						private static final long serialVersionUID = 1L;
 					}, new ParameterConverter<List<A>>() {
 						@Override
-						public List<A> of(String s) throws Exception {
+						public List<A> of(String s) {
 							List<A> l = new LinkedList<>();
 							for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
 								l.add(A.of(e.getAsString()));
@@ -227,7 +227,7 @@ public class HttpServiceConvertersTest {
 						private static final long serialVersionUID = 1L;
 					}, new ParameterConverter<List<B>>() {
 						@Override
-						public List<B> of(String s) throws Exception {
+						public List<B> of(String s) {
 							List<B> l = new LinkedList<>();
 							for (JsonElement e : new JsonParser().parse(s).getAsJsonArray()) {
 								l.add(B.of(e.getAsString()));
