@@ -51,7 +51,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 				}
 				
 				if (scriptEngine.getFactory().getEngineName().equals("Oracle Nashorn")) {
-					LOGGER.debug("Using optimized converted");
+					LOGGER.trace("Using optimized converted");
 					builder = new NashornConvertingBuilder();
 				} else {
 					builder = new JsonConvertingBuilder();
@@ -64,7 +64,7 @@ public final class ExecutorScriptRunner implements ScriptRunner {
 					LOGGER.error("Could not prepare engine", e);
 				}
 
-				LOGGER.debug("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
+				LOGGER.trace("Script engine {}/{}", scriptEngine.getFactory().getEngineName(), scriptEngine.getFactory().getEngineVersion());
 			}
 		});
 	}
