@@ -116,7 +116,7 @@ public final class MemoryCache<K, V> {
 		map.clear();
 	}
 	
-	private void check() {
+	public void check() {
 		double now = DateUtils.now();
 
 		if (expirationAfterAccess > 0d) {

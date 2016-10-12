@@ -147,12 +147,15 @@ public final class SqliteCache {
 					String key;
 					List<T> to;
 					synchronized (cacheByDestinationAddress) {
+						cacheByDestinationAddress.check();
+
 						CacheByAddress<T> cache = cacheByDestinationAddress.get(address);
 						if (cache == null) {
 							LOGGER.trace("No cache (address = {})", address);
 							return;
 						}
 						
+						cache.subToKey.check();
 						key = cache.subToKey.get(sub);
 						if (key == null) {
 							LOGGER.trace("No key (address = {}, sub = {}) - {}", address, sub, cache.subToKey);
@@ -161,12 +164,15 @@ public final class SqliteCache {
 	
 						cache.subToKey.remove(sub);
 	
+						cache.requestsByKey.check();
 						MemoryCache<T, Void> subs = cache.requestsByKey.get(key);
 						if (subs == null) {
 							LOGGER.trace("No corresponding subs (address = {}, sub = {}, key = {})", address, sub, key);
 							return;
 						}
-						
+
+						subs.check();
+
 						to = new LinkedList<>();
 						for (T k : subs.keys()) {
 							to.add(k);
@@ -244,7 +250,8 @@ public final class SqliteCache {
 			Connection callback;
 			synchronized (cacheByDestinationAddress) {
 				callback = connectCallback;
-				
+
+				cacheByDestinationAddress.check();
 				CacheByAddress<T> cache = cacheByDestinationAddress.get(address);
 				if (cache == null) {
 					LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
@@ -252,18 +259,22 @@ public final class SqliteCache {
 					cacheByDestinationAddress.put(address, cache);
 				}
 	
+				cache.requestsByKey.check();
 				MemoryCache<T, Void> subs = cache.requestsByKey.get(context.key);
 				if (subs == null) {
 					subs = MemoryCache.<T, Void> builder().expireAfterWrite(expiration).build();
 					cache.requestsByKey.put(context.key, subs);
 	
 					subs.put(context.sub, null);
+					cache.subToKey.check();
 					cache.subToKey.put(context.sub, context.key);
 
 					send = true;
 					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				} else {
+					subs.check();
 					subs.put(context.sub, null);
+					cache.subToKey.check();
 					cache.subToKey.put(context.sub, context.key);
 
 					send = false;
