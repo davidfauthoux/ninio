@@ -6,11 +6,16 @@ import java.util.Map;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
+import com.typesafe.config.Config;
 
 public final class MemoryCache<K, V> {
+	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.util.dependencies.Dependencies()).getConfig(MemoryCache.class.getPackage().getName());
+	private static final double DEFAULT_CHECK_TIME = ConfigUtils.getDuration(CONFIG, "cache.default.check");
+
 	public static interface Builder<K, V> {
 		Builder<K, V> expireAfterAccess(double expiration);
 		Builder<K, V> expireAfterWrite(double expiration);
+		Builder<K, V> check(double checkTime);
 		MemoryCache<K, V> build();
 	}
 	
@@ -18,6 +23,7 @@ public final class MemoryCache<K, V> {
 		return new Builder<K, V>() {
 			private double expirationAfterAccess = 0d;
 			private double expirationAfterWrite = 0d;
+			private double checkTime = DEFAULT_CHECK_TIME;
 			
 			@Override
 			public Builder<K, V> expireAfterAccess(double expiration) {
@@ -29,10 +35,15 @@ public final class MemoryCache<K, V> {
 				expirationAfterWrite = expiration;
 				return this;
 			}
+			@Override
+			public Builder<K, V> check(double checkTime) {
+				this.checkTime = checkTime;
+				return this;
+			}
 			
 			@Override
 			public MemoryCache<K, V> build() {
-				return new MemoryCache<>(expirationAfterAccess, expirationAfterWrite);
+				return new MemoryCache<>(expirationAfterAccess, expirationAfterWrite, checkTime);
 			}
 		};
 	}
@@ -48,11 +59,14 @@ public final class MemoryCache<K, V> {
 
 	private final double expirationAfterAccess;
 	private final double expirationAfterWrite;
+	private final double checkTime;
+	private double lastCheck = 0d;
 	private final Map<K, Element<V>> map = new LinkedHashMap<>();
 	
-	private MemoryCache(double expirationAfterAccess, double expirationAfterWrite) {
+	private MemoryCache(double expirationAfterAccess, double expirationAfterWrite, double checkTime) {
 		this.expirationAfterAccess = expirationAfterAccess;
 		this.expirationAfterWrite = expirationAfterWrite;
+		this.checkTime = checkTime;
 	}
 	
 	@Override
@@ -72,53 +86,76 @@ public final class MemoryCache<K, V> {
 	}
 	
 	public void put(K key, V value) {
-		double now = DateUtils.now();
-
-		Element<V> e = new Element<>(value);
-		e.writeTimestamp = now;
-		e.accessTimestamp = now;
-		
-		map.remove(key);
-		map.put(key, e);
+		try {
+			double now = DateUtils.now();
+	
+			Element<V> e = new Element<>(value);
+			e.writeTimestamp = now;
+			e.accessTimestamp = now;
+			
+			map.remove(key);
+			map.put(key, e);
+		} finally {
+			check();
+		}
 	}
 	
 	public V get(K key) {
-		Element<V> e = map.remove(key);
-		if (e == null) {
-			return null;
-		}
-
-		double now = DateUtils.now();
-		
-		if (expirationAfterAccess > 0d) {
-			if ((now - e.accessTimestamp) >= expirationAfterAccess) {
-				map.remove(key);
+		try {
+			Element<V> e = map.remove(key);
+			if (e == null) {
 				return null;
 			}
-		}
-		if (expirationAfterWrite > 0d) {
-			if ((now - e.writeTimestamp) >= expirationAfterWrite) {
-				map.remove(key);
-				return null;
+	
+			double now = DateUtils.now();
+			
+			if (expirationAfterAccess > 0d) {
+				if ((now - e.accessTimestamp) >= expirationAfterAccess) {
+					map.remove(key);
+					return null;
+				}
 			}
+			if (expirationAfterWrite > 0d) {
+				if ((now - e.writeTimestamp) >= expirationAfterWrite) {
+					map.remove(key);
+					return null;
+				}
+			}
+			
+			e.accessTimestamp = now;
+			map.put(key, e);
+	
+			return e.v;
+		} finally {
+			check();
 		}
-		
-		e.accessTimestamp = now;
-		map.put(key, e);
-		return e.v;
 	}
 
 	public void remove(K key) {
-		map.remove(key);
+		try {
+			map.remove(key);
+		} finally {
+			check();
+		}
 	}
 
 	public void clear() {
-		map.clear();
+		try {
+			map.clear();
+		} finally {
+			check();
+		}
 	}
 	
-	public void check() {
+	private void check() {
 		double now = DateUtils.now();
 
+		if ((now - lastCheck) < checkTime) {
+			return;
+		}
+		
+		lastCheck = now;
+		
 		if (expirationAfterAccess > 0d) {
 			Iterator<Element<V>> i = map.values().iterator();
 			while (i.hasNext()) {
@@ -139,11 +176,13 @@ public final class MemoryCache<K, V> {
 	
 	public Iterable<K> keys() {
 		check();
+
 		return map.keySet();
 	}
 
 	public Iterable<V> values() {
 		check();
+		
 		return Iterables.transform(map.values(), new Function<Element<V>, V>() {
 			@Override
 			public V apply(Element<V> e) {
