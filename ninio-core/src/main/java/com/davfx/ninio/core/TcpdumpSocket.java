@@ -231,6 +231,23 @@ public final class TcpdumpSocket implements Connecter {
 			}
 		});
 
+		execute("eat", new Runnable() {
+			@Override
+			public void run() {
+				byte[] buffer = new byte[64 * 1024];
+				try {
+					while (true) {
+						if (s.isClosed()) {
+							break;
+						}
+						s.receive(new DatagramPacket(buffer, buffer.length));
+					}
+				} catch (IOException e) {
+					LOGGER.trace("Error eating UDP packets", e);
+				}
+			}
+		});
+
 		execute("wait", new Runnable() {
 			@Override
 			public void run() {
