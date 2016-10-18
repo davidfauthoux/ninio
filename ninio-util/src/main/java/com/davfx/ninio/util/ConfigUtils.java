@@ -101,7 +101,7 @@ public final class ConfigUtils {
 			return this;
 		}
 		public Override add(String key, String value) {
-			override.add(key + " = \"" + value.replace("\"", "\\\""));
+			override.add(key + " = \"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"");
 			return this;
 		}
 	}
