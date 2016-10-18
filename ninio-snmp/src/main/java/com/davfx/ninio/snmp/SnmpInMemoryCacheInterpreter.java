@@ -8,19 +8,19 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.davfx.ninio.core.SqliteCache;
+import com.davfx.ninio.core.InMemoryCache;
 
 //Transforms all values to string
 //Does not tell community on response
-public final class SnmpSqliteCacheInterpreter implements SqliteCache.Interpreter<Integer> {
+public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpreter<Integer> {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpSqliteCacheInterpreter.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpInMemoryCacheInterpreter.class);
 	
-	public SnmpSqliteCacheInterpreter() {
+	public SnmpInMemoryCacheInterpreter() {
 	}
 	
 	@Override
-	public SqliteCache.Context<Integer> handleRequest(ByteBuffer packet) {
+	public InMemoryCache.Context<Integer> handleRequest(ByteBuffer packet) {
 		try {
 			BerReader ber = new BerReader(packet);
 			ber.beginReadSequence();
@@ -47,7 +47,7 @@ public final class SnmpSqliteCacheInterpreter implements SqliteCache.Interpreter
 								
 								String key = oid + "/" + type;
 								
-								return new SqliteCache.Context<Integer>(key, requestId);
+								return new InMemoryCache.Context<Integer>(key, requestId);
 							}
 							// ber.endReadSequence();
 						}

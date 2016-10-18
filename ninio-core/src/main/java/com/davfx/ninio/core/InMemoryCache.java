@@ -1,12 +1,7 @@
 package com.davfx.ninio.core;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -15,12 +10,12 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.util.MemoryCache;
 
-public final class SqliteCache {
+public final class InMemoryCache {
 	
-	private static final Logger LOGGER = LoggerFactory.getLogger(SqliteCache.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(InMemoryCache.class);
 
 	public static interface Builder<T> extends NinioBuilder<Connecter> {
-		Builder<T> database(File database);
+		// Builder<T> database(File database);
 		Builder<T> expiration(double expiration);
 		Builder<T> using(Interpreter<T> interpreter);
 		Builder<T> with(NinioBuilder<Connecter> builder);
@@ -32,7 +27,7 @@ public final class SqliteCache {
 			
 			private double expiration = 0d;
 			private Interpreter<T> interpreter = null;
-			private File database = null;
+			// private File database = null;
 			
 			@Override
 			public Builder<T> using(Interpreter<T> interpreter) {
@@ -46,11 +41,13 @@ public final class SqliteCache {
 				return this;
 			}
 		
+			/*
 			@Override
 			public Builder<T> database(File database) {
 				this.database = database;
 				return this;
 			}
+			*/
 			@Override
 			public Builder<T> expiration(double expiration) {
 				this.expiration = expiration;
@@ -66,27 +63,28 @@ public final class SqliteCache {
 					throw new NullPointerException("interpreter");
 				}
 				
-				return new InnerConnecter<>(database, expiration, interpreter, builder.create(queue));
+				return new InnerConnecter<>(/*database, */expiration, interpreter, builder.create(queue));
 			}
 		};
 	}
 	
 	private static final class InnerConnecter<T> implements Connecter {
-		private final File database;
+		// private final File database;
 		private final Connecter wrappee;
 		private final Interpreter<T> interpreter;
 		private final double expiration;
-		private final java.sql.Connection sqlConnection;
+		// private final java.sql.Connection sqlConnection;
 		private final MemoryCache<Address, CacheByAddress<T>> cacheByDestinationAddress;
 		private Connection connectCallback = null;
 
-		public InnerConnecter(File database, double expiration, Interpreter<T> interpreter, Connecter wrappee) {
+		public InnerConnecter(/*File database, */double expiration, Interpreter<T> interpreter, Connecter wrappee) {
 			this.expiration = expiration;
 			this.interpreter = interpreter;
 			this.wrappee = wrappee;
 			
 			cacheByDestinationAddress = MemoryCache.<Address, CacheByAddress<T>> builder().expireAfterAccess(expiration).build();
 			
+			/*
 			File databaseFile;
 			if (database == null) {
 				try {
@@ -118,10 +116,12 @@ public final class SqliteCache {
 				c = null;
 			}
 			sqlConnection = c;
+			*/
 		}
 		
 		@Override
 		public void connect(final Connection callback) {
+			/*
 			if (database == null) {
 				callback.failed(new IOException("Database file could not be created"));
 				return;
@@ -130,6 +130,7 @@ public final class SqliteCache {
 				callback.failed(new IOException("SQL connection could not be open"));
 				return;
 			}
+			*/
 			
 			synchronized (cacheByDestinationAddress) {
 				connectCallback = callback;
@@ -161,17 +162,19 @@ public final class SqliteCache {
 	
 						cache.subToKey.remove(sub);
 	
-						MemoryCache<T, Void> subs = cache.requestsByKey.get(key);
+						DataCache<T> subs = cache.requestsByKey.get(key);
 						if (subs == null) {
 							LOGGER.trace("No corresponding subs (address = {}, sub = {}, key = {})", address, sub, key);
 							return;
 						}
 						
 						to = new LinkedList<>();
-						for (T k : subs.keys()) {
+						for (T k : subs.subs.keys()) {
 							to.add(k);
 						}
-						subs.clear();
+						subs.subs.clear();
+						
+						subs.data = sourceBuffer.duplicate();
 					}
 
 					for (T s : to) {
@@ -183,6 +186,7 @@ public final class SqliteCache {
 
 					LOGGER.trace("New response (address = {}, sub = {}, key = {})", address, sub, key);
 	
+					/*
 					try {
 						byte[] bytes = new byte[sourceBuffer.remaining()];
 						sourceBuffer.get(bytes);
@@ -196,6 +200,7 @@ public final class SqliteCache {
 					} catch (SQLException se) {
 						LOGGER.error("SQL error", se);
 					}
+					*/
 				}
 				
 				@Override
@@ -205,22 +210,26 @@ public final class SqliteCache {
 				
 				@Override
 				public void failed(IOException ioe) {
+					/*
 					try {
 						sqlConnection.close();
 					} catch (SQLException e) {
 					}
 					database.delete();
+					*/
 
 					callback.failed(ioe);
 				}
 				
 				@Override
 				public void closed() {
+					/*
 					try {
 						sqlConnection.close();
 					} catch (SQLException e) {
 					}
 					database.delete();
+					*/
 
 					callback.closed();
 				}
@@ -229,10 +238,12 @@ public final class SqliteCache {
 		
 		@Override
 		public void send(Address address, ByteBuffer sourceBuffer, SendCallback sendCallback) {
+			/*
 			if ((database == null) || (sqlConnection == null)) {
 				sendCallback.failed(new IOException("Could not be created"));
 				return;
 			}
+			*/
 
 			Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
 			if (context == null) {
@@ -242,6 +253,7 @@ public final class SqliteCache {
 
 			boolean send;
 			Connection callback;
+			ByteBuffer data;
 			synchronized (cacheByDestinationAddress) {
 				callback = connectCallback;
 				
@@ -252,23 +264,25 @@ public final class SqliteCache {
 					cacheByDestinationAddress.put(address, cache);
 				}
 	
-				MemoryCache<T, Void> subs = cache.requestsByKey.get(context.key);
+				DataCache<T> subs = cache.requestsByKey.get(context.key);
 				if (subs == null) {
-					subs = MemoryCache.<T, Void> builder().expireAfterWrite(expiration).build();
+					subs = new DataCache<T>(expiration);
 					cache.requestsByKey.put(context.key, subs);
 	
-					subs.put(context.sub, null);
+					subs.subs.put(context.sub, null);
 					cache.subToKey.put(context.sub, context.key);
 
 					send = true;
 					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				} else {
-					subs.put(context.sub, null);
+					subs.subs.put(context.sub, null);
 					cache.subToKey.put(context.sub, context.key);
 
 					send = false;
 					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				}
+				
+				data = subs.data;
 			}
 
 			if (send) {
@@ -276,6 +290,11 @@ public final class SqliteCache {
 			} else {
 				sendCallback.sent();
 				if (callback != null) {
+					if (data != null) {
+						callback.received(address, interpreter.transform(data.duplicate(), context.sub));
+						return;
+					}
+					/*
 					try {
 						try (PreparedStatement s = sqlConnection.prepareStatement("SELECT `packet` FROM `data` WHERE `address`= ? AND `key` = ?")) {
 							int k = 1;
@@ -294,6 +313,7 @@ public final class SqliteCache {
 					} catch (SQLException se) {
 						LOGGER.error("SQL error", se);
 					}
+					*/
 				}
 
 				LOGGER.trace("Response does not exist yet (address = {}, key = {}, sub = {})", address, context.key, context.sub);
@@ -304,6 +324,7 @@ public final class SqliteCache {
 		@Override
 		public void close() {
 			wrappee.close();
+			/*
 			if (sqlConnection != null) {
 				try {
 					sqlConnection.close();
@@ -313,6 +334,7 @@ public final class SqliteCache {
 			if (database != null) {
 				database.delete();
 			}
+			*/
 		}
 	}
 	
@@ -330,11 +352,18 @@ public final class SqliteCache {
 		ByteBuffer transform(ByteBuffer packet, T sub);
 	}
 	
+	private static final class DataCache<T> {
+		public ByteBuffer data = null;
+		public final MemoryCache<T, Void> subs;
+		public DataCache(double expiration) {
+			subs = MemoryCache.<T, Void> builder().expireAfterWrite(expiration).build();
+		}
+	}
 	private static final class CacheByAddress<T> {
-		public final MemoryCache<String, MemoryCache<T, Void>> requestsByKey;
+		public final MemoryCache<String, DataCache<T>> requestsByKey;
 		public final MemoryCache<T, String> subToKey;
 		public CacheByAddress(double expiration) {
-			requestsByKey = MemoryCache.<String, MemoryCache<T, Void>> builder().expireAfterAccess(expiration).build();
+			requestsByKey = MemoryCache.<String, DataCache<T>> builder().expireAfterAccess(expiration).build();
 			subToKey = MemoryCache.<T, String> builder().expireAfterWrite(expiration).build();
 		}
 	}

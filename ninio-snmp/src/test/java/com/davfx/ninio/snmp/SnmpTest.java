@@ -12,8 +12,8 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Disconnectable;
+import com.davfx.ninio.core.InMemoryCache;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.SqliteCache;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.SerialExecutor;
@@ -202,7 +202,7 @@ public class SnmpTest {
 					public void failed(IOException ioe) {
 					}
 				}))) {
-				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)).with(SqliteCache.<Integer>builder().using(new SnmpSqliteCacheInterpreter())))) {
+				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(new SerialExecutor(SnmpTest.class)).with(InMemoryCache.<Integer>builder().using(new SnmpInMemoryCacheInterpreter())))) {
 					snmpClient.connect(new SnmpConnection() {
 						@Override
 						public void failed(IOException ioe) {
