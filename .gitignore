@@ -11,3 +11,6 @@ release.properties
 *.class
 
 /bin/
+
+**.versionsBackup
+
