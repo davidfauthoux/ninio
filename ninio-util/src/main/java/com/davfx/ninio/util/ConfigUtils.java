@@ -151,14 +151,26 @@ public final class ConfigUtils {
 			c.append(r);
 		}
 
-		String a;
-		try {
-			a = loadConfig(dependencies, "configure", false);
-		} catch (Exception e) {
-			throw new RuntimeException("Could not load application config", e);
+		{
+			String a;
+			try {
+				a = loadConfig(dependencies, "configure-" + resource, false);
+			} catch (Exception e) {
+				throw new RuntimeException("Could not load application config", e);
+			}
+			c.append('\n');
+			c.append(a);
 		}
-		c.append('\n');
-		c.append(a);
+		{
+			String a;
+			try {
+				a = loadConfig(dependencies, "configure", false);
+			} catch (Exception e) {
+				throw new RuntimeException("Could not load application config", e);
+			}
+			c.append('\n');
+			c.append(a);
+		}
 
 		for (String o : override.override) {
 			c.append('\n');
