@@ -139,7 +139,14 @@ public final class InMemoryCache {
 			wrappee.connect(new Connection() {
 				@Override
 				public void received(Address address, ByteBuffer sourceBuffer) {
-					T sub = interpreter.handleResponse(sourceBuffer.duplicate());
+					ByteBuffer sb = sourceBuffer.duplicate();
+					T sub;
+					try {
+						sub = interpreter.handleResponse(sb);
+					} catch (Exception e) {
+						LOGGER.trace("Invalid response packet", e);
+						return;
+					}
 					if (sub == null) {
 						LOGGER.trace("Invalid response (address = {})", address);
 						return;
@@ -178,7 +185,14 @@ public final class InMemoryCache {
 					}
 
 					for (T s : to) {
-						ByteBuffer b = interpreter.transform(sourceBuffer.duplicate(), s);
+						ByteBuffer ssb = sourceBuffer.duplicate();
+						ByteBuffer b;
+						try {
+							b = interpreter.transform(ssb, s);
+						} catch (Exception e) {
+							LOGGER.trace("Invalid response packet", e);
+							continue;
+						}
 						if (b != null) {
 							callback.received(address, b);
 						}
@@ -245,7 +259,14 @@ public final class InMemoryCache {
 			}
 			*/
 
-			Context<T> context = interpreter.handleRequest(sourceBuffer.duplicate());
+			ByteBuffer sb = sourceBuffer.duplicate();
+			Context<T> context;
+			try {
+				context = interpreter.handleRequest(sb);
+			} catch (Exception e) {
+				sendCallback.failed(new IOException("Invalid packet", e));
+				return;
+			}
 			if (context == null) {
 				sendCallback.failed(new IOException("Invalid request: " + address));
 				return;
@@ -288,10 +309,18 @@ public final class InMemoryCache {
 			if (send) {
 				wrappee.send(address, sourceBuffer, sendCallback);
 			} else {
-				sendCallback.sent();
 				if (callback != null) {
 					if (data != null) {
-						callback.received(address, interpreter.transform(data.duplicate(), context.sub));
+						ByteBuffer b = data.duplicate();
+						ByteBuffer tb;
+						try {
+							tb = interpreter.transform(b, context.sub);
+						} catch (Exception e) {
+							sendCallback.failed(new IOException("Invalid packet", e));
+							return;
+						}
+						sendCallback.sent();
+						callback.received(address, tb);
 						return;
 					}
 					/*
@@ -317,6 +346,7 @@ public final class InMemoryCache {
 				}
 
 				LOGGER.trace("Response does not exist yet (address = {}, key = {}, sub = {})", address, context.key, context.sub);
+				sendCallback.sent();
 			}
 			
 		}
