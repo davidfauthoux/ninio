@@ -3,8 +3,6 @@ package com.davfx.ninio.snmp;
 import java.nio.ByteBuffer;
 
 public final class OidBerPacket implements BerPacket {
-	private static final int MAX_OID_BUFFER_SIZE = 1024;
-
 	private final ByteBuffer lengthBuffer;
 	private final int length;
 	private final ByteBuffer bb;
@@ -16,7 +14,22 @@ public final class OidBerPacket implements BerPacket {
 			throw new IllegalArgumentException();
 		}
 
-		bb = ByteBuffer.allocate(MAX_OID_BUFFER_SIZE);
+		int l = 0;
+		l++;
+		for (int i = 2; i < raw.length; i++) {
+			long value = raw[i];
+			long mask = ~0x80000000L;
+			l++;
+			while (true) {
+				mask <<= 7;
+				if ((value & mask) == 0L) {
+					break;
+				}
+				l++;
+			}
+		}
+
+		bb = ByteBuffer.allocate(l);
 		bb.put((byte) ((raw[1] + (raw[0] * 40)) & 0xFF));
 
 		for (int i = 2; i < raw.length; i++) {
@@ -45,7 +58,7 @@ public final class OidBerPacket implements BerPacket {
 
 		bb.flip();
 
-		length = bb.remaining();
+		length = l;
 		lengthBuffer = BerPacketUtils.lengthBuffer(length);
 	}
 
