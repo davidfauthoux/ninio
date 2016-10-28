@@ -22,21 +22,21 @@ public final class OidBerPacket implements BerPacket {
 		for (int i = 2; i < raw.length; i++) {
 			long value = raw[i];
 
-			int mask = ~0x80;
+			long mask = ~0x80000000L;
 			int bits = 0;
 
 			while (true) {
 				mask <<= 7;
-				if ((value & mask) == 0) {
+				if ((value & mask) == 0L) {
 					break;
 				}
 				bits += 7;
 			}
 
 			while (bits >= 0) {
-				long b = (value >>> bits) & ~0x80;
+				long b = (value >>> bits) & ~0x80L;
 				if (bits > 0) {
-					b |= 0x80; // Continuation bit
+					b |= 0x80L; // Continuation bit
 				}
 				bb.put((byte) b);
 				bits -= 7;

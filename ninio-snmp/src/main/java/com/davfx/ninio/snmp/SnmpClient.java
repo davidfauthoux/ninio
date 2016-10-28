@@ -620,6 +620,7 @@ public final class SnmpClient implements SnmpConnecter {
 				for (SnmpResult r : results) {
 					LOGGER.trace("Received in bulk: {}", r);
 				}
+				Oid previous = requestOid;
 				for (SnmpResult r : results) {
 					if (r.value == null) {
 						continue;
@@ -628,6 +629,10 @@ public final class SnmpClient implements SnmpConnecter {
 						LOGGER.trace("{} not prefixed by {}", r.oid, initialRequestOid);
 						lastOid = null;
 						break;
+					}
+					if (previous.compareTo(r.oid) >= 0) {
+						LOGGER.trace("{} not monotonous with {}", r.oid, previous);
+						continue;
 					}
 					LOGGER.trace("Addind to results: {}", r);
 					/*
@@ -642,6 +647,7 @@ public final class SnmpClient implements SnmpConnecter {
 						receiver.received(r);
 					}
 					lastOid = r.oid;
+					previous = r.oid;
 				}
 				if (lastOid != null) {
 					LOGGER.trace("Continuing from: {}", lastOid);

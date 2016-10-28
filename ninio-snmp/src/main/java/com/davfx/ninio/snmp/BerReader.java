@@ -54,7 +54,7 @@ public final class BerReader {
 	}
 
 	private static int doReadInteger(ByteBuffer buffer, int length) throws IOException {
-		int value = 0;
+		long value = 0L;
 		for (int i = 0; i < length; i++) {
 			int b = buffer.get() & 0xFF;
 			if ((i == 0) && ((b & 0x80) == 0x80)) {
@@ -64,16 +64,16 @@ public final class BerReader {
 			value |= b;
 		}
 
-		return value;
+		return (int) value;
 	}
 
 	//TODO Check the OPAQUE UINT64 format
 	private static long doReadLong(ByteBuffer buffer, int length) throws IOException {
-		int value = 0;
+		long value = 0L;
 		for (int i = 0; i < length; i++) {
 			int b = buffer.get() & 0xFF;
 			if ((i == 0) && ((b & 0x80) == 0x80)) {
-				value = 0xFFFFFFFF; // Negative, in two's complement form
+				value = 0xFFFFFFFFL; // Negative, in two's complement form
 			}
 			value <<= 8;
 			value |= b;
@@ -124,16 +124,17 @@ public final class BerReader {
 			throw new IOException("Invalid OID");
 		}
 
-		int b = buffer.get() & 0xFF;
-
-		values.add(b / 40L);
-		values.add(b % 40L);
+		{
+			int b = buffer.get() & 0xFF;
+			values.add((long) (b / 40));
+			values.add((long) (b % 40));
+		}
 
 		length--;
 
-		long value = 0;
+		long value = 0L;
 		while (length > 0) {
-			b = buffer.get() & 0xFF;
+			int b = buffer.get() & 0xFF;
 
 			value <<= 7;
 			value |= (b & ~0x80);
