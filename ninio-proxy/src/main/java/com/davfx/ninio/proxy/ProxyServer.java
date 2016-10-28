@@ -400,6 +400,8 @@ public final class ProxyServer implements Listening {
 						});
 						readConnectionId = -1;
 						command = -1;
+						
+						proxyConnector.close();
 						break;
 					}
 					case ProxyCommons.Commands.CONNECT_WITH_ADDRESS: {

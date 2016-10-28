@@ -89,13 +89,11 @@ public class HttpSocketTest {
 
 				Wait serverWaitForProxyServerClosing = new Wait();
 
-				Wait clientWaitConnecting = new Wait();
-				Wait clientWaitClosing = new Wait();
-				Wait clientWaitSent = new Wait();
-
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
 					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+						Wait clientWaitClosing = new Wait();
 						try (Connecter client = ninio.create(proxyClient.http().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
+							Wait clientWaitConnecting = new Wait();
 							client.connect(
 									new WaitConnectedConnection(clientWaitConnecting, 
 									new WaitClosedConnection(clientWaitClosing, 
@@ -103,6 +101,7 @@ public class HttpSocketTest {
 									new LockReceivedConnection(lock,
 									new Nop())))));
 								
+							Wait clientWaitSent = new Wait();
 							client.send(null, ByteBufferUtils.toByteBuffer("test0"),
 									new WaitSentSendCallback(clientWaitSent,
 									new LockSendCallback(lock,
@@ -111,8 +110,8 @@ public class HttpSocketTest {
 							clientWaitConnecting.waitFor();
 							Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test0");
 						}
+						clientWaitClosing.waitFor();
 					}
-					clientWaitClosing.waitFor();
 				}
 
 				serverWaitForProxyServerClosing.waitFor();

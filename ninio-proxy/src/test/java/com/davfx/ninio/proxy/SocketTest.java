@@ -88,19 +88,18 @@ public class SocketTest {
 
 				int proxyPort = 8081;
 
-				Wait clientWaitConnecting = new Wait();
-				Wait clientWaitClosing = new Wait();
-				Wait clientWaitSent = new Wait();
-
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
 					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+						Wait clientWaitClosing = new Wait();
 						try (Connecter client = ninio.create(proxyClient.tcp().to(new Address(Address.LOCALHOST, port)))) {
+							Wait clientWaitConnecting = new Wait();
 							client.connect(
 								new WaitConnectedConnection(clientWaitConnecting, 
 								new WaitClosedConnection(clientWaitClosing, 
 								new LockFailedConnection(lock, 
 								new LockReceivedConnection(lock,
 								new Nop())))));
+							Wait clientWaitSent = new Wait();
 							client.send(null, ByteBufferUtils.toByteBuffer("test"),
 								new WaitSentSendCallback(clientWaitSent,
 								new LockSendCallback(lock,

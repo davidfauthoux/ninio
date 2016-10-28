@@ -96,15 +96,12 @@ public class WebsocketSocketTest {
 
 				int proxyPort = 8081;
 
-				Wait clientWaitConnecting = new Wait();
-				Wait clientWaitClosing = new Wait();
-				final Wait clientWaitSending0 = new Wait();
-				final Wait clientWaitSending1 = new Wait();
-
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
 					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
 						try (DnsConnecter dns = ninio.create(DnsClient.builder().with(new SerialExecutor(WebsocketSocketTest.class))); HttpConnecter httpClient = ninio.create(HttpClient.builder().with(dns).with(new SerialExecutor(WebsocketSocketTest.class)))) {
+							Wait clientWaitClosing = new Wait();
 							try (Connecter client = ninio.create(proxyClient.websocket().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
+								Wait clientWaitConnecting = new Wait();
 								client.connect(
 										new WaitConnectedConnection(clientWaitConnecting, 
 										new WaitClosedConnection(clientWaitClosing, 
@@ -113,6 +110,7 @@ public class WebsocketSocketTest {
 										new Nop())))));
 								
 								clientWaitConnecting.waitFor();
+								final Wait clientWaitSending0 = new Wait();
 								client.send(null, ByteBufferUtils.toByteBuffer("test0"), new SendCallback() {
 									@Override
 									public void failed(IOException e) {
@@ -123,6 +121,7 @@ public class WebsocketSocketTest {
 										clientWaitSending0.run();
 									}
 								});
+								final Wait clientWaitSending1 = new Wait();
 								client.send(null, ByteBufferUtils.toByteBuffer("test1\n"), new SendCallback() {
 									@Override
 									public void failed(IOException e) {

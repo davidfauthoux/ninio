@@ -55,10 +55,10 @@ public class EchoTest {
 				
 				serverWaitServerConnecting.waitFor();
 				
-				final Wait clientWaitClientConnecting = new Wait();
-				final Wait clientWaitClientClosing = new Wait();
-
 				try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					final Wait clientWaitClientConnecting = new Wait();
+					final Wait clientWaitClientClosing = new Wait();
+
 					try (Connecter client = ninio.create(proxyClient.factory().header(new ProxyHeader("_")).with(new Address(Address.LOCALHOST, port)))) {
 						client.connect(new Connection() {
 							
@@ -88,8 +88,8 @@ public class EchoTest {
 	
 						Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test");
 					}
+					clientWaitClientClosing.waitFor();
 				}
-				clientWaitClientClosing.waitFor();
 			}
 			serverWaitServerClosing.waitFor();
 		}
@@ -98,6 +98,83 @@ public class EchoTest {
 	@Test
 	public void testSameToCheckClose() throws Exception {
 		test();
+	}
+	
+	@Test
+	public void testTwice() throws Exception {
+		final Lock<ByteBuffer, IOException> lock = new Lock<>();
+		
+		try (Ninio ninio = Ninio.create()) {
+			int proxyPort = 8081;
+
+			final Wait serverWaitServerClosing = new Wait();
+			final Wait serverWaitServerConnecting = new Wait();
+			try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new ProxyListening() {
+				@Override
+				public void closed() {
+					serverWaitServerClosing.run();
+				}
+				@Override
+				public void connected(Address address) {
+					serverWaitServerConnecting.run();
+				}
+				@Override
+				public void failed(IOException e) {
+					lock.fail(e);
+				}
+				@Override
+				public NinioBuilder<Connecter> create(Address address, String header) {
+					if (header.equals("_")) {
+						return new EchoNinioSocketBuilder();
+					} else {
+						return null;
+					}
+				}
+			}))) {
+				int port = 8080;
+				
+				serverWaitServerConnecting.waitFor();
+				
+				try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
+					for (int i = 0; i < 5; i++) {
+						final Wait clientWaitClientConnecting = new Wait();
+						final Wait clientWaitClientClosing = new Wait();
+
+						try (Connecter client = ninio.create(proxyClient.factory().header(new ProxyHeader("_")).with(new Address(Address.LOCALHOST, port)))) {
+							client.connect(new Connection() {
+								
+								@Override
+								public void connected(Address address) {
+									clientWaitClientConnecting.run();
+								}
+								
+								@Override
+								public void received(Address address, ByteBuffer buffer) {
+									lock.set(buffer);
+								}
+								
+								@Override
+								public void closed() {
+									clientWaitClientClosing.run();
+								}
+								
+								@Override
+								public void failed(IOException e) {
+									lock.fail(e);
+								}
+							});
+	
+							clientWaitClientConnecting.waitFor();
+							client.send(null, ByteBuffer.wrap("test".getBytes(Charsets.UTF_8)), new Nop());
+		
+							Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO test");
+						}
+						clientWaitClientClosing.waitFor();
+					}
+				}
+			}
+			serverWaitServerClosing.waitFor();
+		}
 	}
 	
 }
