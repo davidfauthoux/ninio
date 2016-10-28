@@ -1,6 +1,5 @@
 package com.davfx.ninio.core;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Date;
 
@@ -13,7 +12,7 @@ final class IpPacketReadUtils {
 	private IpPacketReadUtils() {
 	}
 	
-	public static void read(double timestamp, byte[] bytes, int off, int length, TcpdumpReader.Handler handler) throws IOException {
+	public static void read(double timestamp, byte[] bytes, int off, int length, TcpdumpReader.Handler handler) {
 		ByteBuffer b = ByteBuffer.wrap(bytes, off, length);
 		int firstByte = b.get() & 0xFF;
 		int ipVersion = firstByte >> 4;
@@ -79,7 +78,15 @@ final class IpPacketReadUtils {
 			
 			LOGGER.trace("Packet received: {} -> {} {}", sourceAddress, destinationAddress, new Date((long) (timestamp * 1000d)));
 
-			handler.handle(timestamp, sourceAddress, destinationAddress, ByteBuffer.wrap(bytes, packetPosition, packetLength));
+			ByteBuffer bb;
+			try {
+				bb = ByteBuffer.wrap(bytes, packetPosition, packetLength);
+			} catch (Exception e) {
+				LOGGER.warn("Invalid packet: {} -> {} (position={}, length={}, data={})", sourceAddress, destinationAddress, packetPosition, packetLength, bytes.length, e);
+				return;
+			}
+			
+			handler.handle(timestamp, sourceAddress, destinationAddress, bb);
 		}
 	}
 }
