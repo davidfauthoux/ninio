@@ -112,12 +112,8 @@ public final class ProxyClient implements ProxyProvider {
 		};
 	}
 	
-	private final Queue queue;
-
-	private final TcpSocket.Builder proxyConnectorFactory;
 	private final Executor proxyExecutor;
-
-	private Connecter proxyConnector = null;
+	private final Connecter proxyConnector;
 	private int nextConnectionId = 0;
 
 	private static final class InnerConnection {
@@ -130,10 +126,192 @@ public final class ProxyClient implements ProxyProvider {
 
 	private final Map<Integer, InnerConnection> connections = new HashMap<>();
 
-	private ProxyClient(Queue queue, Executor proxyExecutor, TcpSocket.Builder proxyConnectorFactory) {
-		this.queue = queue;
+	private ProxyClient(Queue queue, final Executor proxyExecutor, final TcpSocket.Builder proxyConnectorFactory) {
 		this.proxyExecutor = proxyExecutor;
-		this.proxyConnectorFactory = proxyConnectorFactory;
+		
+		proxyConnector = proxyConnectorFactory.create(queue);
+		proxyConnector.connect(new Connection() {
+			@Override
+			public void connected(Address address) {
+			}
+			
+			@Override
+			public void closed() {
+				proxyExecutor.execute(new Runnable() {
+					@Override
+					public void run() {
+						for (InnerConnection c : connections.values()) {
+							c.connection.closed();
+						}
+						connections.clear();
+					}
+				});
+			}
+
+			@Override
+			public void failed(final IOException e) {
+				proxyExecutor.execute(new Runnable() {
+					@Override
+					public void run() {
+						for (InnerConnection c : connections.values()) {
+							c.connection.failed(e);
+						}
+						connections.clear();
+					}
+				});
+			}
+
+			private ByteBuffer readByteBuffer;
+
+			private int readConnectionId = -1;
+			private int command = -1;
+
+			private int readIpLength = -1;
+			private byte[] readIp = null;
+			private int readPort = -1;
+			private int readLength = -1;
+			
+			private int readByte(int old, ByteBuffer receivedBuffer) {
+				if (old >= 0) {
+					return old;
+				}
+				if (!receivedBuffer.hasRemaining()) {
+					return -1;
+				}
+				return receivedBuffer.get() & 0xFF;
+			}
+			private byte[] readBytes(ByteBuffer receivedBuffer, int len) {
+				if (readByteBuffer == null) {
+					readByteBuffer = ByteBuffer.allocate(len);
+				}
+				int l = len - readByteBuffer.position();
+				if (l > receivedBuffer.remaining()) {
+					l = receivedBuffer.remaining();
+				}
+				System.arraycopy(receivedBuffer.array(), receivedBuffer.arrayOffset() + receivedBuffer.position(), readByteBuffer.array(), readByteBuffer.arrayOffset() + readByteBuffer.position(), l);
+				receivedBuffer.position(receivedBuffer.position() + l);
+				readByteBuffer.position(readByteBuffer.position() + l);
+				if (readByteBuffer.position() == readByteBuffer.capacity()) {
+					byte[] b = readByteBuffer.array();
+					readByteBuffer = null;
+					return b;
+				}
+				return null;
+			}
+			private int readInt(int old, ByteBuffer receivedBuffer) {
+				if (old >= 0) {
+					return old;
+				}
+				byte[] r = readBytes(receivedBuffer, Ints.BYTES);
+				if (r == null) {
+					return -1;
+				}
+				return ByteBuffer.wrap(r).getInt();
+			}
+			/*
+			private String readString(String old, ByteBuffer receivedBuffer, int len) {
+				if (old != null) {
+					return old;
+				}
+				byte[] r = readBytes(receivedBuffer, len);
+				if (r == null) {
+					return null;
+				}
+				return new String(r, 0, r.length, Charsets.UTF_8);
+			}
+			*/
+			private byte[] readBytes(byte[] old, ByteBuffer receivedBuffer, int len) {
+				if (old != null) {
+					return old;
+				}
+				return readBytes(receivedBuffer, len);
+			}
+			
+			@Override
+			public void received(Address receivedAddress, final ByteBuffer receivedBuffer) {
+				proxyExecutor.execute(new Runnable() {
+					@Override
+					public void run() {
+						while (true) {
+							command = readByte(command, receivedBuffer);
+							if (command < 0) {
+								return;
+							}
+
+							readConnectionId = readInt(readConnectionId, receivedBuffer);
+							if (readConnectionId < 0) {
+								return;
+							}
+
+							switch (command) {
+							case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
+								readIpLength = readInt(readIpLength, receivedBuffer);
+								if (readIpLength < 0) {
+									return;
+								}
+								readIp = readBytes(readIp, receivedBuffer, readIpLength);
+								if (readIp == null) {
+									return;
+								}
+								readPort = readInt(readPort, receivedBuffer);
+								if (readPort < 0) {
+									return;
+								}
+								readLength = readInt(readLength, receivedBuffer);
+								if (readLength < 0) {
+									return;
+								}
+								// LOGGER.debug("SEND_WITH_ADDRESS {}:{} [{} bytes]", Address.ipToString(readIp), readPort, readLength);
+								byte[] r = readBytes(receivedBuffer, readLength);
+								if (r == null) {
+									return;
+								}
+								InnerConnection receivedInnerConnection = connections.get(readConnectionId);
+								if (receivedInnerConnection != null) {
+									receivedInnerConnection.connection.received(new Address(readIp, readPort), ByteBuffer.wrap(r));
+								}
+								readConnectionId = -1;
+								command = -1;
+								readIpLength = -1;
+								readIp = null;
+								readPort = -1;
+								readLength = -1;
+								break;
+							}
+							case ProxyCommons.Commands.SEND_WITHOUT_ADDRESS: {
+								readLength = readInt(readLength, receivedBuffer);
+								if (readLength < 0) {
+									return;
+								}
+								// LOGGER.debug("SEND_WITHOUT_ADDRESS [{} bytes]", readLength);
+								byte[] r = readBytes(receivedBuffer, readLength);
+								if (r == null) {
+									return;
+								}
+								InnerConnection receivedInnerConnection = connections.get(readConnectionId);
+								if (receivedInnerConnection != null) {
+									receivedInnerConnection.connection.received(null, ByteBuffer.wrap(r));
+								}
+								readConnectionId = -1;
+								command = -1;
+								readLength = -1;
+								break;
+							}
+							case ProxyCommons.Commands.CLOSE: {
+								InnerConnection receivedInnerConnection = connections.remove(readConnectionId);
+								readConnectionId = -1;
+								command = -1;
+								if (receivedInnerConnection != null) {
+									receivedInnerConnection.connection.closed();
+								}
+								break;
+							}
+							}
+						}
+					}
+				});
+			}
+		});
 	}
 	
 	@Override
@@ -141,9 +319,7 @@ public final class ProxyClient implements ProxyProvider {
 		proxyExecutor.execute(new Runnable() {
 			@Override
 			public void run() {
-				if (proxyConnector != null) {
-					proxyConnector.close();
-				}
+				proxyConnector.close();
 				// connections.clear();
 			}
 		});
@@ -436,236 +612,42 @@ public final class ProxyClient implements ProxyProvider {
 					}
 					innerConnection.connection = callback;
 
-					reconnect();
+					byte[] headerAsBytes = header.toString().getBytes(Charsets.UTF_8);
+
+					SendCallback sendCallback = new SendCallback() {
+						@Override
+						public void failed(IOException e) {
+							proxyConnector.close();
+						}
+						@Override
+						public void sent() {
+						}
+					};
+					
+					if (connectAddress == null) {
+						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
+						b.put((byte) ProxyCommons.Commands.CONNECT_WITHOUT_ADDRESS);
+						b.putInt(innerConnection.connectionId);
+						b.putInt(headerAsBytes.length);
+						b.put(headerAsBytes);
+						b.flip();
+						proxyConnector.send(null, b, sendCallback);
+					} else {
+						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + connectAddress.ip.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
+						b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
+						b.putInt(innerConnection.connectionId);
+						b.putInt(connectAddress.ip.length);
+						b.put(connectAddress.ip);
+						b.putInt(connectAddress.port);
+						b.putInt(headerAsBytes.length);
+						b.put(headerAsBytes);
+						b.flip();
+						proxyConnector.send(null, b, sendCallback);
+					}
 
 					callback.connected(null);
 				}
 			});
-		}
-		
-		private void reconnect() {
-			if (proxyConnector == null) {
-				proxyConnector = proxyConnectorFactory.create(queue);
-				proxyConnector.connect(new Connection() {
-					@Override
-					public void connected(Address address) {
-					}
-					
-					@Override
-					public void closed() {
-						proxyExecutor.execute(new Runnable() {
-							@Override
-							public void run() {
-								proxyConnector = null;
-								for (InnerConnection c : connections.values()) {
-									c.connection.closed();
-								}
-								connections.clear();
-							}
-						});
-					}
-
-					@Override
-					public void failed(final IOException e) {
-						proxyExecutor.execute(new Runnable() {
-							@Override
-							public void run() {
-								proxyConnector = null;
-								for (InnerConnection c : connections.values()) {
-									c.connection.failed(e);
-								}
-								connections.clear();
-							}
-						});
-					}
-
-					private ByteBuffer readByteBuffer;
-
-					private int readConnectionId = -1;
-					private int command = -1;
-
-					private int readIpLength = -1;
-					private byte[] readIp = null;
-					private int readPort = -1;
-					private int readLength = -1;
-					
-					private int readByte(int old, ByteBuffer receivedBuffer) {
-						if (old >= 0) {
-							return old;
-						}
-						if (!receivedBuffer.hasRemaining()) {
-							return -1;
-						}
-						return receivedBuffer.get() & 0xFF;
-					}
-					private byte[] readBytes(ByteBuffer receivedBuffer, int len) {
-						if (readByteBuffer == null) {
-							readByteBuffer = ByteBuffer.allocate(len);
-						}
-						int l = len - readByteBuffer.position();
-						if (l > receivedBuffer.remaining()) {
-							l = receivedBuffer.remaining();
-						}
-						System.arraycopy(receivedBuffer.array(), receivedBuffer.arrayOffset() + receivedBuffer.position(), readByteBuffer.array(), readByteBuffer.arrayOffset() + readByteBuffer.position(), l);
-						receivedBuffer.position(receivedBuffer.position() + l);
-						readByteBuffer.position(readByteBuffer.position() + l);
-						if (readByteBuffer.position() == readByteBuffer.capacity()) {
-							byte[] b = readByteBuffer.array();
-							readByteBuffer = null;
-							return b;
-						}
-						return null;
-					}
-					private int readInt(int old, ByteBuffer receivedBuffer) {
-						if (old >= 0) {
-							return old;
-						}
-						byte[] r = readBytes(receivedBuffer, Ints.BYTES);
-						if (r == null) {
-							return -1;
-						}
-						return ByteBuffer.wrap(r).getInt();
-					}
-					/*
-					private String readString(String old, ByteBuffer receivedBuffer, int len) {
-						if (old != null) {
-							return old;
-						}
-						byte[] r = readBytes(receivedBuffer, len);
-						if (r == null) {
-							return null;
-						}
-						return new String(r, 0, r.length, Charsets.UTF_8);
-					}
-					*/
-					private byte[] readBytes(byte[] old, ByteBuffer receivedBuffer, int len) {
-						if (old != null) {
-							return old;
-						}
-						return readBytes(receivedBuffer, len);
-					}
-					
-					@Override
-					public void received(Address receivedAddress, final ByteBuffer receivedBuffer) {
-						proxyExecutor.execute(new Runnable() {
-							@Override
-							public void run() {
-								while (true) {
-									command = readByte(command, receivedBuffer);
-									if (command < 0) {
-										return;
-									}
-
-									readConnectionId = readInt(readConnectionId, receivedBuffer);
-									if (readConnectionId < 0) {
-										return;
-									}
-
-									switch (command) {
-									case ProxyCommons.Commands.SEND_WITH_ADDRESS: {
-										readIpLength = readInt(readIpLength, receivedBuffer);
-										if (readIpLength < 0) {
-											return;
-										}
-										readIp = readBytes(readIp, receivedBuffer, readIpLength);
-										if (readIp == null) {
-											return;
-										}
-										readPort = readInt(readPort, receivedBuffer);
-										if (readPort < 0) {
-											return;
-										}
-										readLength = readInt(readLength, receivedBuffer);
-										if (readLength < 0) {
-											return;
-										}
-										// LOGGER.debug("SEND_WITH_ADDRESS {}:{} [{} bytes]", Address.ipToString(readIp), readPort, readLength);
-										byte[] r = readBytes(receivedBuffer, readLength);
-										if (r == null) {
-											return;
-										}
-										InnerConnection receivedInnerConnection = connections.get(readConnectionId);
-										if (receivedInnerConnection != null) {
-											receivedInnerConnection.connection.received(new Address(readIp, readPort), ByteBuffer.wrap(r));
-										}
-										readConnectionId = -1;
-										command = -1;
-										readIpLength = -1;
-										readIp = null;
-										readPort = -1;
-										readLength = -1;
-										break;
-									}
-									case ProxyCommons.Commands.SEND_WITHOUT_ADDRESS: {
-										readLength = readInt(readLength, receivedBuffer);
-										if (readLength < 0) {
-											return;
-										}
-										// LOGGER.debug("SEND_WITHOUT_ADDRESS [{} bytes]", readLength);
-										byte[] r = readBytes(receivedBuffer, readLength);
-										if (r == null) {
-											return;
-										}
-										InnerConnection receivedInnerConnection = connections.get(readConnectionId);
-										if (receivedInnerConnection != null) {
-											receivedInnerConnection.connection.received(null, ByteBuffer.wrap(r));
-										}
-										readConnectionId = -1;
-										command = -1;
-										readLength = -1;
-										break;
-									}
-									case ProxyCommons.Commands.CLOSE: {
-										InnerConnection receivedInnerConnection = connections.remove(readConnectionId);
-										readConnectionId = -1;
-										command = -1;
-										if (receivedInnerConnection != null) {
-											receivedInnerConnection.connection.closed();
-										}
-										break;
-									}
-									}
-								}
-							}
-						});
-					}
-				});
-
-				byte[] headerAsBytes = header.toString().getBytes(Charsets.UTF_8);
-
-				SendCallback sendCallback = new SendCallback() {
-					@Override
-					public void failed(IOException e) {
-						if (proxyConnector != null) {
-							proxyConnector.close();
-						}
-					}
-					@Override
-					public void sent() {
-					}
-				};
-				
-				if (connectAddress == null) {
-					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
-					b.put((byte) ProxyCommons.Commands.CONNECT_WITHOUT_ADDRESS);
-					b.putInt(innerConnection.connectionId);
-					b.putInt(headerAsBytes.length);
-					b.put(headerAsBytes);
-					b.flip();
-					proxyConnector.send(null, b, sendCallback);
-				} else {
-					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + connectAddress.ip.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
-					b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
-					b.putInt(innerConnection.connectionId);
-					b.putInt(connectAddress.ip.length);
-					b.put(connectAddress.ip);
-					b.putInt(connectAddress.port);
-					b.putInt(headerAsBytes.length);
-					b.put(headerAsBytes);
-					b.flip();
-					proxyConnector.send(null, b, sendCallback);
-				}
-			}
 		}
 		
 		@Override
@@ -677,8 +659,6 @@ public final class ProxyClient implements ProxyProvider {
 						throw new IllegalStateException("send() must be called after connect()");
 					}
 					
-					reconnect();
-
 					if (sendAddress == null) {
 						// LOGGER.debug("-->SEND_WITHOUT_ADDRESS [{} bytes]", sendBuffer.remaining());
 						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
@@ -724,9 +704,7 @@ public final class ProxyClient implements ProxyProvider {
 					SendCallback sendCallback = new SendCallback() {
 						@Override
 						public void failed(IOException e) {
-							if (proxyConnector != null) {
-								proxyConnector.close();
-							}
+							proxyConnector.close();
 						}
 						@Override
 						public void sent() {
@@ -734,6 +712,8 @@ public final class ProxyClient implements ProxyProvider {
 					};
 					
 					proxyConnector.send(null, b, sendCallback);
+					
+					innerConnection.connection.closed();
 				}
 			});
 		}
