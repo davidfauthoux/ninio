@@ -3,7 +3,7 @@
 
 	<groupId>com.davfx.ninio</groupId>
 	<artifactId>ninio</artifactId>
-	<version>3.0.12-SNAPSHOT</version>
+	<version>3.0.13-SNAPSHOT</version>
 	<!-- mvn versions:set -DgenerateBackupPoms=false -->
 
 	<packaging>pom</packaging>
@@ -269,6 +269,11 @@
 			<dependency>
 				<groupId>com.davfx.ninio</groupId>
 				<artifactId>ninio-script</artifactId>
+				<version>${project.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>com.davfx.ninio</groupId>
+				<artifactId>ninio-sort</artifactId>
 				<version>${project.version}</version>
 			</dependency>
 			<dependency>

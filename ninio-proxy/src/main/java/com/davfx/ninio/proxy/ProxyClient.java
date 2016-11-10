@@ -630,41 +630,41 @@ public final class ProxyClient implements ProxyProvider {
 						});
 					}
 				});
+			}
+			
+			byte[] headerAsBytes = header.toString().getBytes(Charsets.UTF_8);
 
-				byte[] headerAsBytes = header.toString().getBytes(Charsets.UTF_8);
-
-				SendCallback sendCallback = new SendCallback() {
-					@Override
-					public void failed(IOException e) {
-						if (proxyConnector != null) {
-							proxyConnector.close();
-						}
+			SendCallback sendCallback = new SendCallback() {
+				@Override
+				public void failed(IOException e) {
+					if (proxyConnector != null) {
+						proxyConnector.close();
 					}
-					@Override
-					public void sent() {
-					}
-				};
-				
-				if (connectAddress == null) {
-					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
-					b.put((byte) ProxyCommons.Commands.CONNECT_WITHOUT_ADDRESS);
-					b.putInt(innerConnection.connectionId);
-					b.putInt(headerAsBytes.length);
-					b.put(headerAsBytes);
-					b.flip();
-					proxyConnector.send(null, b, sendCallback);
-				} else {
-					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + connectAddress.ip.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
-					b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
-					b.putInt(innerConnection.connectionId);
-					b.putInt(connectAddress.ip.length);
-					b.put(connectAddress.ip);
-					b.putInt(connectAddress.port);
-					b.putInt(headerAsBytes.length);
-					b.put(headerAsBytes);
-					b.flip();
-					proxyConnector.send(null, b, sendCallback);
 				}
+				@Override
+				public void sent() {
+				}
+			};
+			
+			if (connectAddress == null) {
+				ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
+				b.put((byte) ProxyCommons.Commands.CONNECT_WITHOUT_ADDRESS);
+				b.putInt(innerConnection.connectionId);
+				b.putInt(headerAsBytes.length);
+				b.put(headerAsBytes);
+				b.flip();
+				proxyConnector.send(null, b, sendCallback);
+			} else {
+				ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + connectAddress.ip.length + Ints.BYTES + Ints.BYTES + headerAsBytes.length);
+				b.put((byte) ProxyCommons.Commands.CONNECT_WITH_ADDRESS);
+				b.putInt(innerConnection.connectionId);
+				b.putInt(connectAddress.ip.length);
+				b.put(connectAddress.ip);
+				b.putInt(connectAddress.port);
+				b.putInt(headerAsBytes.length);
+				b.put(headerAsBytes);
+				b.flip();
+				proxyConnector.send(null, b, sendCallback);
 			}
 		}
 		
