@@ -82,6 +82,7 @@ public final class TcpdumpSocket implements Connecter {
 	private static final String TCPDUMP_COMMAND = CONFIG.getString("tcpdump.path");
 	private static final int READ_BUFFER_SIZE = CONFIG.getBytes("tcpdump.datagram.read.size").intValue();
 	private static final int WRITE_BUFFER_SIZE = CONFIG.getBytes("tcpdump.datagram.write.size").intValue();
+	private static final String PORT_PLACEHOLDER = CONFIG.getString("tcpdump.port.placeholder");
 
 
 	private static void execute(String name, Runnable runnable) {
@@ -115,6 +116,7 @@ public final class TcpdumpSocket implements Connecter {
 			return;
 		}
 
+		int bindPort;
 		final DatagramSocket s;
 		try {
 			if (bindAddress == null) {
@@ -123,6 +125,7 @@ public final class TcpdumpSocket implements Connecter {
 				s = new DatagramSocket(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 			}
 			try {
+				bindPort = s.getLocalPort();
 				s.setReceiveBufferSize(READ_BUFFER_SIZE);
 				s.setSendBufferSize(WRITE_BUFFER_SIZE);
 				LOGGER.debug("Datagram socket created (bound to {}, port {}, receive buffer size = {}, send buffer size = {})", bindAddress, s.getLocalPort(), s.getReceiveBufferSize(), s.getSendBufferSize());
@@ -164,6 +167,7 @@ public final class TcpdumpSocket implements Connecter {
 			for (String p : Splitter.on(' ').split(rule)) {
 				String r = p.trim();
 				if (!r.isEmpty()) {
+					r = r.replace(PORT_PLACEHOLDER, Integer.toString(bindPort));
 					toExec.add(r);
 				}
 			}
