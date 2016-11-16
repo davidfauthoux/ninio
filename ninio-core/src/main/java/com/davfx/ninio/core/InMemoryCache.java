@@ -16,7 +16,8 @@ public final class InMemoryCache {
 
 	public static interface Builder<T> extends NinioBuilder<Connecter> {
 		// Builder<T> database(File database);
-		Builder<T> expiration(double expiration);
+		Builder<T> dataExpiration(double dataExpiration);
+		Builder<T> requestExpiration(double requestExpiration);
 		Builder<T> using(Interpreter<T> interpreter);
 		Builder<T> with(NinioBuilder<Connecter> builder);
 	}
@@ -25,7 +26,8 @@ public final class InMemoryCache {
 		return new Builder<T>() {
 			private NinioBuilder<Connecter> builder = UdpSocket.builder();
 			
-			private double expiration = 0d;
+			private double dataExpiration = 0d;
+			private double requestExpiration = 0d;
 			private Interpreter<T> interpreter = null;
 			// private File database = null;
 			
@@ -49,8 +51,13 @@ public final class InMemoryCache {
 			}
 			*/
 			@Override
-			public Builder<T> expiration(double expiration) {
-				this.expiration = expiration;
+			public Builder<T> dataExpiration(double dataExpiration) {
+				this.dataExpiration = dataExpiration;
+				return this;
+			}
+			@Override
+			public Builder<T> requestExpiration(double requestExpiration) {
+				this.requestExpiration = requestExpiration;
 				return this;
 			}
 			
@@ -63,7 +70,7 @@ public final class InMemoryCache {
 					throw new NullPointerException("interpreter");
 				}
 				
-				return new InnerConnecter<>(/*database, */expiration, interpreter, builder.create(queue));
+				return new InnerConnecter<>(/*database, */dataExpiration, requestExpiration, interpreter, builder.create(queue));
 			}
 		};
 	}
@@ -72,17 +79,19 @@ public final class InMemoryCache {
 		// private final File database;
 		private final Connecter wrappee;
 		private final Interpreter<T> interpreter;
-		private final double expiration;
+		private final double dataExpiration;
+		private final double requestExpiration;
 		// private final java.sql.Connection sqlConnection;
 		private final MemoryCache<Address, CacheByAddress<T>> cacheByDestinationAddress;
 		private Connection connectCallback = null;
 
-		public InnerConnecter(/*File database, */double expiration, Interpreter<T> interpreter, Connecter wrappee) {
-			this.expiration = expiration;
+		public InnerConnecter(/*File database, */double dataExpiration, double requestExpiration, Interpreter<T> interpreter, Connecter wrappee) {
+			this.dataExpiration = dataExpiration;
+			this.requestExpiration = requestExpiration;
 			this.interpreter = interpreter;
 			this.wrappee = wrappee;
 			
-			cacheByDestinationAddress = MemoryCache.<Address, CacheByAddress<T>> builder().expireAfterAccess(expiration).build();
+			cacheByDestinationAddress = MemoryCache.<Address, CacheByAddress<T>> builder().expireAfterAccess(dataExpiration).build();
 			
 			/*
 			File databaseFile;
@@ -280,30 +289,28 @@ public final class InMemoryCache {
 				
 				CacheByAddress<T> cache = cacheByDestinationAddress.get(address);
 				if (cache == null) {
-					LOGGER.trace("New cache (address = {}, expiration = {})", address, expiration);
-					cache = new CacheByAddress<T>(expiration);
+					LOGGER.trace("New cache (address = {}, expiration = {})", address, dataExpiration);
+					cache = new CacheByAddress<T>(dataExpiration, requestExpiration);
 					cacheByDestinationAddress.put(address, cache);
 				}
 	
 				DataCache<T> subs = cache.requestsByKey.get(context.key);
 				if (subs == null) {
-					subs = new DataCache<T>(expiration);
+					subs = new DataCache<T>(requestExpiration);
 					cache.requestsByKey.put(context.key, subs);
-	
-					subs.subs.put(context.sub, null);
-					cache.subToKey.put(context.sub, context.key);
-
 					send = true;
 					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				} else {
-					subs.subs.put(context.sub, null);
-					cache.subToKey.put(context.sub, context.key);
-
 					send = false;
 					LOGGER.trace("Request already sent (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
 				}
 				
 				data = subs.data;
+
+				if (send || (data == null)) {
+					subs.subs.put(context.sub, null);
+					cache.subToKey.put(context.sub, context.key);
+				}
 			}
 
 			if (send) {
@@ -385,16 +392,16 @@ public final class InMemoryCache {
 	private static final class DataCache<T> {
 		public ByteBuffer data = null;
 		public final MemoryCache<T, Void> subs;
-		public DataCache(double expiration) {
-			subs = MemoryCache.<T, Void> builder().expireAfterWrite(expiration).build();
+		public DataCache(double requestExpiration) {
+			subs = MemoryCache.<T, Void> builder().expireAfterWrite(requestExpiration).build();
 		}
 	}
 	private static final class CacheByAddress<T> {
 		public final MemoryCache<String, DataCache<T>> requestsByKey;
 		public final MemoryCache<T, String> subToKey;
-		public CacheByAddress(double expiration) {
-			requestsByKey = MemoryCache.<String, DataCache<T>> builder().expireAfterAccess(expiration).build();
-			subToKey = MemoryCache.<T, String> builder().expireAfterWrite(expiration).build();
+		public CacheByAddress(double dataExpiration, double requestExpiration) {
+			requestsByKey = MemoryCache.<String, DataCache<T>> builder().expireAfterAccess(dataExpiration).build();
+			subToKey = MemoryCache.<T, String> builder().expireAfterWrite(requestExpiration).build();
 		}
 	}
 }
