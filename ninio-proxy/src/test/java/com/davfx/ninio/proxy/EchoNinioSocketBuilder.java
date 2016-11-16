@@ -6,7 +6,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Charsets;
 
@@ -15,7 +15,7 @@ public final class EchoNinioSocketBuilder implements NinioBuilder<Connecter> {
 	}
 	
 	@Override
-	public Connecter create(Queue queue) {
+	public Connecter create(NinioProvider ninioProvider) {
 		return new Connecter() {
 			private Connection connection;
 			

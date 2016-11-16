@@ -10,7 +10,6 @@ import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.dns.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 
 public class DnsTest {
 	
@@ -24,7 +23,7 @@ public class DnsTest {
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			final Lock<byte[], IOException> lock = new Lock<>();
 			
-			try (DnsConnecter client = DnsTimeout.wrap(10d, ninio.create(DnsClient.builder().with(new SerialExecutor(DnsTest.class))))) {
+			try (DnsConnecter client = DnsTimeout.wrap(10d, ninio.create(DnsClient.builder()))) {
 				client.connect(new DnsConnection() {
 					@Override
 					public void closed() {

@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
-import com.davfx.ninio.util.SerialExecutor;
 import com.typesafe.config.Config;
 
 public final class ReconnectConnecter implements Connecter {
@@ -34,26 +33,27 @@ public final class ReconnectConnecter implements Connecter {
 			}
 
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
-				return new ReconnectConnecter(queue, builder);
+				return new ReconnectConnecter(ninioProvider, builder);
 			}
 		};
 	}
 	
 
 	
-	private final Queue queue;
+	private final NinioProvider ninioProvider;
 	private final NinioBuilder<Connecter> builder;
-	private final Executor executor = new SerialExecutor(ReconnectConnecter.class);
+	private final Executor executor;
 	private boolean closed = false;
 	private Connecter connecter = null;
 
-	private ReconnectConnecter(Queue queue, NinioBuilder<Connecter> builder) {
-		this.queue = queue;
+	private ReconnectConnecter(NinioProvider ninioProvider, NinioBuilder<Connecter> builder) {
+		this.ninioProvider = ninioProvider;
 		this.builder = builder;
+		executor = ninioProvider.executor();
 	}
 	
 	@Override
@@ -69,7 +69,7 @@ public final class ReconnectConnecter implements Connecter {
 					return;
 				}
 				
-				connecter = builder.create(queue);
+				connecter = builder.create(ninioProvider);
 				connecter.connect(new Connection() {
 					@Override
 					public void received(Address address, ByteBuffer buffer) {

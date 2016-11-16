@@ -27,7 +27,6 @@ import com.davfx.ninio.http.HttpTimeout;
 import com.davfx.ninio.http.UrlUtils;
 import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.collect.ImmutableMultimap;
 import com.typesafe.config.Config;
 
@@ -39,14 +38,13 @@ public final class HttpClient implements AutoCloseable {
 	private static final int DEFAULT_LIMIT = CONFIG.getInt("default.limit");
 
 	private final Ninio ninio = Ninio.create();
-	private final SerialExecutor executor = new SerialExecutor(HttpClient.class);
 	private final HttpConnecter httpClient;
 	private final DnsConnecter dnsClient;
 	private final Timeout timeoutManager = new Timeout();
 	private final Limit limitManager = new Limit();
 
 	public HttpClient() {
-		dnsClient = ninio.create(com.davfx.ninio.dns.DnsClient.builder().with(executor));
+		dnsClient = ninio.create(com.davfx.ninio.dns.DnsClient.builder());
 		dnsClient.connect(new DnsConnection() {
 			@Override
 			public void closed() {
@@ -62,7 +60,7 @@ public final class HttpClient implements AutoCloseable {
 			}
 		});
 
-		httpClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor).with(dnsClient));
+		httpClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(dnsClient));
 	}
 	
 	/*%%

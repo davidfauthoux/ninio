@@ -5,7 +5,6 @@ import java.util.concurrent.Executor;
 
 public final class SecureSocketServerBuilder implements TcpSocketServer.Builder {
 	private Trust trust = new Trust();
-	private Executor executor = null;
 	private ByteBufferAllocator byteBufferAllocator = new DefaultByteBufferAllocator(SecureSocketManager.REQUIRED_BUFFER_SIZE);
 
 	private Address bindAddress = null;
@@ -21,8 +20,8 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 		return this;
 	}
 	
+	@Deprecated
 	public SecureSocketServerBuilder with(Executor executor) {
-		this.executor = executor;
 		return this;
 	}
 
@@ -40,11 +39,11 @@ public final class SecureSocketServerBuilder implements TcpSocketServer.Builder 
 	}
 
 	@Override
-	public Listener create(Queue queue) {
+	public Listener create(NinioProvider ninioProvider) {
 		final Trust thisTrust = trust;
-		final Executor thisExecutor = executor;
+		final Executor thisExecutor = ninioProvider.executor();
 		final ByteBufferAllocator thisByteBufferAllocator = byteBufferAllocator;
-		final Listener listener = wrappee.with(byteBufferAllocator).bind(bindAddress).create(queue);
+		final Listener listener = wrappee.with(byteBufferAllocator).bind(bindAddress).create(ninioProvider);
 		
 		return new Listener() {
 			@Override

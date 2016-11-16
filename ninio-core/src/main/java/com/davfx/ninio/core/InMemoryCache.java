@@ -62,7 +62,7 @@ public final class InMemoryCache {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
@@ -70,7 +70,7 @@ public final class InMemoryCache {
 					throw new NullPointerException("interpreter");
 				}
 				
-				return new InnerConnecter<>(/*database, */dataExpiration, requestExpiration, interpreter, builder.create(queue));
+				return new InnerConnecter<>(/*database, */dataExpiration, requestExpiration, interpreter, builder.create(ninioProvider));
 			}
 		};
 	}

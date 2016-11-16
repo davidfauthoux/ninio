@@ -14,7 +14,6 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class SnmpTrapTest {
@@ -87,7 +86,7 @@ public class SnmpTrapTest {
 				});
 				
 				final Wait waitClient = new Wait();
-				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTrapTest.class)))) {
+				try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()))) {
 					snmpClient.connect(new SnmpConnection() {
 							@Override
 							public void failed(IOException ioe) {
@@ -113,7 +112,7 @@ public class SnmpTrapTest {
 	public static void main(String[] args) {
 		// sudo snmptrapd -f -Le -d
 		try (Ninio ninio = Ninio.create()) {
-			try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()).with(new SerialExecutor(SnmpTrapTest.class)))) {
+			try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()))) {
 				snmpClient.connect(null);
 				snmpClient.request().community("private").build(new Address(Address.LOCALHOST, SnmpClient.DEFAULT_TRAP_PORT), new Oid("1.1.1.1.1")).trap(new Oid("1.1.1.1.1.10"), "trap-test").receive(null);
 				try {

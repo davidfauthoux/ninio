@@ -13,8 +13,8 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.Nop;
-import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.RawSocket;
 
 public final class PingClient implements PingConnecter {
@@ -25,18 +25,19 @@ public final class PingClient implements PingConnecter {
 	private static final long ID_LIMIT = 1L << 32;
 	
 	public static interface Builder extends NinioBuilder<PingConnecter> {
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder with(RawSocket.Builder connectorFactory);
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = null;
 			private RawSocket.Builder connectorFactory = RawSocket.builder();
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -47,11 +48,8 @@ public final class PingClient implements PingConnecter {
 			}
 
 			@Override
-			public PingClient create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
-				return new PingClient(executor, connectorFactory.protocol(ICMP_PROTOCOL).create(queue));
+			public PingConnecter create(NinioProvider ninioProvider) {
+				return new PingClient(ninioProvider.executor(), connectorFactory.protocol(ICMP_PROTOCOL).create(ninioProvider));
 			}
 		};
 	}

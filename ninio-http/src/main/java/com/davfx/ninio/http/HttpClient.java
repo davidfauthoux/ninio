@@ -18,7 +18,7 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -43,7 +43,10 @@ public final class HttpClient implements HttpConnecter {
 
 	public static interface Builder extends NinioBuilder<HttpConnecter> {
 		Builder pipelining();
+		
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder with(DnsConnecter dns);
 		Builder with(TcpSocket.Builder connectorFactory);
 		Builder withSecure(TcpSocket.Builder secureConnectorFactory);
@@ -51,7 +54,6 @@ public final class HttpClient implements HttpConnecter {
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = null;
 			private DnsConnecter dns = null;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
 			private TcpSocket.Builder secureConnectorFactory = new SecureSocketBuilder(TcpSocket.builder());
@@ -63,9 +65,9 @@ public final class HttpClient implements HttpConnecter {
 				return this;
 			}
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -88,14 +90,11 @@ public final class HttpClient implements HttpConnecter {
 			}
 
 			@Override
-			public HttpClient create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
+			public HttpConnecter create(NinioProvider ninioProvider) {
 				if (dns == null) {
 					throw new NullPointerException("dns");
 				}
-				return new HttpClient(queue, executor, dns, connectorFactory, secureConnectorFactory, pipelining);
+				return new HttpClient(ninioProvider, dns, connectorFactory, secureConnectorFactory, pipelining);
 			}
 		};
 	}
@@ -176,7 +175,7 @@ public final class HttpClient implements HttpConnecter {
 			this.address = address;
 		}
 		
-		public void launch(final Executor executor, DnsConnecter dns, final TcpSocket.Builder connectorFactory, final TcpSocket.Builder secureConnectorFactory, final Queue queue, final Runnable onClose) {
+		public void launch(final Executor executor, DnsConnecter dns, final TcpSocket.Builder connectorFactory, final TcpSocket.Builder secureConnectorFactory, final NinioProvider ninioProvider, final Runnable onClose) {
 			dns.request().resolve(address.host, null).receive(new DnsReceiver() {
 				@Override
 				public void failed(final IOException ioe) {
@@ -205,7 +204,7 @@ public final class HttpClient implements HttpConnecter {
 							TcpSocket.Builder factory = address.secure ? secureConnectorFactory : connectorFactory;
 							factory.to(new Address(ip, address.port));
 		
-							Connecter c = factory.create(queue);
+							Connecter c = factory.create(ninioProvider);
 							c.connect(new Connection() {
 								@Override
 								public void received(Address address, final ByteBuffer buffer) {
@@ -298,7 +297,7 @@ public final class HttpClient implements HttpConnecter {
 		}
 	}
 	
-	private final Queue queue;
+	private final NinioProvider ninioProvider;
 	
 	private final Map<Long, ReusableConnector> reusableConnectors = new HashMap<>();
 	private long nextReusableConnectorId = 0L;
@@ -321,9 +320,9 @@ public final class HttpClient implements HttpConnecter {
 		headerSanitization.put(HttpHeaderKey.ACCEPT.toLowerCase(), HttpHeaderKey.ACCEPT);
 	}
 
-	private HttpClient(Queue queue, Executor executor, DnsConnecter dns, TcpSocket.Builder connectorFactory, TcpSocket.Builder secureConnectorFactory, boolean pipelining) {
-		this.queue = queue;
-		this.executor = executor;
+	private HttpClient(NinioProvider ninioProvider, DnsConnecter dns, TcpSocket.Builder connectorFactory, TcpSocket.Builder secureConnectorFactory, boolean pipelining) {
+		this.ninioProvider = ninioProvider;
+		executor = ninioProvider.executor();
 		this.dns = dns;
 		this.connectorFactory = connectorFactory;
 		this.secureConnectorFactory = secureConnectorFactory;
@@ -525,7 +524,7 @@ public final class HttpClient implements HttpConnecter {
 	
 							reusableConnector = new ReusableConnector(request.address);
 							reusableConnectors.put(id, reusableConnector);
-							reusableConnector.launch(executor, dns, connectorFactory, secureConnectorFactory, queue, new Runnable() {
+							reusableConnector.launch(executor, dns, connectorFactory, secureConnectorFactory, ninioProvider, new Runnable() {
 								@Override
 								public void run() {
 									LOGGER.trace("Connection removed (id = {})", id);

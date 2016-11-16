@@ -16,6 +16,8 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Listening;
+import com.davfx.ninio.core.NinioBuilder;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ArrayListMultimap;
@@ -27,17 +29,18 @@ public final class HttpListening implements Listening {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(HttpListening.class);
 	
-	public static interface Builder {
+	public static interface Builder extends NinioBuilder<HttpListening> {
 		Builder secure();
+		
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder with(HttpListeningHandler handler);
-		HttpListening build();
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
 			private boolean secure = false;
-			private Executor executor = null;
 			private HttpListeningHandler handler = null;
 			
 			@Override
@@ -46,9 +49,9 @@ public final class HttpListening implements Listening {
 				return this;
 			}
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -59,14 +62,11 @@ public final class HttpListening implements Listening {
 			}
 
 			@Override
-			public HttpListening build() {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
+			public HttpListening create(NinioProvider ninioProvider) {
 				if (handler == null) {
 					throw new NullPointerException("handler");
 				}
-				return new HttpListening(executor, secure, handler);
+				return new HttpListening(ninioProvider.executor(), secure, handler);
 			}
 		};
 	}

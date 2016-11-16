@@ -50,12 +50,12 @@ public final class TcpSocketServer implements Listener {
 			}
 
 			@Override
-			public TcpSocketServer create(Queue queue) {
+			public Listener create(NinioProvider ninioProvider) {
 				if (bindAddress == null) {
 					throw new NullPointerException("bindAddress");
 				}
 				
-				return new TcpSocketServer(queue, byteBufferAllocator, bindAddress);
+				return new TcpSocketServer(ninioProvider.queue(), byteBufferAllocator, bindAddress);
 			}
 		};
 	}

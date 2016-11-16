@@ -20,7 +20,7 @@ import com.davfx.ninio.core.Connected;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Splitter;
@@ -33,7 +33,10 @@ public final class SshClient implements Connecter {
 
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(TcpSocket.Builder builder);
+		
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder login(String login, String password);
 		Builder login(String login, SshPublicKey publicKey);
 		Builder exec(String exec);
@@ -86,8 +89,6 @@ public final class SshClient implements Connecter {
 			private SshPublicKey publicKey = null;
 			private String exec = null;
 			
-			private Executor executor = null;
-
 			@Override
 			public Builder exec(String exec) {
 				this.exec = exec;
@@ -109,9 +110,9 @@ public final class SshClient implements Connecter {
 				return this;
 			}
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -122,7 +123,7 @@ public final class SshClient implements Connecter {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
@@ -132,11 +133,8 @@ public final class SshClient implements Connecter {
 				if ((password == null) && (publicKey == null)) {
 					throw new NullPointerException("password | publicKey");
 				}
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
 				
-				return new SshClient(builder.create(queue), login, password, publicKey, exec, executor);
+				return new SshClient(builder.create(ninioProvider), login, password, publicKey, exec, ninioProvider.executor());
 			}
 		};
 	}

@@ -19,7 +19,7 @@ import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.SendCallback;
@@ -35,7 +35,6 @@ import com.davfx.ninio.http.HttpClient;
 import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.WebsocketSocket;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.primitives.Ints;
 
@@ -45,13 +44,13 @@ public final class ProxyServer implements Listening {
 
 	public static NinioBuilder<Disconnectable> defaultServer(final Address address, final ProxyListening listening) {
 		return new NinioBuilder<Disconnectable>() {
-			public Disconnectable create(final Queue queue) {
+			@Override
+			public Disconnectable create(NinioProvider ninioProvider) {
 				final Trust trust = new Trust();
-				final Executor executor = new SerialExecutor(ProxyServer.class);
-				final DnsConnecter dnsClient = DnsClient.builder().with(executor).create(queue);
-				final HttpConnecter httpClient = HttpClient.builder().with(dnsClient).with(executor).create(queue);
+				final DnsConnecter dnsClient = DnsClient.builder().create(ninioProvider);
+				final HttpConnecter httpClient = HttpClient.builder().with(dnsClient).create(ninioProvider);
 				
-				final ProxyServer.Builder proxyServerBuilder = ProxyServer.builder().with(executor).listening(new ProxyListening() {
+				final ProxyServer.Builder proxyServerBuilder = ProxyServer.builder().listening(new ProxyListening() {
 					@Override
 					public void connected(Address address) {
 						if (listening != null) {
@@ -85,7 +84,7 @@ public final class ProxyServer implements Listening {
 							return TcpdumpSocket.builder().on(h.parameters.get("interfaceId")).mode(TcpdumpMode.valueOf(h.parameters.get("mode"))).rule(h.parameters.get("rule"));
 						}
 						if (h.type.equals(ProxyCommons.Types.SSL)) {
-							return new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(address);
+							return new SecureSocketBuilder(TcpSocket.builder()).trust(trust).to(address);
 						}
 						if (h.type.equals(ProxyCommons.Types.RAW)) {
 							ProtocolFamily family = "6".equals(h.parameters.get("family")) ? StandardProtocolFamily.INET6 : StandardProtocolFamily.INET;
@@ -107,8 +106,8 @@ public final class ProxyServer implements Listening {
 					}
 				});
 
-				final Listener server = TcpSocketServer.builder().bind(address).create(queue);
-				server.listen(proxyServerBuilder.create(queue));
+				final Listener server = TcpSocketServer.builder().bind(address).create(ninioProvider);
+				server.listen(proxyServerBuilder.create(ninioProvider));
 				return new Disconnectable() {
 					@Override
 					public void close() {
@@ -121,18 +120,19 @@ public final class ProxyServer implements Listening {
 	}
 	
 	public static interface Builder extends NinioBuilder<ProxyServer> {
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder listening(ProxyListening listening);
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = null;
 			private ProxyListening listening = null;
 
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -143,25 +143,22 @@ public final class ProxyServer implements Listening {
 			}
 
 			@Override
-			public ProxyServer create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
+			public ProxyServer create(NinioProvider ninioProvider) {
 				if (listening == null) {
 					throw new NullPointerException("listening");
 				}
-				return new ProxyServer(queue, executor, listening);
+				return new ProxyServer(ninioProvider, listening);
 			}
 		};
 	}
 	
-	private final Queue queue;
+	private final NinioProvider ninioProvider;
 	private final Executor proxyExecutor;
 	private final ProxyListening listening;
 
-	private ProxyServer(Queue queue, Executor proxyExecutor, ProxyListening listening) {
-		this.queue = queue;
-		this.proxyExecutor = proxyExecutor;
+	private ProxyServer(NinioProvider ninioProvider, ProxyListening listening) {
+		this.ninioProvider = ninioProvider;
+		proxyExecutor = ninioProvider.executor();
 		this.listening = listening;
 	}
 	
@@ -433,7 +430,7 @@ public final class ProxyServer implements Listening {
 								if (externalBuilder == null) {
 									LOGGER.error("Unknown header (CONNECT_WITH_ADDRESS): {}", header);
 								} else {
-									Connecter externalConnector = externalBuilder.create(queue);
+									Connecter externalConnector = externalBuilder.create(ninioProvider);
 									externalConnector.connect(connection);
 									connections.put(connectionId, externalConnector);
 								}
@@ -468,7 +465,7 @@ public final class ProxyServer implements Listening {
 								if (externalBuilder == null) {
 									LOGGER.error("Unknown header (CONNECT_WITHOUT_ADDRESS): {}", header);
 								} else {
-									Connecter externalConnector = externalBuilder.create(queue);
+									Connecter externalConnector = externalBuilder.create(ninioProvider);
 									externalConnector.connect(connection);
 									connections.put(connectionId, externalConnector);
 								}

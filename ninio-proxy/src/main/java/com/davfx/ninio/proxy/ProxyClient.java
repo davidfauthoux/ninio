@@ -13,7 +13,7 @@ import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.RawSocket;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
@@ -24,7 +24,6 @@ import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpSocket;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.WebsocketSocket;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.primitives.Ints;
@@ -34,9 +33,8 @@ public final class ProxyClient implements ProxyProvider {
 	public static NinioBuilder<ProxyProvider> defaultClient(final Address address) {
 		return new NinioBuilder<ProxyProvider>() {
 			@Override
-			public ProxyProvider create(Queue queue) {
-				final Executor executor = new SerialExecutor(ProxyClient.class);
-				final ProxyClient client = ProxyClient.builder().with(executor).with(TcpSocket.builder().to(address)).create(queue);
+			public ProxyProvider create(NinioProvider ninioProvider) {
+				final ProxyClient client = ProxyClient.builder().with(TcpSocket.builder().to(address)).create(ninioProvider);
 				return new ProxyProvider() {
 					@Override
 					public void close() {
@@ -81,18 +79,19 @@ public final class ProxyClient implements ProxyProvider {
 	}
 	
 	public static interface Builder extends NinioBuilder<ProxyClient> {
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder with(TcpSocket.Builder connectorFactory);
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = null;
 			private TcpSocket.Builder connectorFactory = TcpSocket.builder();
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -103,11 +102,8 @@ public final class ProxyClient implements ProxyProvider {
 			}
 
 			@Override
-			public ProxyClient create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
-				return new ProxyClient(queue, executor, connectorFactory);
+			public ProxyClient create(NinioProvider ninioProvider) {
+				return new ProxyClient(ninioProvider, connectorFactory);
 			}
 		};
 	}
@@ -126,10 +122,10 @@ public final class ProxyClient implements ProxyProvider {
 
 	private final Map<Integer, InnerConnection> connections = new HashMap<>();
 
-	private ProxyClient(Queue queue, final Executor proxyExecutor, final TcpSocket.Builder proxyConnectorFactory) {
-		this.proxyExecutor = proxyExecutor;
+	private ProxyClient(NinioProvider ninioProvider, final TcpSocket.Builder proxyConnectorFactory) {
+		proxyExecutor = ninioProvider.executor();
 		
-		proxyConnector = proxyConnectorFactory.create(queue);
+		proxyConnector = proxyConnectorFactory.create(ninioProvider);
 		proxyConnector.connect(new Connection() {
 			@Override
 			public void connected(Address address) {
@@ -345,7 +341,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 
 			@Override
-			public Connecter create(Queue ignoredQueue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (header == null) {
 					throw new NullPointerException("header");
 				}
@@ -376,7 +372,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue ignoredQueue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.TCP), connectAddress);
 			}
 		};
@@ -404,7 +400,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue ignoredQueue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.SSL), connectAddress);
 			}
 		};
@@ -424,7 +420,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.UDP), null);
 			}
 		};
@@ -459,7 +455,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.TCPDUMP, ImmutableMap.of("interfaceId", interfaceId, "mode", mode.name(), "rule", rule)), null);
 			}
 		};
@@ -488,7 +484,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.RAW, ImmutableMap.of("family", (family == StandardProtocolFamily.INET6) ? "6" : "4", "protocol", String.valueOf(protocol))), null);
 			}
 		};
@@ -529,7 +525,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.WEBSOCKET, ImmutableMap.of("route", route)), connectAddress);
 			}
 		};
@@ -570,7 +566,7 @@ public final class ProxyClient implements ProxyProvider {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return createConnector(new ProxyHeader(ProxyCommons.Types.HTTP, ImmutableMap.of("route", route)), connectAddress);
 			}
 		};

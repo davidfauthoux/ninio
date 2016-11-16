@@ -15,7 +15,7 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.InMemoryBuffers;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Charsets;
 
@@ -73,7 +73,10 @@ public final class CutOnPromptClient implements Disconnectable {
 	
 	public static interface Builder extends NinioBuilder<CutOnPromptClient> {
 		Builder with(NinioBuilder<Connecter> builder);
+
+		@Deprecated
 		Builder with(Executor executor);
+		
 		Builder charset(Charset charset);
 		Builder limit(int limit);
 		Builder eol(String eol);
@@ -82,15 +85,14 @@ public final class CutOnPromptClient implements Disconnectable {
 	public static Builder builder() {
 		return new Builder() {
 			private NinioBuilder<Connecter> builder = null;
-			private Executor executor = null;
 			
 			private Charset charset = DEFAULT_CHARSET;
 			private int limit = DEFAULT_LIMIT;
 			private String eol = DEFAULT_EOL;
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -117,15 +119,12 @@ public final class CutOnPromptClient implements Disconnectable {
 			}
 			
 			@Override
-			public CutOnPromptClient create(Queue queue) {
+			public CutOnPromptClient create(NinioProvider ninioProvider) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
 
-				return new CutOnPromptClient(builder.create(queue), executor, eol, charset, limit);
+				return new CutOnPromptClient(builder.create(ninioProvider), ninioProvider.executor(), eol, charset, limit);
 			}
 		};
 	}

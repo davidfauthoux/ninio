@@ -17,7 +17,6 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocketServer;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.io.Files;
 
@@ -29,7 +28,7 @@ public class WebsocketTest {
 		final byte[] indexHtml= Files.toByteArray(new File("src/test/resources/files/ws.html"));
 		
 		Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
-		tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketTest.class)).with(new HttpListeningHandler() {
+		tcp.listen(ninio.create(HttpListening.builder().with(new HttpListeningHandler() {
 			@Override
 			public HttpContentReceiver handle(HttpRequest request, HttpResponseSender responseHandler) {
 				LOGGER.debug("----> {}", request);
@@ -86,7 +85,7 @@ public class WebsocketTest {
 			@Override
 			public void failed(IOException ioe) {
 			}
-		}).build());
+		})));
 		return tcp;
 	}
 	

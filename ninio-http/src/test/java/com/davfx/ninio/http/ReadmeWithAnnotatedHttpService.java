@@ -21,7 +21,6 @@ import com.davfx.ninio.http.service.annotations.Path;
 import com.davfx.ninio.http.service.annotations.PathParameter;
 import com.davfx.ninio.http.service.annotations.QueryParameter;
 import com.davfx.ninio.http.service.annotations.Route;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 
 public final class ReadmeWithAnnotatedHttpService {
@@ -135,7 +134,7 @@ public final class ReadmeWithAnnotatedHttpService {
 			}
 	
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				tcp.listen(HttpListening.builder().with(new SerialExecutor(ReadmeWithAnnotatedHttpService.class)).with(a.build()).build());
+				tcp.listen(ninio.create(HttpListening.builder().with(a.build())));
 	
 				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/a/echo?message=helloworld");
 				System.out.println("http://" + new Address(Address.LOCALHOST, port) + "/b?message=helloworld");

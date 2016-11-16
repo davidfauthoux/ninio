@@ -17,7 +17,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.snmp.dependencies.Dependencies;
@@ -38,18 +38,19 @@ public final class SnmpClient implements SnmpConnecter {
 	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "auth.cache");
 
 	public static interface Builder extends NinioBuilder<SnmpConnecter> {
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder with(NinioBuilder<Connecter> connecterFactory);
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = null;
 			private NinioBuilder<Connecter> connecterFactory = UdpSocket.builder();
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -60,11 +61,8 @@ public final class SnmpClient implements SnmpConnecter {
 			}
 
 			@Override
-			public SnmpConnecter create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
-				return new SnmpClient(executor, connecterFactory.create(queue));
+			public SnmpConnecter create(NinioProvider ninioProvider) {
+				return new SnmpClient(ninioProvider.executor(), connecterFactory.create(ninioProvider));
 			}
 		};
 	}

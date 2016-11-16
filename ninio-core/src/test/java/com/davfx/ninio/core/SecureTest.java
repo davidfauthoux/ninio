@@ -2,20 +2,16 @@ package com.davfx.ninio.core;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executor;
 
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class SecureTest {
 	public void test() throws Exception {
 		final Trust trust = new Trust("/keystore.jks", "test-password", "/keystore.jks", "test-password");
-
-		Executor executor = new SerialExecutor(SecureTest.class);
 
 		final Lock<ByteBuffer, IOException> lock = new Lock<>();
 		
@@ -26,7 +22,7 @@ public class SecureTest {
 			Wait serverWaitClosing = new Wait();
 			final Wait serverWaitClientConnecting = new Wait();
 			final Wait serverWaitClientClosing = new Wait();
-			try (Listener server = ninio.create(new SecureSocketServerBuilder(TcpSocketServer.builder()).with(executor).trust(trust).bind(new Address(Address.ANY, port)))) {
+			try (Listener server = ninio.create(new SecureSocketServerBuilder(TcpSocketServer.builder()).trust(trust).bind(new Address(Address.ANY, port)))) {
 				server.listen(
 					new WaitConnectedListening(serverWaitConnecting,
 					new WaitClosedListening(serverWaitClosing,
@@ -72,7 +68,7 @@ public class SecureTest {
 				Wait clientWaitClosing = new Wait();
 				Wait clientWaitSent = new Wait();
 
-				try (Connecter client = ninio.create(new SecureSocketBuilder(TcpSocket.builder()).trust(trust).with(executor).to(new Address(Address.LOCALHOST, port)))) {
+				try (Connecter client = ninio.create(new SecureSocketBuilder(TcpSocket.builder()).trust(trust).to(new Address(Address.LOCALHOST, port)))) {
 					client.connect(
 						new WaitConnectedConnection(clientWaitConnecting, 
 						new WaitClosedConnection(clientWaitClosing, 

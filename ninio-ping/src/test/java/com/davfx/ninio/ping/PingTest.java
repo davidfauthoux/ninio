@@ -4,9 +4,7 @@ import java.io.IOException;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 
 //mvn install dependency:copy-dependencies
 //sudo java -cp target/dependency/*:target/test-classes/:target/classes/ com.davfx.ninio.ping.PingTest
@@ -15,10 +13,10 @@ public class PingTest {
 		byte[] pingHost = new byte[] { 8, 8, 8, 8 };
 		// ::1
 
-		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
+		try (Ninio ninio = Ninio.create()) {
 			final Lock<Double, IOException> lock = new Lock<>();
 			
-			try (PingConnecter client = PingTimeout.wrap(1d, ninio.create(PingClient.builder().with(new SerialExecutor(PingTest.class))))) {
+			try (PingConnecter client = PingTimeout.wrap(1d, ninio.create(PingClient.builder()))) {
 				client.connect(new PingConnection() {
 					@Override
 					public void failed(IOException ioe) {

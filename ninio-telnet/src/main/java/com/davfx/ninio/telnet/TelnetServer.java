@@ -9,7 +9,7 @@ import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Listener;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.TcpSocketServer;
 
 public final class TelnetServer {
@@ -64,13 +64,13 @@ public final class TelnetServer {
 			}
 
 			@Override
-			public Listener create(Queue queue) {
+			public Listener create(NinioProvider ninioProvider) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
 				
 				final TelnetReader telnetReader = new TelnetReader();
-				final Listener listener = builder.create(queue);
+				final Listener listener = builder.create(ninioProvider);
 				
 				return new Listener() {
 					@Override

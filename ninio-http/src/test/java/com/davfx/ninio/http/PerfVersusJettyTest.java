@@ -2,7 +2,6 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.concurrent.Executor;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -36,7 +35,6 @@ import com.davfx.ninio.http.service.HttpService;
 import com.davfx.ninio.http.service.annotations.QueryParameter;
 import com.davfx.ninio.http.service.annotations.Route;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
 
@@ -98,11 +96,12 @@ public class PerfVersusJettyTest {
 
 	private static final Ninio ninio = Ninio.create();
 	private static final com.davfx.ninio.http.HttpConnecter ninioClient;
-	private static final Timeout timeout = new Timeout();
-	private static final Executor executor = new SerialExecutor(HttpGetTest.class);
-	private static final Limit limit = new Limit();
+	private static final Timeout timeout;
+	private static final Limit limit;
 	static {
-		ninioClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(executor));
+		ninioClient = ninio.create(com.davfx.ninio.http.HttpClient.builder());
+		timeout = new Timeout();
+		limit = new Limit();
 	}
 
 	private static String getNinio(int port) throws Exception {
@@ -168,7 +167,7 @@ public class PerfVersusJettyTest {
 		private final Listener server;
 		public NinioServer1() {
 			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)));
-			server.listen(HttpListening.builder().with(new SerialExecutor(NinioServer1.class)).with(new HttpListeningHandler() {
+			server.listen(ninio.create(HttpListening.builder().with(new HttpListeningHandler() {
 				@Override
 				public HttpContentReceiver handle(final HttpRequest request, final HttpResponseSender responseHandler) {
 					return new HttpContentReceiver() {
@@ -199,7 +198,7 @@ public class PerfVersusJettyTest {
 				@Override
 				public void closed() {
 				}
-			}).build());
+			})));
 			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
@@ -219,7 +218,7 @@ public class PerfVersusJettyTest {
 			a.register(null, new TestGetWithQueryParameterController());
 
 			server = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, PORT)));
-			server.listen(HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build());
+			server.listen(ninio.create(HttpListening.builder().with(a.build())));
 			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {

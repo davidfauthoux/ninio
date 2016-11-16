@@ -2,6 +2,7 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -10,8 +11,8 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.Nop;
-import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.collect.ImmutableMultimap;
@@ -61,22 +62,22 @@ public final class HttpSocket implements Connecter {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (httpClient == null) {
 					throw new NullPointerException("httpClient");
 				}
-				return new HttpSocket(queue, httpClient, path, connectAddress);
+				return new HttpSocket(ninioProvider.executor(), httpClient, path, connectAddress);
 			}
 		};
 	}
 
-	private final Queue queue;
+	private final Executor executor;
 	private final HttpContentSender sender;
 	private Connection connection = null;
 	private boolean closed = false;
 	
-	private HttpSocket(final Queue queue, HttpConnecter httpClient, String path, final Address connectAddress) {
-		this.queue = queue;
+	private HttpSocket(final Executor executor, HttpConnecter httpClient, String path, final Address connectAddress) {
+		this.executor = executor;
 		
 		HttpRequest request = new HttpRequest(new HttpRequestAddress(Address.ipToString(connectAddress.ip), connectAddress.port, false), HttpMethod.POST, path, ImmutableMultimap.<String, String>builder()
 			// GZIP deflate cannot stream/flush
@@ -91,7 +92,7 @@ public final class HttpSocket implements Connecter {
 			@Override
 			public HttpContentReceiver received(final HttpResponse response) {
 				if (response.status != 200) {
-					queue.execute(new Runnable() {
+					executor.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (closed) {
@@ -109,7 +110,7 @@ public final class HttpSocket implements Connecter {
 				return new HttpContentReceiver() {
 					@Override
 					public void received(final ByteBuffer buffer) {
-						queue.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								if (closed) {
@@ -126,7 +127,7 @@ public final class HttpSocket implements Connecter {
 					public void ended() {
 						LOGGER.debug("Connection abruptly closed by peer");
 						sender.cancel();
-						queue.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								if (closed) {
@@ -144,7 +145,7 @@ public final class HttpSocket implements Connecter {
 			
 			@Override
 			public void failed(final IOException ioe) {
-				queue.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (closed) {
@@ -170,7 +171,7 @@ public final class HttpSocket implements Connecter {
 		sender.send(buffer, new SendCallback() {
 			@Override
 			public void failed(final IOException e) {
-				queue.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						callback.failed(e);
@@ -180,7 +181,7 @@ public final class HttpSocket implements Connecter {
 			
 			@Override
 			public void sent() {
-				queue.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (closed) {
@@ -195,7 +196,7 @@ public final class HttpSocket implements Connecter {
 	
 	@Override
 	public void connect(final Connection callback) {
-		queue.execute(new Runnable() {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
 				if (closed) {

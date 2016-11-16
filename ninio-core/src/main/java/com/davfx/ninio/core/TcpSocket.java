@@ -56,11 +56,11 @@ public final class TcpSocket implements Connecter {
 			}
 			
 			@Override
-			public TcpSocket create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (connectAddress == null) {
 					throw new NullPointerException("connectAddress");
 				}
-				return new TcpSocket(queue, byteBufferAllocator, bindAddress, connectAddress);
+				return new TcpSocket(ninioProvider.queue(), byteBufferAllocator, bindAddress, connectAddress);
 			}
 		};
 	}

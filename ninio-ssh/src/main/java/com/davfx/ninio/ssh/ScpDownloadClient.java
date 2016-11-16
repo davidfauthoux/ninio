@@ -10,7 +10,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
 
@@ -40,7 +40,7 @@ public final class ScpDownloadClient implements Connecter {
 			}
 
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (path == null) {
 					throw new NullPointerException("path");
 				}
@@ -48,7 +48,7 @@ public final class ScpDownloadClient implements Connecter {
 					throw new NullPointerException("builder");
 				}
 
-				return new ScpDownloadClient(builder.exec("scp -f " + path.replace(" ", "\\ ")).create(queue));
+				return new ScpDownloadClient(builder.exec("scp -f " + path.replace(" ", "\\ ")).create(ninioProvider));
 			}
 		};
 	}

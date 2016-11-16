@@ -26,7 +26,6 @@ import com.davfx.ninio.http.service.Annotated;
 import com.davfx.ninio.http.service.Annotated.Builder;
 import com.davfx.ninio.http.service.HttpController;
 import com.davfx.ninio.http.service.HttpService;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 
@@ -65,7 +64,7 @@ class TestUtils {
 		}
 	}
 	
-	static Disconnectable server(Ninio ninio, int port, Visitor v) {
+	static Disconnectable server(final Ninio ninio, int port, Visitor v) {
 		LOGGER.debug("CREATING ON PORT: {}", port);
 		final Annotated.Builder a = Annotated.builder(HttpService.builder());
 		v.visit(a);
@@ -90,7 +89,7 @@ class TestUtils {
 			
 			@Override
 			public Connection connecting(Connected connecting) {
-				return HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build().connecting(connecting);
+				return ninio.create(HttpListening.builder().with(a.build())).connecting(connecting);
 			}
 		});
 		wait.waitFor();
@@ -103,7 +102,7 @@ class TestUtils {
 		};
 	}
 
-	static Disconnectable routedServer(Ninio ninio, int routedPort, final int port, Visitor v) {
+	static Disconnectable routedServer(final Ninio ninio, int routedPort, final int port, Visitor v) {
 		LOGGER.debug("CREATING ROUTED ON PORTS: {} -> {}", routedPort, port);
 		final Annotated.Builder a = Annotated.builder(HttpService.builder());
 		v.visit(a);
@@ -128,7 +127,7 @@ class TestUtils {
 			
 			@Override
 			public Connection connecting(Connected connecting) {
-				return HttpListening.builder().with(new SerialExecutor(HttpServiceSimpleTest.class)).with(a.build()).build().connecting(connecting);
+				return ninio.create(HttpListening.builder().with(a.build())).connecting(connecting);
 			}
 		});
 		wait.waitFor();

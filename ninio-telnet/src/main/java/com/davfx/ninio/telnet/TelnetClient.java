@@ -7,7 +7,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 
@@ -58,12 +58,12 @@ public final class TelnetClient {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (builder == null) {
 					throw new NullPointerException("builder");
 				}
 				
-				final Connecter connecter = builder.create(queue);
+				final Connecter connecter = builder.create(ninioProvider);
 
 				return new Connecter() {
 					@Override

@@ -29,7 +29,6 @@ import com.davfx.ninio.http.HttpListeningHandler;
 import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class HttpSocketTest {
@@ -46,7 +45,7 @@ public class HttpSocketTest {
 			final Wait serverWaitHttpServerClosing = new Wait();
 			final Wait serverWaitHttpServerConnecting = new Wait();
 			try (Listener httpSocketServer = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				httpSocketServer.listen(HttpListening.builder().with(new SerialExecutor(HttpSocketTest.class)).with(new HttpListeningHandler() {
+				httpSocketServer.listen(ninio.create(HttpListening.builder().with(new HttpListeningHandler() {
 				@Override
 				public HttpContentReceiver handle(HttpRequest request, HttpResponseSender responseHandler) {
 					LOGGER.debug("----> {}", request);
@@ -81,7 +80,7 @@ public class HttpSocketTest {
 				public void failed(IOException ioe) {
 					lock.fail(ioe);
 				}
-			}).build());
+			})));
 				
 				serverWaitHttpServerConnecting.waitFor();
 				
@@ -136,7 +135,7 @@ public class HttpSocketTest {
 			final Wait serverWaitHttpServerClosing = new Wait();
 			final Wait serverWaitHttpServerConnecting = new Wait();
 			try (Listener httpSocketServer = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				httpSocketServer.listen(HttpListening.builder().with(new SerialExecutor(HttpSocketTest.class)).with(new HttpListeningHandler() {
+				httpSocketServer.listen(ninio.create(HttpListening.builder().with(new HttpListeningHandler() {
 				@Override
 				public HttpContentReceiver handle(HttpRequest request, HttpResponseSender responseHandler) {
 					LOGGER.debug("----> {}", request);
@@ -171,7 +170,7 @@ public class HttpSocketTest {
 				public void failed(IOException ioe) {
 					lock.fail(ioe);
 				}
-			}).build());
+			})));
 				
 				serverWaitHttpServerConnecting.waitFor();
 				

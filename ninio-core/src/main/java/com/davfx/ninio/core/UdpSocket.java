@@ -47,8 +47,8 @@ public final class UdpSocket implements Connecter {
 			}
 			
 			@Override
-			public UdpSocket create(Queue queue) {
-				return new UdpSocket(queue, byteBufferAllocator, bindAddress);
+			public Connecter create(NinioProvider ninioProvider) {
+				return new UdpSocket(ninioProvider.queue(), byteBufferAllocator, bindAddress);
 			}
 		};
 	}

@@ -68,7 +68,7 @@ public final class TcpdumpSocket implements Connecter {
 			}
 			
 			@Override
-			public TcpdumpSocket create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (interfaceId == null) {
 					throw new NullPointerException("interfaceId");
 				}

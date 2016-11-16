@@ -16,7 +16,6 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.ToFileConnection;
 import com.davfx.ninio.core.Trust;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 ///!\ NOT WORKING WITH Java7 ON UP-TO-DATE open-ssl SERVERS
@@ -60,7 +59,7 @@ public class ScpDownloadTest {
 					LOGGER.error("Failed", e);
 				}
 			})) {
-				try (Connecter c = ninio.create(ScpDownloadClient.builder().path("todownload.txt").with(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)))))) {
+				try (Connecter c = ninio.create(ScpDownloadClient.builder().path("todownload.txt").with(SshClient.builder().login("davidfauthoux", publicKey).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT)))))) {
 					c.connect(toFileReceiverClosing);
 					wait.waitFor();
 				}

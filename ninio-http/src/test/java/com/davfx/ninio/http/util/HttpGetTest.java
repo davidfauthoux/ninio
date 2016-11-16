@@ -27,7 +27,6 @@ import com.davfx.ninio.http.HttpRequest;
 import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 import com.google.common.base.Charsets;
 
@@ -40,7 +39,7 @@ public class HttpGetTest {
 	private static Disconnectable server(Ninio ninio, int port, final String suffix) {
 		final Wait waitForClosing = new Wait();
 		final Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)));
-		tcp.listen(HttpListening.builder().with(new SerialExecutor(HttpGetTest.class)).with(new HttpListeningHandler() {
+		tcp.listen(ninio.create(HttpListening.builder().with(new HttpListeningHandler() {
 						
 						@Override
 						public void connected(Address address) {
@@ -82,8 +81,7 @@ public class HttpGetTest {
 						}
 					})
 					
-					.build()
-				);
+				));
 		return new Disconnectable() {
 			@Override
 			public void close() {

@@ -13,8 +13,8 @@ import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.Disconnectable;
 import com.davfx.ninio.core.NinioBuilder;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.Nop;
-import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.UdpSocket;
 
 // Syntax: snmp[bulk]walk -v2c -c<anything> -On <ip>:6161 <oid>
@@ -48,8 +48,8 @@ public final class SnmpServer implements Disconnectable {
 			}
 
 			@Override
-			public Disconnectable create(Queue queue) {
-				return new SnmpServer(connectorFactory.create(queue), handler);
+			public Disconnectable create(NinioProvider ninioProvider) {
+				return new SnmpServer(connectorFactory.create(ninioProvider), handler);
 			}
 		};
 	}

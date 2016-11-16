@@ -16,7 +16,6 @@ import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.telnet.TelnetSpecification;
-import com.davfx.ninio.util.SerialExecutor;
 import com.google.common.base.Charsets;
 
 ///!\ NOT WORKING WITH Java7 ON UP-TO-DATE open-ssl SERVERS
@@ -42,7 +41,7 @@ public class SshTest {
 		RsaSshPublicKey publicKey = new RsaSshPublicKey((RSAPrivateKey) trust.getPrivateKey("test-alias", "test-password"), (RSAPublicKey) trust.getPublicKey("test-alias"));
 
 		try (Ninio ninio = Ninio.create()) {
-			try (Connecter c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(new SerialExecutor(SshTest.class)).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT))))) {
+			try (Connecter c = ninio.create(SshClient.builder().login("davidfauthoux", publicKey).with(TcpSocket.builder().to(new Address(Address.LOCALHOST, SshSpecification.DEFAULT_PORT))))) {
 				c.connect(new Connection() {
 					private int n = 0;
 					

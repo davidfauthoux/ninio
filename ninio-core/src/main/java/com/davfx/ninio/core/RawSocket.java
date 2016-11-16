@@ -46,7 +46,7 @@ public final class RawSocket implements Connecter {
 			}
 			
 			@Override
-			public RawSocket create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				return new RawSocket(family, protocol, bindAddress);
 			}
 		};

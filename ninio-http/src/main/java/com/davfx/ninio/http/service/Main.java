@@ -10,7 +10,6 @@ import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.http.service.controllers.FileAssets;
 import com.davfx.ninio.util.ConfigUtils;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 import com.typesafe.config.Config;
 
@@ -25,9 +24,8 @@ public final class Main {
 		File dir = new File(CONFIG.getString("directory"));
 		try (Ninio ninio = Ninio.create()) {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				tcp.listen(HttpListening.builder()
-							.with(new SerialExecutor(Main.class))
-							.with(Annotated.builder(HttpService.builder()).register(null, new FileAssets(dir, "index.html")).build()).build());
+				tcp.listen(ninio.create(HttpListening.builder()
+							.with(Annotated.builder(HttpService.builder()).register(null, new FileAssets(dir, "index.html")).build())));
 				new Wait().waitFor();
 			}
 		}

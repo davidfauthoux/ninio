@@ -36,7 +36,7 @@ public final class RoutingTcpSocketServer {
 			}
 			
 			@Override
-			public RoutingListener create(final Queue queue) {
+			public RoutingListener create(final NinioProvider ninioProvider) {
 				if (serverBuilder == null) {
 					throw new NullPointerException("serverBuilder");
 				}
@@ -45,7 +45,7 @@ public final class RoutingTcpSocketServer {
 				}
 
 				final TcpSocket.Builder supplier = clientBuilder;
-				final Listener listener = serverBuilder.create(queue);
+				final Listener listener = serverBuilder.create(ninioProvider);
 				
 				return new RoutingListener() {
 					@Override
@@ -57,7 +57,7 @@ public final class RoutingTcpSocketServer {
 						listener.listen(new Listening() {
 							@Override
 							public Connection connecting(final Connected connecting) {
-								final Connecter connecter = supplier.create(queue);
+								final Connecter connecter = supplier.create(ninioProvider);
 								
 								connecter.connect(new Connection() {
 									@Override

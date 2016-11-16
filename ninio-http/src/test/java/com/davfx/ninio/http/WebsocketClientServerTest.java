@@ -26,7 +26,6 @@ import com.davfx.ninio.core.WaitConnectedConnection;
 import com.davfx.ninio.dns.DnsClient;
 import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class WebsocketClientServerTest {
@@ -41,7 +40,7 @@ public class WebsocketClientServerTest {
 		int port = 8080;
 		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketClientServerTest.class)).with(new WebsocketHttpListeningHandler(true, new Listening() {
+				tcp.listen(ninio.create(HttpListening.builder().with(new WebsocketHttpListeningHandler(true, new Listening() {
 					@Override
 					public void closed() {
 						serverWaitServerClosing.run();
@@ -82,7 +81,7 @@ public class WebsocketClientServerTest {
 							}
 						};
 					}
-				})).build());
+				}))));
 				
 				serverWaitServerConnecting.waitFor();
 				
@@ -90,7 +89,7 @@ public class WebsocketClientServerTest {
 				Wait clientWaitClosing = new Wait();
 				final Wait clientWaitSending = new Wait();
 
-				try (DnsConnecter dns = ninio.create(DnsClient.builder().with(new SerialExecutor(HttpGetTest.class))); HttpConnecter httpClient = ninio.create(HttpClient.builder().with(dns).with(new SerialExecutor(WebsocketClientServerTest.class)))) {
+				try (DnsConnecter dns = ninio.create(DnsClient.builder()); HttpConnecter httpClient = ninio.create(HttpClient.builder().with(dns))) {
 					try (Connecter client = ninio.create(WebsocketSocket.builder().with(httpClient).to(new Address(Address.LOCALHOST, port)))) {
 						client.connect(
 								new WaitConnectedConnection(clientWaitConnecting, 

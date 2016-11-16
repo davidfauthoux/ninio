@@ -21,7 +21,6 @@ import com.davfx.ninio.core.Ninio;
 import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocketServer;
-import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.core.WaitClosedConnection;
 import com.davfx.ninio.core.WaitConnectedConnection;
 import com.davfx.ninio.dns.DnsClient;
@@ -31,7 +30,6 @@ import com.davfx.ninio.http.HttpConnecter;
 import com.davfx.ninio.http.HttpListening;
 import com.davfx.ninio.http.WebsocketHttpListeningHandler;
 import com.davfx.ninio.util.Lock;
-import com.davfx.ninio.util.SerialExecutor;
 import com.davfx.ninio.util.Wait;
 
 public class WebsocketSocketTest {
@@ -45,9 +43,9 @@ public class WebsocketSocketTest {
 		final Wait serverWaitClientClosing = new Wait();
 
 		int port = 8080;
-		try (Ninio ninio = Ninio.create(); Timeout timeout = new Timeout()) {
+		try (Ninio ninio = Ninio.create()) {
 			try (Listener tcp = ninio.create(TcpSocketServer.builder().bind(new Address(Address.ANY, port)))) {
-				tcp.listen(HttpListening.builder().with(new SerialExecutor(WebsocketSocketTest.class)).with(new WebsocketHttpListeningHandler(true, new Listening() {
+				tcp.listen(ninio.create(HttpListening.builder().with(new WebsocketHttpListeningHandler(true, new Listening() {
 					@Override
 					public void closed() {
 						serverWaitServerClosing.run();
@@ -88,7 +86,7 @@ public class WebsocketSocketTest {
 							}
 						};
 					}
-				})).build());
+				}))));
 				
 				serverWaitServerConnecting.waitFor();
 	
@@ -98,7 +96,7 @@ public class WebsocketSocketTest {
 
 				try (Disconnectable proxyServer = ninio.create(ProxyServer.defaultServer(new Address(Address.ANY, proxyPort), new WaitProxyListening(serverWaitForProxyServerClosing)))) {
 					try (ProxyProvider proxyClient = ninio.create(ProxyClient.defaultClient(new Address(Address.LOCALHOST, proxyPort)))) {
-						try (DnsConnecter dns = ninio.create(DnsClient.builder().with(new SerialExecutor(WebsocketSocketTest.class))); HttpConnecter httpClient = ninio.create(HttpClient.builder().with(dns).with(new SerialExecutor(WebsocketSocketTest.class)))) {
+						try (DnsConnecter dns = ninio.create(DnsClient.builder()); HttpConnecter httpClient = ninio.create(HttpClient.builder().with(dns))) {
 							Wait clientWaitClosing = new Wait();
 							try (Connecter client = ninio.create(proxyClient.websocket().route("/ws").to(new Address(Address.LOCALHOST, port)))) {
 								Wait clientWaitConnecting = new Wait();

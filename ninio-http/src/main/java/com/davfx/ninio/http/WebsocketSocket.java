@@ -3,6 +3,7 @@ package com.davfx.ninio.http;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
+import java.util.concurrent.Executor;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,8 +12,8 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.ByteBufferAllocator;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.Nop;
-import com.davfx.ninio.core.Queue;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
 import com.google.common.base.Charsets;
@@ -65,24 +66,24 @@ public final class WebsocketSocket implements Connecter {
 			}
 			
 			@Override
-			public Connecter create(Queue queue) {
+			public Connecter create(NinioProvider ninioProvider) {
 				if (httpClient == null) {
 					throw new NullPointerException("httpClient");
 				}
-				return new WebsocketSocket(queue, httpClient, path, connectAddress);
+				return new WebsocketSocket(ninioProvider.executor(), httpClient, path, connectAddress);
 			}
 		};
 	}
 
 	private static final SecureRandom RANDOM = new SecureRandom();
 	
-	private final Queue queue;
+	private final Executor executor;
 	private final HttpContentSender sender;
 	private Connection connection = null;
 	private boolean closed = false;
 	
-	private WebsocketSocket(final Queue queue, HttpConnecter httpClient, String path, final Address connectAddress) {
-		this.queue = queue;
+	private WebsocketSocket(final Executor executor, HttpConnecter httpClient, String path, final Address connectAddress) {
+		this.executor = executor;
 		
 		HttpRequest request = new HttpRequest(new HttpRequestAddress(Address.ipToString(connectAddress.ip), connectAddress.port, false), HttpMethod.GET, path, ImmutableMultimap.<String, String>builder()
 			.put("Sec-WebSocket-Key", BaseEncoding.base64().encode(String.valueOf(RANDOM.nextLong()).getBytes(Charsets.UTF_8)))
@@ -114,7 +115,7 @@ public final class WebsocketSocket implements Connecter {
 			public HttpContentReceiver received(final HttpResponse response) {
 				// We should check everything here (status code, header Sec-WebSocket-Accept, ...)
 				if (response.status != 101) {
-					queue.execute(new Runnable() {
+					executor.execute(new Runnable() {
 						@Override
 						public void run() {
 							if (closed) {
@@ -252,7 +253,7 @@ public final class WebsocketSocket implements Connecter {
 									toPing -= partialBuffer.remaining();
 									sender.send(partialBuffer, sendCallback);
 								} else if ((opcode == 0x01) || (opcode == 0x02)) {
-									queue.execute(new Runnable() {
+									executor.execute(new Runnable() {
 										@Override
 										public void run() {
 											if (closed) {
@@ -266,7 +267,7 @@ public final class WebsocketSocket implements Connecter {
 								} else if (opcode == 0x08) {
 									LOGGER.debug("Connection closed by peer");
 									sender.cancel();
-									queue.execute(new Runnable() {
+									executor.execute(new Runnable() {
 										@Override
 										public void run() {
 											if (closed) {
@@ -288,7 +289,7 @@ public final class WebsocketSocket implements Connecter {
 					public void ended() {
 						LOGGER.debug("Connection abruptly closed by peer");
 						sender.cancel();
-						queue.execute(new Runnable() {
+						executor.execute(new Runnable() {
 							@Override
 							public void run() {
 								if (closed) {
@@ -306,7 +307,7 @@ public final class WebsocketSocket implements Connecter {
 			
 			@Override
 			public void failed(final IOException ioe) {
-				queue.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (closed) {
@@ -334,7 +335,7 @@ public final class WebsocketSocket implements Connecter {
 		sender.send(buffer, new SendCallback() {
 			@Override
 			public void failed(final IOException e) {
-				queue.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						callback.failed(e);
@@ -344,7 +345,7 @@ public final class WebsocketSocket implements Connecter {
 			
 			@Override
 			public void sent() {
-				queue.execute(new Runnable() {
+				executor.execute(new Runnable() {
 					@Override
 					public void run() {
 						if (closed) {
@@ -359,7 +360,7 @@ public final class WebsocketSocket implements Connecter {
 	
 	@Override
 	public void connect(final Connection callback) {
-		queue.execute(new Runnable() {
+		executor.execute(new Runnable() {
 			@Override
 			public void run() {
 				if (closed) {

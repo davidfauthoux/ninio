@@ -20,7 +20,7 @@ import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
 import com.davfx.ninio.core.NinioBuilder;
-import com.davfx.ninio.core.Queue;
+import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.dns.dependencies.Dependencies;
@@ -71,20 +71,21 @@ public final class DnsClient implements DnsConnecter {
 	}
 
 	public static interface Builder extends NinioBuilder<DnsConnecter> {
+		@Deprecated
 		Builder with(Executor executor);
+
 		Builder to(Address dnsAddress);
 		Builder with(NinioBuilder<Connecter> connecterFactory);
 	}
 	
 	public static Builder builder() {
 		return new Builder() {
-			private Executor executor = null;
 			private Address dnsAddress = DEFAULT_DNS_ADDRESS;
 			private NinioBuilder<Connecter> connecterFactory = UdpSocket.builder();
 			
+			@Deprecated
 			@Override
 			public Builder with(Executor executor) {
-				this.executor = executor;
 				return this;
 			}
 			
@@ -101,11 +102,8 @@ public final class DnsClient implements DnsConnecter {
 			}
 
 			@Override
-			public DnsConnecter create(Queue queue) {
-				if (executor == null) {
-					throw new NullPointerException("executor");
-				}
-				return new DnsClient(executor, dnsAddress, connecterFactory.create(queue));
+			public DnsConnecter create(NinioProvider ninioProvider) {
+				return new DnsClient(ninioProvider.executor(), dnsAddress, connecterFactory.create(ninioProvider));
 			}
 		};
 	}
