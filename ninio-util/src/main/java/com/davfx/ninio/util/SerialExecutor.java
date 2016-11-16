@@ -22,7 +22,6 @@ public final class SerialExecutor implements Executor {
 	private Runnable last = null;
 	private List<Runnable> toExecute = null;
 	
-	@Deprecated
 	public SerialExecutor(Class<?> clazz) {
 		this.clazz = clazz;
 	}
