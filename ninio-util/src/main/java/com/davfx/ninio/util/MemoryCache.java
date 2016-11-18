@@ -4,16 +4,11 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
 import com.typesafe.config.Config;
 
 public final class MemoryCache<K, V> {
-	
-	private static final Logger LOGGER = LoggerFactory.getLogger(MemoryCache.class);
 	
 	private static final Config CONFIG = ConfigUtils.load(new com.davfx.ninio.util.dependencies.Dependencies()).getConfig(MemoryCache.class.getPackage().getName());
 	private static final double DEFAULT_CHECK_TIME = ConfigUtils.getDuration(CONFIG, "cache.default.check");
@@ -107,7 +102,6 @@ public final class MemoryCache<K, V> {
 	}
 	
 	public V get(K key) {
-		LOGGER.debug("------------> MAP SIZE {}", map.size());
 		try {
 			Element<V> e = map.remove(key);
 			if (e == null) {

@@ -327,6 +327,7 @@ public final class InMemoryCache {
 							return;
 						}
 						sendCallback.sent();
+						LOGGER.trace("Got from cache (address = {}, key = {}, sub = {})", address, context.key, context.sub);
 						callback.received(address, tb);
 						return;
 					}
