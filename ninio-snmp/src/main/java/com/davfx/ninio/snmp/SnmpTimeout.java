@@ -43,6 +43,11 @@ public final class SnmpTimeout {
 				wrappee.auth(authRemoteSpecification);
 				return this;
 			}
+			@Override
+			public SnmpRequestBuilder walk(boolean flag) {
+				wrappee.walk(flag);
+				return this;
+			}
 			
 			@Override
 			public SnmpRequestBuilder build(Address address, Oid oid) {

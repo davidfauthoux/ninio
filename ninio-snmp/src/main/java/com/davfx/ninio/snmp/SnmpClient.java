@@ -23,6 +23,7 @@ import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.snmp.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.MemoryCache;
+import com.google.common.collect.ImmutableList;
 import com.typesafe.config.Config;
 
 public final class SnmpClient implements SnmpConnecter {
@@ -86,6 +87,7 @@ public final class SnmpClient implements SnmpConnecter {
 		return new SnmpRequestBuilder() {
 			private String community = null;
 			private AuthRemoteSpecification authRemoteSpecification = null;
+			private boolean walk = false;
 			private Address address;
 			private Oid oid;
 			private List<SnmpResult> trap = null;
@@ -98,6 +100,11 @@ public final class SnmpClient implements SnmpConnecter {
 			@Override
 			public SnmpRequestBuilder auth(AuthRemoteSpecification authRemoteSpecification) {
 				this.authRemoteSpecification = authRemoteSpecification;
+				return this;
+			}
+			@Override
+			public SnmpRequestBuilder walk(boolean flag) {
+				walk = flag;
 				return this;
 			}
 			
@@ -134,9 +141,11 @@ public final class SnmpClient implements SnmpConnecter {
 			@Override
 			public Cancelable receive(final SnmpReceiver r) {
 				final AuthRemoteSpecification s = authRemoteSpecification;
+				final boolean w = walk;
 				final Oid o = oid;
 				final Address a = address;
 				final String c = community;
+				final Iterable<SnmpResult> t = (trap == null) ? null : ImmutableList.copyOf(trap);
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -144,7 +153,7 @@ public final class SnmpClient implements SnmpConnecter {
 							throw new IllegalStateException();
 						}
 						
-						instance = new Instance(connecter, instanceMapper, o, a, c, trap);
+						instance = new Instance(connecter, instanceMapper, o, a, w, c, t);
 
 						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 						if (s != null) {
@@ -260,10 +269,10 @@ public final class SnmpClient implements SnmpConnecter {
 			public final int request;
 			public final int instanceId;
 			public final Oid oid;
-			public final List<SnmpResult> trap;
+			public final Iterable<SnmpResult> trap;
 			public final SendCallback sendCallback;
 
-			public PendingRequest(int request, int instanceId, Oid oid, List<SnmpResult> trap, SendCallback sendCallback) {
+			public PendingRequest(int request, int instanceId, Oid oid, Iterable<SnmpResult> trap, SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
@@ -469,11 +478,12 @@ public final class SnmpClient implements SnmpConnecter {
 
 		private final Address address;
 		private final String community;
+		private final boolean walk;
 		private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 		
-		private final List<SnmpResult> trap;
+		private final Iterable<SnmpResult> trap;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, String community, List<SnmpResult> trap) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, boolean walk, String community, Iterable<SnmpResult> trap) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
@@ -481,6 +491,7 @@ public final class SnmpClient implements SnmpConnecter {
 			initialRequestOid = requestOid;
 			
 			this.address = address;
+			this.walk = walk;
 			this.community = community;
 			
 			this.trap = trap;
@@ -601,17 +612,21 @@ public final class SnmpClient implements SnmpConnecter {
 					}
 				}
 				if (found != null) {
-					requestOid = null;
 					if (receiver != null) {
 						receiver.received(found);
-						receiver.finished();
 					}
-					receiver = null;
-					return;
-				} else {
+				}
+				
+				if ((found == null) || walk) {
 					instanceMapper.map(this);
 					shouldRepeatWhat = BerConstants.GETBULK;
 					write();
+				} else {
+					requestOid = null;
+					if (receiver != null) {
+						receiver.finished();
+					}
+					receiver = null;
 				}
 			} else {
 				Oid lastOid = null;
