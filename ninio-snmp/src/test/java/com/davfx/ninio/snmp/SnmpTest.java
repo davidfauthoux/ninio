@@ -67,9 +67,9 @@ public class SnmpTest {
 						});
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1, 1.1.1.1:val1.1.1.1, 1.1.1.2:val1.1.1.2, 1.1.2:val1.1.2, 1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1, 1.1.3.2:val1.1.3.2]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.4")).toString()).isEqualTo("[]");
 				}
 				waitClient.waitFor();
@@ -78,9 +78,9 @@ public class SnmpTest {
 		}
 	}
 	
-	private static List<SnmpResult> get(SnmpConnecter snmpClient, Address a, Oid oid) throws IOException {
+	private static List<SnmpResult> call(SnmpConnecter snmpClient, Address a, Oid oid, SnmpCallType snmpCallType) throws IOException {
 		final Lock<List<SnmpResult>, IOException> lock = new Lock<>();
-		snmpClient.request().community("community").build(a, oid).receive(new SnmpReceiver() {
+		snmpClient.request().community("community").build(a, oid).call(snmpCallType, new SnmpReceiver() {
 			private final List<SnmpResult> r = new LinkedList<>();
 			
 			@Override
@@ -99,6 +99,12 @@ public class SnmpTest {
 			}
 		});
 		return lock.waitFor();
+	}
+	private static List<SnmpResult> get(SnmpConnecter snmpClient, Address a, Oid oid) throws IOException {
+		return call(snmpClient, a, oid, SnmpCallType.GET);
+	}
+	private static List<SnmpResult> getbulk(SnmpConnecter snmpClient, Address a, Oid oid) throws IOException {
+		return call(snmpClient, a, oid, SnmpCallType.GETBULK);
 	}
 
 	
@@ -120,7 +126,7 @@ public class SnmpTest {
 						}
 					});
 				
-				snmpClient.request().community("community").build(new Address(Address.LOCALHOST, port), new Oid("1.1.1")).receive(new SnmpReceiver() {
+				snmpClient.request().community("community").build(new Address(Address.LOCALHOST, port), new Oid("1.1.1")).call(SnmpCallType.GET, new SnmpReceiver() {
 							@Override
 							public void received(SnmpResult result) {
 							}
@@ -215,12 +221,12 @@ public class SnmpTest {
 					});
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/0]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/0]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/2, 1.1.1.1:val1.1.1.1/2, 1.1.1.2:val1.1.1.2/2, 1.1.2:val1.1.2/2, 1.1.3.1:val1.1.3.1/2, 1.1.3.2:val1.1.3.2/2]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/2, 1.1.1.1:val1.1.1.1/2, 1.1.1.2:val1.1.1.2/2, 1.1.2:val1.1.2/2, 1.1.3.1:val1.1.3.1/2, 1.1.3.2:val1.1.3.2/2]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/4]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/4]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/6, 1.1.3.2:val1.1.3.2/6]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/6, 1.1.3.2:val1.1.3.2/6]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/1, 1.1.1.1:val1.1.1.1/1, 1.1.1.2:val1.1.1.2/1, 1.1.2:val1.1.2/1, 1.1.3.1:val1.1.3.1/1, 1.1.3.2:val1.1.3.2/1]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/1, 1.1.1.1:val1.1.1.1/1, 1.1.1.2:val1.1.1.2/1, 1.1.2:val1.1.2/1, 1.1.3.1:val1.1.3.1/1, 1.1.3.2:val1.1.3.2/1]");
+					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/2]");
+					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/2]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/3, 1.1.3.2:val1.1.3.2/3]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/3, 1.1.3.2:val1.1.3.2/3]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.4")).toString()).isEqualTo("[]");
 				}
 			}
@@ -307,12 +313,12 @@ public class SnmpTest {
 						});
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/0]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/1]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/3, 1.1.1.1:val1.1.1.1/3, 1.1.1.2:val1.1.1.2/3, 1.1.2:val1.1.2/3, 1.1.3.1:val1.1.3.1/3, 1.1.3.2:val1.1.3.2/3]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/6, 1.1.1.1:val1.1.1.1/6, 1.1.1.2:val1.1.1.2/6, 1.1.2:val1.1.2/6, 1.1.3.1:val1.1.3.1/6, 1.1.3.2:val1.1.3.2/6]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/8]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/9]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/11, 1.1.3.2:val1.1.3.2/11]");
-					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/14, 1.1.3.2:val1.1.3.2/14]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/2, 1.1.1.1:val1.1.1.1/2, 1.1.1.2:val1.1.1.2/2, 1.1.2:val1.1.2/2, 1.1.3.1:val1.1.3.1/2, 1.1.3.2:val1.1.3.2/2]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1")).toString()).isEqualTo("[1.1.1:val1.1.1/3, 1.1.1.1:val1.1.1.1/3, 1.1.1.2:val1.1.1.2/3, 1.1.2:val1.1.2/3, 1.1.3.1:val1.1.3.1/3, 1.1.3.2:val1.1.3.2/3]");
+					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/4]");
+					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.2")).toString()).isEqualTo("[1.1.2:val1.1.2/5]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/6, 1.1.3.2:val1.1.3.2/6]");
+					Assertions.assertThat(getbulk(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.3")).toString()).isEqualTo("[1.1.3.1:val1.1.3.1/7, 1.1.3.2:val1.1.3.2/7]");
 					Assertions.assertThat(get(snmpClient, new Address(Address.LOCALHOST, port), new Oid("1.1.4")).toString()).isEqualTo("[]");
 				}
 				waitClient.waitFor();

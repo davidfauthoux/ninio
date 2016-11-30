@@ -101,7 +101,7 @@ public class SnmpTrapTest {
 						});
 					
 					String sentValue = "trap-test";
-					snmpClient.request().community("community").build(new Address(Address.LOCALHOST, port), new Oid("1.1.1")).trap(sentOid, sentValue).receive(null);
+					snmpClient.request().community("community").build(new Address(Address.LOCALHOST, port), new Oid("1.1.1")).add(sentOid, sentValue).call(SnmpCallType.TRAP, null);
 					Assertions.assertThat(result.waitFor()).isEqualTo(new SnmpResult(sentOid, sentValue));
 				}
 				waitClient.waitFor();
@@ -114,7 +114,7 @@ public class SnmpTrapTest {
 		try (Ninio ninio = Ninio.create()) {
 			try (SnmpConnecter snmpClient = ninio.create(SnmpClient.builder().with(UdpSocket.builder()))) {
 				snmpClient.connect(null);
-				snmpClient.request().community("private").build(new Address(Address.LOCALHOST, SnmpClient.DEFAULT_TRAP_PORT), new Oid("1.1.1.1.1")).trap(new Oid("1.1.1.1.1.10"), "trap-test").receive(null);
+				snmpClient.request().community("private").build(new Address(Address.LOCALHOST, SnmpClient.DEFAULT_TRAP_PORT), new Oid("1.1.1.1.1")).add(new Oid("1.1.1.1.1.10"), "trap-test").call(SnmpCallType.TRAP, null);
 				try {
 					Thread.sleep(1000);
 				} catch (InterruptedException e) {

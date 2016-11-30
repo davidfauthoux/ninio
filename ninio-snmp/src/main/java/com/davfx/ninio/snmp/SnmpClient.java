@@ -35,7 +35,6 @@ public final class SnmpClient implements SnmpConnecter {
 	public static final int DEFAULT_TRAP_PORT = 162;
 
 	private static final int BULK_SIZE = CONFIG.getInt("bulkSize");
-	// private static final int GET_LIMIT = CONFIG.getInt("getLimit");
 	private static final double AUTH_ENGINES_CACHE_DURATION = ConfigUtils.getDuration(CONFIG, "auth.cache");
 
 	public static interface Builder extends NinioBuilder<SnmpConnecter> {
@@ -87,7 +86,6 @@ public final class SnmpClient implements SnmpConnecter {
 		return new SnmpRequestBuilder() {
 			private String community = null;
 			private AuthRemoteSpecification authRemoteSpecification = null;
-			private boolean walk = false;
 			private Address address;
 			private Oid oid;
 			private List<SnmpResult> trap = null;
@@ -100,11 +98,6 @@ public final class SnmpClient implements SnmpConnecter {
 			@Override
 			public SnmpRequestBuilder auth(AuthRemoteSpecification authRemoteSpecification) {
 				this.authRemoteSpecification = authRemoteSpecification;
-				return this;
-			}
-			@Override
-			public SnmpRequestBuilder walk(boolean flag) {
-				walk = flag;
 				return this;
 			}
 			
@@ -130,7 +123,7 @@ public final class SnmpClient implements SnmpConnecter {
 			}
 			
 			@Override
-			public SnmpRequestBuilder trap(Oid oid, String value) {
+			public SnmpRequestBuilder add(Oid oid, String value) {
 				if (trap == null) {
 					trap = new LinkedList<>();
 				}
@@ -139,9 +132,8 @@ public final class SnmpClient implements SnmpConnecter {
 			}
 
 			@Override
-			public Cancelable receive(final SnmpReceiver r) {
+			public Cancelable call(final SnmpCallType type, final SnmpReceiver r) {
 				final AuthRemoteSpecification s = authRemoteSpecification;
-				final boolean w = walk;
 				final Oid o = oid;
 				final Address a = address;
 				final String c = community;
@@ -153,7 +145,7 @@ public final class SnmpClient implements SnmpConnecter {
 							throw new IllegalStateException();
 						}
 						
-						instance = new Instance(connecter, instanceMapper, o, a, w, c, t);
+						instance = new Instance(connecter, instanceMapper, o, a, type, c, t);
 
 						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 						if (s != null) {
@@ -266,13 +258,13 @@ public final class SnmpClient implements SnmpConnecter {
 		private static final Oid DISCOVER_OID = new Oid(new long[] { 1L, 1L });
 		
 		public static final class PendingRequest {
-			public final int request;
+			public final SnmpCallType request;
 			public final int instanceId;
 			public final Oid oid;
 			public final Iterable<SnmpResult> trap;
 			public final SendCallback sendCallback;
 
-			public PendingRequest(int request, int instanceId, Oid oid, Iterable<SnmpResult> trap, SendCallback sendCallback) {
+			public PendingRequest(SnmpCallType request, int instanceId, Oid oid, Iterable<SnmpResult> trap, SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
@@ -342,39 +334,36 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			for (PendingRequest r : pendingRequests) {
 				switch (r.request) {
-				case BerConstants.GET: {
+					case GET: {
 						Version3PacketBuilder builder = Version3PacketBuilder.get(engine, r.instanceId, r.oid);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
+						break;
 					}
-					break;
-				case BerConstants.GETNEXT:
-					{
+					case GETNEXT: {
 						Version3PacketBuilder builder = Version3PacketBuilder.getNext(engine, r.instanceId, r.oid);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
+						break;
 					}
-					break;
-				case BerConstants.GETBULK:
-					{
+					case GETBULK: {
 						Version3PacketBuilder builder = Version3PacketBuilder.getBulk(engine, r.instanceId, r.oid, BULK_SIZE);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
+						break;
 					}
-					break;
-				case BerConstants.TRAP:
-					{
+					case TRAP: {
 						Version3PacketBuilder builder = Version3PacketBuilder.trap(engine, r.instanceId, r.oid, r.trap);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing TRAP v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
+						break;
 					}
-				break;
-				default:
-					break;
+					default:
+						break;
 				}
 			}
 			pendingRequests.clear();
@@ -470,53 +459,42 @@ public final class SnmpClient implements SnmpConnecter {
 		
 		private SnmpReceiver receiver;
 		
-		private final Oid initialRequestOid;
-		private Oid requestOid;
-		// private int countResults = 0;
-		private int shouldRepeatWhat;
+		private final Oid requestOid;
 		public int instanceId = RequestIdProvider.IGNORE_ID;
 
 		private final Address address;
 		private final String community;
-		private final boolean walk;
+		private final SnmpCallType snmpCallType;
 		private AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
 		
 		private final Iterable<SnmpResult> trap;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, boolean walk, String community, Iterable<SnmpResult> trap) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, SnmpCallType snmpCallType, String community, Iterable<SnmpResult> trap) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
 			this.requestOid = requestOid;
-			initialRequestOid = requestOid;
 			
 			this.address = address;
-			this.walk = walk;
+			this.snmpCallType = snmpCallType;
 			this.community = community;
 			
 			this.trap = trap;
 		}
 		
 		public void launch() {
-			if (trap == null) {
+			if (receiver != null) {
 				instanceMapper.map(this);
-				shouldRepeatWhat = BerConstants.GET;
-			} else {
-				shouldRepeatWhat = BerConstants.TRAP;
 			}
 			write();
 		}
 		
 		public void close() {
-			shouldRepeatWhat = 0;
-			requestOid = null;
 			receiver = null;
 		}
 		
 		public void cancel() {
 			instanceMapper.unmap(this);
-			shouldRepeatWhat = 0;
-			requestOid = null;
 			receiver = null;
 		}
 		
@@ -532,47 +510,45 @@ public final class SnmpClient implements SnmpConnecter {
 			};
 			
 			if (authRemoteEnginePendingRequestManager == null) {
-				switch (shouldRepeatWhat) { 
-				case BerConstants.GET: {
-					Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, requestOid);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					connector.send(address, b, sendCallback);
-					break;
-				}
-				case BerConstants.GETNEXT: {
-					Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, requestOid);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					connector.send(address, b, sendCallback);
-					break;
-				}
-				case BerConstants.GETBULK: {
-					Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, requestOid, BULK_SIZE);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					connector.send(address, b, sendCallback);
-					break;
-				}
-				case BerConstants.TRAP: {
-					Version2cPacketBuilder builder = Version2cPacketBuilder.trap(community, instanceId, requestOid, trap);
-					ByteBuffer b = builder.getBuffer();
-					LOGGER.trace("Writing TRAP: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
-					connector.send(address, b, sendCallback);
-					break;
-				}
-				default:
-					break;
+				switch (snmpCallType) { 
+					case GET: {
+						Version2cPacketBuilder builder = Version2cPacketBuilder.get(community, instanceId, requestOid);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GET: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+						connector.send(address, b, sendCallback);
+						break;
+					}
+					case GETNEXT: {
+						Version2cPacketBuilder builder = Version2cPacketBuilder.getNext(community, instanceId, requestOid);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GETNEXT: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+						connector.send(address, b, sendCallback);
+						break;
+					}
+					case GETBULK: {
+						Version2cPacketBuilder builder = Version2cPacketBuilder.getBulk(community, instanceId, requestOid, BULK_SIZE);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing GETBULK: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+						connector.send(address, b, sendCallback);
+						break;
+					}
+					case TRAP: {
+						Version2cPacketBuilder builder = Version2cPacketBuilder.trap(community, instanceId, requestOid, trap);
+						ByteBuffer b = builder.getBuffer();
+						LOGGER.trace("Writing TRAP: {} #{} ({}), packet size = {}", requestOid, instanceId, community, b.remaining());
+						connector.send(address, b, sendCallback);
+						break;
+					}
+					default:
+						break;
 				}
 			} else {
-				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(shouldRepeatWhat, instanceId, requestOid, trap, sendCallback));
+				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(snmpCallType, instanceId, requestOid, trap, sendCallback));
 				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 			}
 		}
 	
 		private void fail(IOException e) {
-			shouldRepeatWhat = 0;
-			requestOid = null;
 			if (receiver != null) {
 				receiver.failed(e);
 			}
@@ -603,82 +579,19 @@ public final class SnmpClient implements SnmpConnecter {
 				LOGGER.trace("Received error: {}/{}", errorStatus, errorIndex);
 			}
 
-			if (shouldRepeatWhat == BerConstants.GET) {
-				SnmpResult found = null;
-				for (SnmpResult r : results) {
-					if (requestOid.equals(r.oid)) {
-						LOGGER.trace("Scalar found: {}", r);
-						found = r;
-					}
+			for (SnmpResult r : results) {
+				if (r.value == null) {
+					continue;
 				}
-				if (found != null) {
-					if (receiver != null) {
-						receiver.received(found);
-					}
-				}
-				
-				if ((found == null) || walk) {
-					instanceMapper.map(this);
-					shouldRepeatWhat = BerConstants.GETBULK;
-					write();
-				} else {
-					requestOid = null;
-					if (receiver != null) {
-						receiver.finished();
-					}
-					receiver = null;
-				}
-			} else {
-				Oid lastOid = null;
-				for (SnmpResult r : results) {
-					LOGGER.trace("Received in bulk: {}", r);
-				}
-				Oid previous = requestOid;
-				for (SnmpResult r : results) {
-					if (r.value == null) {
-						continue;
-					}
-					if (!initialRequestOid.isPrefixOf(r.oid)) {
-						LOGGER.trace("{} not prefixed by {}", r.oid, initialRequestOid);
-						lastOid = null;
-						break;
-					}
-					if (previous.compareTo(r.oid) >= 0) {
-						LOGGER.trace("{} not monotonous with {}", r.oid, previous);
-						continue;
-					}
-					LOGGER.trace("Addind to results: {}", r);
-					/*
-					if ((GET_LIMIT > 0) && (countResults >= GET_LIMIT)) {
-						LOGGER.warn("{} reached limit", requestOid);
-						lastOid = null;
-						break;
-					}
-					countResults++;
-					*/
-					if (receiver != null) {
-						receiver.received(r);
-					}
-					lastOid = r.oid;
-					previous = r.oid;
-				}
-				if (lastOid != null) {
-					LOGGER.trace("Continuing from: {}", lastOid);
-					
-					requestOid = lastOid;
-					
-					instanceMapper.map(this);
-					shouldRepeatWhat = BerConstants.GETBULK;
-					write();
-				} else {
-					// Stop here
-					requestOid = null;
-					if (receiver != null) {
-						receiver.finished();
-					}
-					receiver = null;
+				LOGGER.trace("Addind to results: {}", r);
+				if (receiver != null) {
+					receiver.received(r);
 				}
 			}
+			if (receiver != null) {
+				receiver.finished();
+			}
+			receiver = null;
 		}
 	}
 }

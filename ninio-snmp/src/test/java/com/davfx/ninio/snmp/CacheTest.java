@@ -91,7 +91,7 @@ public class CacheTest {
 
 	private static List<SnmpResult> get(SnmpConnecter snmpClient, Address a, Oid oid) throws IOException {
 		final Lock<List<SnmpResult>, IOException> lock = new Lock<>();
-		snmpClient.request().community("community").build(a, oid).receive(new SnmpReceiver() {
+		snmpClient.request().community("community").build(a, oid).call(SnmpCallType.GETBULK, new SnmpReceiver() {
 			private final List<SnmpResult> r = new LinkedList<>();
 			
 			@Override
