@@ -509,14 +509,12 @@ public final class SnmpClient implements SnmpConnecter {
 			receiver = null;
 		}
 
-		public void cancelFail(IOException ioe) {
+		public void cancelFail(IOException e) {
 			instanceMapper.unmap(this);
-			shouldRepeatWhat = 0;
-			requestOid = null;
 			if (receiver != null) {
-				receiver.failed(ioe);
-				receiver = null;
+				receiver.failed(e);
 			}
+			receiver = null;
 		}
 
 		private void write() {
