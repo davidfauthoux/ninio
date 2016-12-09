@@ -229,6 +229,8 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			@Override
 			public void failed(IOException ioe) {
+				instanceMapper.fail(ioe);
+				
 				if (callback != null) {
 					callback.failed(ioe);
 				}
@@ -243,6 +245,8 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			@Override
 			public void closed() {
+				instanceMapper.fail(new IOException("Closed"));
+				
 				if (callback != null) {
 					callback.closed();
 				}
@@ -445,6 +449,13 @@ public final class SnmpClient implements SnmpConnecter {
 			instances.clear();
 		}
 
+		public void fail(IOException ioe) {
+			for (Instance i : instances.values()) {
+				i.cancelFail(ioe);
+			}
+			instances.clear();
+		}
+
 		public void handle(int instanceId, int errorStatus, int errorIndex, Iterable<SnmpResult> results) {
 			if (instanceId == Integer.MAX_VALUE) {
 				LOGGER.trace("Calling all instances (request ID = {})", Integer.MAX_VALUE);
@@ -519,7 +530,17 @@ public final class SnmpClient implements SnmpConnecter {
 			requestOid = null;
 			receiver = null;
 		}
-		
+
+		public void cancelFail(IOException ioe) {
+			instanceMapper.unmap(this);
+			shouldRepeatWhat = 0;
+			requestOid = null;
+			if (receiver != null) {
+				receiver.failed(ioe);
+				receiver = null;
+			}
+		}
+
 		private void write() {
 			SendCallback sendCallback = new SendCallback() {
 				@Override

@@ -173,10 +173,28 @@ public final class CutOnPromptClient implements Disconnectable {
 					
 					@Override
 					public void closed() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (currentReceiveCallback != null) {
+									currentReceiveCallback.received(null);
+								}
+							}
+						});
+
 						handler.closed();
 					}
 					@Override
 					public void failed(IOException ioe) {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (currentReceiveCallback != null) {
+									currentReceiveCallback.received(null);
+								}
+							}
+						});
+
 						handler.failed(ioe);
 					}
 					@Override
@@ -204,7 +222,7 @@ public final class CutOnPromptClient implements Disconnectable {
 						}
 						@Override
 						public void failed(IOException ioe) {
-							connecter.close();
+							// Nothing to do
 						}
 					});
 				}
