@@ -140,14 +140,21 @@ public final class UdpSocket implements Connecter {
 										if (toWrite == null) {
 											break;
 										}
+										
+										long size = toWrite.buffer.remaining();
+
 										if (toWrite.address == null) {
 											try {
 												LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
 												channel.write(toWrite.buffer);
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
-												disconnect(channel, selectionKey, callback);
-												return;
+												//%% disconnect(channel, selectionKey, callback);
+												//%% return;
+												toWriteLength -= size;
+												toWriteQueue.remove();
+												toWrite.callback.failed(e);
+												continue;
 											}
 										} else {
 											InetSocketAddress a;
@@ -156,28 +163,34 @@ public final class UdpSocket implements Connecter {
 											} catch (IOException e) {
 												LOGGER.warn("Invalid address: {}", toWrite.address);
 												LOGGER.trace("Write failed", e);
-												disconnect(channel, selectionKey, callback);
-												return;
+												//%% disconnect(channel, selectionKey, callback);
+												//%% return;
+												toWriteLength -= size;
+												toWriteQueue.remove();
+												toWrite.callback.failed(e);
+												continue;
 											}
 											
-											long before = toWrite.buffer.remaining();
 											try {
 												LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
 												channel.send(toWrite.buffer, a);
-												toWriteLength -= before - toWrite.buffer.remaining();
+												toWriteLength -= size - toWrite.buffer.remaining();
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
-												disconnect(channel, selectionKey, callback);
-												return;
+												//%% disconnect(channel, selectionKey, callback);
+												//%% return;
+												toWriteLength -= size;
+												toWriteQueue.remove();
+												toWrite.callback.failed(e);
+												continue;
 											}
 										}
 										
 										if (toWrite.buffer.hasRemaining()) {
 											return;
 										}
-										
-										toWrite.callback.sent();
 										toWriteQueue.remove();
+										toWrite.callback.sent();
 									}
 									if (!channel.isOpen()) {
 										return;
@@ -199,16 +212,20 @@ public final class UdpSocket implements Connecter {
 							try {
 								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
-								disconnect(channel, selectionKey, callback);
-								throw new IOException("Could not bind to: " + bindAddress, e);
+								disconnect(channel, selectionKey, null);
+								callback.failed(new IOException("Could not bind to: " + bindAddress, e));
+								return;
 							}
 						}
 
-						connectCallback = callback;
 					} catch (IOException e) {
-						disconnect(channel, null, callback);
-						throw e;
+						disconnect(channel, null, null);
+						callback.failed(e);
+						return;
 					}
+
+					connectCallback = callback;
+				
 				} catch (IOException e) {
 					callback.failed(e);
 					return;

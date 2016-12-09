@@ -11,6 +11,7 @@ import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
 
+@Deprecated
 public final class ReconnectConnecter implements Connecter {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ReconnectConnecter.class);

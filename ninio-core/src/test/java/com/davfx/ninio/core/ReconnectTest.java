@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.util.Lock;
 import com.davfx.ninio.util.Wait;
 
+@Deprecated
 public class ReconnectTest {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(ReconnectTest.class);

@@ -167,13 +167,16 @@ public final class TcpSocket implements Connecter {
 													if (toWrite == null) {
 														break;
 													}
-													long before = toWrite.buffer.remaining();
+													
+													long size = toWrite.buffer.remaining();
+													
 													try {
 														LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
 														channel.write(toWrite.buffer);
-														toWriteLength -= before - toWrite.buffer.remaining();
+														toWriteLength -= size - toWrite.buffer.remaining();
 													} catch (IOException e) {
 														LOGGER.trace("Write failed", e);
+														toWrite.callback.failed(e);
 														disconnect(channel, inboundKey, selectionKey, callback);
 														return;
 													}
@@ -181,9 +184,8 @@ public final class TcpSocket implements Connecter {
 													if (toWrite.buffer.hasRemaining()) {
 														return;
 													}
-													
-													toWrite.callback.sent();
 													toWriteQueue.remove();
+													toWrite.callback.sent();
 												}
 												if (!channel.isOpen()) {
 													return;
@@ -201,13 +203,14 @@ public final class TcpSocket implements Connecter {
 										selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 									}
 		
-									callback.connected(null);
-									
 								} catch (IOException e) {
 									LOGGER.trace("Connection failed", e);
-									disconnect(channel, inboundKey, null, callback);
+									disconnect(channel, inboundKey, null, null);
 									callback.failed(e);
+									return;
 								}
+								
+								callback.connected(null);
 							}
 						});
 						
@@ -216,7 +219,8 @@ public final class TcpSocket implements Connecter {
 								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
 								disconnect(channel, inboundKey, null, null);
-								throw new IOException("Could not bind to: " + bindAddress, e);
+								callback.failed(new IOException("Could not bind to: " + bindAddress, e));
+								return;
 							}
 						}
 
@@ -226,15 +230,18 @@ public final class TcpSocket implements Connecter {
 							channel.connect(a);
 						} catch (IOException e) {
 							disconnect(channel, inboundKey, null, null);
-							throw new IOException("Could not connect to: " + connectAddress, e);
+							callback.failed(new IOException("Could not connect to: " + connectAddress, e));
+							return;
 						}
 
-						connectCallback = callback;
 					} catch (IOException e) {
 						disconnect(channel, null, null, null);
-						throw e;
+						callback.failed(e);
+						return;
 					}
 		
+					connectCallback = callback;
+
 				} catch (IOException ee) {
 					callback.failed(ee);
 					return;
