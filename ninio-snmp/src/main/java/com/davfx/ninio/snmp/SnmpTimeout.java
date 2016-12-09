@@ -43,11 +43,6 @@ public final class SnmpTimeout {
 				wrappee.auth(authRemoteSpecification);
 				return this;
 			}
-			@Override
-			public SnmpRequestBuilder walk(boolean flag) {
-				wrappee.walk(flag);
-				return this;
-			}
 			
 			@Override
 			public SnmpRequestBuilder build(Address address, Oid oid) {
@@ -56,8 +51,8 @@ public final class SnmpTimeout {
 			}
 			
 			@Override
-			public SnmpRequestBuilder trap(Oid oid, String value) {
-				wrappee.trap(oid, value);
+			public SnmpRequestBuilder add(Oid oid, String value) {
+				wrappee.add(oid, value);
 				return this;
 			}
 			
@@ -67,9 +62,9 @@ public final class SnmpTimeout {
 			}
 
 			@Override
-			public Cancelable receive(final SnmpReceiver callback) {
+			public Cancelable call(SnmpCallType type, final SnmpReceiver callback) {
 				final Timeout.Manager m = t.set(timeout);
-				wrappee.receive(new SnmpReceiver() {
+				wrappee.call(type, new SnmpReceiver() {
 					@Override
 					public void failed(IOException ioe) {
 						m.cancel();
