@@ -105,6 +105,8 @@ final class GzipWriter implements HttpContentSender {
 		
 		if (toSend != null) {
 			wrappee.send(toSend, callback);
+		} else {
+			callback.sent();
 		}
 	}
 	
