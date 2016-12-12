@@ -237,7 +237,7 @@ public final class HttpClient implements AutoCloseable {
 	        HttpTimeout.wrap(timeoutManager, timeout, HttpLimit.wrap(limitManager, limit, requestReceiverBuilder))
 				.build(httpRequest)
 				.receive(receiver)
-				.finish();;
+				.finish();
 		}
 
 		public HttpContentSender post() {

@@ -181,7 +181,7 @@ public final class DnsClient implements DnsConnecter {
 							}
 
 							if ((parsedIp == null) && SYSTEM) {
-								LOGGER.info("Sync resolution: {}", host);
+								LOGGER.trace("Sync resolution: {}", host);
 								try {
 									parsedIp = InetAddress.getByName(host).getAddress();
 								} catch (UnknownHostException e) {

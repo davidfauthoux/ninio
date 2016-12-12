@@ -235,12 +235,15 @@ public final class TcpSocketServer implements Listener {
 																	if (toWrite == null) {
 																		break;
 																	}
-																	long before = toWrite.buffer.remaining();
+
+																	long size = toWrite.buffer.remaining();
+
 																	try {
 																		outboundChannel.write(toWrite.buffer);
-																		context.toWriteLength -= before - toWrite.buffer.remaining();
+																		context.toWriteLength -= size - toWrite.buffer.remaining();
 																	} catch (IOException e) {
-																		LOGGER.trace("Connection failed", e);
+																		LOGGER.trace("Write failed", e);
+																		toWrite.callback.failed(e);
 																		context.disconnectAndRemove();
 																		return;
 																	}
@@ -248,7 +251,6 @@ public final class TcpSocketServer implements Listener {
 																	if (toWrite.buffer.hasRemaining()) {
 																		return;
 																	}
-																	
 																	toWrite.callback.sent();
 																	context.toWriteQueue.remove();
 																}

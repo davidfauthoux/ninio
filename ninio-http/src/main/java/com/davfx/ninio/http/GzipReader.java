@@ -226,7 +226,9 @@ final class GzipReader implements HttpContentReceiver {
     	
     	ByteBuffer b = ByteBuffer.allocate(FOOTER_LENGTH);
     	for (ByteBuffer d : previewFooter) {
-    		b.put(d);
+    		if (b.hasRemaining()) {
+    			b.put(d);
+    		}
     	}
     	b.flip();
 		b.order(ByteOrder.LITTLE_ENDIAN);
