@@ -392,6 +392,9 @@ public final class HttpListening implements Listening {
 											for (Map.Entry<String, String> h : completedHeaders.entries()) {
 												String k = h.getKey();
 												String v = h.getValue();
+												if ((k.equals(HttpHeaderKey.CONTENT_ENCODING) || k.equals(HttpHeaderKey.TRANSFER_ENCODING)) && v.equals(HttpHeaderValue.IDENTITY)) {
+													continue;
+												}
 												connecting.send(null, LineReader.toBuffer(k + HttpSpecification.HEADER_KEY_VALUE_SEPARATOR + HttpSpecification.HEADER_BEFORE_VALUE + v), sendCallback);
 											}
 											connecting.send(null, emptyLineByteBuffer.duplicate(), sendCallback);
