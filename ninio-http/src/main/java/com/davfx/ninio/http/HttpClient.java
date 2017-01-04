@@ -37,6 +37,7 @@ public final class HttpClient implements HttpConnecter {
 	
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpClient.class.getPackage().getName());
 	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("redirect.max");
+	private static final double KEEP_ALIVE_TIMEOUT = ConfigUtils.getDuration(CONFIG, "keepalive.timeout");
 
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
 	private static final String DEFAULT_ACCEPT = "*/*";
@@ -165,6 +166,7 @@ public final class HttpClient implements HttpConnecter {
 		public final DeferredConnecter connecting = new DeferredConnecter();
 		
 		public final HttpRequestAddress address;
+		public double closeTimestamp = 0d;
 
 		public boolean reusable = true;
 
@@ -343,6 +345,10 @@ public final class HttpClient implements HttpConnecter {
 		});
 	}
 
+	private static double now() {
+		return System.currentTimeMillis() / 1000d;
+	}
+	
 	@Override
 	public HttpRequestBuilder request() {
 		return new HttpRequestBuilder() {
@@ -497,22 +503,38 @@ public final class HttpClient implements HttpConnecter {
 							throw new IllegalStateException("Could not be created twice");
 						}
 						
+						double now = now();
+						
 						if (requestKeepAlive) {
 							//%% LOGGER.trace("Connections = {}", reusableConnectors);
+							List<Long> closed = new LinkedList<>();
+							
 							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
 								long reusedId = e.getKey();
 								ReusableConnector reusedConnector = e.getValue();
 								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address)) {
+									if (now >= reusedConnector.closeTimestamp) {
+										LOGGER.trace("Connection running out of time (id = {})", id);
+										reusedConnector.failAllNext(new IOException("Out of time"));
+										closed.add(reusedId);
+										continue;
+									}
+
 									id = reusedId;
 	
 									LOGGER.trace("Recycling connection (id = {})", id);
 									
 									reusableConnector = reusedConnector;
+									reusableConnector.closeTimestamp = now + KEEP_ALIVE_TIMEOUT;
 									reusableConnector.reusable = false;
 									break;
 								} else if (!reusedConnector.reusable) {
 									LOGGER.trace("Connection not reusable (id = {})", reusedId);
 								}
+							}
+							
+							for (Long reusedId : closed) {
+								reusableConnectors.remove(reusedId);
 							}
 						}
 
@@ -523,6 +545,9 @@ public final class HttpClient implements HttpConnecter {
 							LOGGER.trace("Creating a new connection (id = {})", id);
 	
 							reusableConnector = new ReusableConnector(request.address);
+							reusableConnector.closeTimestamp = now + KEEP_ALIVE_TIMEOUT;
+							reusableConnector.reusable = false;
+							
 							reusableConnectors.put(id, reusableConnector);
 							reusableConnector.launch(executor, dns, connectorFactory, secureConnectorFactory, ninioProvider, new Runnable() {
 								@Override
@@ -531,8 +556,6 @@ public final class HttpClient implements HttpConnecter {
 									abruptlyClose(new IOException("Connection closed"));
 								}
 							});
-	
-							reusableConnector.reusable = false;
 						}
 	
 						//
