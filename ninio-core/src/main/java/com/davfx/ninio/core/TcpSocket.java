@@ -21,8 +21,10 @@ public final class TcpSocket implements Connecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocket.class);
 
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(TcpSocket.class.getPackage().getName());
-	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("socket.write.buffer").longValue();
-	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "socket.timeout");
+	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("tcp.buffer.write").longValue();
+	private static final double SOCKET_TIMEOUT = ConfigUtils.getDuration(CONFIG, "tcp.socket.timeout");
+	private static final long SOCKET_WRITE_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.write").longValue();
+	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.read").longValue();
 
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
@@ -112,8 +114,16 @@ public final class TcpSocket implements Connecter {
 					final SocketChannel channel = SocketChannel.open();
 					currentChannel = channel;
 					try {
-						// channel.socket().setSoTimeout((int) (TIMEOUT * 1000d)); // Not working with NIO
 						channel.configureBlocking(false);
+						if (SOCKET_TIMEOUT > 0d) {
+							channel.socket().setSoTimeout((int) (SOCKET_TIMEOUT * 1000d)); // Not working with NIO?
+						}
+						if (SOCKET_READ_BUFFER_SIZE > 0L) {
+							channel.socket().setReceiveBufferSize((int) SOCKET_READ_BUFFER_SIZE);
+						}
+						if (SOCKET_WRITE_BUFFER_SIZE > 0L) {
+							channel.socket().setSendBufferSize((int) SOCKET_WRITE_BUFFER_SIZE);
+						}
 						final SelectionKey inboundKey = queue.register(channel);
 						inboundKey.interestOps(inboundKey.interestOps() | SelectionKey.OP_CONNECT);
 						currentInboundKey = inboundKey;

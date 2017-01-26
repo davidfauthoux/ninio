@@ -21,7 +21,9 @@ public final class UdpSocket implements Connecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(UdpSocket.class.getPackage().getName());
-	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("datagram.write.buffer").longValue();
+	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("udp.buffer.write").longValue();
+	private static final long SOCKET_WRITE_BUFFER_SIZE = CONFIG.getBytes("udp.socket.write").longValue();
+	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("udp.socket.read").longValue();
 
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
@@ -103,8 +105,12 @@ public final class UdpSocket implements Connecter {
 					currentChannel = channel;
 					try {
 						channel.configureBlocking(false);
-						//%% channel.socket().setReceiveBufferSize(READ_BUFFER_SIZE);
-						//%% channel.socket().setSendBufferSize(WRITE_BUFFER_SIZE);
+						if (SOCKET_READ_BUFFER_SIZE > 0L) {
+							channel.socket().setReceiveBufferSize((int) SOCKET_READ_BUFFER_SIZE);
+						}
+						if (SOCKET_WRITE_BUFFER_SIZE > 0L) {
+							channel.socket().setSendBufferSize((int) SOCKET_WRITE_BUFFER_SIZE);
+						}
 						final SelectionKey selectionKey = queue.register(channel);
 						currentSelectionKey = selectionKey;
 						

@@ -23,8 +23,9 @@ public final class TcpSocketServer implements Listener {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TcpSocketServer.class);
 
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(TcpSocketServer.class.getPackage().getName());
-	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("socket.write.buffer").longValue();
-	// private static final double TIMEOUT = ConfigUtils.getDuration(CONFIG, "socket.timeout");
+	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("tcp.buffer.write").longValue();
+	private static final double SOCKET_TIMEOUT = ConfigUtils.getDuration(CONFIG, "tcp.serversocket.timeout");
+	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("tcp.serversocket.read").longValue();
 
 	public static interface Builder extends NinioBuilder<Listener> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
@@ -104,8 +105,13 @@ public final class TcpSocketServer implements Listener {
 					currentServerChannel = serverChannel;
 					try {
 						serverChannel.configureBlocking(false);
-						//%% serverChannel.socket().setReceiveBufferSize();
-						
+						if (SOCKET_TIMEOUT > 0d) {
+							serverChannel.socket().setSoTimeout((int) (SOCKET_TIMEOUT * 1000d)); // Not working with NIO?
+						}
+						if (SOCKET_READ_BUFFER_SIZE > 0L) {
+							serverChannel.socket().setReceiveBufferSize((int) SOCKET_READ_BUFFER_SIZE);
+						}
+
 						LOGGER.debug("-> Server channel ready to accept on: {}", bindAddress);
 
 						final SelectionKey acceptSelectionKey = queue.register(serverChannel);
