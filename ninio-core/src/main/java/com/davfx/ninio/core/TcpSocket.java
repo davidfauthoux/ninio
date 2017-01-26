@@ -181,7 +181,7 @@ public final class TcpSocket implements Connecter {
 													long size = toWrite.buffer.remaining();
 													
 													try {
-														LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
+														LOGGER.trace("Actual write buffer: {} bytes", size);
 														channel.write(toWrite.buffer);
 														toWriteLength -= size - toWrite.buffer.remaining();
 													} catch (IOException e) {

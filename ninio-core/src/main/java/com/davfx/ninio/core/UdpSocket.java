@@ -151,7 +151,7 @@ public final class UdpSocket implements Connecter {
 
 										if (toWrite.address == null) {
 											try {
-												LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
+												LOGGER.trace("Actual write buffer: {} bytes", size);
 												channel.write(toWrite.buffer);
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
@@ -178,9 +178,12 @@ public final class UdpSocket implements Connecter {
 											}
 											
 											try {
-												LOGGER.trace("Actual write buffer: {} bytes", toWrite.buffer.remaining());
+												LOGGER.trace("Actual write buffer: {} bytes", size);
 												channel.send(toWrite.buffer, a);
-												toWriteLength -= size - toWrite.buffer.remaining();
+												if (toWrite.buffer.hasRemaining()) {
+													throw new IOException("Packet was not entirely written");
+												}
+												toWriteLength -= size; //%% - toWrite.buffer.remaining();
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
 												//%% disconnect(channel, selectionKey, callback);
@@ -192,9 +195,9 @@ public final class UdpSocket implements Connecter {
 											}
 										}
 										
-										if (toWrite.buffer.hasRemaining()) {
-											return;
-										}
+										//%% if (toWrite.buffer.hasRemaining()) {
+										//%% return;
+										//%% }
 										toWriteQueue.remove();
 										toWrite.callback.sent();
 									}
