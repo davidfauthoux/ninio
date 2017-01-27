@@ -8,12 +8,16 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.dependencies.Dependencies;
+import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.ninio.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class UdpSocket implements Connecter {
@@ -24,7 +28,37 @@ public final class UdpSocket implements Connecter {
 	private static final long WRITE_MAX_BUFFER_SIZE = CONFIG.getBytes("udp.buffer.write").longValue();
 	private static final long SOCKET_WRITE_BUFFER_SIZE = CONFIG.getBytes("udp.socket.write").longValue();
 	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("udp.socket.read").longValue();
+	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "udp.supervision.display");
+	private static final double SUPERVISION_CLEAR = ConfigUtils.getDuration(CONFIG, "udp.supervision.clear");
 
+	private static double floorTime(double now, double period) {
+    	double precision = 1000d;
+    	long t = (long) (now * precision);
+    	long d = (long) (period * precision);
+    	return (t - (t % d)) / precision;
+	}
+	
+	private static String percent(long out, long in) {
+		return String.format("%.2f", ((double) (out - in)) * 100d / ((double) out));
+	}
+
+	private static long SUPERVISION_IN = 0L;
+	private static long SUPERVISION_OUT = 0L;
+	private static double SUPERVISION_TIMEOUT = 0d;
+	static {
+		if (SUPERVISION_DISPLAY > 0d) {
+			double now = DateUtils.now();
+			Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true)).scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					long in = SUPERVISION_IN;
+					long out = SUPERVISION_OUT;
+					LOGGER.info("[UDP Supervision] out = {}, in = {}, lost = {} %", out, in, percent(out, in));
+				}
+			}, (long) ((SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR))) * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
+		}
+	}
+	
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
@@ -77,7 +111,7 @@ public final class UdpSocket implements Connecter {
 
 	private Connection connectCallback = null;
 	private boolean closed = false;
-
+	
 	public UdpSocket(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress) {
 		this.queue = queue;
 		this.byteBufferAllocator = byteBufferAllocator;
@@ -139,6 +173,17 @@ public final class UdpSocket implements Connecter {
 
 									readBuffer.flip();
 									Address a = new Address(from.getAddress().getAddress(), from.getPort());
+									
+									if (SUPERVISION_DISPLAY > 0d) {
+										double now = DateUtils.now();
+										if (now >= SUPERVISION_TIMEOUT) {
+											SUPERVISION_IN = 0L;
+											SUPERVISION_OUT = 0L;
+											SUPERVISION_TIMEOUT = now + SUPERVISION_CLEAR;
+										}
+										SUPERVISION_IN++;
+									}
+									
 									callback.received(a, readBuffer);
 								} else if (key.isWritable()) {
 									while (true) {
@@ -153,6 +198,16 @@ public final class UdpSocket implements Connecter {
 											try {
 												LOGGER.trace("Actual write buffer: {} bytes", size);
 												channel.write(toWrite.buffer);
+
+												if (SUPERVISION_DISPLAY > 0d) {
+													double now = DateUtils.now();
+													if (now >= SUPERVISION_TIMEOUT) {
+														SUPERVISION_IN = 0L;
+														SUPERVISION_OUT = 0L;
+														SUPERVISION_TIMEOUT = now + SUPERVISION_CLEAR;
+													}
+													SUPERVISION_OUT++;
+												}
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
 												//%% disconnect(channel, selectionKey, callback);
@@ -183,6 +238,17 @@ public final class UdpSocket implements Connecter {
 												if (toWrite.buffer.hasRemaining()) {
 													throw new IOException("Packet was not entirely written");
 												}
+
+												if (SUPERVISION_DISPLAY > 0d) {
+													double now = DateUtils.now();
+													if (now >= SUPERVISION_TIMEOUT) {
+														SUPERVISION_IN = 0L;
+														SUPERVISION_OUT = 0L;
+														SUPERVISION_TIMEOUT = now + SUPERVISION_CLEAR;
+													}
+													SUPERVISION_OUT++;
+												}
+
 												toWriteLength -= size; //%% - toWrite.buffer.remaining();
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
