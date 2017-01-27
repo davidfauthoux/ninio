@@ -9,6 +9,7 @@ import java.nio.channels.SelectionKey;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -52,7 +53,9 @@ public final class UdpSocket implements Connecter {
 			double now = DateUtils.now();
 			double start = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
 			
-			Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true)).scheduleAtFixedRate(new Runnable() {
+			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+
+			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
 					long i = in.get();
@@ -61,7 +64,7 @@ public final class UdpSocket implements Connecter {
 				}
 			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 
-			Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true)).scheduleAtFixedRate(new Runnable() {
+			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
 					in.set(0L);
