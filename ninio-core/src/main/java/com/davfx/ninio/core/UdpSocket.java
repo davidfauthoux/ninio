@@ -67,6 +67,10 @@ public final class UdpSocket implements Connecter {
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
+					long i = in.get();
+					long o = out.get();
+					LOGGER.info("[UDP Supervision] (cleared) out = {}, in = {}, lost = {} %", o, i, percent(o, i));
+
 					in.set(0L);
 					out.set(0L);
 				}
