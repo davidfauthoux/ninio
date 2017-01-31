@@ -23,7 +23,7 @@ public final class Ninio implements AutoCloseable {
 			internalExecutors[i] = new SerialExecutor(Ninio.class);
 		}
 		NinioPriority[] priorities = NinioPriority.values();
-		internalQueues = new InternalQueue[Math.max(priorities.length, MAX_QUEUE)];
+		internalQueues = new InternalQueue[Math.min(priorities.length, MAX_QUEUE)];
 		for (int i = 0; i < internalQueues.length; i++) {
 			internalQueues[i] = new InternalQueue(priorities[i % priorities.length]);
 		}
