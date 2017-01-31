@@ -33,7 +33,6 @@ public final class TcpSocket implements Connecter {
 	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.read").longValue();
 
 	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "supervision.tcp.display");
-	private static final double SUPERVISION_CLEAR = ConfigUtils.getDuration(CONFIG, "supervision.tcp.clear");
 
 	private static final class Supervision {
 		private static double floorTime(double now, double period) {
@@ -47,25 +46,17 @@ public final class TcpSocket implements Connecter {
 		
 		public Supervision() {
 			double now = DateUtils.now();
-			double start = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
+			double start = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
 			
 			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
 
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
-					long m = max.get();
-					LOGGER.info("[TCPSERVER Supervision] max = {}", m);
+					long m = max.getAndSet(0L);
+					LOGGER.info("[TCP Supervision] max = {}", m);
 				}
 			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
-
-			executor.scheduleAtFixedRate(new Runnable() {
-				@Override
-				public void run() {
-					long m = max.getAndSet(0L);
-					LOGGER.info("[TCPSERVER Supervision] (cleared) max = {}", m);
-				}
-			}, (long) (start * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
 		}
 		
 		public void setWriteMax(long newMax) {
