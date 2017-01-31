@@ -11,18 +11,21 @@ import com.typesafe.config.Config;
 public final class Ninio implements AutoCloseable {
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(Ninio.class.getPackage().getName());
 	private static final int THREADING = CONFIG.getInt("threading");
+	private static final int MAX_QUEUE = CONFIG.getInt("queue.max");
 
 	private final SerialExecutor[] internalExecutors = new SerialExecutor[THREADING];
 	private final AtomicLong internalExecutorIndex = new AtomicLong(0L);
 
-	private final InternalQueue[] internalQueues = new InternalQueue[NinioPriority.values().length];
+	private final InternalQueue[] internalQueues;
 
 	private Ninio() {
 		for (int i = 0; i < internalExecutors.length; i++) {
 			internalExecutors[i] = new SerialExecutor(Ninio.class);
 		}
+		NinioPriority[] priorities = NinioPriority.values();
+		internalQueues = new InternalQueue[Math.max(priorities.length, MAX_QUEUE)];
 		for (int i = 0; i < internalQueues.length; i++) {
-			internalQueues[i] = new InternalQueue(NinioPriority.values()[i]);
+			internalQueues[i] = new InternalQueue(priorities[i % priorities.length]);
 		}
 	}
 	

@@ -120,7 +120,7 @@ public final class TcpSocket implements Connecter {
 				if (connectAddress == null) {
 					throw new NullPointerException("connectAddress");
 				}
-				return new TcpSocket(ninioProvider.queue(NinioPriority.LOW), byteBufferAllocator, bindAddress, connectAddress);
+				return new TcpSocket(ninioProvider.queue(NinioPriority.REGULAR), byteBufferAllocator, bindAddress, connectAddress);
 			}
 		};
 	}

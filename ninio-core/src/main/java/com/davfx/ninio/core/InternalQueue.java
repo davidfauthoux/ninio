@@ -82,6 +82,9 @@ final class InternalQueue implements Queue, AutoCloseable {
 			}
 		});
 		
+		if (priority == NinioPriority.HIGH) {
+			t.setPriority(Thread.MAX_PRIORITY);
+		}
 		t.setDaemon(true);
 		t.start();
 	}
