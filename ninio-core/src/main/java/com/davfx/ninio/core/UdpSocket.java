@@ -112,7 +112,7 @@ public final class UdpSocket implements Connecter {
 			
 			@Override
 			public Connecter create(NinioProvider ninioProvider) {
-				return new UdpSocket(ninioProvider.queue(), byteBufferAllocator, bindAddress);
+				return new UdpSocket(ninioProvider.queue(0L), byteBufferAllocator, bindAddress);
 			}
 		};
 	}
@@ -180,7 +180,7 @@ public final class UdpSocket implements Connecter {
 							@Override
 							public void visit(final SelectionKey key) {
 								if (closed) {
-									disconnect(channel, selectionKey, callback);
+									disconnect(channel, selectionKey, callback, null);
 									return;
 								}
 
@@ -195,8 +195,12 @@ public final class UdpSocket implements Connecter {
 										from = (InetSocketAddress) channel.receive(readBuffer);
 									} catch (IOException e) {
 										LOGGER.trace("Read failed", e);
-										disconnect(channel, selectionKey, callback);
+										disconnect(channel, selectionKey, callback, e);
 										return;
+									}
+
+									if (!readBuffer.hasRemaining()) {
+										LOGGER.error("Packet received too big: {} bytes", readBuffer.position());
 									}
 
 									readBuffer.flip();
@@ -297,14 +301,14 @@ public final class UdpSocket implements Connecter {
 							try {
 								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
-								disconnect(channel, selectionKey, null);
+								disconnect(channel, selectionKey, null, e);
 								callback.failed(new IOException("Could not bind to: " + bindAddress, e));
 								return;
 							}
 						}
 
 					} catch (IOException e) {
-						disconnect(channel, null, null);
+						disconnect(channel, null, null, e);
 						callback.failed(e);
 						return;
 					}
@@ -326,7 +330,7 @@ public final class UdpSocket implements Connecter {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
-				disconnect(currentChannel, currentSelectionKey, connectCallback);
+				disconnect(currentChannel, currentSelectionKey, connectCallback, null);
 			}
 		});
 	}
@@ -370,7 +374,7 @@ public final class UdpSocket implements Connecter {
 		});
 	}
 			
-	private void disconnect(DatagramChannel channel, SelectionKey selectionKey, Connection callback) {
+	private void disconnect(DatagramChannel channel, SelectionKey selectionKey, Connection callback, IOException error) {
 		if (channel != null) {
 			channel.socket().close();
 			try {
@@ -382,7 +386,7 @@ public final class UdpSocket implements Connecter {
 			selectionKey.cancel();
 		}
 
-		IOException e = new IOException("Closed");
+		IOException e = (error == null) ? new IOException("Closed") : new IOException("Closed because of", error);
 		for (ToWrite toWrite : toWriteQueue) {
 			toWrite.callback.failed(e);
 		}

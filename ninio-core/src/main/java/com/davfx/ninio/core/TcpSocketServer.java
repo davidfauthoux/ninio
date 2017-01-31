@@ -56,7 +56,7 @@ public final class TcpSocketServer implements Listener {
 					throw new NullPointerException("bindAddress");
 				}
 				
-				return new TcpSocketServer(ninioProvider.queue(), byteBufferAllocator, bindAddress);
+				return new TcpSocketServer(ninioProvider.queue(1L), byteBufferAllocator, bindAddress);
 			}
 		};
 	}
@@ -121,7 +121,7 @@ public final class TcpSocketServer implements Listener {
 							@Override
 							public void visit(SelectionKey key) {
 								if (closed) {
-									disconnect(serverChannel, acceptSelectionKey, callback);
+									disconnect(serverChannel, acceptSelectionKey, callback, null);
 									return;
 								}
 								
@@ -145,7 +145,7 @@ public final class TcpSocketServer implements Listener {
 											queue.execute(new Runnable() {
 												@Override
 												public void run() {
-													context.disconnectAndRemove();
+													context.disconnectAndRemove(null);
 												}
 											});
 										}
@@ -213,7 +213,7 @@ public final class TcpSocketServer implements Listener {
 														@Override
 														public void visit(SelectionKey key) {
 															if (closed) {
-																context.disconnectAndRemove();
+																context.disconnectAndRemove(null);
 																return;
 															}
 															
@@ -224,12 +224,12 @@ public final class TcpSocketServer implements Listener {
 																final ByteBuffer readBuffer = byteBufferAllocator.allocate();
 																try {
 																	if (outboundChannel.read(readBuffer) < 0) {
-																		context.disconnectAndRemove();
+																		context.disconnectAndRemove(null);
 																		return;
 																	}
 																} catch (IOException e) {
 																	LOGGER.trace("Connection failed", e);
-																	context.disconnectAndRemove();
+																	context.disconnectAndRemove(e);
 																	return;
 																}
 																
@@ -250,7 +250,7 @@ public final class TcpSocketServer implements Listener {
 																	} catch (IOException e) {
 																		LOGGER.trace("Write failed", e);
 																		toWrite.callback.failed(e);
-																		context.disconnectAndRemove();
+																		context.disconnectAndRemove(e);
 																		return;
 																	}
 																	
@@ -278,12 +278,12 @@ public final class TcpSocketServer implements Listener {
 
 												} catch (IOException e) {
 													LOGGER.trace("Connection failed", e);
-													context.disconnectAndRemove();
+													context.disconnectAndRemove(e);
 													throw e;
 												}
 									
 											} catch (IOException e) {
-												context.disconnectAndRemove();
+												context.disconnectAndRemove(e);
 												connection.failed(e);
 												return;
 											}
@@ -293,7 +293,7 @@ public final class TcpSocketServer implements Listener {
 										}
 									});
 								} catch (IOException e) {
-									disconnect(serverChannel, acceptSelectionKey, callback);
+									disconnect(serverChannel, acceptSelectionKey, callback, e);
 									LOGGER.error("Error while accepting on: {}", bindAddress, e);
 								}
 							}
@@ -305,13 +305,13 @@ public final class TcpSocketServer implements Listener {
 							serverChannel.socket().bind(a);
 							acceptSelectionKey.interestOps(acceptSelectionKey.interestOps() | SelectionKey.OP_ACCEPT);
 						} catch (IOException e) {
-							disconnect(serverChannel, acceptSelectionKey, null);
+							disconnect(serverChannel, acceptSelectionKey, null, e);
 							throw new IOException("Could not bind to: " + bindAddress, e);
 						}
 
 						listenCallback = callback;
 					} catch (IOException e) {
-						disconnect(serverChannel, null, null);
+						disconnect(serverChannel, null, null, e);
 						LOGGER.error("Error while creating server socket on: {}", bindAddress, e);
 						callback.failed(e);
 						return;
@@ -332,15 +332,15 @@ public final class TcpSocketServer implements Listener {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
-				disconnect(currentServerChannel, currentAcceptSelectionKey, listenCallback);
+				disconnect(currentServerChannel, currentAcceptSelectionKey, listenCallback, null);
 			}
 		});
 	}
 	
-	private void disconnect(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey, Listening callback) {
+	private void disconnect(ServerSocketChannel serverChannel, SelectionKey acceptSelectionKey, Listening callback, IOException error) {
 		for (InnerSocketContext context : outboundChannels) {
 			LOGGER.debug("Closing outbound channel");
-			context.disconnect();
+			context.disconnect(error);
 		}
 		outboundChannels.clear();
 
@@ -386,14 +386,14 @@ public final class TcpSocketServer implements Listener {
 			LOGGER.debug("-> Clients connected: {}", outboundChannels.size());
 		}
 		
-		void disconnectAndRemove() {
-			disconnect();
+		void disconnectAndRemove(IOException error) {
+			disconnect(error);
 			
 			outboundChannels.remove(this);
 			LOGGER.debug("<- Clients connected: {}", outboundChannels.size());
 		}
 		
-		void disconnect() {
+		void disconnect(IOException error) {
 			if (currentChannel != null) {
 				try {
 					currentChannel.socket().close();
@@ -408,7 +408,7 @@ public final class TcpSocketServer implements Listener {
 				currentSelectionKey.cancel();
 			}
 
-			IOException e = new IOException("Closed");
+			IOException e = (error == null) ? new IOException("Closed") : new IOException("Closed because of", error);
 			for (ToWrite toWrite : toWriteQueue) {
 				toWrite.callback.failed(e);
 			}

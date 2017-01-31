@@ -62,7 +62,7 @@ public final class TcpSocket implements Connecter {
 				if (connectAddress == null) {
 					throw new NullPointerException("connectAddress");
 				}
-				return new TcpSocket(ninioProvider.queue(), byteBufferAllocator, bindAddress, connectAddress);
+				return new TcpSocket(ninioProvider.queue(1L), byteBufferAllocator, bindAddress, connectAddress);
 			}
 		};
 	}
@@ -131,7 +131,7 @@ public final class TcpSocket implements Connecter {
 							@Override
 							public void visit(SelectionKey key) {
 								if (closed) {
-									disconnect(channel, inboundKey, null, callback);
+									disconnect(channel, inboundKey, null, callback, null);
 									return;
 								}
 								
@@ -148,7 +148,7 @@ public final class TcpSocket implements Connecter {
 										@Override
 										public void visit(SelectionKey key) {
 											if (closed) {
-												disconnect(channel, inboundKey, null, callback);
+												disconnect(channel, inboundKey, null, callback, null);
 												return;
 											}
 											
@@ -160,12 +160,12 @@ public final class TcpSocket implements Connecter {
 												ByteBuffer readBuffer = byteBufferAllocator.allocate();
 												try {
 													if (channel.read(readBuffer) < 0) {
-														disconnect(channel, inboundKey, selectionKey, callback);
+														disconnect(channel, inboundKey, selectionKey, callback, null);
 														return;
 													}
 												} catch (IOException e) {
 													LOGGER.trace("Read failed", e);
-													disconnect(channel, inboundKey, selectionKey, callback);
+													disconnect(channel, inboundKey, selectionKey, callback, e);
 													return;
 												}
 
@@ -187,7 +187,7 @@ public final class TcpSocket implements Connecter {
 													} catch (IOException e) {
 														LOGGER.trace("Write failed", e);
 														toWrite.callback.failed(e);
-														disconnect(channel, inboundKey, selectionKey, callback);
+														disconnect(channel, inboundKey, selectionKey, callback, e);
 														return;
 													}
 													
@@ -215,7 +215,7 @@ public final class TcpSocket implements Connecter {
 		
 								} catch (IOException e) {
 									LOGGER.trace("Connection failed", e);
-									disconnect(channel, inboundKey, null, null);
+									disconnect(channel, inboundKey, null, null, e);
 									callback.failed(e);
 									return;
 								}
@@ -228,7 +228,7 @@ public final class TcpSocket implements Connecter {
 							try {
 								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
-								disconnect(channel, inboundKey, null, null);
+								disconnect(channel, inboundKey, null, null, e);
 								callback.failed(new IOException("Could not bind to: " + bindAddress, e));
 								return;
 							}
@@ -239,13 +239,13 @@ public final class TcpSocket implements Connecter {
 							LOGGER.trace("Connecting to: {}", a);
 							channel.connect(a);
 						} catch (IOException e) {
-							disconnect(channel, inboundKey, null, null);
+							disconnect(channel, inboundKey, null, null, e);
 							callback.failed(new IOException("Could not connect to: " + connectAddress, e));
 							return;
 						}
 
 					} catch (IOException e) {
-						disconnect(channel, null, null, null);
+						disconnect(channel, null, null, null, e);
 						callback.failed(e);
 						return;
 					}
@@ -265,7 +265,7 @@ public final class TcpSocket implements Connecter {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
-				disconnect(currentChannel, currentInboundKey, currentSelectionKey, connectCallback);
+				disconnect(currentChannel, currentInboundKey, currentSelectionKey, connectCallback, null);
 			}
 		});
 	}
@@ -313,7 +313,7 @@ public final class TcpSocket implements Connecter {
 		});
 	}
 
-	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey, Connection callback) {
+	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey, Connection callback, IOException error) {
 		if (channel != null) {
 			try {
 				channel.socket().close();
@@ -331,7 +331,7 @@ public final class TcpSocket implements Connecter {
 			selectionKey.cancel();
 		}
 
-		IOException e = new IOException("Closed");
+		IOException e = (error == null) ? new IOException("Closed") : new IOException("Closed because of", error);
 		for (ToWrite toWrite : toWriteQueue) {
 			toWrite.callback.failed(e);
 		}
