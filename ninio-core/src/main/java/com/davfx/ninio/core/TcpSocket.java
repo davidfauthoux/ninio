@@ -8,12 +8,18 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.dependencies.Dependencies;
+import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.ninio.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class TcpSocket implements Connecter {
@@ -26,6 +32,58 @@ public final class TcpSocket implements Connecter {
 	private static final long SOCKET_WRITE_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.write").longValue();
 	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.read").longValue();
 
+	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "supervision.tcp.display");
+	private static final double SUPERVISION_CLEAR = ConfigUtils.getDuration(CONFIG, "supervision.tcp.clear");
+
+	private static final class Supervision {
+		private static double floorTime(double now, double period) {
+	    	double precision = 1000d;
+	    	long t = (long) (now * precision);
+	    	long d = (long) (period * precision);
+	    	return (t - (t % d)) / precision;
+		}
+		
+		private final AtomicLong max = new AtomicLong(0L);
+		
+		public Supervision() {
+			double now = DateUtils.now();
+			double start = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
+			
+			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+
+			executor.scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					long m = max.get();
+					LOGGER.info("[TCPSERVER Supervision] max = {}", m);
+				}
+			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
+
+			executor.scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					long m = max.getAndSet(0L);
+					LOGGER.info("[TCPSERVER Supervision] (cleared) max = {}", m);
+				}
+			}, (long) (start * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
+		}
+		
+		public void setWriteMax(long newMax) {
+			while (true) {
+				long curMax = max.get();
+				if (curMax >= newMax) {
+					break;
+				}
+				boolean setSuccessful = max.compareAndSet(curMax, newMax);
+				if (setSuccessful) {
+					break;
+				}
+			}
+		}
+	}
+	
+	private static final Supervision SUPERVISION = (SUPERVISION_DISPLAY > 0d) ? new Supervision() : null;
+	
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder with(ByteBufferAllocator byteBufferAllocator);
 		Builder bind(Address bindAddress);
@@ -62,7 +120,7 @@ public final class TcpSocket implements Connecter {
 				if (connectAddress == null) {
 					throw new NullPointerException("connectAddress");
 				}
-				return new TcpSocket(ninioProvider.queue(1L), byteBufferAllocator, bindAddress, connectAddress);
+				return new TcpSocket(ninioProvider.queue(NinioPriority.LOW), byteBufferAllocator, bindAddress, connectAddress);
 			}
 		};
 	}
@@ -293,6 +351,10 @@ public final class TcpSocket implements Connecter {
 				toWriteQueue.add(new ToWrite(buffer, callback));
 				toWriteLength += buffer.remaining();
 				LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
+				
+				if (SUPERVISION != null) {
+					SUPERVISION.setWriteMax(toWriteLength);
+				}
 				
 				SocketChannel channel = currentChannel;
 				SelectionKey selectionKey = currentSelectionKey;

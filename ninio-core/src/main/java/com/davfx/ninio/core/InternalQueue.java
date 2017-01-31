@@ -28,7 +28,7 @@ final class InternalQueue implements Queue, AutoCloseable {
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 
-	public InternalQueue() {
+	public InternalQueue(NinioPriority priority) {
 		try {
 			selector = SelectorProvider.provider().openSelector();
 		} catch (IOException ioe) {

@@ -31,8 +31,8 @@ public final class UdpSocket implements Connecter {
 	private static final long SOCKET_WRITE_BUFFER_SIZE = CONFIG.getBytes("udp.socket.write").longValue();
 	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("udp.socket.read").longValue();
 
-	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "udp.supervision.display");
-	private static final double SUPERVISION_CLEAR = ConfigUtils.getDuration(CONFIG, "udp.supervision.clear");
+	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "supervision.udp.display");
+	private static final double SUPERVISION_CLEAR = ConfigUtils.getDuration(CONFIG, "supervision.udp.clear");
 
 	private static final class Supervision {
 		private static double floorTime(double now, double period) {
@@ -67,12 +67,9 @@ public final class UdpSocket implements Connecter {
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
-					long i = in.get();
-					long o = out.get();
+					long i = in.getAndSet(0L);
+					long o = out.getAndSet(0L);
 					LOGGER.info("[UDP Supervision] (cleared) out = {}, in = {}, lost = {} %", o, i, percent(o, i));
-
-					in.set(0L);
-					out.set(0L);
 				}
 			}, (long) (start * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
 		}
@@ -112,7 +109,7 @@ public final class UdpSocket implements Connecter {
 			
 			@Override
 			public Connecter create(NinioProvider ninioProvider) {
-				return new UdpSocket(ninioProvider.queue(0L), byteBufferAllocator, bindAddress);
+				return new UdpSocket(ninioProvider.queue(NinioPriority.HIGH), byteBufferAllocator, bindAddress);
 			}
 		};
 	}
