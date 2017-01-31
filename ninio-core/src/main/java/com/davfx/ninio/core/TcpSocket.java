@@ -208,7 +208,7 @@ public final class TcpSocket implements Connecter {
 										}
 									});
 				
-									//selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_READ);
+									selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_READ);
 									if (!toWriteQueue.isEmpty()) {
 										selectionKey.interestOps(selectionKey.interestOps() | SelectionKey.OP_WRITE);
 									}
