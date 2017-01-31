@@ -74,8 +74,7 @@ public final class TcpSocket implements Connecter {
 				if (curMax >= newMax) {
 					break;
 				}
-				boolean setSuccessful = max.compareAndSet(curMax, newMax);
-				if (setSuccessful) {
+				if (max.compareAndSet(curMax, newMax)) {
 					break;
 				}
 			}
