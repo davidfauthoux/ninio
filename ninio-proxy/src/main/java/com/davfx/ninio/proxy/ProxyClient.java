@@ -699,7 +699,7 @@ public final class ProxyClient implements ProxyProvider {
 						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES + Ints.BYTES + sendAddress.ip.length + Ints.BYTES + Ints.BYTES + sendBuffer.remaining());
 						b.put((byte) ProxyCommons.Commands.SEND_WITH_ADDRESS);
 						b.putInt(innerConnection.connectionId);
-						b.putInt(sendAddress.ip.length);
+						b.putInt(sendAddress.ip.length); //TODO Reduce to short?
 						b.put(sendAddress.ip);
 						b.putInt(sendAddress.port);
 						b.putInt(sendBuffer.remaining());
