@@ -155,6 +155,7 @@ public final class UdpSocket implements Connecter {
 					throw new IllegalStateException();
 				}
 				
+				//%% LOGGER.debug("Connecting UDP socket");
 				try {
 					if (closed) {
 						throw new IOException("Closed");
@@ -186,28 +187,33 @@ public final class UdpSocket implements Connecter {
 								}
 								
 								if (key.isReadable()) {
-									ByteBuffer readBuffer = byteBufferAllocator.allocate();
-									InetSocketAddress from;
-									try {
-										from = (InetSocketAddress) channel.receive(readBuffer);
-									} catch (IOException e) {
-										LOGGER.trace("Read failed", e);
-										disconnect(channel, selectionKey, callback, e);
-										return;
+									while (true) {
+										ByteBuffer readBuffer = byteBufferAllocator.allocate();
+										InetSocketAddress from;
+										try {
+											from = (InetSocketAddress) channel.receive(readBuffer);
+											if (from == null) {
+												break;
+											}
+										} catch (IOException e) {
+											LOGGER.trace("Read failed", e);
+											disconnect(channel, selectionKey, callback, e);
+											return;
+										}
+	
+										if (!readBuffer.hasRemaining()) {
+											LOGGER.error("Packet received too big: {} bytes", readBuffer.position());
+										}
+	
+										readBuffer.flip();
+										Address a = new Address(from.getAddress().getAddress(), from.getPort());
+										
+										if (SUPERVISION != null) {
+											SUPERVISION.incIn();
+										}
+										
+										callback.received(a, readBuffer);
 									}
-
-									if (!readBuffer.hasRemaining()) {
-										LOGGER.error("Packet received too big: {} bytes", readBuffer.position());
-									}
-
-									readBuffer.flip();
-									Address a = new Address(from.getAddress().getAddress(), from.getPort());
-									
-									if (SUPERVISION != null) {
-										SUPERVISION.incIn();
-									}
-									
-									callback.received(a, readBuffer);
 								} else if (key.isWritable()) {
 									while (true) {
 										ToWrite toWrite = toWriteQueue.peek();

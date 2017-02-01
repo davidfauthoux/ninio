@@ -100,7 +100,7 @@ final class UncipheringConnection implements Connection {
 					if (lengthBuffer.position() == lengthBuffer.capacity()) {
 						lengthBuffer.flip();
 						count = lengthBuffer.getInt();
-						lengthBuffer.rewind();
+						lengthBuffer.clear();
 						sequence++;
 					}
 				}
@@ -128,10 +128,10 @@ final class UncipheringConnection implements Connection {
 						throw new RuntimeException(e);
 					}
 					uncipheredFirstBuffer.flip();
-					firstBuffer.rewind();
+					firstBuffer.clear();
 					int firstLength = uncipheredFirstBuffer.getInt() + 4;
 					remainingBuffer = ByteBuffer.allocate(firstLength - uncipheredFirstBuffer.capacity());
-					uncipheredFirstBuffer.rewind();
+					uncipheredFirstBuffer.clear();
 					state = 1;
 				}
 			}
@@ -189,7 +189,7 @@ final class UncipheringConnection implements Connection {
 					ByteBuffer rbb = uncipheredRemainingBuffer;
 					uncipheredFirstBuffer = null;
 					uncipheredRemainingBuffer = null;
-					macBuffer.rewind();
+					macBuffer.clear();
 
 					if (!valid) {
 						LOGGER.error("Invalid MAC");

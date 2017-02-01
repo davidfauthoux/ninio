@@ -28,7 +28,7 @@ final class SshPacketConnection implements Connection {
 				if (lengthBuffer.position() == lengthBuffer.capacity()) {
 					lengthBuffer.flip();
 					length = lengthBuffer.getInt();
-					lengthBuffer.rewind();
+					lengthBuffer.clear();
 					state = 1;
 				}
 			}

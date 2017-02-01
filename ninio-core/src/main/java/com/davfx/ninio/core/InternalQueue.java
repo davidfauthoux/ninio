@@ -28,7 +28,7 @@ final class InternalQueue implements Queue, AutoCloseable {
 	private final Selector selector;
 	private final ConcurrentLinkedQueue<Runnable> toRun = new ConcurrentLinkedQueue<Runnable>(); // Using LinkedBlockingQueue my prevent OutOfMemory errors but may DEADLOCK
 
-	public InternalQueue(NinioPriority priority) {
+	public InternalQueue(final NinioPriority priority) {
 		try {
 			selector = SelectorProvider.provider().openSelector();
 		} catch (IOException ioe) {
@@ -57,13 +57,13 @@ final class InternalQueue implements Queue, AutoCloseable {
 								try {
 									((SelectionKeyVisitor) key.attachment()).visit(key);
 								} catch (Throwable e) {
-									LOGGER.error("Error in event handling", e);
+									LOGGER.error("[{}] Error in event handling", priority, e);
 								}
 							}
 							s.clear();
 						}
 					} catch (Throwable e) {
-						LOGGER.error("Error in selector ", e);
+						LOGGER.error("[{}] Error in selector ", priority, e);
 						try {
 							Thread.sleep((long) (WAIT_ON_ERROR * 1000d));
 						} catch (InterruptedException ie) {
@@ -75,7 +75,7 @@ final class InternalQueue implements Queue, AutoCloseable {
 						try {
 							r.run();
 						} catch (Throwable e) {
-							LOGGER.error("Error in running task", e);
+							LOGGER.error("[{}] Error in running task", priority, e);
 						}
 					}
 				}

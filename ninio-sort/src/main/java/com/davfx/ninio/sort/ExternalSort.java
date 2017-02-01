@@ -240,7 +240,7 @@ public final class ExternalSort<T> {
 					cache = null;
 					return;
 				}
-				sizeBuffer.rewind();
+				sizeBuffer.clear();
 				readFully(sizeBuffer);
 				sizeBuffer.flip();
 				ByteBuffer b = ByteBuffer.allocate(sizeBuffer.getInt());
@@ -294,7 +294,7 @@ public final class ExternalSort<T> {
 		public void write(T t) throws IOException {
 			ByteBuffer b = toByteBuffer.apply(t);
 			if (b != null) {
-				sizeBuffer.rewind();
+				sizeBuffer.clear();
 				sizeBuffer.putInt(b.remaining());
 				sizeBuffer.flip();
 				r.write(sizeBuffer);

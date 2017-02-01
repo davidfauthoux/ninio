@@ -205,20 +205,26 @@ public final class TcpSocket implements Connecter {
 											}
 											
 											if (key.isReadable()) {
-												ByteBuffer readBuffer = byteBufferAllocator.allocate();
-												try {
-													if (channel.read(readBuffer) < 0) {
-														disconnect(channel, inboundKey, selectionKey, callback, null);
+												while (true) {
+													ByteBuffer readBuffer = byteBufferAllocator.allocate();
+													try {
+														int r = channel.read(readBuffer);
+														if (r == 0) {
+															break;
+														}
+														if (r < 0) {
+															disconnect(channel, inboundKey, selectionKey, callback, null);
+															return;
+														}
+													} catch (IOException e) {
+														LOGGER.trace("Read failed", e);
+														disconnect(channel, inboundKey, selectionKey, callback, e);
 														return;
 													}
-												} catch (IOException e) {
-													LOGGER.trace("Read failed", e);
-													disconnect(channel, inboundKey, selectionKey, callback, e);
-													return;
+	
+													readBuffer.flip();
+													callback.received(null, readBuffer);
 												}
-
-												readBuffer.flip();
-												callback.received(null, readBuffer);
 											} else if (key.isWritable()) {
 												while (true) {
 													ToWrite toWrite = toWriteQueue.peek();

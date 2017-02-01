@@ -249,6 +249,7 @@ public final class TcpSocketServer implements Listener {
 									queue.execute(new Runnable() {
 										@Override
 										public void run() {
+											//%% LOGGER.debug("Connecting server-side TCP socket");
 											try {
 												if (closed) {
 													throw new IOException("Closed");
@@ -273,20 +274,26 @@ public final class TcpSocketServer implements Listener {
 																return;
 															}
 															if (key.isReadable()) {
-																final ByteBuffer readBuffer = byteBufferAllocator.allocate();
-																try {
-																	if (outboundChannel.read(readBuffer) < 0) {
-																		context.disconnectAndRemove(null);
+																while (true) {
+																	final ByteBuffer readBuffer = byteBufferAllocator.allocate();
+																	try {
+																		int r = outboundChannel.read(readBuffer);
+																		if (r == 0) {
+																			break;
+																		}
+																		if (r < 0) {
+																			context.disconnectAndRemove(null);
+																			return;
+																		}
+																	} catch (IOException e) {
+																		LOGGER.trace("Connection failed", e);
+																		context.disconnectAndRemove(e);
 																		return;
 																	}
-																} catch (IOException e) {
-																	LOGGER.trace("Connection failed", e);
-																	context.disconnectAndRemove(e);
-																	return;
+																	
+																	readBuffer.flip();
+																	connection.received(null, readBuffer);
 																}
-																
-																readBuffer.flip();
-																connection.received(null, readBuffer);
 															} else if (key.isWritable()) {
 																while (true) {
 																	ToWrite toWrite = context.toWriteQueue.peek();
