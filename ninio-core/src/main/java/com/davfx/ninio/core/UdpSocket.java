@@ -8,6 +8,7 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.Deque;
 import java.util.LinkedList;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -46,8 +47,10 @@ public final class UdpSocket implements Connecter {
 			return String.format("%.2f", ((double) (out - in)) * 100d / ((double) out));
 		}
 	
-		private final AtomicLong in = new AtomicLong(0L);
-		private final AtomicLong out = new AtomicLong(0L);
+		private final AtomicLong inPackets = new AtomicLong(0L);
+		private final AtomicLong outPackets = new AtomicLong(0L);
+		private final AtomicLong inBytes = new AtomicLong(0L);
+		private final AtomicLong outBytes = new AtomicLong(0L);
 		
 		public Supervision() {
 			double now = DateUtils.now();
@@ -58,27 +61,33 @@ public final class UdpSocket implements Connecter {
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
-					long i = in.get();
-					long o = out.get();
-					LOGGER.info("[UDP Supervision] out = {}, in = {}, lost = {} %", o, i, percent(o, i));
+					long ip = inPackets.get();
+					long ib = inBytes.get();
+					long op = outPackets.get();
+					long ob = outBytes.get();
+					LOGGER.info("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
 			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
-					long i = in.getAndSet(0L);
-					long o = out.getAndSet(0L);
-					LOGGER.info("[UDP Supervision] (cleared) out = {}, in = {}, lost = {} %", o, i, percent(o, i));
+					long ip = inPackets.getAndSet(0L);
+					long ib = inBytes.getAndSet(0L);
+					long op = outPackets.getAndSet(0L);
+					long ob = outBytes.getAndSet(0L);
+					LOGGER.info("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
 			}, (long) (start * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
 		}
 		
-		public void incIn() {
-			in.incrementAndGet();
+		public void incIn(long bytes) {
+			inPackets.incrementAndGet();
+			inBytes.addAndGet(bytes);
 		}
-		public void incOut() {
-			out.incrementAndGet();
+		public void incOut(long bytes) {
+			outPackets.incrementAndGet();
+			outBytes.addAndGet(bytes);
 		}
 	}
 	
@@ -137,6 +146,8 @@ public final class UdpSocket implements Connecter {
 	private Connection connectCallback = null;
 	private boolean closed = false;
 	
+	//TODO rm //private final Executor eee = Executors.newSingleThreadExecutor();
+	
 	public UdpSocket(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress) {
 		this.queue = queue;
 		this.byteBufferAllocator = byteBufferAllocator;
@@ -174,6 +185,8 @@ public final class UdpSocket implements Connecter {
 						final SelectionKey selectionKey = queue.register(channel);
 						currentSelectionKey = selectionKey;
 						
+						//final ByteBuffer readBuffer = byteBufferAllocator.allocate();
+
 						selectionKey.attach(new SelectionKeyVisitor() {
 							@Override
 							public void visit(final SelectionKey key) {
@@ -189,6 +202,7 @@ public final class UdpSocket implements Connecter {
 								if (key.isReadable()) {
 									while (true) {
 										ByteBuffer readBuffer = byteBufferAllocator.allocate();
+										//readBuffer.clear();//TODO rm
 										InetSocketAddress from;
 										try {
 											from = (InetSocketAddress) channel.receive(readBuffer);
@@ -209,10 +223,21 @@ public final class UdpSocket implements Connecter {
 										Address a = new Address(from.getAddress().getAddress(), from.getPort());
 										
 										if (SUPERVISION != null) {
-											SUPERVISION.incIn();
+											SUPERVISION.incIn(readBuffer.remaining());
 										}
 										
 										callback.received(a, readBuffer);
+										/*//TODO rm
+										final Address aaa = a;
+										eee.execute(new Runnable() {
+											@Override
+											public void run() {
+												final byte[] bbb = new byte[readBuffer.remaining()];
+												System.arraycopy(readBuffer.array(), readBuffer.arrayOffset() + readBuffer.position(), bbb, 0, bbb.length);
+												callback.received(aaa, ByteBuffer.wrap(bbb));
+											}
+										});
+										*/
 									}
 								} else if (key.isWritable()) {
 									while (true) {
@@ -227,9 +252,12 @@ public final class UdpSocket implements Connecter {
 											try {
 												LOGGER.trace("Actual write buffer: {} bytes", size);
 												channel.write(toWrite.buffer);
+												if (toWrite.buffer.hasRemaining()) {
+													throw new IOException("Packet was not entirely written");
+												}
 
 												if (SUPERVISION != null) {
-													SUPERVISION.incOut();
+													SUPERVISION.incOut(size);
 												}
 											} catch (IOException e) {
 												LOGGER.trace("Write failed", e);
@@ -263,7 +291,7 @@ public final class UdpSocket implements Connecter {
 												}
 
 												if (SUPERVISION != null) {
-													SUPERVISION.incOut();
+													SUPERVISION.incOut(size);
 												}
 
 												toWriteLength -= size; //%% - toWrite.buffer.remaining();
