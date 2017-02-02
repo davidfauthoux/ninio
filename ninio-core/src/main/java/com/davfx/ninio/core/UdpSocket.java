@@ -1,6 +1,8 @@
 package com.davfx.ninio.core;
 
 import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
@@ -8,7 +10,7 @@ import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.util.Deque;
 import java.util.LinkedList;
-import java.util.concurrent.Executor;
+import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -21,9 +23,97 @@ import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.DateUtils;
+import com.davfx.ninio.util.Wait;
 import com.typesafe.config.Config;
 
+// MacOS X : sudo sysctl -w net.inet.udp.recvspace=8000000
+// Linux: sysctl -w net.core.rmem_max=8000000
 public final class UdpSocket implements Connecter {
+	
+	public static final class Test {
+		public static final class Send {
+			private static final Logger INNER_LOGGER = LoggerFactory.getLogger(Receive.class);
+
+			private static double floorTime(double now, double period) {
+		    	double precision = 1000d;
+		    	long t = (long) (now * precision);
+		    	long d = (long) (period * precision);
+		    	return (t - (t % d)) / precision;
+			}
+			public static void main(String[] args) throws Exception {
+				try (DatagramSocket s = new DatagramSocket()) {
+					InetAddress a = InetAddress.getByName(System.getProperty("host", "127.0.0.1"));
+					int port = Integer.parseInt(System.getProperty("port", "9099"));
+					byte[] buffer = new byte[Integer.parseInt(System.getProperty("size", "100"))];
+					Random random = new Random(System.currentTimeMillis());
+					random.nextBytes(buffer);
+					double t = Double.parseDouble(System.getProperty("wait", "0"));
+					long k = Long.parseLong(System.getProperty("burst", "1000000"));
+					double display = Double.parseDouble(System.getProperty("display", "10"));
+					boolean stop = Boolean.parseBoolean(System.getProperty("stop", "true"));
+					long n = 0L;
+					INNER_LOGGER.info("Sending to {}:{}", a, port);
+
+					double now = DateUtils.now();
+					double timeToDisplay = stop ? 0d : now + display - (now - floorTime(now, display));
+					double last = now;
+
+					while (true) {
+						for (int i = 0; i < k; i++) {
+							DatagramPacket p = new DatagramPacket(buffer, buffer.length, a, port);
+							s.send(p);
+							n++;
+						}
+						if (t > 0d) {
+							Thread.sleep((long) (t * 1000d));
+						}
+						double tn = DateUtils.now();
+						if (tn >= timeToDisplay) {
+							INNER_LOGGER.info("{} packets sent ({} KBps per second)", n, Math.round(100d * ((n * buffer.length) / 1000d) / (tn - last)) / 100d);
+							n = 0L;
+							timeToDisplay += display;
+							last = tn;
+							if (stop) {
+								break;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		public static final class Receive {
+			private static final Logger INNER_LOGGER = LoggerFactory.getLogger(Receive.class);
+
+			public static void main(String[] args) throws Exception {
+				InetAddress a = InetAddress.getByName(System.getProperty("host", "0.0.0.0"));
+				int port = Integer.parseInt(System.getProperty("port", "9099"));
+
+				try (Ninio ninio = Ninio.create()) {
+					try (Connecter server = ninio.create(UdpSocket.builder().bind(new Address(a.getAddress(), port)))) {
+						server.connect(
+							new Connection() {
+								@Override
+								public void failed(IOException ioe) {
+									INNER_LOGGER.error("Failed", ioe);
+								}
+								@Override
+								public void connected(Address address) {
+								}
+								@Override
+								public void closed() {
+								}
+								@Override
+								public void received(Address address, ByteBuffer buffer) {
+								}
+						});
+						new Wait().waitFor();
+					}
+				}
+			}
+		}
+	}
+	
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(UdpSocket.class);
 
@@ -65,7 +155,7 @@ public final class UdpSocket implements Connecter {
 					long ib = inBytes.get();
 					long op = outPackets.get();
 					long ob = outBytes.get();
-					LOGGER.info("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
+					LOGGER.debug("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
 			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 
@@ -146,8 +236,6 @@ public final class UdpSocket implements Connecter {
 	private Connection connectCallback = null;
 	private boolean closed = false;
 	
-	//TODO rm //private final Executor eee = Executors.newSingleThreadExecutor();
-	
 	public UdpSocket(Queue queue, ByteBufferAllocator byteBufferAllocator, Address bindAddress) {
 		this.queue = queue;
 		this.byteBufferAllocator = byteBufferAllocator;
@@ -185,8 +273,6 @@ public final class UdpSocket implements Connecter {
 						final SelectionKey selectionKey = queue.register(channel);
 						currentSelectionKey = selectionKey;
 						
-						//final ByteBuffer readBuffer = byteBufferAllocator.allocate();
-
 						selectionKey.attach(new SelectionKeyVisitor() {
 							@Override
 							public void visit(final SelectionKey key) {
@@ -202,7 +288,6 @@ public final class UdpSocket implements Connecter {
 								if (key.isReadable()) {
 									while (true) {
 										ByteBuffer readBuffer = byteBufferAllocator.allocate();
-										//readBuffer.clear();//TODO rm
 										InetSocketAddress from;
 										try {
 											from = (InetSocketAddress) channel.receive(readBuffer);
@@ -225,19 +310,9 @@ public final class UdpSocket implements Connecter {
 										if (SUPERVISION != null) {
 											SUPERVISION.incIn(readBuffer.remaining());
 										}
-										
+										long start = System.nanoTime();
+										while((start + 100000L) >= System.nanoTime());
 										callback.received(a, readBuffer);
-										/*//TODO rm
-										final Address aaa = a;
-										eee.execute(new Runnable() {
-											@Override
-											public void run() {
-												final byte[] bbb = new byte[readBuffer.remaining()];
-												System.arraycopy(readBuffer.array(), readBuffer.arrayOffset() + readBuffer.position(), bbb, 0, bbb.length);
-												callback.received(aaa, ByteBuffer.wrap(bbb));
-											}
-										});
-										*/
 									}
 								} else if (key.isWritable()) {
 									while (true) {

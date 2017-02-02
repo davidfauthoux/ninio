@@ -12,6 +12,10 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,12 +23,60 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.dependencies.Dependencies;
 import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
+import com.davfx.ninio.util.DateUtils;
+import com.davfx.ninio.util.Wait;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.typesafe.config.Config;
 
 public final class TcpdumpSocket implements Connecter {
 	
+	public static final class Test {
+		public static final class Receive {
+			private static final Logger INNER_LOGGER = LoggerFactory.getLogger(Receive.class);
+
+			// sudo chmod go=r /dev/bpf*
+			public static void main(String[] args) throws Exception {
+				InetAddress a = InetAddress.getByName(System.getProperty("host", "0.0.0.0"));
+				int port = Integer.parseInt(System.getProperty("port", "9099"));
+
+				String interfaceId = System.getProperty("interface", "lo");
+				String modeString = System.getProperty("mode", "raw");
+				TcpdumpMode mode;
+				if (modeString.equals("hex")) {
+					mode = TcpdumpMode.HEX;
+				} else if (modeString.equals("raw")) {
+					mode = TcpdumpMode.RAW;
+				} else {
+					throw new Exception("Bad mode (only hex|raw allowed): " + modeString);
+				}
+				String rule = System.getProperty("rule", "dst port " + port);
+				
+				try (Ninio ninio = Ninio.create()) {
+					try (Connecter server = ninio.create(TcpdumpSocket.builder().on(interfaceId).mode(mode).rule(rule).bind(new Address(a.getAddress(), port)))) {
+						server.connect(
+							new Connection() {
+								@Override
+								public void failed(IOException ioe) {
+									INNER_LOGGER.error("Failed", ioe);
+								}
+								@Override
+								public void connected(Address address) {
+								}
+								@Override
+								public void closed() {
+								}
+								@Override
+								public void received(Address address, ByteBuffer buffer) {
+								}
+						});
+						new Wait().waitFor();
+					}
+				}
+			}
+		}
+	}
+
 	public static interface Builder extends NinioBuilder<Connecter> {
 		Builder on(String interfaceId);
 		Builder mode(TcpdumpMode mode);
@@ -36,6 +88,67 @@ public final class TcpdumpSocket implements Connecter {
 
 	private static final String TCPDUMP_DEFAULT_INTERFACE_ID = CONFIG.getString("tcpdump.interface");
 	private static final String TCPDUMP_DEFAULT_RULE = CONFIG.getString("tcpdump.rule");
+
+	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "supervision.tcpdump.display");
+	private static final double SUPERVISION_CLEAR = ConfigUtils.getDuration(CONFIG, "supervision.tcpdump.clear");
+
+	private static final class Supervision {
+		private static double floorTime(double now, double period) {
+	    	double precision = 1000d;
+	    	long t = (long) (now * precision);
+	    	long d = (long) (period * precision);
+	    	return (t - (t % d)) / precision;
+		}
+		
+		private static String percent(long out, long in) {
+			return String.format("%.2f", ((double) (out - in)) * 100d / ((double) out));
+		}
+	
+		private final AtomicLong inPackets = new AtomicLong(0L);
+		private final AtomicLong outPackets = new AtomicLong(0L);
+		private final AtomicLong inBytes = new AtomicLong(0L);
+		private final AtomicLong outBytes = new AtomicLong(0L);
+		
+		public Supervision() {
+			double now = DateUtils.now();
+			double start = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
+			
+			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+
+			executor.scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					long ip = inPackets.get();
+					long ib = inBytes.get();
+					long op = outPackets.get();
+					long ob = outBytes.get();
+					LOGGER.debug("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
+				}
+			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
+
+			executor.scheduleAtFixedRate(new Runnable() {
+				@Override
+				public void run() {
+					long ip = inPackets.getAndSet(0L);
+					long ib = inBytes.getAndSet(0L);
+					long op = outPackets.getAndSet(0L);
+					long ob = outBytes.getAndSet(0L);
+					LOGGER.info("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
+				}
+			}, (long) (start * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
+		}
+		
+		public void incIn(long bytes) {
+			inPackets.incrementAndGet();
+			inBytes.addAndGet(bytes);
+		}
+		public void incOut(long bytes) {
+			outPackets.incrementAndGet();
+			outBytes.addAndGet(bytes);
+		}
+	}
+	
+	private static final Supervision SUPERVISION = (SUPERVISION_DISPLAY > 0d) ? new Supervision() : null;
 
 	public static Builder builder() {
 		return new Builder() {
@@ -223,6 +336,10 @@ public final class TcpdumpSocket implements Connecter {
 						tcpdumpReader.read(input, new TcpdumpReader.Handler() {
 							@Override
 							public void handle(double timestamp, Address sourceAddress, Address destinationAddress, ByteBuffer buffer) {
+								if (SUPERVISION != null) {
+									SUPERVISION.incIn(buffer.remaining());
+								}
+
 								callback.received(sourceAddress, buffer);
 							}
 						});
@@ -290,6 +407,10 @@ public final class TcpdumpSocket implements Connecter {
 		}
 
 		LOGGER.trace("Sending datagram to: {}", address);
+
+		if (SUPERVISION != null) {
+			SUPERVISION.incOut(buffer.remaining());
+		}
 
 		try {
 			if (closed) {
