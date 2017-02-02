@@ -8,6 +8,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.util.DateUtils;
 import com.davfx.ninio.util.MemoryCache;
 
 public final class InMemoryCache {
@@ -281,6 +282,8 @@ public final class InMemoryCache {
 				return;
 			}
 
+			double now = DateUtils.now();
+			
 			boolean send;
 			Connection callback;
 			ByteBuffer data;
@@ -295,8 +298,17 @@ public final class InMemoryCache {
 				}
 	
 				DataCache<T> subs = cache.requestsByKey.get(context.key);
+
+				if (subs != null) {
+					if (subs.data == null) {
+						if (now >= (subs.creation + requestExpiration)) {
+							subs = null;
+						}
+					}
+				}
+				
 				if (subs == null) {
-					subs = new DataCache<T>(requestExpiration);
+					subs = new DataCache<T>(now, requestExpiration);
 					cache.requestsByKey.put(context.key, subs);
 					send = true;
 					LOGGER.trace("New request (address = {}, key = {}, sub = {}) - {}", address, context.key, context.sub, cache.subToKey);
@@ -307,10 +319,6 @@ public final class InMemoryCache {
 				
 				data = subs.data;
 				
-				if (data != null) {
-					send = false;
-				}
-
 				if (send || (data == null)) {
 					subs.subs.put(context.sub, null);
 					cache.subToKey.put(context.sub, context.key);
@@ -395,9 +403,11 @@ public final class InMemoryCache {
 	}
 	
 	private static final class DataCache<T> {
+		public final double creation;
 		public ByteBuffer data = null;
 		public final MemoryCache<T, Void> subs;
-		public DataCache(double requestExpiration) {
+		public DataCache(double now, double requestExpiration) {
+			creation = now;
 			subs = MemoryCache.<T, Void> builder().expireAfterWrite(requestExpiration).build();
 		}
 	}
@@ -405,7 +415,7 @@ public final class InMemoryCache {
 		public final MemoryCache<String, DataCache<T>> requestsByKey;
 		public final MemoryCache<T, String> subToKey;
 		public CacheByAddress(double dataExpiration, double requestExpiration) {
-			requestsByKey = MemoryCache.<String, DataCache<T>> builder().expireAfterAccess(dataExpiration).build();
+			requestsByKey = MemoryCache.<String, DataCache<T>> builder().expireAfterWrite(dataExpiration).build();
 			subToKey = MemoryCache.<T, String> builder().expireAfterWrite(requestExpiration).build();
 		}
 	}
