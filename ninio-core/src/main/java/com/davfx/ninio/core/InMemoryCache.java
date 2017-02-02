@@ -306,6 +306,10 @@ public final class InMemoryCache {
 				}
 				
 				data = subs.data;
+				
+				if (data != null) {
+					send = false;
+				}
 
 				if (send || (data == null)) {
 					subs.subs.put(context.sub, null);
