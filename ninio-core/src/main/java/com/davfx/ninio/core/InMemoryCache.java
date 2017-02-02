@@ -87,7 +87,7 @@ public final class InMemoryCache {
 
 		public InnerConnecter(/*File database, */double dataExpiration, double requestExpiration, Interpreter<T> interpreter, Connecter wrappee) {
 			this.dataExpiration = dataExpiration;
-			this.requestExpiration = requestExpiration;
+			this.requestExpiration = Math.min(dataExpiration, requestExpiration);
 			this.interpreter = interpreter;
 			this.wrappee = wrappee;
 			
