@@ -507,7 +507,7 @@ public final class HttpClient implements HttpConnecter {
 						
 						if (requestKeepAlive) {
 							//%% LOGGER.trace("Connections = {}", reusableConnectors);
-							List<Long> closed = new LinkedList<>();
+							Map<Long, ReusableConnector> closed = new HashMap<>();
 							
 							for (Map.Entry<Long, ReusableConnector> e : reusableConnectors.entrySet()) {
 								long reusedId = e.getKey();
@@ -515,8 +515,7 @@ public final class HttpClient implements HttpConnecter {
 								if (((pipelining && reusedConnector.reusable) || (!pipelining && (reusedConnector.receiver == null))) && reusedConnector.address.equals(request.address)) {
 									if (now >= reusedConnector.closeTimestamp) {
 										LOGGER.trace("Connection running out of time (id = {})", id);
-										reusedConnector.failAllNext(new IOException("Out of time"));
-										closed.add(reusedId);
+										closed.put(reusedId, reusedConnector);
 										continue;
 									}
 
@@ -533,7 +532,10 @@ public final class HttpClient implements HttpConnecter {
 								}
 							}
 							
-							for (Long reusedId : closed) {
+							for (Map.Entry<Long, ReusableConnector> e : closed.entrySet()) {
+								long reusedId = e.getKey();
+								ReusableConnector reusedConnector = e.getValue();
+								reusedConnector.failAllNext(new IOException("Out of time"));
 								reusableConnectors.remove(reusedId);
 							}
 						}
