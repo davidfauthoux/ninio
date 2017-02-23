@@ -119,6 +119,7 @@ public final class HttpClient implements HttpConnecter {
 
 		private List<ToSend> toSend = new LinkedList<>();
 		private Connecter connecter = null;
+		private boolean closed = false;
 		
 		@Override
 		public void send(Address address, ByteBuffer buffer, SendCallback callback) {
@@ -139,7 +140,13 @@ public final class HttpClient implements HttpConnecter {
 				callbacks = toSend;
 				toSend = null;
 			}
-			connecter = null;
+			
+			if (connecter != null) {
+				connecter.close();
+				connecter = null;
+			}
+			
+			closed = true;
 			
 			if (callbacks != null) {
 				for (ToSend s : callbacks) {
@@ -153,6 +160,11 @@ public final class HttpClient implements HttpConnecter {
 		}
 		
 		public void set(Connecter connecter) {
+			if (closed) {
+				connecter.close();
+				return;
+			}
+			
 			this.connecter = connecter;
 
 			for (ToSend s : toSend) {
