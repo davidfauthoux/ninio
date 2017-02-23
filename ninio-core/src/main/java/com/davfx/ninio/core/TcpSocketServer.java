@@ -47,7 +47,7 @@ public final class TcpSocketServer implements Listener {
 		
 		public Supervision() {
 			double now = DateUtils.now();
-			double start = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
+			double startDisplay = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
 			
 			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
 
@@ -57,7 +57,7 @@ public final class TcpSocketServer implements Listener {
 					long m = max.getAndSet(0L);
 					LOGGER.info("[TCPSERVER Supervision] max = {} Kb", m / 1000d);
 				}
-			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
+			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 		}
 		
 		public void setWriteMax(long newMax) {

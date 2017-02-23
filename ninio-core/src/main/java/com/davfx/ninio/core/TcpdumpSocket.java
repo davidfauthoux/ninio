@@ -111,7 +111,8 @@ public final class TcpdumpSocket implements Connecter {
 		
 		public Supervision() {
 			double now = DateUtils.now();
-			double start = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
+			double startDisplay = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
+			double startClear = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
 			
 			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
 
@@ -124,7 +125,7 @@ public final class TcpdumpSocket implements Connecter {
 					long ob = outBytes.get();
 					LOGGER.debug("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
-			}, (long) (start * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
+			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
@@ -135,7 +136,7 @@ public final class TcpdumpSocket implements Connecter {
 					long ob = outBytes.getAndSet(0L);
 					LOGGER.info("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
-			}, (long) (start * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
+			}, (long) (startClear * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
 		}
 		
 		public void incIn(long bytes) {
