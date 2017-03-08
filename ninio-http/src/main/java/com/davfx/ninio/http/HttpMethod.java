@@ -5,7 +5,8 @@ public enum HttpMethod {
 	POST("POST"),
 	HEAD("HEAD"),
 	PUT("PUT"),
-	DELETE("DELETE");
+	DELETE("DELETE"),
+	OPTIONS("OPTIONS");
 
 	private final String out;
 
