@@ -6,10 +6,9 @@ release.properties
 .settings
 .project
 .classpath
-/.idea/
-/*.iml
+.idea/
+*.iml
 *.class
-
 /bin/
 
 **.versionsBackup
