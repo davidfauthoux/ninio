@@ -27,6 +27,7 @@ import com.davfx.ninio.http.HttpResponse;
 import com.davfx.ninio.http.HttpSpecification;
 import com.davfx.ninio.http.HttpStatus;
 import com.davfx.ninio.http.dependencies.Dependencies;
+import com.davfx.ninio.http.service.HttpController.Http;
 import com.davfx.ninio.http.service.HttpController.HttpAsyncOutput;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.SerialExecutor;
@@ -145,7 +146,7 @@ public final class HttpService implements HttpListeningHandler {
 				execute(new Runnable() {
 					@Override
 					public void run() {
-						HttpController.Http r = null;
+						HttpController.Http r = Http.notFound();
 						
 						for (HttpServiceHandler h : handlers) {
 							try {
@@ -202,17 +203,9 @@ public final class HttpService implements HttpListeningHandler {
 								}
 							} catch (Exception e) {
 								LOGGER.error("Http service error", e);
-								r = null;
-								HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.INTERNAL_SERVER_ERROR, HttpMessage.INTERNAL_SERVER_ERROR, ImmutableMultimap.of(HttpHeaders.CONTENT_TYPE, HttpContentType.plainText())));
-								sender.send(ByteBuffer.wrap(e.getMessage().getBytes(Charsets.UTF_8)), new Nop());
-								sender.finish();
+								r = Http.internalServerError();
 								break;
 							}
-						}
-
-						if (r == null) {
-							HttpContentSender sender = responseHandler.send(new HttpResponse(HttpStatus.NOT_FOUND, HttpMessage.NOT_FOUND));
-							sender.finish();
 						}
 
 						synchronized (lock) {
