@@ -55,7 +55,7 @@ public final class TcpSocketServer implements Listener {
 				@Override
 				public void run() {
 					long m = max.getAndSet(0L);
-					LOGGER.info("[TCPSERVER Supervision] max = {} Kb", m / 1000d);
+					LOGGER.debug("[TCPSERVER Supervision] max = {} Kb", m / 1000d);
 				}
 			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 		}

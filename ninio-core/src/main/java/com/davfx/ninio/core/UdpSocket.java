@@ -167,7 +167,7 @@ public final class UdpSocket implements Connecter {
 					long ib = inBytes.getAndSet(0L);
 					long op = outPackets.getAndSet(0L);
 					long ob = outBytes.getAndSet(0L);
-					LOGGER.info("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
+					LOGGER.debug("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
 			}, (long) (startClear * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
 		}
