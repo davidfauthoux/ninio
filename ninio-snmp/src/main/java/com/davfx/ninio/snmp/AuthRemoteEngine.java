@@ -24,7 +24,7 @@ public final class AuthRemoteEngine {
 	
 	private int bootCount = 0;
 	private int resetTime = 0;
-	private byte[] id = new byte[0];
+	private byte[] id = null;
 
 	public final AuthRemoteSpecification authRemoteSpecification;
 	private final MessageDigest messageDigest;

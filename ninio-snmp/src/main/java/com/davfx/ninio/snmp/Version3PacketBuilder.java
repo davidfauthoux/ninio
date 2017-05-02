@@ -94,9 +94,9 @@ public final class Version3PacketBuilder {
 		PrivacyBerPacket priv = new PrivacyBerPacket();
 		
 		root.add(new BytesSequenceBerPacket(new SequenceBerPacket(BerConstants.SEQUENCE)
-				.add(new BytesBerPacket(ByteBuffer.wrap(authEngine.getId())))
-				.add(new IntegerBerPacket(authEngine.getBootCount() == 0 ? 1 : authEngine.getBootCount()))
-				.add(new IntegerBerPacket(authEngine.getTime() == 0 ? 1 : authEngine.getTime()))
+				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
+				.add(new IntegerBerPacket((authEngine.getBootCount() == 0) ? 1 : authEngine.getBootCount()))
+				.add(new IntegerBerPacket((authEngine.getTime() == 0) ? 1 : authEngine.getTime()))
 				.add(new BytesBerPacket(BerPacketUtils.bytes(authEngine.getAuthLogin())))
 				.add(auth)
 				.add(priv)));
