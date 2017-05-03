@@ -120,8 +120,8 @@ Java_com_davfx_ninio_core_NativeRawSocket__1_1socket
 	settimeout(s, SO_SNDTIMEO, 0);
 	settimeout(s, SO_RCVTIMEO, 0);
 	setintsockopt(s, IPPROTO_IP, IP_HDRINCL, 0);
-	//setintsockopt(s, SOL_SOCKET, SO_SNDBUF, size);
-	//setintsockopt(s, SOL_SOCKET, SO_RCVBUF, size);
+	/* setintsockopt(s, SOL_SOCKET, SO_SNDBUF, size); */
+	/* setintsockopt(s, SOL_SOCKET, SO_RCVBUF, size); */
 	return s;
 }
 
