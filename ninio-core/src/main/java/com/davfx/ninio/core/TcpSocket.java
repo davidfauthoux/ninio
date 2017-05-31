@@ -213,6 +213,7 @@ public final class TcpSocket implements Connecter {
 															break;
 														}
 														if (r < 0) {
+															LOGGER.trace("Connection closed by peer");
 															disconnect(channel, inboundKey, selectionKey, callback, null);
 															return;
 														}

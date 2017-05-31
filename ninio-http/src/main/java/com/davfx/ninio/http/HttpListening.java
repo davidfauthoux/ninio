@@ -313,7 +313,7 @@ public final class HttpListening implements Listening {
 													} else {
 														LOGGER.trace("Actually closed");
 														closed = true;
-														// Will be closed by client // connector.close();
+														connecting.close();
 													}
 												}
 												

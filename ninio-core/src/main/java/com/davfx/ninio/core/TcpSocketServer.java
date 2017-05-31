@@ -282,6 +282,7 @@ public final class TcpSocketServer implements Listener {
 																			break;
 																		}
 																		if (r < 0) {
+																			LOGGER.trace("Connection closed by peer");
 																			context.disconnectAndRemove(null);
 																			return;
 																		}
