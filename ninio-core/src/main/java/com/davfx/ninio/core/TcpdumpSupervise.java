@@ -95,7 +95,7 @@ public final class TcpdumpSupervise {
 		double startDisplay = supervisionDisplay - (now - floorTime(now, supervisionDisplay));
 		double startClear = supervisionClear - (now - floorTime(now, supervisionClear));
 		
-		ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+		ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(TcpdumpSupervise.class, true));
 
 		executor.scheduleAtFixedRate(new Runnable() {
 			@Override

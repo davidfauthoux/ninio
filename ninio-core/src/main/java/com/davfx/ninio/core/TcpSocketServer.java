@@ -49,13 +49,13 @@ public final class TcpSocketServer implements Listener {
 			double now = DateUtils.now();
 			double startDisplay = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
 			
-			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(TcpSocketServer.Supervision.class, true));
 
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
 					long m = max.getAndSet(0L);
-					LOGGER.debug("[TCPSERVER Supervision] max = {} Kb", m / 1000d);
+					LOGGER.trace("[TCPSERVER Supervision] max = {} Kb", m / 1000d);
 				}
 			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 		}

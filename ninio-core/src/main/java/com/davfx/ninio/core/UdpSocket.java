@@ -147,7 +147,7 @@ public final class UdpSocket implements Connecter {
 			double startDisplay = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
 			double startClear = SUPERVISION_CLEAR - (now - floorTime(now, SUPERVISION_CLEAR));
 			
-			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.Supervision.class, true));
 
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
@@ -156,7 +156,7 @@ public final class UdpSocket implements Connecter {
 					long ib = inBytes.get();
 					long op = outPackets.get();
 					long ob = outBytes.get();
-					LOGGER.debug("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
+					LOGGER.trace("[UDP Supervision] out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
 			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 
@@ -167,7 +167,7 @@ public final class UdpSocket implements Connecter {
 					long ib = inBytes.getAndSet(0L);
 					long op = outPackets.getAndSet(0L);
 					long ob = outBytes.getAndSet(0L);
-					LOGGER.debug("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
+					LOGGER.trace("[UDP Supervision] (cleared) out = {} ({} Kb), in = {} ({} Kb), lost = {} %", op, ob / 1000d, ip, ib / 1000d, percent(op, ip));
 				}
 			}, (long) (startClear * 1000d), (long) (SUPERVISION_CLEAR * 1000d), TimeUnit.MILLISECONDS);
 		}

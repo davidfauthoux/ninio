@@ -48,13 +48,13 @@ public final class TcpSocket implements Connecter {
 			double now = DateUtils.now();
 			double startDisplay = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
 			
-			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(UdpSocket.class, true));
+			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(TcpSocket.Supervision.class, true));
 
 			executor.scheduleAtFixedRate(new Runnable() {
 				@Override
 				public void run() {
 					long m = max.getAndSet(0L);
-					LOGGER.debug("[TCP Supervision] max = {} Kb", m / 1000d);
+					LOGGER.trace("[TCP Supervision] max = {} Kb", m / 1000d);
 				}
 			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 		}
