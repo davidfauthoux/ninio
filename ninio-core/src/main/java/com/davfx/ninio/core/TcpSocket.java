@@ -233,22 +233,34 @@ public final class TcpSocket implements Connecter {
 														break;
 													}
 													
-													long size = toWrite.buffer.remaining();
-													
-													try {
-														LOGGER.trace("Actual write buffer: {} bytes", size);
-														channel.write(toWrite.buffer);
-														toWriteLength -= size - toWrite.buffer.remaining();
-													} catch (IOException e) {
-														LOGGER.trace("Write failed", e);
-														toWrite.callback.failed(e);
-														disconnect(channel, inboundKey, selectionKey, callback, e);
-														return;
+													if (toWrite.buffer == null) {
+														try {
+															channel.close();
+														} catch (IOException e) {
+															LOGGER.trace("Graceful close failed", e);
+															toWrite.callback.failed(e);
+															disconnect(channel, inboundKey, selectionKey, callback, e);
+															return;
+														}
+													} else {
+														long size = toWrite.buffer.remaining();
+														
+														try {
+															LOGGER.trace("Actual write buffer: {} bytes", size);
+															channel.write(toWrite.buffer);
+															toWriteLength -= size - toWrite.buffer.remaining();
+														} catch (IOException e) {
+															LOGGER.trace("Write failed", e);
+															toWrite.callback.failed(e);
+															disconnect(channel, inboundKey, selectionKey, callback, e);
+															return;
+														}
+														
+														if (toWrite.buffer.hasRemaining()) {
+															return;
+														}
 													}
 													
-													if (toWrite.buffer.hasRemaining()) {
-														return;
-													}
 													toWriteQueue.remove();
 													toWrite.callback.sent();
 												}
@@ -339,18 +351,22 @@ public final class TcpSocket implements Connecter {
 					LOGGER.warn("Ignored send address: {}", address);
 				}
 				
-				if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-					LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
-					callback.failed(new IOException("Packet dropped"));
-					return;
+				if (buffer != null) {
+					if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+						LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
+						callback.failed(new IOException("Packet dropped"));
+						return;
+					}
 				}
 				
 				toWriteQueue.add(new ToWrite(buffer, callback));
-				toWriteLength += buffer.remaining();
-				LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
+				if (buffer != null) {
+					toWriteLength += buffer.remaining();
+					LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), toWriteLength);
 				
-				if (SUPERVISION != null) {
-					SUPERVISION.setWriteMax(toWriteLength);
+					if (SUPERVISION != null) {
+						SUPERVISION.setWriteMax(toWriteLength);
+					}
 				}
 				
 				SocketChannel channel = currentChannel;

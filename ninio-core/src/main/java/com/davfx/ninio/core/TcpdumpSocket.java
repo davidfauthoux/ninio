@@ -409,8 +409,10 @@ public final class TcpdumpSocket implements Connecter {
 
 		LOGGER.trace("Sending datagram to: {}", address);
 
-		if (SUPERVISION != null) {
-			SUPERVISION.incOut(buffer.remaining());
+		if (buffer != null) {
+			if (SUPERVISION != null) {
+				SUPERVISION.incOut(buffer.remaining());
+			}
 		}
 
 		try {
@@ -418,8 +420,12 @@ public final class TcpdumpSocket implements Connecter {
 				throw new IOException("Closed");
 			}
 
-			DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByAddress(address.ip), address.port);
-			socket.send(packet);
+			if (buffer == null) {
+				// socket.close();
+			} else {
+				DatagramPacket packet = new DatagramPacket(buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), InetAddress.getByAddress(address.ip), address.port);
+				socket.send(packet);
+			}
 
 			callback.sent();
 		} catch (Exception e) {

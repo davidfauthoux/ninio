@@ -322,63 +322,98 @@ public final class UdpSocket implements Connecter {
 											break;
 										}
 										
-										long size = toWrite.buffer.remaining();
-
-										if (toWrite.address == null) {
-											try {
-												LOGGER.trace("Actual write buffer: {} bytes", size);
-												channel.write(toWrite.buffer);
-												if (toWrite.buffer.hasRemaining()) {
-													throw new IOException("Packet was not entirely written");
+										if (toWrite.buffer == null) {
+											/*
+											if (toWrite.address == null) {
+												try {
+													channel.close();
+												} catch (IOException e) {
+													LOGGER.trace("Graceful close failed", e);
+													toWriteQueue.remove();
+													toWrite.callback.failed(e);
+													continue;
 												}
-
-												if (SUPERVISION != null) {
-													SUPERVISION.incOut(size);
+											} else {
+												InetSocketAddress a;
+												try {
+													a = new InetSocketAddress(InetAddress.getByAddress(toWrite.address.ip), toWrite.address.port);
+												} catch (IOException e) {
+													LOGGER.warn("Invalid address: {}", toWrite.address);
+													LOGGER.trace("Graceful close failed", e);
+													toWriteQueue.remove();
+													toWrite.callback.failed(e);
+													continue;
 												}
-											} catch (IOException e) {
-												LOGGER.trace("Write failed", e);
-												//%% disconnect(channel, selectionKey, callback);
-												//%% return;
-												toWriteLength -= size;
-												toWriteQueue.remove();
-												toWrite.callback.failed(e);
-												continue;
+												
+												try {
+													channel.close(a);
+												} catch (IOException e) {
+													LOGGER.trace("Graceful close failed", e);
+													toWriteQueue.remove();
+													toWrite.callback.failed(e);
+													continue;
+												}
 											}
+											*/
 										} else {
-											InetSocketAddress a;
-											try {
-												a = new InetSocketAddress(InetAddress.getByAddress(toWrite.address.ip), toWrite.address.port);
-											} catch (IOException e) {
-												LOGGER.warn("Invalid address: {}", toWrite.address);
-												LOGGER.trace("Write failed", e);
-												//%% disconnect(channel, selectionKey, callback);
-												//%% return;
-												toWriteLength -= size;
-												toWriteQueue.remove();
-												toWrite.callback.failed(e);
-												continue;
-											}
-											
-											try {
-												LOGGER.trace("Actual write buffer: {} bytes", size);
-												channel.send(toWrite.buffer, a);
-												if (toWrite.buffer.hasRemaining()) {
-													throw new IOException("Packet was not entirely written");
+											long size = toWrite.buffer.remaining();
+	
+											if (toWrite.address == null) {
+												try {
+													LOGGER.trace("Actual write buffer: {} bytes", size);
+													channel.write(toWrite.buffer);
+													if (toWrite.buffer.hasRemaining()) {
+														throw new IOException("Packet was not entirely written");
+													}
+	
+													if (SUPERVISION != null) {
+														SUPERVISION.incOut(size);
+													}
+												} catch (IOException e) {
+													LOGGER.trace("Write failed", e);
+													//%% disconnect(channel, selectionKey, callback);
+													//%% return;
+													toWriteLength -= size;
+													toWriteQueue.remove();
+													toWrite.callback.failed(e);
+													continue;
 												}
-
-												if (SUPERVISION != null) {
-													SUPERVISION.incOut(size);
+											} else {
+												InetSocketAddress a;
+												try {
+													a = new InetSocketAddress(InetAddress.getByAddress(toWrite.address.ip), toWrite.address.port);
+												} catch (IOException e) {
+													LOGGER.warn("Invalid address: {}", toWrite.address);
+													LOGGER.trace("Write failed", e);
+													//%% disconnect(channel, selectionKey, callback);
+													//%% return;
+													toWriteLength -= size;
+													toWriteQueue.remove();
+													toWrite.callback.failed(e);
+													continue;
 												}
-
-												toWriteLength -= size; //%% - toWrite.buffer.remaining();
-											} catch (IOException e) {
-												LOGGER.trace("Write failed", e);
-												//%% disconnect(channel, selectionKey, callback);
-												//%% return;
-												toWriteLength -= size;
-												toWriteQueue.remove();
-												toWrite.callback.failed(e);
-												continue;
+												
+												try {
+													LOGGER.trace("Actual write buffer: {} bytes", size);
+													channel.send(toWrite.buffer, a);
+													if (toWrite.buffer.hasRemaining()) {
+														throw new IOException("Packet was not entirely written");
+													}
+	
+													if (SUPERVISION != null) {
+														SUPERVISION.incOut(size);
+													}
+	
+													toWriteLength -= size; //%% - toWrite.buffer.remaining();
+												} catch (IOException e) {
+													LOGGER.trace("Write failed", e);
+													//%% disconnect(channel, selectionKey, callback);
+													//%% return;
+													toWriteLength -= size;
+													toWriteQueue.remove();
+													toWrite.callback.failed(e);
+													continue;
+												}
 											}
 										}
 										
@@ -452,15 +487,19 @@ public final class UdpSocket implements Connecter {
 					return;
 				}
 
-				if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-					LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
-					callback.failed(new IOException("Packet dropped"));
-					return;
+				if (buffer != null) {
+					if ((WRITE_MAX_BUFFER_SIZE > 0L) && (toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+						LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
+						callback.failed(new IOException("Packet dropped"));
+						return;
+					}
 				}
 				
 				toWriteQueue.add(new ToWrite(address, buffer, callback));
-				toWriteLength += buffer.remaining();
-				LOGGER.trace("Write buffer: {} bytes (to {}) (current size: {} bytes)", buffer.remaining(), address, toWriteLength);
+				if (buffer != null) {
+					toWriteLength += buffer.remaining();
+					LOGGER.trace("Write buffer: {} bytes (to {}) (current size: {} bytes)", buffer.remaining(), address, toWriteLength);
+				}
 				
 				DatagramChannel channel = currentChannel;
 				SelectionKey selectionKey = currentSelectionKey;

@@ -18,6 +18,7 @@ import com.davfx.ninio.core.Failing;
 import com.davfx.ninio.core.Listening;
 import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.NinioProvider;
+import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ArrayListMultimap;
@@ -313,7 +314,7 @@ public final class HttpListening implements Listening {
 													} else {
 														LOGGER.trace("Actually closed");
 														closed = true;
-														connecting.close();
+														connecting.send(null, null, new Nop());
 													}
 												}
 												

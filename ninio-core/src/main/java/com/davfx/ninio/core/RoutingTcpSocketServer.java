@@ -58,6 +58,17 @@ public final class RoutingTcpSocketServer {
 							@Override
 							public Connection connecting(final Connected connecting) {
 								final Connecter connecter = supplier.create(ninioProvider);
+								final SendCallback sendCallback = new SendCallback() {
+									@Override
+									public void failed(IOException e) {
+										LOGGER.warn("Failed to route packet", e);
+										connecting.close();
+										connecter.close();
+									}
+									@Override
+									public void sent() {
+									}
+								};
 								
 								connecter.connect(new Connection() {
 									@Override
@@ -66,22 +77,12 @@ public final class RoutingTcpSocketServer {
 									
 									@Override
 									public void received(Address address, ByteBuffer buffer) {
-										connecting.send(address, buffer, new SendCallback() {
-											@Override
-											public void failed(IOException e) {
-												LOGGER.warn("Failed to route packet", e);
-												connecting.close();
-												connecter.close();
-											}
-											@Override
-											public void sent() {
-											}
-										});
+										connecting.send(address, buffer, sendCallback);
 									}
 									
 									@Override
 									public void closed() {
-										connecting.close();
+										connecting.send(null, null, sendCallback);
 									}
 									
 									@Override
@@ -98,22 +99,12 @@ public final class RoutingTcpSocketServer {
 									
 									@Override
 									public void received(Address address, ByteBuffer buffer) {
-										connecter.send(address, buffer, new SendCallback() {
-											@Override
-											public void failed(IOException e) {
-												LOGGER.warn("Failed to route packet", e);
-												connecting.close();
-												connecter.close();
-											}
-											@Override
-											public void sent() {
-											}
-										});
+										connecter.send(address, buffer, sendCallback);
 									}
 									
 									@Override
 									public void closed() {
-										connecter.close();
+										connecter.send(null, null, sendCallback);
 									}
 									@Override
 									public void failed(IOException e) {

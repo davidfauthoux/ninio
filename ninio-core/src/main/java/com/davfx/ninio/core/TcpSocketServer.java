@@ -212,18 +212,22 @@ public final class TcpSocketServer implements Listener {
 														LOGGER.warn("Ignored send address: {}", address);
 													}
 													
-													if ((WRITE_MAX_BUFFER_SIZE > 0L) && (context.toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
-														LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
-														callback.failed(new IOException("Packet dropped"));
-														return;
+													if (buffer != null) {
+														if ((WRITE_MAX_BUFFER_SIZE > 0L) && (context.toWriteLength > WRITE_MAX_BUFFER_SIZE)) {
+															LOGGER.warn("Dropping {} bytes that should have been sent to {}", buffer.remaining(), address);
+															callback.failed(new IOException("Packet dropped"));
+															return;
+														}
 													}
 													
 													context.toWriteQueue.add(new ToWrite(buffer, callback));
-													context.toWriteLength += buffer.remaining();
-													LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), context.toWriteLength);
-													
-													if (SUPERVISION != null) {
-														SUPERVISION.setWriteMax(context.toWriteLength);
+													if (buffer != null) {
+														context.toWriteLength += buffer.remaining();
+														LOGGER.trace("Write buffer: {} bytes (current size: {} bytes)", buffer.remaining(), context.toWriteLength);
+														
+														if (SUPERVISION != null) {
+															SUPERVISION.setWriteMax(context.toWriteLength);
+														}
 													}
 													
 													SocketChannel channel = context.currentChannel;
@@ -302,21 +306,33 @@ public final class TcpSocketServer implements Listener {
 																		break;
 																	}
 
-																	long size = toWrite.buffer.remaining();
-
-																	try {
-																		outboundChannel.write(toWrite.buffer);
-																		context.toWriteLength -= size - toWrite.buffer.remaining();
-																	} catch (IOException e) {
-																		LOGGER.trace("Write failed", e);
-																		toWrite.callback.failed(e);
-																		context.disconnectAndRemove(e);
-																		return;
+																	if (toWrite.buffer == null) {
+																		try {
+																			outboundChannel.close();
+																		} catch (IOException e) {
+																			LOGGER.trace("Graceful close failed", e);
+																			toWrite.callback.failed(e);
+																			context.disconnectAndRemove(e);
+																			return;
+																		}
+																	} else {
+																		long size = toWrite.buffer.remaining();
+	
+																		try {
+																			outboundChannel.write(toWrite.buffer);
+																			context.toWriteLength -= size - toWrite.buffer.remaining();
+																		} catch (IOException e) {
+																			LOGGER.trace("Write failed", e);
+																			toWrite.callback.failed(e);
+																			context.disconnectAndRemove(e);
+																			return;
+																		}
+																		
+																		if (toWrite.buffer.hasRemaining()) {
+																			return;
+																		}
 																	}
 																	
-																	if (toWrite.buffer.hasRemaining()) {
-																		return;
-																	}
 																	toWrite.callback.sent();
 																	context.toWriteQueue.remove();
 																}
