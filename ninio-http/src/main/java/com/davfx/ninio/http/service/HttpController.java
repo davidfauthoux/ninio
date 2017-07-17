@@ -144,6 +144,9 @@ public interface HttpController {
 		public static Http badRequest() {
 			return new Http(HttpStatus.BAD_REQUEST, HttpMessage.BAD_REQUEST);
 		}
+		public static Http movedPermanently(String url) {
+			return new Http(HttpStatus.MOVED_PERMANENTLY, HttpMessage.MOVED_PERMANENTLY).header(HttpHeaderKey.LOCATION, url);
+		}
 		
 		public static Http wrap(HttpWrap wrap) {
 			return new Http(HttpStatus.OK, HttpMessage.OK, wrap);

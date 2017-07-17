@@ -8,5 +8,6 @@ public interface HttpMessage {
 	String NOT_FOUND = "Not Found";
 	String FORBIDDEN = "Forbidden";
 	String BAD_REQUEST = "Bad Request";
+	String MOVED_PERMANENTLY = "Moved Permanently";
 
 }

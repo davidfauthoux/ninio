@@ -7,5 +7,6 @@ public interface HttpStatus {
 	int NOT_FOUND = 404;
 	int FORBIDDEN = 403;
 	int BAD_REQUEST = 400;
+	int MOVED_PERMANENTLY = 301;
 
 }
