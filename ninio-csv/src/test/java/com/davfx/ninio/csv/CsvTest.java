@@ -132,4 +132,47 @@ public class CsvTest {
 		
 		Files.delete(dir);
 	}
+
+	@Test
+	public void testWithDoubleQuote() throws Exception {
+		File dir = new File("test-csv");
+		Files.delete(dir);
+		
+		dir.mkdirs();
+		File file = new File(dir, "test.csv");
+		
+		try (OutputStream out = new FileOutputStream(file)) {
+			out.write("\"a\"\"b\"\"c\"".getBytes(Charsets.UTF_8));
+			out.write("\n".getBytes(Charsets.UTF_8));
+		}
+		
+		try (AutoCloseableCsvReader csv = Csv.read().from(file)) {
+			Iterable<String> i = csv.next();
+			Assertions.assertThat(i.toString()).isEqualTo("[a\"b\"c]");
+			Assertions.assertThat(csv.next()).isNull();
+		}
+		
+		Files.delete(dir);
+	}
+
+	@Test
+	public void testWithDoubleQuoteAndStuff() throws Exception {
+		File dir = new File("test-csv");
+		Files.delete(dir);
+		
+		dir.mkdirs();
+		File file = new File(dir, "test.csv");
+		
+		try (OutputStream out = new FileOutputStream(file)) {
+			out.write("c1,c2,\"[\"\"c30\"\",\"\"c31\"\"]\",\"[\"\"c30\"\",\"\"c31\"\"]\",".getBytes(Charsets.UTF_8));
+			out.write("\n".getBytes(Charsets.UTF_8));
+		}
+		
+		try (AutoCloseableCsvReader csv = Csv.read().from(file)) {
+			Assertions.assertThat(csv.next().toString()).isEqualTo("[c1, c2, [\"c30\",\"c31\"], [\"c30\",\"c31\"], ]");
+			Assertions.assertThat(csv.next()).isNull();
+		}
+		
+		Files.delete(dir);
+	}
 }

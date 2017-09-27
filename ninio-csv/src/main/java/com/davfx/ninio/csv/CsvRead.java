@@ -205,16 +205,15 @@ public final class CsvRead {
 					char character = line.charAt(i);
 					if (inQuote) {
 						if (character == quote) {
-							if (last == quote) {
-								c.append(quote);
-							}
 							inQuote = false;
 						} else {
 							c.append(character);
 						}
-						last = character;
 					} else {
 						if (character == quote) {
+							if (last == quote) {
+								c.append(quote);
+							}
 							inQuote = true;
 						} else if (character == delimiter) {
 							components.add(c.toString());
@@ -223,6 +222,7 @@ public final class CsvRead {
 							c.append(character);
 						}
 					}
+					last = character;
 					i++;
 				}
 				
