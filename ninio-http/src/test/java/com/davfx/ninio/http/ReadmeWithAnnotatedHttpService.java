@@ -29,7 +29,7 @@ public final class ReadmeWithAnnotatedHttpService {
 	public static final class TestController implements HttpController {
 		@Route(method = HttpMethod.GET, path = "/echo")
 		public Http echo(@QueryParameter("message") String message) {
-			return Http.ok().content("a/echo " + message);
+			return Http.ok().header(HttpHeaderKey.CONTENT_ENCODING, HttpHeaderValue.GZIP).content("a/echo " + message);
 		}
 	}
 	
