@@ -17,6 +17,7 @@ public final class MemoryCache<K, V> {
 		Builder<K, V> expireAfterAccess(double expiration);
 		Builder<K, V> expireAfterWrite(double expiration);
 		Builder<K, V> check(double checkTime);
+		Builder<K, V> limitedTo(int limit);
 		MemoryCache<K, V> build();
 	}
 	
@@ -25,7 +26,8 @@ public final class MemoryCache<K, V> {
 			private double expirationAfterAccess = 0d;
 			private double expirationAfterWrite = 0d;
 			private double checkTime = DEFAULT_CHECK_TIME;
-			
+			private int limit = 0;
+
 			@Override
 			public Builder<K, V> expireAfterAccess(double expiration) {
 				expirationAfterAccess = expiration;
@@ -37,6 +39,11 @@ public final class MemoryCache<K, V> {
 				return this;
 			}
 			@Override
+			public Builder<K, V> limitedTo(int limit) {
+				this.limit = limit;
+				return this;
+			}
+			@Override
 			public Builder<K, V> check(double checkTime) {
 				this.checkTime = checkTime;
 				return this;
@@ -44,7 +51,7 @@ public final class MemoryCache<K, V> {
 			
 			@Override
 			public MemoryCache<K, V> build() {
-				return new MemoryCache<>(expirationAfterAccess, expirationAfterWrite, checkTime);
+				return new MemoryCache<>(expirationAfterAccess, expirationAfterWrite, limit, checkTime);
 			}
 		};
 	}
@@ -60,13 +67,15 @@ public final class MemoryCache<K, V> {
 
 	private final double expirationAfterAccess;
 	private final double expirationAfterWrite;
+	private final int limit;
 	private final double checkTime;
 	private double lastCheck = 0d;
 	private final Map<K, Element<V>> map = new LinkedHashMap<>();
 	
-	private MemoryCache(double expirationAfterAccess, double expirationAfterWrite, double checkTime) {
+	private MemoryCache(double expirationAfterAccess, double expirationAfterWrite, int limit, double checkTime) {
 		this.expirationAfterAccess = expirationAfterAccess;
 		this.expirationAfterWrite = expirationAfterWrite;
+		this.limit = limit;
 		this.checkTime = checkTime;
 	}
 	
@@ -96,6 +105,14 @@ public final class MemoryCache<K, V> {
 			
 			map.remove(key);
 			map.put(key, e);
+
+			if (limit > 0) {
+				if (map.size() > limit) {
+					Iterator<Map.Entry<K, Element<V>>> i = map.entrySet().iterator();
+					i.next();
+					i.remove();
+				}
+			}
 		} finally {
 			check();
 		}
