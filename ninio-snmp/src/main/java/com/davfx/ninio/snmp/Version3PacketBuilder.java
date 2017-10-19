@@ -74,7 +74,7 @@ public final class Version3PacketBuilder {
 		if (authEngine.getId() != null) {
 			if (authEngine.getAuthLogin() != null) {
 				securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
-				if (authEngine.getPrivLogin() != null) {
+				if (authEngine.usePriv()) {
 					securityFlags |= BerConstants.VERSION_3_PRIV_FLAG;
 					encrypt = true;
 				}

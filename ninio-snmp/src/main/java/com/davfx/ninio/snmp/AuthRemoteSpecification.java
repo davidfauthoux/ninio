@@ -3,25 +3,23 @@ package com.davfx.ninio.snmp;
 import java.util.Objects;
 
 public final class AuthRemoteSpecification {
-	public final String authLogin;
+	public final String login;
 	public final String authPassword;
 	public final String authDigestAlgorithm;
-	public final String privLogin;
 	public final String privPassword;
 	public final String privEncryptionAlgorithm;
 	
-	public AuthRemoteSpecification(String authLogin, String authPassword, String authDigestAlgorithm, String privLogin, String privPassword, String privEncryptionAlgorithm) {
-		this.authLogin = authLogin;
+	public AuthRemoteSpecification(String login, String authPassword, String authDigestAlgorithm, String privPassword, String privEncryptionAlgorithm) {
+		this.login = login;
 		this.authPassword = authPassword;
 		this.authDigestAlgorithm = authDigestAlgorithm;
-		this.privLogin = privLogin;
 		this.privPassword = privPassword;
 		this.privEncryptionAlgorithm = privEncryptionAlgorithm;
 	}
 
 	@Override
 	public int hashCode() {
-		return Objects.hash(authLogin, authPassword, authDigestAlgorithm, privLogin, privPassword, privEncryptionAlgorithm);
+		return Objects.hash(login, authPassword, authDigestAlgorithm, privPassword, privEncryptionAlgorithm);
 	}
 
 	@Override
@@ -36,10 +34,9 @@ public final class AuthRemoteSpecification {
 			return false;
 		}
 		AuthRemoteSpecification other = (AuthRemoteSpecification) obj;
-		return Objects.equals(authLogin, other.authLogin)
+		return Objects.equals(login, other.login)
 			&& Objects.equals(authPassword, other.authPassword)
 			&& Objects.equals(authDigestAlgorithm, other.authDigestAlgorithm)
-			&& Objects.equals(privLogin, other.privLogin)
 			&& Objects.equals(privPassword, other.privPassword)
 			&& Objects.equals(privEncryptionAlgorithm, other.privEncryptionAlgorithm);
 	}

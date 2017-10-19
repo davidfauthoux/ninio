@@ -72,10 +72,10 @@ public final class AuthRemoteEngine {
 	*/
 
 	public String getAuthLogin() {
-		return authRemoteSpecification.authLogin;
+		return authRemoteSpecification.login;
 	}
-	public String getPrivLogin() {
-		return authRemoteSpecification.privLogin;
+	public boolean usePriv() {
+		return (authRemoteSpecification.privPassword != null);
 	}
 	
 	public int incPacketNumber() {
