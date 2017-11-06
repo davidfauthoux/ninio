@@ -28,7 +28,6 @@ final class IpPacketReadUtils {
 			payloadLength = totalLength - headerLength;
 			@SuppressWarnings("unused")
 			int identification = b.getShort() & 0xFFFF;
-			@SuppressWarnings("unused")
 			int indicatorAndFragmentOffset = b.getShort() & 0xFFFF;
 			@SuppressWarnings("unused")
 			int ttl = b.get() & 0xFF;
@@ -40,6 +39,10 @@ final class IpPacketReadUtils {
 			b.get(sourceIp);
 			destinationIp = new byte[4];
 			b.get(destinationIp);
+			if (indicatorAndFragmentOffset != 0) {
+				LOGGER.warn("Fragmented packet from {}", Address.ipToString(sourceIp));
+				return;
+			}
 		} else if (ipVersion == 6) {
 			// traffic class (low bits) and flow label 
 			b.get(); b.get(); b.get();
@@ -68,14 +71,15 @@ final class IpPacketReadUtils {
 			@SuppressWarnings("unused")
 			int checksum = b.getShort() & 0xFFFF;
 			int packetPosition = b.position();
-			if (udpLength != payloadLength) {
-				LOGGER.warn("Strange packet, udp length {} should equal payload length {}", udpLength, payloadLength);
-			}
 			int packetLength = payloadLength - 8; // udpLength SHOULD EQUAL payloadLength
 			
 			Address sourceAddress = new Address(sourceIp, sourcePort);
 			Address destinationAddress = new Address(destinationIp, destinationPort);
 			
+			if (udpLength != payloadLength) {
+				LOGGER.warn("Strange packet from {}, udp length {} should equal payload length {}", sourceAddress, udpLength, payloadLength);
+				return;
+			}
 			LOGGER.trace("Packet received: {} -> {} {}", sourceAddress, destinationAddress, new Date((long) (timestamp * 1000d)));
 
 			ByteBuffer bb;
