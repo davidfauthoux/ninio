@@ -230,7 +230,7 @@ final class SecureSocketManager implements Connected, Connection {
 	
 	private void doClose() {
 		if (sent != null) {
-			IOException e = new IOException("SSL engine failed");
+			IOException e = new IOException("SSL engine failed, premature close");
 			for (ToWrite toWrite : sent) {
 				toWrite.callback.failed(e);
 			}

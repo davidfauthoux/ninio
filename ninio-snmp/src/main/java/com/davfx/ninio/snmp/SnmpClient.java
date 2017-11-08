@@ -275,14 +275,14 @@ public final class SnmpClient implements SnmpConnecter {
 			public final SnmpCallType request;
 			public final int instanceId;
 			public final Oid oid;
-			public final Iterable<SnmpResult> trap;
+//			public final Iterable<SnmpResult> trap;
 			public final SendCallback sendCallback;
 
-			public PendingRequest(SnmpCallType request, int instanceId, Oid oid, Iterable<SnmpResult> trap, SendCallback sendCallback) {
+			public PendingRequest(SnmpCallType request, int instanceId, Oid oid, /*Iterable<SnmpResult> trap, */SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
-				this.trap = trap;
+//				this.trap = trap;
 				this.sendCallback = sendCallback;
 			}
 		}
@@ -370,10 +370,13 @@ public final class SnmpClient implements SnmpConnecter {
 						break;
 					}
 					case TRAP: {
+						LOGGER.error("No TRAP possible in v3: {} #{}", r.oid, r.instanceId);
+/*
 						Version3PacketBuilder builder = Version3PacketBuilder.trap(engine, r.instanceId, r.oid, r.trap);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing TRAP v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
+*/
 						break;
 					}
 					default:
@@ -564,7 +567,7 @@ public final class SnmpClient implements SnmpConnecter {
 						break;
 				}
 			} else {
-				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(snmpCallType, instanceId, requestOid, trap, sendCallback));
+				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(snmpCallType, instanceId, requestOid, /*trap, */sendCallback));
 				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 			}
 		}

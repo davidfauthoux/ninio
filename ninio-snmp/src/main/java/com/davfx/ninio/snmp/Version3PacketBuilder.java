@@ -1,10 +1,9 @@
 package com.davfx.ninio.snmp;
 
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
-import java.util.List;
 
 public final class Version3PacketBuilder {
+/*
 	private static interface Value {
 		BerPacket ber();
 	}
@@ -17,7 +16,8 @@ public final class Version3PacketBuilder {
 			this.value = value;
 		}
 	}
-	
+*/
+
 	private final ByteBuffer buffer;
 
 	private static final class AuthBerPacket implements BerPacket {
@@ -66,7 +66,7 @@ public final class Version3PacketBuilder {
 		}
 	}
 
-	private Version3PacketBuilder(AuthRemoteEngine authEngine, int requestId, int type, int bulkLength, Iterable<OidValue> oidValues) {
+	private Version3PacketBuilder(AuthRemoteEngine authEngine, int requestId, int type, int bulkLength, Oid oid) {
 		authEngine.renewTime();
 		
 		boolean encrypt = false;
@@ -99,17 +99,14 @@ public final class Version3PacketBuilder {
 				.add(new IntegerBerPacket((authEngine.getTime() == 0) ? 1 : authEngine.getTime()))
 				.add(new BytesBerPacket(BerPacketUtils.bytes(authEngine.getAuthLogin())))
 				.add(auth)
-				.add(priv)));
+				.add(priv)
+			));
 
 		SequenceBerPacket seq = new SequenceBerPacket(BerConstants.SEQUENCE);
-		for (OidValue oidValue : oidValues) {
-			seq.add(new SequenceBerPacket(BerConstants.SEQUENCE)
-						.add(new OidBerPacket(oidValue.oid))
-						.add(oidValue.value.ber()));
-		}
+		seq.add(new OidBerPacket(oid)).add(new NullBerPacket());
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
-			.add(new BytesBerPacket(ByteBuffer.wrap(authEngine.getId())))
+			.add(new BytesBerPacket((authEngine.getId() != null) ? ByteBuffer.wrap(authEngine.getId()) : ByteBuffer.allocate(0)))
 			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
 			.add(new SequenceBerPacket(type)
 				.add(new IntegerBerPacket(requestId))
@@ -145,6 +142,7 @@ public final class Version3PacketBuilder {
 		buffer.position(p);
 	}
 
+/*
 	private static Iterable<OidValue> single(Oid oid) {
 		List<OidValue> l = new LinkedList<>();
 		l.add(new OidValue(oid, new Value() {
@@ -155,17 +153,19 @@ public final class Version3PacketBuilder {
 		}));
 		return l;
 	}
+*/
 	
 	public static Version3PacketBuilder getBulk(AuthRemoteEngine authEngine, int requestId, Oid oid, int bulkLength) {
-		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETBULK, bulkLength, single(oid));
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETBULK, bulkLength, oid);
 	}
 	public static Version3PacketBuilder get(AuthRemoteEngine authEngine, int requestId, Oid oid) {
-		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GET, 0, single(oid));
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GET, 0, oid);
 	}
 	public static Version3PacketBuilder getNext(AuthRemoteEngine authEngine, int requestId, Oid oid) {
-		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETNEXT, 0, single(oid));
+		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETNEXT, 0, oid);
 	}
-
+	
+/*
 	public static Version3PacketBuilder trap(AuthRemoteEngine authEngine, int requestId, final Oid trapOid, Iterable<SnmpResult> oidValues) {
 		List<OidValue> l = new LinkedList<>();
 		l.add(new OidValue(BerConstants.TIMESTAMP_OID, new Value() {
@@ -190,7 +190,8 @@ public final class Version3PacketBuilder {
 		}
 		return new Version3PacketBuilder(authEngine, requestId, BerConstants.TRAP, 0, l);
 	}
-
+*/
+	
 	public ByteBuffer getBuffer() {
 		return buffer;
 	}

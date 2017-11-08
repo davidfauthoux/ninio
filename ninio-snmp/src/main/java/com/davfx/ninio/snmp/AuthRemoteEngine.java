@@ -50,15 +50,20 @@ public final class AuthRemoteEngine {
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		}
-		try {
-			cipher = Cipher.getInstance(authRemoteSpecification.privEncryptionAlgorithm + "/" + (authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
-		} catch (NoSuchPaddingException e) {
-			throw new RuntimeException(e);
+		if (authRemoteSpecification.privPassword == null) {
+			cipher = null;
+			privKeyLength = 0;
+		} else {
+			try {
+				cipher = Cipher.getInstance(authRemoteSpecification.privEncryptionAlgorithm + "/" + (authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
+			} catch (NoSuchAlgorithmException e) {
+				throw new RuntimeException(e);
+			} catch (NoSuchPaddingException e) {
+				throw new RuntimeException(e);
+			}
+			
+			privKeyLength = authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		}
-		
-		privKeyLength = authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 	}
 	
 	/*%%
@@ -158,7 +163,7 @@ public final class AuthRemoteEngine {
 
 		messageDigest.reset();
 		messageDigest.update(digest);
-		messageDigest.update(id);
+		messageDigest.update((id != null) ? id : new byte[] {});
 		messageDigest.update(digest);
 		return messageDigest.digest();
 	}
