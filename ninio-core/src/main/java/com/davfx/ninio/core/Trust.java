@@ -115,7 +115,7 @@ public final class Trust {
 			*/
 			
 			// WARNING! Not secure to a man-in-the-middle attack
-			TrustManager[] t = new TrustManager[] {
+			TrustManager[] t = INSECURE ? new TrustManager[] {
 				new X509TrustManager() {
 					@Override
 					public java.security.cert.X509Certificate[] getAcceptedIssuers() {
@@ -128,10 +128,10 @@ public final class Trust {
 					public void checkServerTrusted(X509Certificate[] certs, String authType) {
 					}
 				}
-			};
+			} : null;
 			
 			sslContext = SSLContext.getInstance(TLS_VERSION);
-			sslContext.init(null, INSECURE ? t : null, null);
+			sslContext.init(null, t, null);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
