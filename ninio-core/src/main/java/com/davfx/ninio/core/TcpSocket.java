@@ -209,6 +209,7 @@ public final class TcpSocket implements Connecter {
 													ByteBuffer readBuffer = byteBufferAllocator.allocate();
 													try {
 														int r = channel.read(readBuffer);
+														LOGGER.trace("Reading: {} bytes", r);
 														if (r == 0) {
 															break;
 														}

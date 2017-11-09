@@ -10,10 +10,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Limit;
 import com.davfx.ninio.core.Ninio;
-import com.davfx.ninio.core.SecureSocketBuilder;
-import com.davfx.ninio.core.TcpSocket;
 import com.davfx.ninio.core.Timeout;
-import com.davfx.ninio.core.Trust;
 import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.dns.DnsConnection;
 import com.davfx.ninio.http.HttpConnecter;
@@ -39,7 +36,6 @@ public final class HttpClient implements AutoCloseable {
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(com.davfx.ninio.http.HttpClient.class.getPackage().getName());
 	private static final double DEFAULT_TIMEOUT = ConfigUtils.getDuration(CONFIG, "default.timeout");
 	private static final int DEFAULT_LIMIT = CONFIG.getInt("default.limit");
-	private static final boolean INSECURE = CONFIG.getBoolean("insecure");
 
 	private final Ninio ninio = Ninio.create();
 	private final HttpConnecter httpClient;
@@ -64,11 +60,7 @@ public final class HttpClient implements AutoCloseable {
 			}
 		});
 
-		com.davfx.ninio.http.HttpClient.Builder b = com.davfx.ninio.http.HttpClient.builder().with(dnsClient);
-		if (INSECURE) {
-			b.withSecure(new SecureSocketBuilder(TcpSocket.builder()).trust(new Trust()));
-		}
-		httpClient = ninio.create(b);
+		httpClient = ninio.create(com.davfx.ninio.http.HttpClient.builder().with(dnsClient));
 	}
 	
 	/*%%

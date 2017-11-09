@@ -19,10 +19,18 @@ import javax.net.ssl.X509TrustManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.davfx.ninio.core.dependencies.Dependencies;
+import com.davfx.ninio.util.ConfigUtils;
+import com.typesafe.config.Config;
+
 public final class Trust {
 	
 	private static final Logger LOGGER = LoggerFactory.getLogger(Trust.class);
 	
+	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(Trust.class.getPackage().getName());
+	private static final boolean INSECURE = CONFIG.getBoolean("insecure");
+	private static final String TLS_VERSION = CONFIG.getString("tls");
+
 	private final KeyStore ksKeys;
 	private final SSLContext sslContext;
 
@@ -52,7 +60,7 @@ public final class Trust {
 			TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
 			tmf.init(ksTrust);
 
-			sslContext = SSLContext.getInstance("TLS");
+			sslContext = SSLContext.getInstance(TLS_VERSION);
 			sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -85,7 +93,7 @@ public final class Trust {
 			TrustManagerFactory tmf = TrustManagerFactory.getInstance("SunX509");
 			tmf.init(ksTrust);
 
-			sslContext = SSLContext.getInstance("TLS");
+			sslContext = SSLContext.getInstance(TLS_VERSION);
 			sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
@@ -122,8 +130,8 @@ public final class Trust {
 				}
 			};
 			
-			sslContext = SSLContext.getInstance("TLS");
-			sslContext.init(null, t, null);
+			sslContext = SSLContext.getInstance(TLS_VERSION);
+			sslContext.init(null, INSECURE ? t : null, null);
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
