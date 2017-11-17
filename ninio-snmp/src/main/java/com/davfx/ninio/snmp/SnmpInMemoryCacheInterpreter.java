@@ -72,7 +72,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 			{
 				int version = ber.readInteger();
 				if (version != BerConstants.VERSION_2C) {
-					throw new IOException("Invalid version: " + version + " should be " + BerConstants.VERSION_2C);
+					return null;
 				}
 				ber.readBytes(); // community
 				
