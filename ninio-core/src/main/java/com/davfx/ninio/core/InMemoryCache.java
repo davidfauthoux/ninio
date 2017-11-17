@@ -149,17 +149,19 @@ public final class InMemoryCache {
 			wrappee.connect(new Connection() {
 				@Override
 				public void received(Address address, ByteBuffer sourceBuffer) {
-					ByteBuffer sb = sourceBuffer.duplicate();
 					T sub;
-					try {
-						sub = interpreter.handleResponse(sb);
-					} catch (Exception e) {
-						LOGGER.trace("Invalid response packet", e);
-						return;
-					}
-					if (sub == null) {
-						LOGGER.trace("Invalid response (address = {})", address);
-						return;
+					{
+						ByteBuffer sb = sourceBuffer.duplicate();
+						try {
+							sub = interpreter.handleResponse(sb);
+						} catch (Exception e) {
+							LOGGER.trace("Invalid response packet", e);
+							return;
+						}
+						if (sub == null) {
+							callback.received(address, sourceBuffer);
+							return;
+						}
 					}
 	
 					String key;
@@ -269,17 +271,19 @@ public final class InMemoryCache {
 			}
 			*/
 
-			ByteBuffer sb = sourceBuffer.duplicate();
 			Context<T> context;
-			try {
-				context = interpreter.handleRequest(sb);
-			} catch (Exception e) {
-				sendCallback.failed(new IOException("Invalid packet", e));
-				return;
-			}
-			if (context == null) {
-				sendCallback.failed(new IOException("Invalid request: " + address));
-				return;
+			{
+				ByteBuffer sb = sourceBuffer.duplicate();
+				try {
+					context = interpreter.handleRequest(sb);
+				} catch (Exception e) {
+					sendCallback.failed(new IOException("Invalid packet", e));
+					return;
+				}
+				if (context == null) {
+					wrappee.send(address, sourceBuffer, sendCallback);
+					return;
+				}
 			}
 
 			double now = DateUtils.now();

@@ -27,7 +27,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 			{
 				int version = ber.readInteger();
 				if (version != BerConstants.VERSION_2C) {
-					throw new IOException("Invalid version: " + version + " should be " + BerConstants.VERSION_2C);
+					return null;
 				}
 				ber.readBytes(); // community
 				
@@ -105,7 +105,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 			{
 				int version = ber.readInteger();
 				if (version != BerConstants.VERSION_2C) {
-					throw new IOException("Invalid version: " + version + " should be " + BerConstants.VERSION_2C);
+					return null;
 				}
 				ber.readBytes(); // community
 				
@@ -152,13 +152,13 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 		}
 
 		SequenceBerPacket root = new SequenceBerPacket(BerConstants.SEQUENCE)
-		.add(new IntegerBerPacket(BerConstants.VERSION_2C))
-		.add(new BytesBerPacket(BerPacketUtils.bytes(""))) // community ignored
-		.add(new SequenceBerPacket(BerConstants.RESPONSE)
-			.add(new IntegerBerPacket(requestId))
-			.add(new IntegerBerPacket(errorStatus))
-			.add(new IntegerBerPacket(errorIndex))
-			.add(oidSequence));
+			.add(new IntegerBerPacket(BerConstants.VERSION_2C))
+			.add(new BytesBerPacket(BerPacketUtils.bytes(""))) // community ignored
+			.add(new SequenceBerPacket(BerConstants.RESPONSE)
+				.add(new IntegerBerPacket(requestId))
+				.add(new IntegerBerPacket(errorStatus))
+				.add(new IntegerBerPacket(errorIndex))
+				.add(oidSequence));
 
 		ByteBuffer buffer = ByteBuffer.allocate(BerPacketUtils.typeAndLengthBufferLength(root.lengthBuffer()) + root.length());
 		root.write(buffer);
