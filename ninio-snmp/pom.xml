@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.davfx.ninio</groupId>
 		<artifactId>ninio</artifactId>
-		<version>3.0.28</version>
+		<version>3.0.29-SNAPSHOT</version>
 	</parent>
 
 	<artifactId>ninio-snmp</artifactId>
