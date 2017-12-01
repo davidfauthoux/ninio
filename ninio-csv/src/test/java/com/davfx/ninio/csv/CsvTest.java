@@ -2,6 +2,7 @@ package com.davfx.ninio.csv;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 
 import org.assertj.core.api.Assertions;
@@ -174,5 +175,77 @@ public class CsvTest {
 		}
 		
 		Files.delete(dir);
+	}
+	
+	@Test
+	public void testWithInvalidCharacter() throws Exception {
+		File dir = new File("test-csv");
+		Files.delete(dir);
+		
+		dir.mkdirs();
+		File file = new File(dir, "test.csv");
+		
+		try (AutoCloseableCsvWriter csv = Csv.write().to(file)) {
+			try (CsvWriter.Line line = csv.line()) {
+				line.append("a0");
+				line.append("a1");
+				line.append("a2");
+			}
+			try (CsvWriter.Line line = csv.line()) {
+				line.append("b");
+				line.append("-");
+				line.append("c");
+			}
+		}
+		
+		try {
+			try (AutoCloseableCsvReader csv = Csv.read().withInvalidCharacters(new char[] { '-' }).from(file)) {
+				Assertions.assertThat(csv.next().toString()).isEqualTo("[a0, a1, a2]");
+				Assertions.assertThat(csv.next()).isNull();
+			}
+		} catch (IOException ioe) {
+			Assertions.assertThat(ioe.getMessage()).isEqualTo("Invalid character found at line #" + 1);
+			return;
+		} finally {
+			Files.delete(dir);
+		}
+		
+		Assertions.fail("Should fail with invalid character");
+	}
+
+	@Test
+	public void testWithInvalidEolCharacter() throws Exception {
+		File dir = new File("test-csv");
+		Files.delete(dir);
+		
+		dir.mkdirs();
+		File file = new File(dir, "test.csv");
+		
+		try (AutoCloseableCsvWriter csv = Csv.write().to(file)) {
+			try (CsvWriter.Line line = csv.line()) {
+				line.append("a0");
+				line.append("a1");
+				line.append("a2");
+			}
+			try (CsvWriter.Line line = csv.line()) {
+				line.append("b");
+				line.append("\n");
+				line.append("c");
+			}
+		}
+		
+		try {
+			try (AutoCloseableCsvReader csv = Csv.read().withInvalidCharacters(new char[] { '\n' }).from(file)) {
+				Assertions.assertThat(csv.next().toString()).isEqualTo("[a0, a1, a2]");
+				Assertions.assertThat(csv.next()).isNull();
+			}
+		} catch (IOException ioe) {
+			Assertions.assertThat(ioe.getMessage()).isEqualTo("Invalid character found at line #" + 1);
+			return;
+		} finally {
+			Files.delete(dir);
+		}
+		
+		Assertions.fail("Should fail with invalid character");
 	}
 }

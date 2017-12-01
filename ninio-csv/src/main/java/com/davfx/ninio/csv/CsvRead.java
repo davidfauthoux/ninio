@@ -16,6 +16,7 @@ import java.util.Map;
 import com.davfx.ninio.csv.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.typesafe.config.Config;
+import com.typesafe.config.ConfigException;
 
 public final class CsvRead {
 	
@@ -24,11 +25,25 @@ public final class CsvRead {
 	private static final char DEFAULT_DELIMITER = ConfigUtils.getChar(CONFIG, "delimiter");
 	private static final char DEFAULT_QUOTE = ConfigUtils.getChar(CONFIG, "quote");
 	private static final boolean DEFAULT_IGNORE_EMPTY_LINES = CONFIG.getBoolean("ignoreEmptyLines");
+	private static final char[] DEFAULT_INVALID_CHARACTERS;
+	static {
+		List<String> l = CONFIG.getStringList("invalid");
+		DEFAULT_INVALID_CHARACTERS = new char[l.size()];
+		int i = 0;
+		for (String s : l) {
+			if (s.length() != 1) {
+				throw new ConfigException.BadValue(CONFIG.origin(), "invalid", "only single characters allowed");
+			}
+			DEFAULT_INVALID_CHARACTERS[i] = s.charAt(0);
+			i++;
+		}
+	}
 
 	private Charset charset = DEFAULT_CHARSET;
 	private char delimiter = DEFAULT_DELIMITER;
 	private char quote = DEFAULT_QUOTE;
 	private boolean ignoreEmptyLines = DEFAULT_IGNORE_EMPTY_LINES;
+	private char[] invalidCharacters = DEFAULT_INVALID_CHARACTERS;
 	
 	public CsvRead() {
 	}
@@ -49,9 +64,13 @@ public final class CsvRead {
 		this.ignoreEmptyLines = ignoreEmptyLines;
 		return this;
 	}
+	public CsvRead withInvalidCharacters(char[] invalidCharacters) {
+		this.invalidCharacters = invalidCharacters;
+		return this;
+	}
 
 	public MayAutoCloseCsvReader from(final InputStream in) {
-		final CsvReader csvReader = new CsvReaderImpl(charset, delimiter, quote, ignoreEmptyLines, in);
+		final CsvReader csvReader = new CsvReaderImpl(charset, delimiter, quote, ignoreEmptyLines, invalidCharacters, in);
 		return new MayAutoCloseCsvReader() {
 			@Override
 			public String skip() throws IOException {
@@ -152,13 +171,34 @@ public final class CsvRead {
 		private final char delimiter;
 		private final char quote;
 		private final boolean ignoreEmptyLines;
+		private final char[] invalidCharacters;
+		private final boolean eolIsInvalid;
 
 		private final BufferedReader reader;
+		
+		private int currentLine = 0;
 
-		public CsvReaderImpl(Charset charset, char delimiter, char quote, boolean ignoreEmptyLines, InputStream in) {
+		public CsvReaderImpl(Charset charset, char delimiter, char quote, boolean ignoreEmptyLines, char[] invalidCharacters, InputStream in) {
 			this.delimiter = delimiter;
 			this.quote = quote;
 			this.ignoreEmptyLines = ignoreEmptyLines;
+			{ // Get all but '\n' treated as a special character
+				char[] invalidChars = new char[invalidCharacters.length];
+				boolean isInvalid = false;
+				int i = 0;
+				for (char invalidCharacter : invalidCharacters) {
+					if (invalidCharacter == '\n') {
+						isInvalid = true;
+					} else {
+						invalidChars[i] = invalidCharacter;
+						i++;
+					}
+				}
+				this.invalidCharacters = new char[i];
+				System.arraycopy(invalidCharacters, 0, this.invalidCharacters, 0, i);
+				this.eolIsInvalid = isInvalid;
+			}
+			
 			reader = new BufferedReader(new InputStreamReader(in, charset));
 		}
 		
@@ -166,6 +206,7 @@ public final class CsvRead {
 		public String skip() throws IOException {
 			while (true) {
 				String line = reader.readLine();
+				currentLine++;
 				if (line == null) {
 					return null;
 				}
@@ -188,12 +229,20 @@ public final class CsvRead {
 			while (true) {
 				String line = reader.readLine();
 				if (line == null) {
+					currentLine++;
 					return null;
+				}
+				
+				for (char invalidCharacter : invalidCharacters) {
+					if (line.indexOf(invalidCharacter) >= 0) {
+						throw new IOException("Invalid character found at line #" + currentLine);
+					}
 				}
 				
 				if (!inQuote) {
 					line = line.trim();
 					if (ignoreEmptyLines && line.isEmpty()) {
+						currentLine++;
 						continue;
 					}
 				}
@@ -228,8 +277,17 @@ public final class CsvRead {
 				
 				if (!inQuote) {
 					components.add(c.toString());
+					currentLine++;
 					break;
 				}
+
+				if (inQuote) {
+					if (eolIsInvalid) {
+						throw new IOException("Invalid character found at line #" + currentLine);
+					}
+				}
+				
+				currentLine++;
 			}
 
 			return components;
