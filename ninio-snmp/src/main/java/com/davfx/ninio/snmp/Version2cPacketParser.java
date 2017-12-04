@@ -8,6 +8,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@Deprecated
 public final class Version2cPacketParser {
 	/*%%%
 	public static void main(String[] args) throws Exception {

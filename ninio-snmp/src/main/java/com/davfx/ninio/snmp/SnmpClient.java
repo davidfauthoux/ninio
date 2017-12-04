@@ -187,19 +187,11 @@ public final class SnmpClient implements SnmpConnecter {
 							ready = true;
 						}
 						try {
-							if (authRemoteEnginePendingRequestManager == null) {
-								Version2cPacketParser parser = new Version2cPacketParser(buffer);
-								instanceId = parser.getRequestId();
-								errorStatus = parser.getErrorStatus();
-								errorIndex = parser.getErrorIndex();
-								results = parser.getResults();
-							} else {
-								Version3PacketParser parser = new Version3PacketParser(authRemoteEnginePendingRequestManager.engine, buffer);
-								instanceId = parser.getRequestId();
-								errorStatus = parser.getErrorStatus();
-								errorIndex = parser.getErrorIndex();
-								results = parser.getResults();
-							}
+							SnmpPacketParser parser = new SnmpPacketParser((authRemoteEnginePendingRequestManager == null) ? null : authRemoteEnginePendingRequestManager.engine, buffer);
+							instanceId = parser.getRequestId();
+							errorStatus = parser.getErrorStatus();
+							errorIndex = parser.getErrorIndex();
+							results = parser.getResults();
 						} catch (Exception e) {
 							LOGGER.error("Invalid packet", e);
 							return;
