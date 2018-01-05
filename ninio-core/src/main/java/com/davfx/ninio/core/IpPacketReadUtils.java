@@ -1,10 +1,10 @@
 package com.davfx.ninio.core;
 
-import java.nio.ByteBuffer;
-import java.util.Date;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.nio.ByteBuffer;
+import java.util.Date;
 
 final class IpPacketReadUtils {
 	private static final Logger LOGGER = LoggerFactory.getLogger(IpPacketReadUtils.class);
@@ -28,7 +28,12 @@ final class IpPacketReadUtils {
 			payloadLength = totalLength - headerLength;
 			@SuppressWarnings("unused")
 			int identification = b.getShort() & 0xFFFF;
-			int indicatorAndFragmentOffset = b.getShort() & 0xFFFF;
+			short indicatorAndFragmentOffset = b.getShort();
+			@SuppressWarnings("unused")
+			boolean dontFragment = ((indicatorAndFragmentOffset >> 14) & 1) != 0;
+			@SuppressWarnings("unused")
+			boolean moreFragment = ((indicatorAndFragmentOffset >> 13) & 1) != 0;
+			int offset = indicatorAndFragmentOffset & 0x1FFF;
 			@SuppressWarnings("unused")
 			int ttl = b.get() & 0xFF;
 			int protocol = (b.get() & 0xFF);
@@ -39,7 +44,7 @@ final class IpPacketReadUtils {
 			b.get(sourceIp);
 			destinationIp = new byte[4];
 			b.get(destinationIp);
-			if (indicatorAndFragmentOffset != 0) {
+			if (offset != 0) {
 				LOGGER.warn("Fragmented packet from {}", Address.ipToString(sourceIp));
 				return;
 			}
