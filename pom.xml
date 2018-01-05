@@ -109,11 +109,11 @@
 			<distributionManagement>
 				<repository>
 					<id>nexus</id>
-					<url>http://172.17.10.31:8081/nexus/content/repositories/releases</url>
+					<url>http://nexus.livingobjects.com/repository/releases</url>
 				</repository>
 				<snapshotRepository>
 					<id>nexus</id>
-					<url>http://172.17.10.31:8081/nexus/content/repositories/snapshots</url>
+					<url>http://nexus.livingobjects.com/repository/snapshots</url>
 				</snapshotRepository>
 			</distributionManagement>
 		</profile>
