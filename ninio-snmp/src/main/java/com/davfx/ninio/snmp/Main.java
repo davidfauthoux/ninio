@@ -22,6 +22,8 @@ public class Main {
 		System.out.println("authMethod = " + authMethod);
 		String privMethod = System.getProperty("privMethod", "AES");
 		System.out.println("privMethod = " + privMethod);
+		String contextName = System.getProperty("contextName", null);
+		System.out.println("contextName = " + contextName);
 		byte[] ip = InetAddress.getByName(System.getProperty("ip", "localhost")).getAddress();
 		String portProperty = System.getProperty("port");
 		int port = (portProperty == null) ? SnmpClient.DEFAULT_PORT : Integer.parseInt(portProperty);
@@ -49,7 +51,7 @@ public class Main {
 				
 				SnmpRequestBuilder r = snmpClient.request();
 				if (community == null) {
-					r.auth(new AuthRemoteSpecification(login, authPassword, authMethod, privPassword, privMethod));
+					r.auth(new AuthRemoteSpecification(login, authPassword, authMethod, privPassword, privMethod, contextName));
 				} else {
 					r.community(community);
 				}

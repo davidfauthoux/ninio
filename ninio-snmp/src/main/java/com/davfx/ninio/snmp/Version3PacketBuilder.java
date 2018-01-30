@@ -107,7 +107,7 @@ public final class Version3PacketBuilder {
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
 			.add(new BytesBerPacket((authEngine.getId() != null) ? ByteBuffer.wrap(authEngine.getId()) : ByteBuffer.allocate(0)))
-			.add(new BytesBerPacket(ByteBuffer.allocate(0)))
+			.add(new BytesBerPacket((authEngine.authRemoteSpecification.contextName != null) ? BerPacketUtils.bytes(authEngine.authRemoteSpecification.contextName) : ByteBuffer.allocate(0)))
 			.add(new SequenceBerPacket(type)
 				.add(new IntegerBerPacket(requestId))
 				.add(new IntegerBerPacket(0))
