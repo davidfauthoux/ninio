@@ -119,48 +119,72 @@ public final class Annotated {
 				stringConverters.add(new ConverterElement<Boolean>(Boolean.class, new ParameterConverter<Boolean>() {
 					@Override
 					public Boolean of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Boolean.parseBoolean(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Byte>(Byte.class, new ParameterConverter<Byte>() {
 					@Override
 					public Byte of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Byte.parseByte(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Short>(Short.class, new ParameterConverter<Short>() {
 					@Override
 					public Short of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Short.parseShort(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Integer>(Integer.class, new ParameterConverter<Integer>() {
 					@Override
 					public Integer of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Integer.parseInt(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Long>(Long.class, new ParameterConverter<Long>() {
 					@Override
 					public Long of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Long.parseLong(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Character>(Character.class, new ParameterConverter<Character>() {
 					@Override
 					public Character of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return s.charAt(0);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Float>(Float.class, new ParameterConverter<Float>() {
 					@Override
 					public Float of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Float.parseFloat(s);
 					}
 				}));
 				stringConverters.add(new ConverterElement<Double>(Double.class, new ParameterConverter<Double>() {
 					@Override
 					public Double of(String s) {
+						if (s == null) {
+							return null;
+						}
 						return Double.parseDouble(s);
 					}
 				}));

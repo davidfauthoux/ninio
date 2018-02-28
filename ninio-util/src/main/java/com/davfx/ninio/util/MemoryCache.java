@@ -3,6 +3,7 @@ package com.davfx.ninio.util;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import com.google.common.base.Function;
 import com.google.common.collect.Iterables;
@@ -205,6 +206,47 @@ public final class MemoryCache<K, V> {
 			@Override
 			public V apply(Element<V> e) {
 				return e.v;
+			}
+		});
+	}
+	
+	private static final class InnerMapEntry<K, V> implements Map.Entry<K, V> {
+		private final Map.Entry<K, Element<V>> e;
+		public InnerMapEntry(Map.Entry<K, Element<V>> e) {
+			this.e = e;
+		}
+		public K getKey() {
+			return e.getKey();
+		}
+		public V getValue() {
+			return e.getValue().v;
+		}
+		public int hashCode() {
+			return Objects.hash(e.getKey(), e.getValue().v);
+		}
+		public boolean equals(Object o) {
+			if (o == this) {
+				return true;
+			}
+			if (!(o instanceof InnerMapEntry<?, ?>)) {
+				return false;
+			}
+			@SuppressWarnings("unchecked")
+			InnerMapEntry<K, V> a = (InnerMapEntry<K, V>) o;
+			return Objects.equals(e.getKey(), a.e.getKey()) && Objects.equals(e.getValue(), a.e.getValue());
+		}
+		public V setValue(V value) {
+			throw new UnsupportedOperationException();
+		}
+	}
+
+	public Iterable<Map.Entry<K, V>> entries() {
+		check();
+		
+		return Iterables.transform(map.entrySet(), new Function<Map.Entry<K, Element<V>>, Map.Entry<K, V>>() {
+			@Override
+			public Map.Entry<K, V> apply(Map.Entry<K, Element<V>> e) {
+				return new InnerMapEntry<K, V>(e);
 			}
 		});
 	}
