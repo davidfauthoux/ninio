@@ -9,19 +9,13 @@ import java.nio.channels.SocketChannel;
 import java.util.Deque;
 import java.util.LinkedList;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.dependencies.Dependencies;
-import com.davfx.ninio.util.ClassThreadFactory;
 import com.davfx.ninio.util.ConfigUtils;
-import com.davfx.ninio.util.DateUtils;
 import com.typesafe.config.Config;
 
 public final class TcpSocket {
@@ -33,49 +27,10 @@ public final class TcpSocket {
 	private static final long SOCKET_WRITE_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.write").longValue();
 	private static final long SOCKET_READ_BUFFER_SIZE = CONFIG.getBytes("tcp.socket.read").longValue();
 
-	private static final double SUPERVISION_DISPLAY = ConfigUtils.getDuration(CONFIG, "supervision.tcp.display");
+	private static final Supervision.Supervise SUPERVISION = Supervision.supervise("tcp");
 
-	private static final class Supervision {
-		private static double floorTime(double now, double period) {
-	    	double precision = 1000d;
-	    	long t = (long) (now * precision);
-	    	long d = (long) (period * precision);
-	    	return (t - (t % d)) / precision;
-		}
-		
-		private final AtomicLong max = new AtomicLong(0L);
-		
-		public Supervision() {
-			double now = DateUtils.now();
-			double startDisplay = SUPERVISION_DISPLAY - (now - floorTime(now, SUPERVISION_DISPLAY));
-			
-			ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor(new ClassThreadFactory(TcpSocket.Supervision.class, true));
-
-			executor.scheduleAtFixedRate(new Runnable() {
-				@Override
-				public void run() {
-					long m = max.getAndSet(0L);
-					LOGGER.trace("[TCP Supervision] max = {} Kb", m / 1000d);
-				}
-			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
-		}
-		
-		public void setWriteMax(long newMax) {
-			while (true) {
-				long curMax = max.get();
-				if (curMax >= newMax) {
-					break;
-				}
-				if (max.compareAndSet(curMax, newMax)) {
-					break;
-				}
-			}
-		}
-	}
-	
-	private static final Supervision SUPERVISION = (SUPERVISION_DISPLAY > 0d) ? new Supervision() : null;
-
-	private Queue queue;
+	private final Queue queue;
+	private final SocketChannelProvider channelProvider;
 	
 	private Address bindAddress = null;
 	
@@ -106,12 +61,23 @@ public final class TcpSocket {
 	
 	private final Deque<Reading> readings = new LinkedList<>();
 	private final Deque<Writing> writings = new LinkedList<>();
-	private final Deque<CompletableFuture<Void>> onCloses = new LinkedList<>();
+	// private final Deque<CompletableFuture<Void>> onCloses = new LinkedList<>();
 	
-	public TcpSocket(Ninio ninio) {
-		queue = ninio.register(NinioPriority.REGULAR);
+	TcpSocket(Queue queue, SocketChannelProvider channelProvider) {
+		this.queue = queue;
+		this.channelProvider = channelProvider;
 	}
 	
+	public TcpSocket(Ninio ninio) {
+		this(ninio.register(NinioPriority.REGULAR), new SocketChannelProvider() {
+			@Override
+			public SocketChannel open() throws IOException {
+				return SocketChannel.open();
+			}
+		});
+	}
+	
+	/*
 	public CompletableFuture<Void> onClose() {
 		CompletableFuture<Void> future = new CompletableFuture<>();
 		queue.execute(new Runnable() {
@@ -126,6 +92,7 @@ public final class TcpSocket {
 		});
 		return future;
 	}
+	*/
 	
 	public TcpSocket bind(Address bindAddress) {
 		this.bindAddress = bindAddress;
@@ -138,13 +105,15 @@ public final class TcpSocket {
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
-				if (currentChannel != null) {
-					future.completeExceptionally(new IOException("Already connected"));
-					return;
-				}
-				
 				try {
-					final SocketChannel channel = SocketChannel.open();
+					if (closed) {
+						throw new IOException("Closed");
+					}
+					if (currentChannel != null) {
+						throw new IOException("Already connected");
+					}
+
+					final SocketChannel channel = channelProvider.open(); // SocketChannel.open();
 					currentChannel = channel;
 					try {
 						channel.configureBlocking(false);
@@ -157,157 +126,68 @@ public final class TcpSocket {
 						if (SOCKET_WRITE_BUFFER_SIZE > 0L) {
 							channel.socket().setSendBufferSize((int) SOCKET_WRITE_BUFFER_SIZE);
 						}
-						final SelectionKey inboundKey = queue.register(channel);
-						inboundKey.interestOps(inboundKey.interestOps() | SelectionKey.OP_CONNECT);
-						currentInboundKey = inboundKey;
-						inboundKey.attach(new SelectionKeyVisitor() {
-							@Override
-							public void visit(SelectionKey key) {
-								if (closed) {
-									disconnect(channel, inboundKey, null, null);
-									return;
+						
+						final SelectionKey inboundKey;
+						if (connectAddress != null) {
+							inboundKey = queue.register(channel);
+							inboundKey.interestOps(inboundKey.interestOps() | SelectionKey.OP_CONNECT);
+							currentInboundKey = inboundKey;
+							inboundKey.attach(new SelectionKeyVisitor() {
+								@Override
+								public void visit(SelectionKey key) {
+									if (closed) {
+										disconnect(channel, inboundKey, null, null);
+										return;
+									}
+									
+									if (!key.isConnectable()) {
+										return;
+									}
+					
+									try {
+										channel.finishConnect();
+										init(channel, inboundKey);
+									} catch (IOException e) {
+										disconnect(channel, inboundKey, null, e);
+										future.completeExceptionally(new IOException("Connection failed", e));
+										return;
+									}
+		
+									future.complete(null);
 								}
-								
-								if (!key.isConnectable()) {
-									return;
-								}
-				
-								try {
-									channel.finishConnect();
-									final SelectionKey selectionKey = queue.register(channel);
-									currentSelectionKey = selectionKey;
-			
-									selectionKey.attach(new SelectionKeyVisitor() {
-										@Override
-										public void visit(SelectionKey key) {
-											if (closed) {
-												disconnect(channel, inboundKey, null, null);
-												return;
-											}
-											
-											if (!channel.isOpen()) {
-												return;
-											}
-											
-											if (key.isReadable()) {
-												
-												while (!readings.isEmpty()) {
-													Reading reading = readings.getLast();
-													
-													byte[] b = reading.buffer.bytes[reading.index];
-													int r;
-													try {
-														r = channel.read(ByteBuffer.wrap(b, reading.offset, b.length - reading.offset));
-													} catch (IOException e) {
-														LOGGER.trace("Read failed", e);
-														disconnect(channel, inboundKey, selectionKey, e);
-														return;
-													}
-													
-													if (r == 0) {
-														break;
-													}
-													if (r < 0) {
-														LOGGER.trace("Connection closed by peer");
-														disconnect(channel, inboundKey, selectionKey, null);
-														return;
-													}
-													
-													reading.offset += r;
-													if (reading.offset == b.length) {
-														reading.index++;
-														reading.offset = 0;
-														if (reading.index == reading.buffer.bytes.length) {
-															readings.removeLast();
-															reading.future.complete(null);
-														}
-													}
-												}
-												
-												selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_READ);
-	
-											} else if (key.isWritable()) {
-												
-												while (!writings.isEmpty()) {
-													Writing writing = writings.removeLast();
-													
-													if (writing.buffer == null) {
-														try {
-															channel.close();
-														} catch (IOException e) {
-															writing.future.completeExceptionally(new IOException("Graceful close failed", e));
-															disconnect(channel, inboundKey, selectionKey, e);
-															return;
-														}
-														writing.future.complete(null);
-													} else {
-														for (byte[] b : writing.buffer.bytes) {
-															try {
-																channel.write(ByteBuffer.wrap(b));
-															} catch (IOException e) {
-																writing.future.completeExceptionally(new IOException("Write failed", e));
-																disconnect(channel, inboundKey, selectionKey, e);
-																return;
-															}
-														}
-														writing.future.complete(null);
-													}
-												}
-												
-												if (!channel.isOpen()) {
-													return;
-												}
-												if (!selectionKey.isValid()) {
-													return;
-												}
-												
-												selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
-												
-											}
-										}
-									});
-								} catch (IOException e) {
-									disconnect(channel, inboundKey, null, e);
-									future.completeExceptionally(new IOException("Connection failed", e));
-									return;
-								}
-	
-								future.complete(null);
-							}
-						});
+							});
+						} else {
+							inboundKey = null;
+							init(channel, inboundKey);
+						}
 	
 						if (bindAddress != null) {
 							try {
 								channel.socket().bind(new InetSocketAddress(InetAddress.getByAddress(bindAddress.ip), bindAddress.port));
 							} catch (IOException e) {
 								disconnect(channel, inboundKey, null, e);
-								future.completeExceptionally(new IOException("Could not bind to: " + bindAddress, e));
-								return;
+								throw new IOException("Could not bind to: " + bindAddress, e);
 							}
 						}
 	
-						try {
-							InetSocketAddress a = new InetSocketAddress(InetAddress.getByAddress(connectAddress.ip), connectAddress.port);
-							LOGGER.trace("Connecting to: {}", a);
-							channel.connect(a);
-						} catch (IOException e) {
-							LOGGER.error("Could not connect to: " + connectAddress, e);
-							disconnect(channel, inboundKey, null, e);
-							future.completeExceptionally(new IOException("Could not connect to: " + connectAddress, e));
-							return;
+						if (connectAddress != null) {
+							try {
+								InetSocketAddress a = new InetSocketAddress(InetAddress.getByAddress(connectAddress.ip), connectAddress.port);
+								LOGGER.trace("Connecting to: {}", a);
+								channel.connect(a);
+							} catch (IOException e) {
+								disconnect(channel, inboundKey, null, e);
+								throw new IOException("Could not connect to: " + connectAddress, e);
+							}
 						}
 	
 					} catch (IOException ee) {
-						LOGGER.error("Connection failed", ee);
 						disconnect(channel, null, null, ee);
-						future.completeExceptionally(new IOException("Connection failed", ee));
-						return;
+						throw new IOException("Connection failed", ee);
 					}
 				} catch (IOException eee) {
-					LOGGER.error("Connection failed", eee);
 					disconnect(null, null, null, eee);
 					future.completeExceptionally(new IOException("Connection failed", eee));
-					return;
 				}
 			}
 		});
@@ -315,7 +195,117 @@ public final class TcpSocket {
 		return future;
 	}
 
+	
+	private void init(SocketChannel channel, SelectionKey inboundKey) throws IOException {
+		final SelectionKey selectionKey = queue.register(channel);
+		currentSelectionKey = selectionKey;
+
+		selectionKey.attach(new SelectionKeyVisitor() {
+			@Override
+			public void visit(SelectionKey key) {
+				if (closed) {
+					disconnect(channel, inboundKey, null, null);
+					return;
+				}
+				
+				if (!channel.isOpen()) {
+					return;
+				}
+				
+				if (key.isReadable()) {
+					
+					while (!readings.isEmpty()) {
+						Reading reading = readings.getLast();
+						
+						byte[] b;
+						if (MutableByteArrays.isEmpty(reading.buffer)) {
+							b = new byte[] {};
+						} else {
+							b = reading.buffer.bytes[reading.index];
+						}
+						int r;
+						try {
+							r = channel.read(ByteBuffer.wrap(b, reading.offset, b.length - reading.offset));
+						} catch (IOException e) {
+							LOGGER.trace("Read failed", e);
+							disconnect(channel, inboundKey, selectionKey, e);
+							return;
+						}
+
+						LOGGER.trace("Read: {} bytes", r);
+
+						if (b.length == 0) {
+							readings.removeLast();
+							reading.future.complete(null);
+						} else {
+							if (r == 0) {
+								break;
+							}
+							if (r < 0) {
+								LOGGER.trace("Connection closed by peer");
+								disconnect(channel, inboundKey, selectionKey, null);
+								return;
+							}
+							
+							reading.offset += r;
+							if (reading.offset == b.length) {
+								reading.index++;
+								reading.offset = 0;
+								if (reading.index == reading.buffer.bytes.length) {
+									readings.removeLast();
+									reading.future.complete(null);
+								}
+							}
+						}
+					}
+					
+					selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_READ);
+
+				} else if (key.isWritable()) {
+					
+					while (!writings.isEmpty()) {
+						Writing writing = writings.removeLast();
+						
+						if (writing.buffer == null) {
+							LOGGER.trace("Gracefully closing");
+							try {
+								channel.close();
+							} catch (IOException e) {
+								writing.future.completeExceptionally(new IOException("Graceful close failed", e));
+								disconnect(channel, inboundKey, selectionKey, e);
+								return;
+							}
+							writing.future.complete(null);
+						} else {
+							for (byte[] b : writing.buffer.bytes) {
+								try {
+									channel.write(ByteBuffer.wrap(b));
+								} catch (IOException e) {
+									writing.future.completeExceptionally(new IOException("Write failed", e));
+									disconnect(channel, inboundKey, selectionKey, e);
+									return;
+								}
+							}
+							writing.future.complete(null);
+						}
+					}
+					
+					if (!channel.isOpen()) {
+						return;
+					}
+					if (!selectionKey.isValid()) {
+						return;
+					}
+					
+					selectionKey.interestOps(selectionKey.interestOps() & ~SelectionKey.OP_WRITE);
+					
+				}
+			}
+		});
+	}
+	
 	private void disconnect(SocketChannel channel, SelectionKey inboundKey, SelectionKey selectionKey, IOException error) {
+		LOGGER.trace("Socket disconnected", error);
 		if (channel != null) {
 			try {
 				channel.socket().close();
@@ -335,7 +325,11 @@ public final class TcpSocket {
 
 		IOException e = (error == null) ? new IOException("Closed") : new IOException("Closed because of", error);
 		for (Reading reading : readings) {
-			reading.future.completeExceptionally(e);
+			if ((error == null) && MutableByteArrays.isEmpty(reading.buffer)) {
+				reading.future.complete(null);
+			} else {
+				reading.future.completeExceptionally(e);
+			}
 		}
 		for (Writing writing : writings) {
 			writing.future.completeExceptionally(e);
@@ -350,9 +344,11 @@ public final class TcpSocket {
 		if (!closed) {
 			closed = true;
 
+			/*
 			for (CompletableFuture<Void> onClose : onCloses) {
 				onClose.complete(null);
 			}
+			*/
 
 			queue.close();
 		}
@@ -365,7 +361,7 @@ public final class TcpSocket {
 			@Override
 			public void run() {
 				if (currentSelectionKey == null) {
-					future.completeExceptionally(new IOException("Closed"));
+					future.completeExceptionally(new IOException("Not open"));
 					return;
 				}
 				readings.addLast(new Reading(future, buffer));
@@ -379,15 +375,15 @@ public final class TcpSocket {
 	public CompletableFuture<Void> write(ByteArray buffer) {
 		CompletableFuture<Void> future = new CompletableFuture<>();
 
-		if (SUPERVISION != null) {
-			SUPERVISION.setWriteMax(ByteArrays.totalLength(buffer));
+		if ((buffer != null) && (SUPERVISION != null)) {
+			SUPERVISION.set(ByteArrays.totalLength(buffer) / 1000d);
 		}
 
 		queue.execute(new Runnable() {
 			@Override
 			public void run() {
 				if (currentSelectionKey == null) {
-					future.completeExceptionally(new IOException("Closed"));
+					future.completeExceptionally(new IOException("Not open"));
 					return;
 				}
 				writings.addLast(new Writing(future, buffer));

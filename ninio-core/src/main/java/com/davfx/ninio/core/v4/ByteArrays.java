@@ -12,6 +12,10 @@ public final class ByteArrays {
 	private ByteArrays() {
 	}
 
+	public static ByteArray empty() {
+		return new ByteArray(new byte[][] {});
+	}
+
 	public static ByteArray cat(ByteArray... byteArrays) {
 		int s = 0;
 		for (ByteArray b : byteArrays) {
@@ -33,6 +37,10 @@ public final class ByteArrays {
 			l += b.length;
 		}
 		return l;
+	}
+
+	public static boolean isEmpty(ByteArray byteArray) {
+		return (byteArray.bytes.length == 0);
 	}
 
 	public static byte[] flattened(ByteArray byteArray) {
@@ -83,16 +91,5 @@ public final class ByteArrays {
 
 	public static String utf8(ByteArray byteArray) {
 		return new String(flattened(byteArray), Charsets.UTF_8);
-	}
-	
-	public static MutableByteArray allocate(long length) {
-		long m = Integer.MAX_VALUE;
-		byte[][] bytes = new byte[((int) (length / m)) + ((length % m) > 0 ? 1 : 0)][];
-		long l = length;
-		for (int i = 0; i < bytes.length; i++) {
-			bytes[i] = new byte[(int) Math.min(l, m)];
-			l -= bytes[i].length;
-		}
-		return new MutableByteArray(bytes);
 	}
 }
