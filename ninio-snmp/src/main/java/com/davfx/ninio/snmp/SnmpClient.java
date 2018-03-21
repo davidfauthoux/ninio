@@ -78,7 +78,7 @@ public final class SnmpClient implements SnmpConnecter {
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final MemoryCache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Address, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
     private static LoadingCache<AuthRemoteSpecification, EncryptionEngine> authEngines = CacheBuilder.newBuilder()
-            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .expireAfterAccess(5, TimeUnit.MINUTES)
             .build(new CacheLoader<AuthRemoteSpecification, EncryptionEngine>() {
                 @Override
                 public EncryptionEngine load(AuthRemoteSpecification key) throws Exception {
