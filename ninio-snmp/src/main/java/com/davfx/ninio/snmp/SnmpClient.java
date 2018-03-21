@@ -1,18 +1,5 @@
 package com.davfx.ninio.snmp;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.security.SecureRandom;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.Executor;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Connecter;
 import com.davfx.ninio.core.Connection;
@@ -23,8 +10,24 @@ import com.davfx.ninio.core.UdpSocket;
 import com.davfx.ninio.snmp.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.davfx.ninio.util.MemoryCache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.CacheLoader;
+import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.typesafe.config.Config;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.security.SecureRandom;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 public final class SnmpClient implements SnmpConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SnmpClient.class);
@@ -74,6 +77,15 @@ public final class SnmpClient implements SnmpConnecter {
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final MemoryCache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Address, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+    private static LoadingCache<AuthRemoteSpecification, EncryptionEngine> authEngines = CacheBuilder.newBuilder()
+            .expireAfterAccess(5, TimeUnit.MINUTES)
+            .build(new CacheLoader<AuthRemoteSpecification, EncryptionEngine>() {
+                @Override
+                public EncryptionEngine load(AuthRemoteSpecification key) throws Exception {
+                    return new EncryptionEngine(key);
+                }
+            });
+
 
 	private SnmpClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
@@ -287,11 +299,11 @@ public final class SnmpClient implements SnmpConnecter {
 		
 		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, Connecter connector) {
 			if (engine == null) {
-				engine = new AuthRemoteEngine(authRemoteSpecification);
+				engine = new AuthRemoteEngine(authRemoteSpecification, authEngines.getUnchecked(authRemoteSpecification));
 				discoverIfNecessary(address, connector);
 			} else {
 				if (!engine.authRemoteSpecification.equals(authRemoteSpecification)) {
-					engine = new AuthRemoteEngine(authRemoteSpecification);
+					engine = new AuthRemoteEngine(authRemoteSpecification, authEngines.getUnchecked(authRemoteSpecification));
 					discoverIfNecessary(address, connector);
 				}
 			}
@@ -305,7 +317,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void reset() {
-			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
+			engine = new AuthRemoteEngine(engine.authRemoteSpecification, authEngines.getUnchecked(engine.authRemoteSpecification));
 		}
 		
 		public void discoverIfNecessary(Address address, Connecter connector) {

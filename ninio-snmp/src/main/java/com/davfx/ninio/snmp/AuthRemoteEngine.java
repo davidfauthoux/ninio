@@ -1,49 +1,50 @@
 package com.davfx.ninio.snmp;
 
+import com.google.common.io.BaseEncoding;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.crypto.Cipher;
+import javax.crypto.NoSuchPaddingException;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 
-import javax.crypto.Cipher;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import com.google.common.base.Charsets;
-import com.google.common.io.BaseEncoding;
-
 public final class AuthRemoteEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AuthRemoteEngine.class);
 
 	private static final int ENCRYPTION_MARGIN = 64;
-	
+
 	private int bootCount = 0;
 	private int resetTime = 0;
 	private byte[] id = null;
 
 	public final AuthRemoteSpecification authRemoteSpecification;
+	public final EncryptionEngine encryptionEngine;
 	private final MessageDigest messageDigest;
-	
+
 	private int packetNumber = 0;
     private byte[] encryptionParameters = new byte[8];
     
     private final SecureRandom random = new SecureRandom();
-    
+
     private final Cipher cipher;
     private final int privKeyLength;
 
     private long timeResetAt = 0L;
     private int time = 0;
+
+	private final byte[] authKey;
+
+	//%%% private boolean ready = false;
     
-    //%%% private boolean ready = false;
-    
-	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification) {
+	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification, EncryptionEngine encryptionEngine) {
 		this.authRemoteSpecification = authRemoteSpecification;
+		this.encryptionEngine = encryptionEngine;
 
 		try {
 			messageDigest = MessageDigest.getInstance(authRemoteSpecification.authDigestAlgorithm);
@@ -61,9 +62,10 @@ public final class AuthRemoteEngine {
 			} catch (NoSuchPaddingException e) {
 				throw new RuntimeException(e);
 			}
-			
+
 			privKeyLength = authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		}
+		authKey = getAuthKey();
 	}
 	
 	/*%%
@@ -135,31 +137,13 @@ public final class AuthRemoteEngine {
 	public byte[] getAuthKey() {
 		return getKey(authRemoteSpecification.authPassword);
 	}
-	
+
 	private byte[] getPrivKey() {
 		return getKey(authRemoteSpecification.privPassword);
 	}
 
 	private byte[] getKey(String password) {
-		byte[] passwordBytes = password.getBytes(Charsets.UTF_8);
-
-		int passwordIndex = 0;
-
-		int count = 0;
-		// Use while loop until we've done 1 Megabyte
-		while (count < (1024 * 1024)) {
-			byte[] b = new byte[64];
-			for (int i = 0; i < b.length; i++) {
-				// Take the next octet of the password, wrapping to the
-				// beginning of the password as necessary
-				b[i] = passwordBytes[passwordIndex % passwordBytes.length];
-				passwordIndex++;
-			}
-			messageDigest.update(b);
-			count += b.length;
-		}
-
-		byte[] digest = messageDigest.digest();
+		byte[] digest = encryptionEngine.getDigest(password);
 
 		messageDigest.reset();
 		messageDigest.update(digest);
@@ -167,7 +151,7 @@ public final class AuthRemoteEngine {
 		messageDigest.update(digest);
 		return messageDigest.digest();
 	}
-	
+
 	public byte[] hash(ByteBuffer message) {
 		ByteBuffer messageDup = message.duplicate();
 
@@ -179,9 +163,9 @@ public final class AuthRemoteEngine {
 
 		/*
 		 * the HMAC_MD transform looks like:
-		 * 
+		 *
 		 * MD(K XOR opad, MD(K XOR ipad, msg))
-		 * 
+		 *
 		 * where K is an n byte key ipad is the byte 0x36 repeated 64 times opad
 		 * is the byte 0x5c repeated 64 times and text is the data being
 		 * protected
