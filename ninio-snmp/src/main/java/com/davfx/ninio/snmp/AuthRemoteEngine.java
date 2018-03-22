@@ -14,10 +14,9 @@ import javax.crypto.spec.SecretKeySpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Charsets;
 import com.google.common.io.BaseEncoding;
 
-public final class AuthRemoteEngine {
+final class AuthRemoteEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AuthRemoteEngine.class);
 
 	private static final int ENCRYPTION_MARGIN = 64;
@@ -26,8 +25,8 @@ public final class AuthRemoteEngine {
 	private int resetTime = 0;
 	private byte[] id = null;
 
-	public final AuthRemoteSpecification authRemoteSpecification;
 	private final MessageDigest messageDigest;
+	public final AuthRemoteSpecification authRemoteSpecification;
 	
 	private int packetNumber = 0;
     private byte[] encryptionParameters = new byte[8];
@@ -42,14 +41,20 @@ public final class AuthRemoteEngine {
     
     //%%% private boolean ready = false;
     
-	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification) {
+    public final EncryptionEngine encryptionEngine;
+    private byte[] authKey;
+    private byte[] privKey;
+    
+	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification, EncryptionEngine encryptionEngine) {
 		this.authRemoteSpecification = authRemoteSpecification;
+		this.encryptionEngine = encryptionEngine;
 
 		try {
 			messageDigest = MessageDigest.getInstance(authRemoteSpecification.authDigestAlgorithm);
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		}
+
 		if (authRemoteSpecification.privPassword == null) {
 			cipher = null;
 			privKeyLength = 0;
@@ -64,6 +69,9 @@ public final class AuthRemoteEngine {
 			
 			privKeyLength = authRemoteSpecification.privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		}
+
+		authKey = encryptionEngine.regenerateKey(null, authRemoteSpecification.authPassword);
+		privKey = encryptionEngine.regenerateKey(null, authRemoteSpecification.privPassword);
 	}
 	
 	/*%%
@@ -100,6 +108,8 @@ public final class AuthRemoteEngine {
 	public void setId(byte[] id) {
 		LOGGER.trace("Auth engine ID: {} -> {}", (this.id == null) ? null : BaseEncoding.base16().encode(this.id), BaseEncoding.base16().encode(id));
 		this.id = id;
+		authKey = encryptionEngine.regenerateKey(this.id, authRemoteSpecification.authPassword);
+		privKey = encryptionEngine.regenerateKey(this.id, authRemoteSpecification.privPassword);
 	}
 	public void setEncryptionParameters(byte[] encryptionParameters) {
 		this.encryptionParameters = encryptionParameters;
@@ -133,41 +143,13 @@ public final class AuthRemoteEngine {
 	}
 
 	public byte[] getAuthKey() {
-		return getKey(authRemoteSpecification.authPassword);
+		return authKey;
 	}
 	
 	private byte[] getPrivKey() {
-		return getKey(authRemoteSpecification.privPassword);
+		return privKey;
 	}
 
-	private byte[] getKey(String password) {
-		byte[] passwordBytes = password.getBytes(Charsets.UTF_8);
-
-		int passwordIndex = 0;
-
-		int count = 0;
-		// Use while loop until we've done 1 Megabyte
-		while (count < (1024 * 1024)) {
-			byte[] b = new byte[64];
-			for (int i = 0; i < b.length; i++) {
-				// Take the next octet of the password, wrapping to the
-				// beginning of the password as necessary
-				b[i] = passwordBytes[passwordIndex % passwordBytes.length];
-				passwordIndex++;
-			}
-			messageDigest.update(b);
-			count += b.length;
-		}
-
-		byte[] digest = messageDigest.digest();
-
-		messageDigest.reset();
-		messageDigest.update(digest);
-		messageDigest.update((id != null) ? id : new byte[] {});
-		messageDigest.update(digest);
-		return messageDigest.digest();
-	}
-	
 	public byte[] hash(ByteBuffer message) {
 		ByteBuffer messageDup = message.duplicate();
 
@@ -197,6 +179,7 @@ public final class AuthRemoteEngine {
 		}
 
 		/* perform inner MD */
+		messageDigest.reset();
 		messageDigest.update(k_ipad); /* start with inner pad */
 		messageDigest.update(messageDup); /* then text of msg */
 		newDigest = messageDigest.digest(); /* finish up 1st pass */

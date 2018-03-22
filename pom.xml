@@ -3,7 +3,7 @@
 
 	<groupId>com.davfx.ninio</groupId>
 	<artifactId>ninio</artifactId>
-	<version>3.0.34-SNAPSHOT</version>
+	<version>3.0.34</version>
 	<!-- mvn versions:set -DgenerateBackupPoms=false -->
 
 	<packaging>pom</packaging>
@@ -120,7 +120,7 @@
 	</profiles>
 
 	<properties>
-		<jdk.version>1.8</jdk.version>
+		<jdk.version>1.7</jdk.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 	</properties>
 

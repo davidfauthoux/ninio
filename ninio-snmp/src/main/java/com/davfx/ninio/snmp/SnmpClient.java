@@ -74,6 +74,7 @@ public final class SnmpClient implements SnmpConnecter {
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final MemoryCache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Address, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+	private final MemoryCache<AuthRemoteSpecification, EncryptionEngine> encryptionEngines = MemoryCache.<AuthRemoteSpecification, EncryptionEngine> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
 
 	private SnmpClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
@@ -154,7 +155,14 @@ public final class SnmpClient implements SnmpConnecter {
 								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
 								authRemoteEngines.put(a, authRemoteEnginePendingRequestManager);
 							}
-							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, a, connecter);
+
+							EncryptionEngine encryptionEngine = encryptionEngines.get(s);
+							if (encryptionEngine == null) {
+								encryptionEngine = new EncryptionEngine(s.authDigestAlgorithm, AUTH_ENGINES_CACHE_DURATION);
+								encryptionEngines.put(s, encryptionEngine);
+							}
+
+							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, encryptionEngine, a, connecter);
 						}
 
 						instance.receiver = r;
@@ -285,13 +293,13 @@ public final class SnmpClient implements SnmpConnecter {
 		public AuthRemoteEnginePendingRequestManager() {
 		}
 		
-		public void update(AuthRemoteSpecification authRemoteSpecification, Address address, Connecter connector) {
+		public void update(AuthRemoteSpecification authRemoteSpecification, EncryptionEngine encryptionEngine, Address address, Connecter connector) {
 			if (engine == null) {
-				engine = new AuthRemoteEngine(authRemoteSpecification);
+				engine = new AuthRemoteEngine(authRemoteSpecification, encryptionEngine);
 				discoverIfNecessary(address, connector);
 			} else {
 				if (!engine.authRemoteSpecification.equals(authRemoteSpecification)) {
-					engine = new AuthRemoteEngine(authRemoteSpecification);
+					engine = new AuthRemoteEngine(authRemoteSpecification, encryptionEngine);
 					discoverIfNecessary(address, connector);
 				}
 			}
@@ -305,7 +313,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void reset() {
-			engine = new AuthRemoteEngine(engine.authRemoteSpecification);
+			engine = new AuthRemoteEngine(engine.authRemoteSpecification, engine.encryptionEngine);
 		}
 		
 		public void discoverIfNecessary(Address address, Connecter connector) {
