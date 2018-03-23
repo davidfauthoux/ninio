@@ -21,6 +21,10 @@ final class EncryptionEngine {
 	}
 
 	public byte[] regenerateKey(byte[] id, String password) {
+		if (password == null) {
+			return null;
+		}
+		
 		if (id == null) {
 			id = new byte[] {};
 		}

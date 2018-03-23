@@ -142,18 +142,8 @@ final class AuthRemoteEngine {
 		this.time = resetTime;
 	}
 
-	public byte[] getAuthKey() {
-		return authKey;
-	}
-	
-	private byte[] getPrivKey() {
-		return privKey;
-	}
-
 	public byte[] hash(ByteBuffer message) {
 		ByteBuffer messageDup = message.duplicate();
-
-		byte[] digest = getAuthKey();
 
 		byte[] newDigest;
 		byte[] k_ipad = new byte[64]; /* inner padding - key XORd with ipad */
@@ -169,11 +159,11 @@ final class AuthRemoteEngine {
 		 * protected
 		 */
 		/* start out by storing key, ipad and opad in pads */
-		for (int i = 0; i < digest.length; ++i) {
-			k_ipad[i] = (byte) (digest[i] ^ 0x36);
-			k_opad[i] = (byte) (digest[i] ^ 0x5c);
+		for (int i = 0; i < authKey.length; ++i) {
+			k_ipad[i] = (byte) (authKey[i] ^ 0x36);
+			k_opad[i] = (byte) (authKey[i] ^ 0x5c);
 		}
-		for (int i = digest.length; i < 64; ++i) {
+		for (int i = authKey.length; i < 64; ++i) {
 			k_ipad[i] = 0x36;
 			k_opad[i] = 0x5c;
 		}
@@ -196,7 +186,6 @@ final class AuthRemoteEngine {
 	}
 
 	public ByteBuffer encrypt(ByteBuffer decryptedBuffer) {
-		byte[] encryptionKey = getPrivKey();
 		int salt = random.nextInt();
 		byte[] iv;
 
@@ -218,11 +207,11 @@ final class AuthRemoteEngine {
 
 			iv = new byte[8];
 			for (int i = 0; i < iv.length; i++) {
-				iv[i] = (byte) (encryptionKey[iv.length + i] ^ encryptionParameters[i]);
+				iv[i] = (byte) (privKey[iv.length + i] ^ encryptionParameters[i]);
 			}
 		}
 		try {
-			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encryptionKey, 0, privKeyLength, authRemoteSpecification.privEncryptionAlgorithm), new IvParameterSpec(iv));
+			cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(privKey, 0, privKeyLength, authRemoteSpecification.privEncryptionAlgorithm), new IvParameterSpec(iv));
 			ByteBuffer b = ByteBuffer.allocate(decryptedBuffer.remaining() + ENCRYPTION_MARGIN);
 			cipher.doFinal(decryptedBuffer, b);
 			b.flip();
@@ -233,8 +222,6 @@ final class AuthRemoteEngine {
 	}
 
 	public ByteBuffer decrypt(ByteBuffer encryptedBuffer) {
-		byte[] decryptionKey = getPrivKey();
-
 		byte[] iv;
 
 		if (authRemoteSpecification.privEncryptionAlgorithm.equals("AES")) {
@@ -249,12 +236,12 @@ final class AuthRemoteEngine {
 		} else {
 			iv = new byte[8];
 			for (int i = 0; i < 8; ++i) {
-				iv[i] = (byte) (decryptionKey[8 + i] ^ encryptionParameters[i]);
+				iv[i] = (byte) (privKey[8 + i] ^ encryptionParameters[i]);
 			}
 		}
 
 		try {
-			SecretKeySpec key = new SecretKeySpec(decryptionKey, 0, privKeyLength, authRemoteSpecification.privEncryptionAlgorithm);
+			SecretKeySpec key = new SecretKeySpec(privKey, 0, privKeyLength, authRemoteSpecification.privEncryptionAlgorithm);
 			IvParameterSpec ivSpec = new IvParameterSpec(iv);
 			cipher.init(Cipher.DECRYPT_MODE, key, ivSpec);
 			ByteBuffer b = ByteBuffer.allocate(encryptedBuffer.remaining() + ENCRYPTION_MARGIN);
