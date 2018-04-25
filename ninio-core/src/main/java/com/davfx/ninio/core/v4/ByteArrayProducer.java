@@ -13,7 +13,7 @@ import com.google.common.primitives.Longs;
 public final class ByteArrayProducer {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ByteArrayProducer.class);
 
-	private static final int MIN_BUFFER_SIZE = 100;
+	private static final int MIN_BUFFER_SIZE = 100; //TODO config
 	
 	private final List<ByteBuffer> bytes = Lists.newArrayList();
 	private ByteBuffer current = null;
@@ -79,6 +79,13 @@ public final class ByteArrayProducer {
 	}
 	public ByteArrayProducer produceBytes(byte[] value) {
 		produceBytes(value, 0, value.length);
+		return this;
+	}
+
+	public ByteArrayProducer produceByteArray(ByteArray value) {
+		for (byte[] b : value.bytes) {
+			produceBytes(b);
+		}
 		return this;
 	}
 }

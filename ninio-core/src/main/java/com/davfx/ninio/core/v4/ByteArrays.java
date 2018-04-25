@@ -63,6 +63,39 @@ public final class ByteArrays {
 		return bb;
 	}
 
+	public static byte[] cut(ByteArray byteArray, long offset, int length) {
+		long o = 0L;
+		int i = 0;
+		while (true) {
+			int localLength = byteArray.bytes[i].length;
+			if ((o + localLength) <= offset) {
+				o += localLength;
+				i++;
+			} else {
+				byte[] copy = new byte[length];
+				int copyOffset = 0;
+				while (length > 0) {
+					int localOffset = (int) (offset - o);
+					int copyLength = byteArray.bytes[i].length - localOffset;
+					if (copyLength > length) {
+						copyLength = length;
+					}
+					if ((copyOffset == 0) && (localOffset == 0) && (length == byteArray.bytes[i].length)) {
+						// Optimization
+						return byteArray.bytes[i];
+					}
+					System.arraycopy(byteArray.bytes[i], localOffset, copy, copyOffset, copyLength);
+					length -= copyLength;
+					copyOffset += copyLength;
+					o += copyLength;
+					offset = o;
+					i++;
+				}
+				return copy;
+			}
+		}
+	}
+
 	public static String representation(ByteArray byteArray) {
 		StringBuilder b = new StringBuilder();
 		for (int i = 0; i < byteArray.bytes.length; i++) {
