@@ -696,9 +696,6 @@ public final class Annotated {
 			if (c.type.equals(t)) {
 				return c.converter;
 			}
-			if (c.type.isAssignableFrom(t)) {
-				return c.converter;
-			}
 		}
 		throw new IllegalArgumentException("No converter found for: " + clazz);
 	}
