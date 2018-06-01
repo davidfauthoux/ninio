@@ -71,13 +71,18 @@ public final class FileHandler {
 		}
 
 		if (in != null) {
-			LOGGER.debug("Resource found: {}", name);
 			String contentType = null;
 			for (Map.Entry<String, String> e : DEFAULT_CONTENT_TYPES.entrySet()) {
 				if (name.toLowerCase().endsWith(e.getKey())) {
 					contentType = e.getValue();
 					break;
 				}
+			}
+			
+			if (contentType == null) {
+				LOGGER.debug("Resource found with no content type: {}", name);
+			} else {
+				LOGGER.debug("Resource found: {} [{}]", name, contentType);
 			}
 
 			// "Cache-Control", "private, max-age=0, no-cache"

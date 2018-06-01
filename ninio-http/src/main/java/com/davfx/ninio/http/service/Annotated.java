@@ -285,7 +285,7 @@ public final class Annotated {
 				
 				for (RegisteredElement registeredElement : registerControllers) {
 					final HttpController controller = registeredElement.controller;
-					String rootPathSuffix = registeredElement.path;
+					ImmutableList<String> rootPathSuffix = (registeredElement.path == null) ? null : HttpRequest.path(registeredElement.path);
 					
 					final List<StringPattern> controllerHeaders = buildStringPatternList(controller.getClass());
 					
@@ -295,7 +295,7 @@ public final class Annotated {
 					final List<PathComponent> controllerRoutePathComponents = new LinkedList<>();
 					if (rootPathSuffix != null) {
 						int controllerRoutePathVariableIndex = 0;
-						for (String p : HttpRequest.path(rootPathSuffix)) {
+						for (String p : rootPathSuffix) {
 							controllerRoutePathComponents.add(PathComponent.of(p, controllerRoutePathVariableIndex));
 							controllerRoutePathVariableIndex++;
 						}
@@ -364,7 +364,7 @@ public final class Annotated {
 							final List<PathComponent> routePathComponents = new LinkedList<>();
 							int routePathVariableIndex = 0;
 							if (rootPathSuffix != null) {
-								for (String p : HttpRequest.path(rootPathSuffix)) {
+								for (String p : rootPathSuffix) {
 									routePathComponents.add(PathComponent.of(p, routePathVariableIndex));
 									routePathVariableIndex++;
 								}
@@ -383,9 +383,11 @@ public final class Annotated {
 							}
 		
 							ImmutableMultimap.Builder<String, Optional<String>> pathParametersBuilder = ImmutableMultimap.builder();
+							/*%%
 							if (rootPathSuffix != null) {
 								pathParametersBuilder.putAll(HttpRequest.parameters(rootPathSuffix));
 							}
+							*/
 							if (controllerPathSuffix != null) {
 								pathParametersBuilder.putAll(HttpRequest.parameters(controllerPathSuffix));
 							}
@@ -480,6 +482,12 @@ public final class Annotated {
 		
 									if (!filterPath(request.path, routePathComponents)) {
 										return fallback.handle(request, post);
+									}
+									
+									//
+									
+									if (rootPathSuffix != null) {
+										request = new HttpServiceRequest(request.method, request.headers, request.path.subList(rootPathSuffix.size(), request.path.size()), request.parameters);
 									}
 									
 									//
