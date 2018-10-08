@@ -169,34 +169,39 @@ public final class DnsClient implements DnsConnecter {
 							}
 						}
 
-						byte[] parsedIp;
-						
 						if (host == null) {
-							parsedIp = new byte[] { };
+							c.received(new byte[] { });
+							return;
 						} else {
+							byte[] parsedIp;
 							try {
 								parsedIp = InetAddresses.forString(host).getAddress();
 							} catch (IllegalArgumentException e) {
 								parsedIp = null;
 							}
+							if (parsedIp != null) {
+								c.received(parsedIp);
+								return;
+							}
 
-							if ((parsedIp == null) && SYSTEM) {
+							if (SYSTEM) {
 								LOGGER.trace("Sync resolution: {}", host);
 								try {
 									parsedIp = InetAddress.getByName(host).getAddress();
 								} catch (UnknownHostException e) {
 									parsedIp = null;
 								}
+								if (parsedIp != null) {
+									c.received(parsedIp);
+									return;
+								} else {
+									c.failed(new IOException("Unknown host"));
+									return;
+								}
 							}
 						}
 						
-						if (parsedIp == null) {
-							instance = new Instance(connecter, dnsAddress, instanceMapper, host, family);
-						} else {
-							c.received(parsedIp);
-							return;
-						}
-						
+						instance = new Instance(connecter, dnsAddress, instanceMapper, host, family);
 						instance.receiver = c;
 						instance.launch();
 					}

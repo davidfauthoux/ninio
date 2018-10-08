@@ -22,8 +22,10 @@ import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.SecureSocketBuilder;
 import com.davfx.ninio.core.SendCallback;
 import com.davfx.ninio.core.TcpSocket;
+import com.davfx.ninio.core.Timeout;
 import com.davfx.ninio.dns.DnsConnecter;
 import com.davfx.ninio.dns.DnsReceiver;
+import com.davfx.ninio.dns.DnsTimeout;
 import com.davfx.ninio.http.dependencies.Dependencies;
 import com.davfx.ninio.util.ConfigUtils;
 import com.google.common.collect.ArrayListMultimap;
@@ -38,6 +40,7 @@ public final class HttpClient implements HttpConnecter {
 	private static final Config CONFIG = ConfigUtils.load(new Dependencies()).getConfig(HttpClient.class.getPackage().getName());
 	private static final int DEFAULT_MAX_REDIRECTIONS = CONFIG.getInt("redirect.max");
 	private static final double KEEP_ALIVE_TIMEOUT = ConfigUtils.getDuration(CONFIG, "keepalive.timeout");
+	private static final double DNS_TIMEOUT = ConfigUtils.getDuration(CONFIG, "dns.timeout");
 
 	private static final String DEFAULT_USER_AGENT = "ninio"; // Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/38.0.2125.111 Safari/537.36";
 	private static final String DEFAULT_ACCEPT = "*/*";
@@ -104,7 +107,8 @@ public final class HttpClient implements HttpConnecter {
 	private final DnsConnecter dns;
 	private final TcpSocket.Builder connectorFactory;
 	private final TcpSocket.Builder secureConnectorFactory;
-	
+	private final Timeout dnsTimeoutManager = new Timeout();
+
 	private static final class DeferredConnecter implements Connecter {
 		private static final class ToSend {
 			public final Address address;
@@ -189,8 +193,8 @@ public final class HttpClient implements HttpConnecter {
 			this.address = address;
 		}
 		
-		public void launch(final Executor executor, DnsConnecter dns, final TcpSocket.Builder connectorFactory, final TcpSocket.Builder secureConnectorFactory, final NinioProvider ninioProvider, final Runnable onClose) {
-			dns.request().resolve(address.host, null).receive(new DnsReceiver() {
+		public void launch(final Executor executor, DnsConnecter dns, Timeout dnsTimeoutManager, final TcpSocket.Builder connectorFactory, final TcpSocket.Builder secureConnectorFactory, final NinioProvider ninioProvider, final Runnable onClose) {
+			DnsTimeout.wrap(dnsTimeoutManager, DNS_TIMEOUT, dns.request()).resolve(address.host, null).receive(new DnsReceiver() {
 				@Override
 				public void failed(final IOException ioe) {
 					executor.execute(new Runnable() {
@@ -353,6 +357,7 @@ public final class HttpClient implements HttpConnecter {
 					connector.connecting.close();
 				}
 				reusableConnectors.clear();
+				dnsTimeoutManager.close();
 			}
 		});
 	}
@@ -563,7 +568,7 @@ public final class HttpClient implements HttpConnecter {
 							reusableConnector.reusable = false;
 							
 							reusableConnectors.put(id, reusableConnector);
-							reusableConnector.launch(executor, dns, connectorFactory, secureConnectorFactory, ninioProvider, new Runnable() {
+							reusableConnector.launch(executor, dns, dnsTimeoutManager, connectorFactory, secureConnectorFactory, ninioProvider, new Runnable() {
 								@Override
 								public void run() {
 									LOGGER.trace("Connection removed (id = {})", id);
