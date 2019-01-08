@@ -3,7 +3,7 @@
 
 	<groupId>com.davfx.ninio</groupId>
 	<artifactId>ninio</artifactId>
-	<version>3.0.35</version>
+	<version>3.2.0</version>
 	<!-- mvn versions:set -DgenerateBackupPoms=false -->
 
 	<packaging>pom</packaging>
