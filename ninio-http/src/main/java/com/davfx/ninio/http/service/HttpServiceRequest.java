@@ -13,6 +13,13 @@ public final class HttpServiceRequest {
 	public final ImmutableList<String> path;
 	public final ImmutableMultimap<String, Optional<String>> parameters;
 	
+	public HttpServiceRequest(HttpMethod method, ImmutableMultimap<String, String> headers, ImmutableList<String> path, ImmutableMultimap<String, Optional<String>> parameters) {
+		this.method = method;
+		this.headers = headers;
+		this.path = path;
+		this.parameters = parameters;
+	}
+
 	public HttpServiceRequest(HttpRequest request) {
 		method = request.method;
 		headers = request.headers;

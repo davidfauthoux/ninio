@@ -2,6 +2,7 @@ package com.davfx.ninio.http;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -14,7 +15,6 @@ import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.SendCallback;
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.hash.Hashing;
 import com.google.common.io.BaseEncoding;
 
 public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
@@ -22,6 +22,17 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 
 	private final HttpContentReceiver receiver;
 
+	private static byte[] sha1(byte[] b) {
+		try {
+			MessageDigest crypt = MessageDigest.getInstance("SHA-1");
+			crypt.reset();
+			crypt.update(b);
+			return crypt.digest();
+		} catch (Exception e) {
+			return new byte[] {};
+		}
+	}
+	
 	public WebsocketHttpContentReceiver(HttpRequest request, HttpListeningHandler.HttpResponseSender responseHandler, final boolean textResponses, Listening listening) {
 		String wsKey = null;
 		for (String v : request.headers.get("Sec-WebSocket-Key")) {
@@ -51,7 +62,7 @@ public final class WebsocketHttpContentReceiver implements HttpContentReceiver {
 		HttpResponse response = new HttpResponse(101, "Switching Protocols", ImmutableMultimap.<String, String>builder()
 			.put("Connection", "Upgrade")
 			.put("Upgrade", "websocket")
-			.put("Sec-WebSocket-Accept", BaseEncoding.base64().encode(Hashing.sha1().hashBytes((wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(Charsets.UTF_8)).asBytes()))
+			.put("Sec-WebSocket-Accept", BaseEncoding.base64().encode(sha1((wsKey + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").getBytes(Charsets.UTF_8))))
 			.build()
 		);
 
