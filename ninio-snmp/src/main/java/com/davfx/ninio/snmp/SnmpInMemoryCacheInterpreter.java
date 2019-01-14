@@ -26,35 +26,96 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 			ber.beginReadSequence();
 			{
 				int version = ber.readInteger();
-				if (version != BerConstants.VERSION_2C) {
-					return null;
-				}
-				ber.readBytes(); // community
-				
-				int type = ber.beginReadSequence();
-				{
-					int requestId = ber.readInteger();
-					ber.readInteger();
-					ber.readInteger();
-
+				if (version == BerConstants.VERSION_2C) {
+					ber.readBytes(); // community
+					
+					int type = ber.beginReadSequence();
+					{
+						int requestId = ber.readInteger();
+						ber.readInteger();
+						ber.readInteger();
+	
+						ber.beginReadSequence();
+						{
+							while (ber.hasRemainingInSequence()) {
+								ber.beginReadSequence();
+								{
+									Oid oid = ber.readOid();
+									ber.readValue();
+									
+									String key = oid + "/" + type;
+									
+									return new InMemoryCache.Context<Integer>(key, requestId);
+								}
+								// ber.endReadSequence();
+							}
+						}
+						ber.endReadSequence();
+					}
+					ber.endReadSequence();
+				} else if (version == BerConstants.VERSION_3) {
+					byte securityFlags;
+		
 					ber.beginReadSequence();
 					{
-						while (ber.hasRemainingInSequence()) {
-							ber.beginReadSequence();
-							{
-								Oid oid = ber.readOid();
-								ber.readValue();
-								
-								String key = oid + "/" + type;
-								
-								return new InMemoryCache.Context<Integer>(key, requestId);
-							}
-							// ber.endReadSequence();
+						ber.readInteger(); // Packet number
+						ber.readInteger(); // Max packet size
+						securityFlags = ber.readBytes().get();
+						int securityModel = ber.readInteger();
+						if (securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL) {
+							return null;
 						}
 					}
 					ber.endReadSequence();
+		
+					BerReader secBer = new BerReader(ber.readBytes());
+					secBer.beginReadSequence();
+					{
+						secBer.readBytes(); // engine
+						BerPacketUtils.string(secBer.readBytes()); // login
+						secBer.readBytes();
+						secBer.readBytes(); // decryptParams
+					}
+					secBer.endReadSequence();
+		
+					BerReader pdu;
+					if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
+						return null; // Will not decrypt packet
+					} else {
+						pdu = ber;
+					}
+		
+					pdu.beginReadSequence();
+					pdu.readBytes();
+					pdu.readBytes();
+		
+					int type = pdu.beginReadSequence();
+					{
+						int requestId = pdu.readInteger();
+						pdu.readInteger();
+						pdu.readInteger();
+		
+						pdu.beginReadSequence();
+						{
+							while (pdu.hasRemainingInSequence()) {
+								pdu.beginReadSequence();
+								{
+									Oid oid = pdu.readOid();
+									pdu.readValue();
+									
+									String key = oid + "/" + type;
+									
+									return new InMemoryCache.Context<Integer>(key, requestId);
+								}
+								// pdu.endReadSequence();
+							}
+						}
+						pdu.endReadSequence();
+					}
+					pdu.endReadSequence();
+				} else {
+					return null;
 				}
-				ber.endReadSequence();
 			}
 			ber.endReadSequence();
 		} catch (IOException ioe) {
@@ -71,17 +132,65 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 			ber.beginReadSequence();
 			{
 				int version = ber.readInteger();
-				if (version != BerConstants.VERSION_2C) {
+				if (version == BerConstants.VERSION_2C) {
+					ber.readBytes(); // community
+					
+					ber.beginReadSequence();
+					{
+						int requestId = ber.readInteger();
+						return requestId;
+					}
+					// ber.endReadSequence();
+				} else if (version == BerConstants.VERSION_3) {
+					byte securityFlags;
+					
+					ber.beginReadSequence();
+					{
+						ber.readInteger(); // Packet number
+						ber.readInteger(); // Max packet size
+						securityFlags = ber.readBytes().get();
+						ber.readInteger(); // securityModel
+					}
+					ber.endReadSequence();
+		
+					BerReader secBer = new BerReader(ber.readBytes());
+					secBer.beginReadSequence();
+					{
+						ByteBuffer engine = secBer.readBytes();
+						byte[] id = new byte[engine.remaining()];
+						engine.get(id);
+						BerPacketUtils.string(secBer.readBytes()); // login
+						secBer.readBytes();
+						secBer.readBytes(); // decryptParams
+					}
+					secBer.endReadSequence();
+		
+					BerReader pdu;
+					if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
+						return null; // Could not handle encrypted packet
+					} else {
+						pdu = ber;
+					}
+		
+					pdu.beginReadSequence();
+					pdu.readBytes();
+					pdu.readBytes();
+		
+					int s = pdu.beginReadSequence();
+					if (s == BerConstants.REPORT) {
+						int requestId = ber.readInteger();
+						return requestId;
+					} else {
+						if (s != BerConstants.RESPONSE) {
+							throw new IOException("Not a response packet");
+						}
+						int requestId = ber.readInteger();
+						return requestId;
+					}
+					// ber.endReadSequence();
+				} else {
 					return null;
 				}
-				ber.readBytes(); // community
-				
-				ber.beginReadSequence();
-				{
-					int requestId = ber.readInteger();
-					return requestId;
-				}
-				// ber.endReadSequence();
 			}
 			// ber.endReadSequence();
 		} catch (IOException ioe) {
@@ -104,37 +213,100 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 			ber.beginReadSequence();
 			{
 				int version = ber.readInteger();
-				if (version != BerConstants.VERSION_2C) {
-					return null;
-				}
-				ber.readBytes(); // community
-				
-				int s = ber.beginReadSequence();
-				{
-					if (s != BerConstants.RESPONSE) {
-						throw new IOException("Not a response packet");
+				if (version == BerConstants.VERSION_2C) {
+					ber.readBytes(); // community
+					
+					int s = ber.beginReadSequence();
+					{
+						if (s != BerConstants.RESPONSE) {
+							throw new IOException("Not a response packet");
+						}
+						ber.readInteger();
+						errorStatus = ber.readInteger();
+						errorIndex = ber.readInteger();
+	
+						ber.beginReadSequence();
+						{
+							while (ber.hasRemainingInSequence()) {
+								ber.beginReadSequence();
+								{
+									Oid oid = ber.readOid();
+									String value = ber.readValue();
+									if (value != null) {
+										results.add(new SnmpResult(oid, value));
+									}
+								}
+								ber.endReadSequence();
+							}
+						}
+						ber.endReadSequence();
 					}
-					ber.readInteger();
-					errorStatus = ber.readInteger();
-					errorIndex = ber.readInteger();
-
+					ber.endReadSequence();
+				} else if (version == BerConstants.VERSION_3) {
+					byte securityFlags;
+					
 					ber.beginReadSequence();
 					{
-						while (ber.hasRemainingInSequence()) {
-							ber.beginReadSequence();
-							{
-								Oid oid = ber.readOid();
-								String value = ber.readValue();
-								if (value != null) {
-									results.add(new SnmpResult(oid, value));
-								}
-							}
-							ber.endReadSequence();
+						ber.readInteger(); // Packet number
+						ber.readInteger(); // Max packet size
+						securityFlags = ber.readBytes().get();
+						int securityModel = ber.readInteger();
+						if (securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL) {
+							return null;
 						}
 					}
 					ber.endReadSequence();
+		
+					BerReader secBer = new BerReader(ber.readBytes());
+					secBer.beginReadSequence();
+					{
+						secBer.readBytes(); // engine
+						BerPacketUtils.string(secBer.readBytes()); // login
+						secBer.readBytes();
+						secBer.readBytes(); // decryptParams
+					}
+					secBer.endReadSequence();
+		
+					BerReader pdu;
+					if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
+						return null; // Will not decrypt packet
+					} else {
+						pdu = ber;
+					}
+		
+					pdu.beginReadSequence();
+					pdu.readBytes();
+					pdu.readBytes();
+		
+					int s = pdu.beginReadSequence();
+					{
+						if ((s != BerConstants.REPORT) && (s != BerConstants.RESPONSE)) {
+							throw new IOException("Not a response packet");
+						}
+						pdu.readInteger();
+						errorStatus = pdu.readInteger();
+						errorIndex = pdu.readInteger();
+		
+						pdu.beginReadSequence();
+						{
+							while (pdu.hasRemainingInSequence()) {
+								pdu.beginReadSequence();
+								{
+									Oid oid = pdu.readOid();
+									String value = pdu.readValue();
+									if (value != null) {
+										results.add(new SnmpResult(oid, value));
+									}
+								}
+								pdu.endReadSequence();
+							}
+						}
+						pdu.endReadSequence();
+					}
+					pdu.endReadSequence();
+				} else {
+					return null;
 				}
-				ber.endReadSequence();
 			}
 			ber.endReadSequence();
 		} catch (IOException ioe) {
