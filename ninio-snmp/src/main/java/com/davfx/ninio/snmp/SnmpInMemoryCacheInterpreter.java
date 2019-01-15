@@ -177,11 +177,8 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					pdu.readBytes();
 		
 					int s = pdu.beginReadSequence();
-					if (s == BerConstants.REPORT) {
-						int requestId = ber.readInteger();
-						return requestId;
-					} else {
-						if (s != BerConstants.RESPONSE) {
+					{
+						if ((s != BerConstants.REPORT) && (s != BerConstants.RESPONSE)) {
 							throw new IOException("Not a response packet");
 						}
 						int requestId = ber.readInteger();
