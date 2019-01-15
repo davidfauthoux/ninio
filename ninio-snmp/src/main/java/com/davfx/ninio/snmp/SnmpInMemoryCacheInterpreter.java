@@ -54,7 +54,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
-					LOGGER.info("handleRequest VERSION_3");
+					// LOGGER.info("handleRequest VERSION_3");
 					byte securityFlags;
 		
 					ber.beginReadSequence();
@@ -64,7 +64,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 						securityFlags = ber.readBytes().get();
 						int securityModel = ber.readInteger();
 						if (securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL) {
-							LOGGER.info("securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL");
+							// LOGGER.info("securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL");
 							return null;
 						}
 					}
@@ -84,7 +84,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 		
 					BerReader pdu;
 					if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
-						LOGGER.info("(securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0");
+						// LOGGER.info("(securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0");
 						return null; // Will not decrypt packet
 					} else {
 						pdu = ber;
@@ -109,7 +109,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 									pdu.readValue();
 									
 									String key = oid + "/" + type;
-									LOGGER.info("key={}", key);
+									// LOGGER.info("key={}", key);
 
 									return new InMemoryCache.Context<Integer>(key, requestId);
 								}
@@ -148,7 +148,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					// ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
-					LOGGER.info("handleResponse VERSION_3");
+					// LOGGER.info("handleResponse VERSION_3");
 					byte securityFlags;
 					
 					ber.beginReadSequence();
@@ -174,7 +174,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 		
 					BerReader pdu;
 					if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
-						LOGGER.info("(securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0");
+						// LOGGER.info("(securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0");
 						return null; // Could not handle encrypted packet
 					} else {
 						pdu = ber;
@@ -190,7 +190,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 							throw new IOException("Not a response packet");
 						}
 						int requestId = ber.readInteger();
-						LOGGER.info("requestId={}", requestId);
+						// LOGGER.info("requestId={}", requestId);
 						return requestId;
 					}
 					// ber.endReadSequence();
@@ -249,7 +249,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
-					LOGGER.info("transform VERSION_3");
+					// LOGGER.info("transform VERSION_3");
 					byte securityFlags;
 					
 					ber.beginReadSequence();
@@ -259,7 +259,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 						securityFlags = ber.readBytes().get();
 						int securityModel = ber.readInteger();
 						if (securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL) {
-							LOGGER.info("securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL");
+							// LOGGER.info("securityModel != BerConstants.VERSION_3_USM_SECURITY_MODEL");
 							return null;
 						}
 					}
@@ -279,7 +279,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 		
 					BerReader pdu;
 					if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
-						LOGGER.info("(securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0");
+						// LOGGER.info("(securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0");
 						return null; // Will not decrypt packet
 					} else {
 						pdu = ber;
