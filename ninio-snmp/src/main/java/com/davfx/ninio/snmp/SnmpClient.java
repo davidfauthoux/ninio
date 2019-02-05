@@ -306,7 +306,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public boolean isReady() {
-			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+			if (engine.getId() == null) {
 				return false;
 			}
 			return true;
@@ -317,7 +317,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void discoverIfNecessary(Address address, Connecter connector) {
-			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+			if (engine.getId() == null) {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
 				ByteBuffer b = builder.getBuffer();
 				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
@@ -342,7 +342,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void sendPendingRequestsIfReady(Address address, Connecter connector) {
-			if ((engine.getId() == null) || (engine.getBootCount() == 0) || (engine.getTime() == 0)) {
+			if (engine.getId() == null) {
 				return;
 			}
 			

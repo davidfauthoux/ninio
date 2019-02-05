@@ -199,11 +199,15 @@ public final class InMemoryCache {
 					for (T s : to) {
 						ByteBuffer ssb = sourceBuffer.duplicate();
 						ByteBuffer b;
-						try {
-							b = interpreter.transform(ssb, s);
-						} catch (Exception e) {
-							LOGGER.trace("Invalid response packet", e);
-							continue;
+						if (sub.equals(s)) {
+							b = ssb;
+						} else {
+							try {
+								b = interpreter.transform(ssb, s);
+							} catch (Exception e) {
+								LOGGER.trace("Invalid response packet", e);
+								continue;
+							}
 						}
 						if (b != null) {
 							callback.received(address, b);

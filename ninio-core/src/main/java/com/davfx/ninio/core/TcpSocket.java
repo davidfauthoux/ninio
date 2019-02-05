@@ -54,7 +54,7 @@ public final class TcpSocket implements Connecter {
 				@Override
 				public void run() {
 					long m = max.getAndSet(0L);
-					LOGGER.trace("[TCP Supervision] max = {} Kb", m / 1000d);
+					LOGGER.debug("[TCP Supervision] max = {} Kb", m / 1000d);
 				}
 			}, (long) (startDisplay * 1000d), (long) (SUPERVISION_DISPLAY * 1000d), TimeUnit.MILLISECONDS);
 		}
