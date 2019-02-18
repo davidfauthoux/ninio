@@ -269,8 +269,6 @@ public final class SnmpClient implements SnmpConnecter {
 	}
 	
 	private static final class AuthRemoteEnginePendingRequestManager {
-		private static final Oid DISCOVER_OID = new Oid(new long[] { 1L, 1L });
-		
 		public static final class PendingRequest {
 			public final SnmpCallType request;
 			public final int instanceId;
@@ -318,9 +316,9 @@ public final class SnmpClient implements SnmpConnecter {
 		
 		public void discoverIfNecessary(Address address, Connecter connector) {
 			if (engine.getId() == null) {
-				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, DISCOVER_OID);
+				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, null);
 				ByteBuffer b = builder.getBuffer();
-				LOGGER.trace("Writing discover GET v3: {} #{}, packet size = {}", DISCOVER_OID, RequestIdProvider.IGNORE_ID, b.remaining());
+				LOGGER.trace("Writing discover GET v3: #{}, packet size = {}", RequestIdProvider.IGNORE_ID, b.remaining());
 				connector.send(address, b, new SendCallback() {
 					@Override
 					public void sent() {

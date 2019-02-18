@@ -90,24 +90,26 @@ public final class Version3PacketBuilder {
 				.add(new BytesBerPacket(ByteBuffer.wrap(new byte[] { (byte) securityFlags })))
 				.add(new IntegerBerPacket(BerConstants.VERSION_3_USM_SECURITY_MODEL)));
 
-		AuthBerPacket auth = new AuthBerPacket();
-		PrivacyBerPacket priv = new PrivacyBerPacket();
+		AuthBerPacket auth = (authEngine.getId() == null) ? null : new AuthBerPacket();
+		PrivacyBerPacket priv = (authEngine.getId() == null) ? null : new PrivacyBerPacket();
 		
 		root.add(new BytesSequenceBerPacket(new SequenceBerPacket(BerConstants.SEQUENCE)
 				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
 				.add(new IntegerBerPacket(authEngine.getBootCount()))
 				.add(new IntegerBerPacket(authEngine.getTime()))
-				.add(new BytesBerPacket(BerPacketUtils.bytes(authEngine.getAuthLogin())))
-				.add(auth)
-				.add(priv)
+				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.getAuthLogin())))
+				.add((auth == null) ? new NullBerPacket() : auth)
+				.add((priv == null) ? new NullBerPacket() : priv)
 			));
 
 		SequenceBerPacket seq = new SequenceBerPacket(BerConstants.SEQUENCE);
-		seq.add(new OidBerPacket(oid)).add(new NullBerPacket());
+		if (oid != null) {
+			seq.add(new OidBerPacket(oid)).add(new NullBerPacket());
+		}
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
-			.add(new BytesBerPacket((authEngine.getId() != null) ? ByteBuffer.wrap(authEngine.getId()) : ByteBuffer.allocate(0)))
-			.add(new BytesBerPacket((authEngine.authRemoteSpecification.contextName != null) ? BerPacketUtils.bytes(authEngine.authRemoteSpecification.contextName) : ByteBuffer.allocate(0)))
+			.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
+			.add(new BytesBerPacket((authEngine.authRemoteSpecification.contextName == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.authRemoteSpecification.contextName)))
 			.add(new SequenceBerPacket(type)
 				.add(new IntegerBerPacket(requestId))
 				.add(new IntegerBerPacket(0))
@@ -128,11 +130,13 @@ public final class Version3PacketBuilder {
 		root.write(buffer);
 		buffer.flip();
 		
-		if (encrypt) {
+		if (encrypt && (priv != null)) {
 			writeInside(buffer, priv.position, authEngine.getEncryptionParameters());
 		}
 
-		writeInside(buffer, auth.position, authEngine.hash(buffer));
+		if (auth != null) {
+			writeInside(buffer, auth.position, authEngine.hash(buffer));
+		}
 	}
 	
 	private static void writeInside(ByteBuffer buffer, int position, byte[] bytes) {
