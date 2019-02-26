@@ -79,7 +79,7 @@ public final class PingClient implements PingConnecter {
 	public void connect(final PingConnection callback) {
 		connecter.connect(new Connection() {
 			@Override
-			public void received(Address address, final ByteBuffer buffer) {
+			public void received(final Address address, final ByteBuffer buffer) {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
@@ -103,8 +103,13 @@ public final class PingClient implements PingConnecter {
 							return;
 						}
 
-						double delta = (now - time) / 1_000_000_000d;
+						long deltaNano = now - time;
+						double delta = deltaNano / 1_000_000_000d;
 						
+						if (LOGGER.isTraceEnabled()) {
+							LOGGER.trace("Received ICMP packet from {} (ID {}): {} ns", address, id, deltaNano);
+						}
+
 						PingReceiver r = receivers.remove(id);
 						if (r == null) {
 							return;
@@ -215,6 +220,9 @@ public final class PingClient implements PingConnecter {
 				b.position(endPosition);
 				b.flip();
 				
+				if (LOGGER.isTraceEnabled()) {
+					LOGGER.trace("Sending ICMP packet to {} (ID {})", Address.ipToString(ip), idManager.id);
+				}
 				connecter.send(new Address(ip, 0), b, new Nop());
 			}
 		});
