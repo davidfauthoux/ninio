@@ -1,11 +1,11 @@
 package com.davfx.ninio.string;
 
 final class GetSuffixStringInput<T> implements StringInput<T> {
-	private final StringInput<T> prefix;
+	private final StringInput<T> suffix;
 	private final StringInput<T> wrappee;
 
-	public GetSuffixStringInput(StringInput<T> prefix, StringInput<T> wrappee) {
-		this.prefix = prefix;
+	public GetSuffixStringInput(StringInput<T> suffix, StringInput<T> wrappee) {
+		this.suffix = suffix;
 		this.wrappee = wrappee;
 	}
 	@Override
@@ -14,7 +14,7 @@ final class GetSuffixStringInput<T> implements StringInput<T> {
 		if (s == null) {
 			return null;
 		}
-		String p = prefix.get(h);
+		String p = suffix.get(h);
 		if (p == null) {
 			return null;
 		}
