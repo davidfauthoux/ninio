@@ -16,6 +16,8 @@ import com.davfx.ninio.core.NinioBuilder;
 import com.davfx.ninio.core.NinioProvider;
 import com.davfx.ninio.core.Nop;
 import com.davfx.ninio.core.RawSocket;
+import com.davfx.ninio.string.Identifiers;
+import com.davfx.ninio.util.Mutable;
 
 public final class PingClient implements PingConnecter {
 	
@@ -58,16 +60,19 @@ public final class PingClient implements PingConnecter {
 	private final Connecter connecter;
 	private long nextId = 0L;
 
-	private final Map<Long, PingReceiver> receivers = new HashMap<>();
+	private final Map<Address, PingReceiver> receivers = new HashMap<>();
 	
 	private boolean closed = false;
+	
+	private final String clientIdentifier;
 
 	public PingClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
 		this.connecter = connecter;
+		clientIdentifier = Identifiers.identifier();
 	}
 	
-	private static void closeSendCallbacks(Map<Long, PingReceiver> receivers) {
+	private static void closeSendCallbacks(Map<Address, PingReceiver> receivers) {
 		IOException e = new IOException("Closed");
 		for (PingReceiver c : receivers.values()) {
 			c.failed(e);
@@ -87,17 +92,22 @@ public final class PingClient implements PingConnecter {
 							return;
 						}
 						
+						int type;
+						int code;
 						long now = System.nanoTime();
 						long time;
-						long id;
+						Address id;
 						try {
-							buffer.get(); // type
-							buffer.get(); // code
+							type = buffer.get() & 0xFF; // type
+							code = buffer.get() & 0xFF; // code
+							if ((type != 0) || (code != 0)) {
+								return;
+							}
 							buffer.getShort(); // checksum
 							short identifier = buffer.getShort(); // identifier
 							short sequence = buffer.getShort(); // sequence
 							time = buffer.getLong();
-							id = ((identifier & 0xFFFF) << 16) | (sequence & 0xFFFF);
+							id = new Address(address.ip, (int) (((identifier & 0xFFFFL) << 16) | (sequence & 0xFFFFL)));
 						} catch (Exception e) {
 							LOGGER.error("Invalid packet", e);
 							return;
@@ -107,13 +117,18 @@ public final class PingClient implements PingConnecter {
 						double delta = deltaNano / 1_000_000_000d;
 						
 						if (LOGGER.isTraceEnabled()) {
-							LOGGER.trace("Received ICMP packet from {} (ID {}): {} ns", address, id, deltaNano);
+							LOGGER.trace("@{} Received ICMP packet [{}/{}] from {} (ID {}): {} ns", clientIdentifier, type, code, address, id.port, deltaNano);
 						}
 
 						PingReceiver r = receivers.remove(id);
 						if (r == null) {
 							return;
 						}
+
+						if (LOGGER.isTraceEnabled()) {
+							LOGGER.trace("@{} Transmitted ICMP packet [{}/{}] from {} (ID {}): {} ns", clientIdentifier, type, code, address, id.port, deltaNano);
+						}
+
 						r.received(delta);
 					}
 				});
@@ -167,13 +182,9 @@ public final class PingClient implements PingConnecter {
 		});
 	}
 	
-	private static final class IdManager {
-		long id = -1L;
-	}
-	
 	@Override
 	public Cancelable ping(final byte[] ip, final PingReceiver callback) {
-		final IdManager idManager = new IdManager();
+		final Mutable<Address> id = new Mutable<>();
 		
 		executor.execute(new Runnable() {
 			@Override
@@ -183,14 +194,12 @@ public final class PingClient implements PingConnecter {
 					return;
 				}
 				
-				if (idManager.id < 0L) {
-					idManager.id = nextId;
-					nextId++;
-					if (nextId == ID_LIMIT) {
-						nextId = 0L;
-					}
-					receivers.put(idManager.id, callback);
+				id.value = new Address(ip, (int) (nextId & 0xFFFFFFFFL));
+				nextId++;
+				if (nextId == ID_LIMIT) {
+					nextId = 0L;
 				}
+				receivers.put(id.value, callback);
 
 				byte[] sendData = new byte[16];
 
@@ -199,8 +208,8 @@ public final class PingClient implements PingConnecter {
 				b.put((byte) 0); // code
 				int checksumPosition = b.position();
 				b.putShort((short) 0); // checksum
-				b.putShort((short) ((idManager.id >>> 16) & 0xFFFF)); // identifier
-				b.putShort((short) (idManager.id & 0xFFFF)); // sequence
+				b.putShort((short) ((id.value.port >>> 16) & 0xFFFF)); // identifier
+				b.putShort((short) (id.value.port & 0xFFFF)); // sequence
 				long nt = System.nanoTime();
 				b.putLong(nt);
 				int endPosition = b.position();
@@ -221,7 +230,7 @@ public final class PingClient implements PingConnecter {
 				b.flip();
 				
 				if (LOGGER.isTraceEnabled()) {
-					LOGGER.trace("Sending ICMP packet to {} (ID {})", Address.ipToString(ip), idManager.id);
+					LOGGER.trace("@{} Sending ICMP packet to {} (ID {})", clientIdentifier, Address.ipToString(ip), id.value.port);
 				}
 				connecter.send(new Address(ip, 0), b, new Nop());
 			}
@@ -233,11 +242,11 @@ public final class PingClient implements PingConnecter {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
-						if (idManager.id < 0L) {
+						if (id.value == null) {
 							return;
 						}
 
-						PingReceiver r = receivers.remove(idManager.id);
+						PingReceiver r = receivers.remove(id.value);
 						if (r == null) {
 							return;
 						}
