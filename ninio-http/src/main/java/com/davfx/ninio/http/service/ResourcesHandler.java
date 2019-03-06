@@ -55,17 +55,28 @@ public final class ResourcesHandler {
 		List<String> p = new LinkedList<>(dir);
 		p.addAll(path);
 		String rootName = Joiner.on('/').join(p);
-		p.add(index);
-		String indexName = Joiner.on('/').join(p);
-		
+		String indexName;
+		if (index != null) {
+			p.add(index);
+			indexName = Joiner.on('/').join(p);
+		} else {
+			indexName = null;
+		}
+
 		if (rooted) {
 			rootName = '/' + rootName;
-			indexName = '/' + indexName;
+			indexName = (indexName == null) ? null : ('/' + indexName);
 		}
 		
 		String name = indexName;
 		LOGGER.debug("Resources dir: {}", clazz.getResource("."));
-		InputStream in = clazz.getResourceAsStream(name);
+		InputStream in;
+		if (name == null) {
+			in = null;
+		} else {
+			in = clazz.getResourceAsStream(name);
+		}
+		
 		if (in == null) {
 			LOGGER.debug("Resource not found: {}", name);
 			name = rootName;
@@ -74,13 +85,7 @@ public final class ResourcesHandler {
 
 		if (in != null) {
 			LOGGER.debug("Resource found: {}", name);
-			String contentType = null;
-			for (Map.Entry<String, String> e : DEFAULT_CONTENT_TYPES.entrySet()) {
-				if (name.toLowerCase().endsWith(e.getKey())) {
-					contentType = e.getValue();
-					break;
-				}
-			}
+			String contentType = contentType(name);
 
 			// "Cache-Control", "private, max-age=0, no-cache"
 
@@ -89,5 +94,14 @@ public final class ResourcesHandler {
 			LOGGER.debug("Resource not found: {}", name);
 			return Http.notFound();
 		}
+	}
+	
+	public static String contentType(String name) {
+		for (Map.Entry<String, String> e : DEFAULT_CONTENT_TYPES.entrySet()) {
+			if (name.toLowerCase().endsWith(e.getKey())) {
+				return e.getValue();
+			}
+		}
+		return "application/octet-stream";
 	}
 }
