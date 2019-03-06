@@ -162,11 +162,16 @@ public final class ProxyServer implements Listening {
 		this.listening = listening;
 	}
 	
-	private void closedRegisteredConnections(Map<Integer, Connecter> connections, IOException ioe) {
-		for (final Connecter c : connections.values()) {
-			c.close();
-		}
-		connections.clear();
+	private void closedRegisteredConnections(final Map<Integer, Connecter> connections, IOException ioe) {
+		proxyExecutor.execute(new Runnable() {
+			@Override
+			public void run() {
+				for (final Connecter c : connections.values()) {
+					c.close();
+				}
+				connections.clear();
+			}
+		});
 	}
 
 	@Override
@@ -430,9 +435,14 @@ public final class ProxyServer implements Listening {
 								if (externalBuilder == null) {
 									LOGGER.error("Unknown header (CONNECT_WITH_ADDRESS): {}", header);
 								} else {
-									Connecter externalConnector = externalBuilder.create(ninioProvider);
-									externalConnector.connect(connection);
-									connections.put(connectionId, externalConnector);
+									Connecter receivedInnerConnection = connections.get(connectionId);
+									if (receivedInnerConnection != null) {
+										LOGGER.error("Identifier already in use (CONNECT_WITH_ADDRESS): {}", connectionId);
+									} else {
+										Connecter externalConnector = externalBuilder.create(ninioProvider);
+										externalConnector.connect(connection);
+										connections.put(connectionId, externalConnector);
+									}
 								}
 							}
 						});
@@ -465,9 +475,14 @@ public final class ProxyServer implements Listening {
 								if (externalBuilder == null) {
 									LOGGER.error("Unknown header (CONNECT_WITHOUT_ADDRESS): {}", header);
 								} else {
-									Connecter externalConnector = externalBuilder.create(ninioProvider);
-									externalConnector.connect(connection);
-									connections.put(connectionId, externalConnector);
+									Connecter receivedInnerConnection = connections.get(connectionId);
+									if (receivedInnerConnection != null) {
+										LOGGER.error("Identifier already in use (CONNECT_WITH_ADDRESS): {}", connectionId);
+									} else {
+										Connecter externalConnector = externalBuilder.create(ninioProvider);
+										externalConnector.connect(connection);
+										connections.put(connectionId, externalConnector);
+									}
 								}
 							}
 						});
@@ -502,6 +517,7 @@ public final class ProxyServer implements Listening {
 	@Override
 	public void closed() {
 		listening.closed();
+		//TODO Close all connections
 	}
 	@Override
 	public void connected(Address address) {
@@ -510,5 +526,6 @@ public final class ProxyServer implements Listening {
 	@Override
 	public void failed(IOException e) {
 		listening.failed(e);
+		//TODO Close all connections
 	}
 }
