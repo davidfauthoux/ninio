@@ -428,6 +428,10 @@ public final class ProxyClient implements ProxyProvider {
 						proxyConnector.close();
 						proxyConnector = null;
 					}
+					for (InnerConnection c : connections.values()) {
+						c.connection.failed(new IOException("Abruptly closed"));
+					}
+					connections.clear();
 				}
 			});
 		}
@@ -454,7 +458,7 @@ public final class ProxyClient implements ProxyProvider {
 									@Override
 									public void run() {
 										for (InnerConnection c : connections.values()) {
-											c.connection.closed();
+											c.connection.failed(new IOException("Abruptly closed"));
 										}
 										connections.clear();
 										
@@ -716,7 +720,7 @@ public final class ProxyClient implements ProxyProvider {
 			proxyExecutor.execute(new Runnable() {
 				@Override
 				public void run() {
-					// connections.remove(innerConnection.connectionId); // Will be removed when server closes connection
+					connections.remove(innerConnection.connectionId);
 
 					if (proxyConnector == null) {
 						return;
@@ -738,8 +742,6 @@ public final class ProxyClient implements ProxyProvider {
 					};
 					
 					proxyConnector.send(null, b, sendCallback);
-					
-					innerConnection.connection.closed();
 				}
 			});
 		}
