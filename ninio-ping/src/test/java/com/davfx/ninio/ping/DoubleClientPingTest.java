@@ -25,7 +25,7 @@ public class DoubleClientPingTest {
 
 		try (Ninio ninio = Ninio.create()) {
 			final List<Lock<Double, IOException>> locks = new LinkedList<Lock<Double, IOException>>();
-			for (int i = 0; i < 10; i++) {
+			for (int i = 0; i < 500; i++) {
 				locks.add(new Lock<Double, IOException>());
 			}
 			
@@ -74,10 +74,15 @@ public class DoubleClientPingTest {
 							}
 						});
 						ping0 = !ping0;
+						Thread.sleep(10);
 					}
 					
+
+					int i =0;
 					for (Lock<Double, IOException> lock : locks) {
 						System.out.println(lock.waitFor());
+						System.out.println("---------------------" + i);
+						i++;
 					}
 				}
 			}

@@ -722,26 +722,26 @@ public final class ProxyClient implements ProxyProvider {
 				public void run() {
 					connections.remove(innerConnection.connectionId);
 
-					if (proxyConnector == null) {
-						return;
+					if (proxyConnector != null) {
+						ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES);
+						b.put((byte) ProxyCommons.Commands.CLOSE);
+						b.putInt(innerConnection.connectionId);
+						b.flip();
+	
+						SendCallback sendCallback = new SendCallback() {
+							@Override
+							public void failed(IOException e) {
+								doClose();
+							}
+							@Override
+							public void sent() {
+							}
+						};
+						
+						proxyConnector.send(null, b, sendCallback);
 					}
-
-					ByteBuffer b = ByteBuffer.allocate(1 + Ints.BYTES);
-					b.put((byte) ProxyCommons.Commands.CLOSE);
-					b.putInt(innerConnection.connectionId);
-					b.flip();
-
-					SendCallback sendCallback = new SendCallback() {
-						@Override
-						public void failed(IOException e) {
-							doClose();
-						}
-						@Override
-						public void sent() {
-						}
-					};
 					
-					proxyConnector.send(null, b, sendCallback);
+					innerConnection.connection.closed();
 				}
 			});
 		}
