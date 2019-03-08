@@ -16,7 +16,7 @@ public class NativeRawSocketTest {
 		int id = 1234;
 
 		try (Ninio ninio = Ninio.create()) {
-			NativeRawSocket s = new NativeRawSocket(NativeRawSocket.PF_INET, 1);
+			final NativeRawSocket s = new NativeRawSocket(NativeRawSocket.PF_INET, 1);
 
 			byte[] sendData = new byte[16];
 
@@ -51,9 +51,6 @@ public class NativeRawSocketTest {
 			byte[] recvData = new byte[84];
 			byte[] srcAddress = new byte[4];
 			
-			s.close();
-
-			
 			int r = s.read(recvData, 0, recvData.length, srcAddress);
 			Address a = new Address(srcAddress, 0);
 			LOGGER.debug("Received raw packet: {} bytes from: {}", r, a);
@@ -73,7 +70,18 @@ public class NativeRawSocketTest {
 
 			long deltaNano = now - time;
 			LOGGER.info("Received ICMP packet [{}/{}] (ID {}): {} ns", type, code, id, deltaNano);
-			
-			s.close();
+
+			new Thread(new Runnable() {
+				@Override
+				public void run() {
+					try {
+						Thread.sleep(1000);
+						s.close();
+					} catch (Exception e) {
+						LOGGER.error("Error", e);
+					}
+				}
+			}).start();
+			s.read(recvData, 0, recvData.length, srcAddress);
 		}
 	}}
