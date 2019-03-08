@@ -24,7 +24,7 @@ public final class PingClient implements PingConnecter {
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingClient.class);
 	
 	private static final int ICMP_PROTOCOL = 1;
-	private static final long ID_LIMIT = 1L << 32;
+	private static final long ID_LIMIT = Integer.MAX_VALUE - 1; // Last one is reserved for TERMINATE packet on RawSocket, sorry...
 	
 	public static interface Builder extends NinioBuilder<PingConnecter> {
 		@Deprecated
