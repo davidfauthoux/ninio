@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
 import com.davfx.ninio.core.Address;
 import com.davfx.ninio.core.Ninio;
 
-//mvn install dependency:copy-dependencies
+//mvn install -DskipTests=true dependency:copy-dependencies
 //sudo java -cp target/dependency/*:target/test-classes/:target/classes/ com.davfx.ninio.ping.PingTest
 public class PingTest {
 	private static final Logger LOGGER = LoggerFactory.getLogger(PingTest.class);
@@ -31,7 +31,7 @@ public class PingTest {
 					public void closed() {
 					}
 				});
-				while (true) {
+				for (int i = 0; i < 10; i++) {
 					client.ping(pingHost, new PingReceiver() {
 						@Override
 						public void received(double time) {
@@ -44,6 +44,8 @@ public class PingTest {
 					});
 					Thread.sleep(100L);
 				}
+				client.close();
+				Thread.sleep(1000L);
 			}
 		}
 	}

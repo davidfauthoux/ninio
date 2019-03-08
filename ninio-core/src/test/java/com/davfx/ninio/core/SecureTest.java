@@ -75,12 +75,12 @@ public class SecureTest {
 						new LockFailedConnection(lock, 
 						new LockReceivedConnection(lock,
 						new Nop())))));
+					clientWaitConnecting.waitFor();
 					client.send(null, ByteBufferUtils.toByteBuffer("loooooooooooongtest"),
 						new WaitSentSendCallback(clientWaitSent,
 						new LockSendCallback(lock,
 						new Nop())));
 					
-					clientWaitConnecting.waitFor();
 					serverWaitClientConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("ECHO:loooooooooooongtest");
 				}

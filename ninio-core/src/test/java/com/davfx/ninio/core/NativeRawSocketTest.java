@@ -75,13 +75,18 @@ public class NativeRawSocketTest {
 				@Override
 				public void run() {
 					try {
-						Thread.sleep(1000);
+						Thread.sleep(5000);
+						LOGGER.info("Close");
 						s.close();
 					} catch (Exception e) {
 						LOGGER.error("Error", e);
 					}
 				}
 			}).start();
-			s.read(recvData, 0, recvData.length, srcAddress);
+			while (true) {
+				r = s.read(recvData, 0, recvData.length, srcAddress);
+				a = new Address(srcAddress, 0);
+				LOGGER.debug("Received raw packet: {} bytes from: {}", r, a);
+			}
 		}
 	}}

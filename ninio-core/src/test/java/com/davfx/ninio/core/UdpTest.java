@@ -60,12 +60,12 @@ public class UdpTest {
 						new LockFailedConnection(lock, 
 						new LockReceivedConnection(lock,
 						new Nop())))));
+					clientWaitConnecting.waitFor();
 					client.send(new Address(Address.LOCALHOST, port), ByteBufferUtils.toByteBuffer("test"),
 						new WaitSentSendCallback(clientWaitSent,
 						new LockSendCallback(lock,
 						new Nop())));
 					
-					clientWaitConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 				}
 

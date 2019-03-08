@@ -74,12 +74,12 @@ public class TcpTest {
 						new LockFailedConnection(lock, 
 						new LockReceivedConnection(lock,
 						new Nop())))));
+					clientWaitConnecting.waitFor();
 					client.send(null, ByteBufferUtils.toByteBuffer("test"),
 						new WaitSentSendCallback(clientWaitSent,
 						new LockSendCallback(lock,
 						new Nop())));
 					
-					clientWaitConnecting.waitFor();
 					serverWaitClientConnecting.waitFor();
 					Assertions.assertThat(ByteBufferUtils.toString(lock.waitFor())).isEqualTo("test");
 				}
@@ -94,42 +94,5 @@ public class TcpTest {
 	@Test
 	public void testSameToCheckClose() throws Exception {
 		test();
-	}
-	
-	public static void main(String[] args) throws Exception {
-		try (Ninio ninio = Ninio.create()) {
-			int port = 8080;
-	
-		try (Connecter client = ninio.create(TcpSocket.builder().to(new Address(Address.LOCALHOST, port)))) {
-			client.connect(new Connection() {
-				
-				@Override
-				public void received(Address address, ByteBuffer buffer) {
-					// TODO Auto-generated method stub
-					
-				}
-				
-				@Override
-				public void connected(Address address) {
-					// TODO Auto-generated method stub
-					
-				}
-				
-				@Override
-				public void closed() {
-					System.err.println("CLOSED");
-					// TODO Auto-generated method stub
-					
-				}
-				
-				@Override
-				public void failed(IOException e) {
-					e.printStackTrace();
-					
-				}
-			});
-			Thread.sleep(1000);
-		}
-	}
 	}
 }
