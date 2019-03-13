@@ -90,19 +90,22 @@ public final class Version3PacketBuilder {
 				.add(new BytesBerPacket(ByteBuffer.wrap(new byte[] { (byte) securityFlags })))
 				.add(new IntegerBerPacket(BerConstants.VERSION_3_USM_SECURITY_MODEL)));
 
-		AuthBerPacket auth = (authEngine.getId() == null) ? null : new AuthBerPacket();
-		PrivacyBerPacket priv = (authEngine.getId() == null) ? null : new PrivacyBerPacket();
+		AuthBerPacket auth = new AuthBerPacket();
+		PrivacyBerPacket priv = new PrivacyBerPacket();
 		
 		root.add(new BytesSequenceBerPacket(new SequenceBerPacket(BerConstants.SEQUENCE)
 				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
 				.add(new IntegerBerPacket(authEngine.getBootCount()))
 				.add(new IntegerBerPacket(authEngine.getTime()))
-				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.getAuthLogin())))
+				.add(new BytesBerPacket(BerPacketUtils.bytes(authEngine.getAuthLogin())))
 				.add((auth == null) ? new NullBerPacket() : auth)
 				.add((priv == null) ? new NullBerPacket() : priv)
 			));
 
 		SequenceBerPacket seq = new SequenceBerPacket(BerConstants.SEQUENCE);
+		if (oid == null) {
+			oid = new Oid(new long[] { 1L, 1L });
+		}
 		if (oid != null) {
 			seq.add(new OidBerPacket(oid)).add(new NullBerPacket());
 		}
