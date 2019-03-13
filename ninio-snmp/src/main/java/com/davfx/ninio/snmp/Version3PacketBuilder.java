@@ -18,6 +18,8 @@ public final class Version3PacketBuilder {
 	}
 */
 
+	private static final int MAX_PACKET_SIZE = 65507; // Let's do as snmpwalk is doing
+	
 	private final ByteBuffer buffer;
 
 	private static final class AuthBerPacket implements BerPacket {
@@ -86,28 +88,25 @@ public final class Version3PacketBuilder {
 			.add(new IntegerBerPacket(BerConstants.VERSION_3))
 			.add(new SequenceBerPacket(BerConstants.SEQUENCE)
 				.add(new IntegerBerPacket(authEngine.incPacketNumber())) // Packet number
-				.add(new IntegerBerPacket(65535)) // Max packet size
+				.add(new IntegerBerPacket(MAX_PACKET_SIZE)) // Max packet size
 				.add(new BytesBerPacket(ByteBuffer.wrap(new byte[] { (byte) securityFlags })))
 				.add(new IntegerBerPacket(BerConstants.VERSION_3_USM_SECURITY_MODEL)));
 
-		AuthBerPacket auth = new AuthBerPacket();
-		PrivacyBerPacket priv = new PrivacyBerPacket();
+		AuthBerPacket auth = (authEngine.getId() == null) ? null : new AuthBerPacket();
+		PrivacyBerPacket priv = (authEngine.getId() == null) ? null : new PrivacyBerPacket();
 		
 		root.add(new BytesSequenceBerPacket(new SequenceBerPacket(BerConstants.SEQUENCE)
 				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
 				.add(new IntegerBerPacket(authEngine.getBootCount()))
 				.add(new IntegerBerPacket(authEngine.getTime()))
-				.add(new BytesBerPacket(BerPacketUtils.bytes(authEngine.getAuthLogin())))
-				.add((auth == null) ? new NullBerPacket() : auth)
-				.add((priv == null) ? new NullBerPacket() : priv)
+				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.getAuthLogin())))
+				.add((auth == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : auth)
+				.add((priv == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : priv)
 			));
 
-		SequenceBerPacket seq = new SequenceBerPacket(BerConstants.SEQUENCE);
-		if (oid == null) {
-			oid = new Oid(new long[] { 1L, 1L });
-		}
+		SequenceBerPacket pduSeq = new SequenceBerPacket(BerConstants.SEQUENCE);
 		if (oid != null) {
-			seq.add(new OidBerPacket(oid)).add(new NullBerPacket());
+			pduSeq.add(new SequenceBerPacket(BerConstants.SEQUENCE).add(new OidBerPacket(oid)).add(new NullBerPacket()));
 		}
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
@@ -117,8 +116,7 @@ public final class Version3PacketBuilder {
 				.add(new IntegerBerPacket(requestId))
 				.add(new IntegerBerPacket(0))
 				.add(new IntegerBerPacket(bulkLength))
-				.add(new SequenceBerPacket(BerConstants.SEQUENCE)
-					.add(seq)));
+				.add(pduSeq));
 
 		if (encrypt) {
 			ByteBuffer decryptedBuffer = ByteBuffer.allocate(BerPacketUtils.typeAndLengthBufferLength(pduPacket.lengthBuffer()) + pduPacket.length());
@@ -148,7 +146,6 @@ public final class Version3PacketBuilder {
 		buffer.put(bytes);
 		buffer.position(p);
 	}
-
 /*
 	private static Iterable<OidValue> single(Oid oid) {
 		List<OidValue> l = new LinkedList<>();

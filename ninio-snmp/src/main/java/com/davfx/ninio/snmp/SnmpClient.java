@@ -389,10 +389,9 @@ public final class SnmpClient implements SnmpConnecter {
 
 		private static final Random RANDOM = new SecureRandom();
 
-		public static final int IGNORE_ID = 0;
-		
-		private static final int MAX_ID = 2_000_000_000;
-		private static final int INITIAL_VARIABILITY = 100_000;
+		private static final int MIN_ID = 1_000;
+		private static final int MAX_ID = 2_043_088_696; // Let's do as snmpwalk is doing
+		public static final int IGNORE_ID = MAX_ID;
 		
 		private static int NEXT = MAX_ID;
 		
@@ -404,7 +403,7 @@ public final class SnmpClient implements SnmpConnecter {
 		public int get() {
 			synchronized (LOCK) {
 				if (NEXT == MAX_ID) {
-					NEXT = IGNORE_ID + 1 + RANDOM.nextInt(INITIAL_VARIABILITY);
+					NEXT = MIN_ID + RANDOM.nextInt(MAX_ID - MIN_ID);
 				}
 				int k = NEXT;
 				NEXT++;

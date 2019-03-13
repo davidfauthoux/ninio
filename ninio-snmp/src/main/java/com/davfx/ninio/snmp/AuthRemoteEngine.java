@@ -20,6 +20,7 @@ final class AuthRemoteEngine {
 	private static final Logger LOGGER = LoggerFactory.getLogger(AuthRemoteEngine.class);
 
 	private static final int ENCRYPTION_MARGIN = 64;
+	private static final int INITIAL_PACKET_NUMBER = 61_473_655; // Let's do as snmpwalk is doing
 	
 	private int bootCount = 0;
 	private int resetTime = 0;
@@ -28,7 +29,7 @@ final class AuthRemoteEngine {
 	private final MessageDigest messageDigest;
 	public final AuthRemoteSpecification authRemoteSpecification;
 	
-	private int packetNumber = 0;
+	private int packetNumber = INITIAL_PACKET_NUMBER;
     private byte[] encryptionParameters = new byte[8];
     
     private final SecureRandom random = new SecureRandom();
