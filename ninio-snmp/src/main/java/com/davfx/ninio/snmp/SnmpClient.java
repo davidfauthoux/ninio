@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.Executor;
 
@@ -74,7 +75,37 @@ public final class SnmpClient implements SnmpConnecter {
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final MemoryCache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Address, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
-	private final MemoryCache<AuthRemoteSpecification, EncryptionEngine> encryptionEngines = MemoryCache.<AuthRemoteSpecification, EncryptionEngine> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+	private static final class EncryptionEngineKey {
+		public final String authDigestAlgorithm;
+		public final String privEncryptionAlgorithm;
+		
+		public EncryptionEngineKey(String authDigestAlgorithm, String privEncryptionAlgorithm) {
+			this.authDigestAlgorithm = authDigestAlgorithm;
+			this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(authDigestAlgorithm, privEncryptionAlgorithm);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (!(obj instanceof AuthRemoteSpecification)) {
+				return false;
+			}
+			AuthRemoteSpecification other = (AuthRemoteSpecification) obj;
+			return Objects.equals(authDigestAlgorithm, other.authDigestAlgorithm)
+				&& Objects.equals(privEncryptionAlgorithm, other.privEncryptionAlgorithm);
+		}
+	}
+	private final MemoryCache<EncryptionEngineKey, EncryptionEngine> encryptionEngines = MemoryCache.<EncryptionEngineKey, EncryptionEngine> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
 
 	private SnmpClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
@@ -156,10 +187,11 @@ public final class SnmpClient implements SnmpConnecter {
 								authRemoteEngines.put(a, authRemoteEnginePendingRequestManager);
 							}
 
-							EncryptionEngine encryptionEngine = encryptionEngines.get(s);
+							EncryptionEngineKey k = new EncryptionEngineKey(s.authDigestAlgorithm, s.privEncryptionAlgorithm);
+							EncryptionEngine encryptionEngine = encryptionEngines.get(k);
 							if (encryptionEngine == null) {
-								encryptionEngine = new EncryptionEngine(s.authDigestAlgorithm, AUTH_ENGINES_CACHE_DURATION);
-								encryptionEngines.put(s, encryptionEngine);
+								encryptionEngine = new EncryptionEngine(s.authDigestAlgorithm, s.privEncryptionAlgorithm, AUTH_ENGINES_CACHE_DURATION);
+								encryptionEngines.put(k, encryptionEngine);
 							}
 
 							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, encryptionEngine, a, connecter);
