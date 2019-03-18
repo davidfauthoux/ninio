@@ -73,7 +73,7 @@ public final class Version3PacketBuilder {
 		
 		boolean encrypt = false;
 		int securityFlags = 0x0;
-		if (authEngine.getId() != null) {
+		if (authEngine.isValid()) {
 			if (authEngine.getAuthLogin() != null) {
 				securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
 				if (authEngine.usePriv()) {
@@ -92,14 +92,14 @@ public final class Version3PacketBuilder {
 				.add(new BytesBerPacket(ByteBuffer.wrap(new byte[] { (byte) securityFlags })))
 				.add(new IntegerBerPacket(BerConstants.VERSION_3_USM_SECURITY_MODEL)));
 
-		AuthBerPacket auth = (authEngine.getId() == null) ? null : new AuthBerPacket();
-		PrivacyBerPacket priv = (authEngine.getId() == null) ? null : new PrivacyBerPacket();
+		AuthBerPacket auth = !authEngine.isValid() ? null : new AuthBerPacket();
+		PrivacyBerPacket priv = !authEngine.isValid() ? null : new PrivacyBerPacket();
 		
 		root.add(new BytesSequenceBerPacket(new SequenceBerPacket(BerConstants.SEQUENCE)
 				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
 				.add(new IntegerBerPacket(authEngine.getBootCount()))
 				.add(new IntegerBerPacket(authEngine.getTime()))
-				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.getAuthLogin())))
+				.add(new BytesBerPacket((authEngine.getAuthLogin() == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.getAuthLogin())))
 				.add((auth == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : auth)
 				.add((priv == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : priv)
 			));

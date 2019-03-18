@@ -102,6 +102,10 @@ final class AuthRemoteEngine {
 		return encryptionParameters;
 	}
 	
+	public boolean isValid() {
+		return (id != null) && (time > 0);
+	}
+
 	public byte[] getId() {
 		return id;
 	}
@@ -138,9 +142,15 @@ final class AuthRemoteEngine {
 	}
 	public void resetTime(int resetTime) {
 		LOGGER.trace("Auth engine reset time: {} ({}) -> {}", this.resetTime, time, resetTime);
-		timeResetAt = System.currentTimeMillis();
-		this.resetTime = resetTime;
-		this.time = resetTime;
+		if (resetTime == 0) {
+			timeResetAt = 0L;
+			time = 0;
+			this.resetTime = 0;
+		} else {
+			timeResetAt = System.currentTimeMillis();
+			this.resetTime = resetTime;
+			time = resetTime;
+		}
 	}
 
 	public byte[] hash(ByteBuffer message) {

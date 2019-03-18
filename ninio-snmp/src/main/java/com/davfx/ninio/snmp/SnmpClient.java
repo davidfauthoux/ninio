@@ -304,10 +304,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public boolean isReady() {
-			if (engine.getId() == null) {
-				return false;
-			}
-			return true;
+			return engine.isValid();
 		}
 		
 		public void reset() {
@@ -315,7 +312,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void discoverIfNecessary(Address address, Connecter connector) {
-			if (engine.getId() == null) {
+			if (!engine.isValid()) {
 				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, null);
 				ByteBuffer b = builder.getBuffer();
 				LOGGER.trace("Writing discover GET v3: #{}, packet size = {}", RequestIdProvider.IGNORE_ID, b.remaining());
@@ -340,7 +337,7 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void sendPendingRequestsIfReady(Address address, Connecter connector) {
-			if (engine.getId() == null) {
+			if (!engine.isValid()) {
 				return;
 			}
 			
