@@ -144,14 +144,7 @@ public final class SnmpClient implements SnmpConnecter {
 			
 			@Override
 			public void cancel() {
-				executor.execute(new Runnable() {
-					@Override
-					public void run() {
-						if (instance != null) {
-							instance.cancel();
-						}
-					}
-				});
+				// Deprecated
 			}
 			
 			@Override
@@ -202,7 +195,19 @@ public final class SnmpClient implements SnmpConnecter {
 						instance.launch();
 					}
 				});
-				return this;
+				return new Cancelable() {
+					@Override
+					public void cancel() {
+						executor.execute(new Runnable() {
+							@Override
+							public void run() {
+								if (instance != null) {
+									instance.cancel();
+								}
+							}
+						});
+					}
+				};
 			}
 		};
 	}

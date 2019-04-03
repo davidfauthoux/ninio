@@ -58,7 +58,7 @@ public final class SnmpTimeout {
 			
 			@Override
 			public void cancel() {
-				wrappee.cancel();
+				// Deprecated
 			}
 
 			@Override
@@ -86,7 +86,6 @@ public final class SnmpTimeout {
 				m.run(new Runnable() {
 					@Override
 					public void run() {
-						wrappee.cancel();
 						callback.failed(new IOException("Timeout"));
 					}
 				});
@@ -95,7 +94,6 @@ public final class SnmpTimeout {
 					@Override
 					public void cancel() {
 						m.cancel();
-						wrappee.cancel();
 					}
 				};
 			}

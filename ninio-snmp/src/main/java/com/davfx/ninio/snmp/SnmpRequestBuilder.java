@@ -2,7 +2,7 @@ package com.davfx.ninio.snmp;
 
 import com.davfx.ninio.core.Address;
 
-public interface SnmpRequestBuilder extends Cancelable {
+public interface SnmpRequestBuilder extends Cancelable { // extends Cancelable is deprecated
 	SnmpRequestBuilder community(String community);
 	SnmpRequestBuilder auth(AuthRemoteSpecification authRemoteSpecification);
 
