@@ -60,6 +60,8 @@ public final class SnmpSerialByAddress {
 			private Oid oid;
 			private final List<OidValue> added = new LinkedList<>();
 			
+			private ToSend currentToSend = null;
+			
 			@Override
 			public SnmpRequestBuilder community(String community) {
 				this.community = community;
@@ -87,6 +89,29 @@ public final class SnmpSerialByAddress {
 			@Override
 			public void cancel() {
 				// Deprecated
+				final Address a = address;
+				executor.execute(new Runnable() {
+					@Override
+					public void run() {
+						ToSend s = currentToSend;
+
+						if (currentToSend == null) {
+							return;
+						}
+						currentToSend = null;
+
+						ToSendByAddress q = toSend.get(a);
+						if (q == null) {
+							// Nothing to do
+						} else {
+							if (!q.list.remove(s)) {
+								q.currentCancelable.cancel();
+								doSendNext(a, q);
+							}
+						}
+					}
+				});
+
 			}
 			
 			private void doSendNext(final Address a, final ToSendByAddress q) {
@@ -141,6 +166,12 @@ public final class SnmpSerialByAddress {
 				executor.execute(new Runnable() {
 					@Override
 					public void run() {
+						if (currentToSend != null) {
+							LOGGER.error("Invalid call!");
+							return;
+						}
+						currentToSend = s;
+						
 						ToSendByAddress q = toSend.get(a);
 						if (q == null) {
 							LOGGER.info("Call to: {} NOT serialized", a);
@@ -161,6 +192,11 @@ public final class SnmpSerialByAddress {
 						executor.execute(new Runnable() {
 							@Override
 							public void run() {
+								if (currentToSend == null) {
+									return;
+								}
+								currentToSend = null;
+
 								ToSendByAddress q = toSend.get(a);
 								if (q == null) {
 									// Nothing to do
