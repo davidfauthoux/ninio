@@ -65,7 +65,7 @@ public final class SnmpTimeout {
 			@Override
 			public Cancelable call(SnmpCallType type, final SnmpReceiver callback) {
 				final Timeout.Manager m = t.set(timeout);
-				wrappee.call(type, new SnmpReceiver() {
+				final Cancelable c = wrappee.call(type, new SnmpReceiver() {
 					@Override
 					public void failed(IOException ioe) {
 						m.cancel();
@@ -88,6 +88,7 @@ public final class SnmpTimeout {
 					@Override
 					public void run() {
 						wrappee.cancel(); // Deprecated
+						c.cancel();
 						callback.failed(new IOException("Timeout"));
 					}
 				});
@@ -95,6 +96,7 @@ public final class SnmpTimeout {
 				return new Cancelable() {
 					@Override
 					public void cancel() {
+						c.cancel();
 						m.cancel();
 						wrappee.cancel(); // Deprecated
 					}
