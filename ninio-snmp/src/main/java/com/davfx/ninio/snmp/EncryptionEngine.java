@@ -32,15 +32,21 @@ final class EncryptionEngine {
 		} catch (NoSuchAlgorithmException e) {
 			throw new RuntimeException(e);
 		}
-		
-		try {
-			cipher = Cipher.getInstance(privEncryptionAlgorithm + "/" + (privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
-		} catch (NoSuchPaddingException e) {
-			throw new RuntimeException(e);
+
+		if (privEncryptionAlgorithm != null) {
+			boolean isAes = privEncryptionAlgorithm.equals("AES");
+
+			try {
+				cipher = Cipher.getInstance(privEncryptionAlgorithm + "/" + (isAes ? "CFB" : "CBC") + "/" + (isAes ? "NoPadding" : "PKCS5Padding"));
+			} catch (NoSuchAlgorithmException|NoSuchPaddingException e) {
+				throw new RuntimeException(e);
+			}
+
+			privKeyLength = isAes ? 16 : 8;
+		} else {
+			cipher = null;
+			privKeyLength = 8;
 		}
-		privKeyLength = privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		
 		cache = MemoryCache.<String, byte[]> builder().expireAfterAccess(cacheDuration).build();
 	}
