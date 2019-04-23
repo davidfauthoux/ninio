@@ -195,7 +195,7 @@ public final class SnmpClient implements SnmpConnecter {
 								encryptionEngines.put(k, encryptionEngine);
 							}
 
-							authRemoteEnginePendingRequestManager.update(authRemoteSpecification, encryptionEngine, a, connecter);
+							authRemoteEnginePendingRequestManager.update(s, encryptionEngine, a, connecter);
 						}
 
 						instance.receiver = r;

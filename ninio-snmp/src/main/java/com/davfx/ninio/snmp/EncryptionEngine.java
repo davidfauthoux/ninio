@@ -25,27 +25,40 @@ final class EncryptionEngine {
 	private final String privEncryptionAlgorithm;
 
 	public EncryptionEngine(String authDigestAlgorithm, String privEncryptionAlgorithm, double cacheDuration) {
-		this.privEncryptionAlgorithm = privEncryptionAlgorithm;
-		
-		try {
-			messageDigest = MessageDigest.getInstance(authDigestAlgorithm);
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
+		if (authDigestAlgorithm == null) {
+			messageDigest = null;
+		} else {
+			try {
+				messageDigest = MessageDigest.getInstance(authDigestAlgorithm);
+			} catch (NoSuchAlgorithmException e) {
+				throw new RuntimeException(e);
+			}
 		}
 		
-		try {
-			cipher = Cipher.getInstance(privEncryptionAlgorithm + "/" + (privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
-		} catch (NoSuchPaddingException e) {
-			throw new RuntimeException(e);
+		if (privEncryptionAlgorithm == null) {
+			this.privEncryptionAlgorithm = null;
+			cipher = null;
+			privKeyLength = 0;
+		} else {
+			this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+			try {
+				cipher = Cipher.getInstance(privEncryptionAlgorithm + "/" + (privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
+			} catch (NoSuchAlgorithmException e) {
+				throw new RuntimeException(e);
+			} catch (NoSuchPaddingException e) {
+				throw new RuntimeException(e);
+			}
+			privKeyLength = privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		}
-		privKeyLength = privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		
 		cache = MemoryCache.<String, byte[]> builder().expireAfterAccess(cacheDuration).build();
 	}
 
 	public byte[] regenerateKey(byte[] id, String password) {
+		if (messageDigest == null) {
+			return null;
+		}
+		
 		if (password == null) {
 			return null;
 		}
@@ -83,6 +96,10 @@ final class EncryptionEngine {
 	}
 	
 	public byte[] hash(byte[] authKey, ByteBuffer message) {
+		if (messageDigest == null) {
+			return null;
+		}
+		
 		ByteBuffer messageDup = message.duplicate();
 
 		byte[] newDigest;
@@ -126,6 +143,10 @@ final class EncryptionEngine {
 	}
 	
 	public ByteBuffer encrypt(int bootCount, int time, byte[] encryptionParameters, byte[] privKey, ByteBuffer decryptedBuffer) {
+		if (cipher == null) {
+			return null;
+		}
+		
 		int salt = random.nextInt();
 		byte[] iv;
 
@@ -162,6 +183,10 @@ final class EncryptionEngine {
 	}
 
 	public ByteBuffer decrypt(int bootCount, int time, byte[] encryptionParameters, byte[] privKey, ByteBuffer encryptedBuffer) {
+		if (cipher == null) {
+			return null;
+		}
+		
 		byte[] iv;
 
 		if (privEncryptionAlgorithm.equals("AES")) {

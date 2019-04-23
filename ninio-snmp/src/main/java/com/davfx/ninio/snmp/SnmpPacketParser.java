@@ -105,7 +105,11 @@ public final class SnmpPacketParser {
 	
 				BerReader pdu;
 				if ((securityFlags & BerConstants.VERSION_3_PRIV_FLAG) != 0) {
-					pdu = new BerReader(authEngine.decrypt(ber.readBytes()));
+					ByteBuffer decrypted = authEngine.decrypt(ber.readBytes());
+					if (decrypted == null) {
+						throw new IOException("Could not decrypt, auth engine keys/algorithms not provided");
+					}
+					pdu = new BerReader(decrypted);
 				} else {
 					pdu = ber;
 				}
