@@ -4,7 +4,7 @@
 	<parent>
 		<groupId>com.davfx.ninio</groupId>
 		<artifactId>ninio</artifactId>
-		<version>3.0.40i</version>
+		<version>3.0.40ii</version>
 	</parent>
 
 	<artifactId>ninio-script</artifactId>
