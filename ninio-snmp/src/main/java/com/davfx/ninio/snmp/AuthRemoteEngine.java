@@ -1,6 +1,7 @@
 package com.davfx.ninio.snmp;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -38,11 +39,41 @@ final class AuthRemoteEngine {
 		privKey = encryptionEngine.regenerateKey(null, authRemoteSpecification.privPassword);
 	}
 	
-	public String getAuthLogin() {
-		return authRemoteSpecification.login;
+	public static boolean hasChanged(AuthRemoteSpecification s, AuthRemoteSpecification other) {
+		return !Objects.equals(s.authPassword, other.authPassword)
+			|| !Objects.equals(s.authDigestAlgorithm, other.authDigestAlgorithm)
+			|| !Objects.equals(s.privPassword, other.privPassword)
+			|| !Objects.equals(s.privEncryptionAlgorithm, other.privEncryptionAlgorithm);
 	}
-	public boolean usePriv() {
-		return (authRemoteSpecification.privPassword != null);
+	public static final class EncryptionEngineKey {
+		public final String authDigestAlgorithm;
+		public final String privEncryptionAlgorithm;
+		
+		public EncryptionEngineKey(String authDigestAlgorithm, String privEncryptionAlgorithm) {
+			this.authDigestAlgorithm = authDigestAlgorithm;
+			this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(authDigestAlgorithm, privEncryptionAlgorithm);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (!(obj instanceof EncryptionEngineKey)) {
+				return false;
+			}
+			EncryptionEngineKey other = (EncryptionEngineKey) obj;
+			return Objects.equals(authDigestAlgorithm, other.authDigestAlgorithm)
+				&& Objects.equals(privEncryptionAlgorithm, other.privEncryptionAlgorithm);
+		}
 	}
 	
 	public int incPacketNumber() {
@@ -64,7 +95,9 @@ final class AuthRemoteEngine {
 	}
 
 	public void setId(byte[] id) {
-		LOGGER.trace("Auth engine ID: {} -> {}", (this.id == null) ? null : BaseEncoding.base16().encode(this.id), BaseEncoding.base16().encode(id));
+		if (LOGGER.isTraceEnabled()) {
+			LOGGER.trace("Auth engine ID: {} -> {}", (this.id == null) ? null : BaseEncoding.base16().encode(this.id), BaseEncoding.base16().encode(id));
+		}
 		this.id = id;
 		authKey = encryptionEngine.regenerateKey(this.id, authRemoteSpecification.authPassword);
 		privKey = encryptionEngine.regenerateKey(this.id, authRemoteSpecification.privPassword);

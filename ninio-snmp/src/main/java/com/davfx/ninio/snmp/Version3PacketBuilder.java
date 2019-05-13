@@ -74,9 +74,9 @@ public final class Version3PacketBuilder {
 		boolean encrypt = false;
 		int securityFlags = 0x0;
 		if (authEngine.isValid()) {
-			if (authEngine.getAuthLogin() != null) {
+			if (authEngine.authRemoteSpecification.login != null) {
 				securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
-				if (authEngine.usePriv()) {
+				if (authEngine.authRemoteSpecification.privPassword != null) {
 					securityFlags |= BerConstants.VERSION_3_PRIV_FLAG;
 					encrypt = true;
 				}
@@ -99,7 +99,7 @@ public final class Version3PacketBuilder {
 				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
 				.add(new IntegerBerPacket(authEngine.getBootCount()))
 				.add(new IntegerBerPacket(authEngine.getTime()))
-				.add(new BytesBerPacket((authEngine.getAuthLogin() == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.getAuthLogin())))
+				.add(new BytesBerPacket((authEngine.authRemoteSpecification.login == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.authRemoteSpecification.login)))
 				.add((auth == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : auth)
 				.add((priv == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : priv)
 			));

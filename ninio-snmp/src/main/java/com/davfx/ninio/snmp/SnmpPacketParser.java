@@ -90,8 +90,8 @@ public final class SnmpPacketParser {
 					authEngine.setBootCount(secBer.readInteger());
 					authEngine.resetTime(secBer.readInteger());
 					String login = BerPacketUtils.string(secBer.readBytes());
-					if (((securityFlags & BerConstants.VERSION_3_AUTH_FLAG) != 0) && !login.equals(authEngine.getAuthLogin())) {
-						throw new IOException("Bad login: " + login + " should be: " + authEngine.getAuthLogin());
+					if (((securityFlags & BerConstants.VERSION_3_AUTH_FLAG) != 0) && !login.equals(authEngine.authRemoteSpecification.login)) {
+						throw new IOException("Bad login: " + login + " should be: " + authEngine.authRemoteSpecification.login);
 					}
 					secBer.readBytes();
 					ByteBuffer decryptParams = secBer.readBytes();

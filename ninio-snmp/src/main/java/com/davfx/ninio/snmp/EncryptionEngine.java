@@ -11,11 +11,16 @@ import javax.crypto.NoSuchPaddingException;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.davfx.ninio.util.MemoryCache;
 import com.google.common.base.Charsets;
 import com.google.common.io.BaseEncoding;
 
 final class EncryptionEngine {
+	private static final Logger LOGGER = LoggerFactory.getLogger(EncryptionEngine.class);
+
 	private static final int ENCRYPTION_MARGIN = 64;
 	private final SecureRandom random = new SecureRandom();
 	private final MessageDigest messageDigest;
@@ -41,6 +46,7 @@ final class EncryptionEngine {
 			privKeyLength = 0;
 		} else {
 			this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+			LOGGER.trace("Creating encryption engine");
 			try {
 				cipher = Cipher.getInstance(privEncryptionAlgorithm + "/" + (privEncryptionAlgorithm.equals("AES") ? "CFB" : "CBC") + "/" + (privEncryptionAlgorithm.equals("AES") ? "NoPadding" : "PKCS5Padding"));
 			} catch (NoSuchAlgorithmException e) {
@@ -48,6 +54,7 @@ final class EncryptionEngine {
 			} catch (NoSuchPaddingException e) {
 				throw new RuntimeException(e);
 			}
+			LOGGER.trace("Encryption engine created");
 			privKeyLength = privEncryptionAlgorithm.equals("AES") ? 16 : 8;
 		}
 		
@@ -64,12 +71,13 @@ final class EncryptionEngine {
 		}
 		
 		if (id == null) {
-			id = new byte[] {};
+			return null; // id = new byte[] {};
 		}
 		
 		String k = BaseEncoding.base64().encode(id) + " " + password; // Space is a safe separator (not in the regular Base64 characters)
 		byte[] d = cache.get(k);
 		if (d == null) {
+			LOGGER.trace("Regenerating key");
 			byte[] passwordBytes = password.getBytes(Charsets.UTF_8);
 
 			int count = 0;
@@ -91,6 +99,7 @@ final class EncryptionEngine {
 			messageDigest.update(digest);
 			d = messageDigest.digest();
 			cache.put(k, d);
+			LOGGER.trace("Key regenerated");
 		}
 		return d;
 	}
