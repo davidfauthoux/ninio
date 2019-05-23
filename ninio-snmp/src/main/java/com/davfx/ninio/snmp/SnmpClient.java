@@ -350,6 +350,9 @@ public final class SnmpClient implements SnmpConnecter {
 		public void registerPendingRequest(PendingRequest r) {
 			pendingRequests.add(r);
 		}
+		public void clearPendingRequests() {
+			pendingRequests.clear();
+		}
 		
 		public void sendPendingRequestsIfReady(Address address, Connecter connector) {
 			if (!engine.isValid()) {
@@ -527,6 +530,9 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void cancel() {
+			if (authRemoteEnginePendingRequestManager != null) {
+				authRemoteEnginePendingRequestManager.clearPendingRequests();
+			}
 			instanceMapper.unmap(this);
 			receiver = null;
 		}
