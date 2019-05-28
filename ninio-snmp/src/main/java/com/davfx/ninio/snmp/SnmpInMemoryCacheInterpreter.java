@@ -54,7 +54,6 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
-					if (true) return null;
 					// LOGGER.info("handleRequest VERSION_3");
 					byte securityFlags;
 		
@@ -149,7 +148,6 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					// ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
-					if (true) return null;
 					// LOGGER.info("handleResponse VERSION_3");
 					byte securityFlags;
 					
@@ -251,7 +249,6 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
-					if (true) return null;
 					// LOGGER.info("transform VERSION_3");
 					byte securityFlags;
 					
