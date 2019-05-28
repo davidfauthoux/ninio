@@ -1,7 +1,6 @@
 package com.davfx.ninio.snmp;
 
 import java.nio.ByteBuffer;
-import java.util.Objects;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -13,17 +12,17 @@ final class AuthRemoteEngine {
 
 	private static final int INITIAL_PACKET_NUMBER = 61_473_655; // Let's do as snmpwalk is doing
 	
-	private int bootCount = 0;
-	private int resetTime = 0;
-	private byte[] id = null;
+	private int bootCount;
+	private int resetTime;
+	private byte[] id;
 
-	public final AuthRemoteSpecification authRemoteSpecification;
+	public final Auth auth;
 	
-	private int packetNumber = INITIAL_PACKET_NUMBER;
-    private byte[] encryptionParameters = new byte[8];
+	private int packetNumber;
+    private byte[] encryptionParameters;
     
-    private long timeResetAt = 0L;
-    private int time = 0;
+    private long timeResetAt;
+    private int time;
     
     //%%% private boolean ready = false;
     
@@ -31,49 +30,25 @@ final class AuthRemoteEngine {
     private byte[] authKey;
     private byte[] privKey;
     
-	public AuthRemoteEngine(AuthRemoteSpecification authRemoteSpecification, EncryptionEngine encryptionEngine) {
-		this.authRemoteSpecification = authRemoteSpecification;
+	public AuthRemoteEngine(Auth auth, EncryptionEngine encryptionEngine) {
+		this.auth = auth;
 		this.encryptionEngine = encryptionEngine;
 
-		authKey = encryptionEngine.regenerateKey(null, authRemoteSpecification.authPassword);
-		privKey = encryptionEngine.regenerateKey(null, authRemoteSpecification.privPassword);
+		reset();
 	}
 	
-	public static boolean hasChanged(AuthRemoteSpecification s, AuthRemoteSpecification other) {
-		return !Objects.equals(s.authPassword, other.authPassword)
-			|| !Objects.equals(s.authDigestAlgorithm, other.authDigestAlgorithm)
-			|| !Objects.equals(s.privPassword, other.privPassword)
-			|| !Objects.equals(s.privEncryptionAlgorithm, other.privEncryptionAlgorithm);
-	}
-	public static final class EncryptionEngineKey {
-		public final String authDigestAlgorithm;
-		public final String privEncryptionAlgorithm;
+	public void reset() {
+		bootCount = 0;
+		resetTime = 0;
+		id = null;
+
+		packetNumber = INITIAL_PACKET_NUMBER;
+		encryptionParameters = new byte[8];
+		timeResetAt = 0L;
+		time = 0;
 		
-		public EncryptionEngineKey(String authDigestAlgorithm, String privEncryptionAlgorithm) {
-			this.authDigestAlgorithm = authDigestAlgorithm;
-			this.privEncryptionAlgorithm = privEncryptionAlgorithm;
-		}
-
-		@Override
-		public int hashCode() {
-			return Objects.hash(authDigestAlgorithm, privEncryptionAlgorithm);
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if (this == obj) {
-				return true;
-			}
-			if (obj == null) {
-				return false;
-			}
-			if (!(obj instanceof EncryptionEngineKey)) {
-				return false;
-			}
-			EncryptionEngineKey other = (EncryptionEngineKey) obj;
-			return Objects.equals(authDigestAlgorithm, other.authDigestAlgorithm)
-				&& Objects.equals(privEncryptionAlgorithm, other.privEncryptionAlgorithm);
-		}
+		authKey = encryptionEngine.regenerateKey(null, auth.authPassword);
+		privKey = encryptionEngine.regenerateKey(null, auth.privPassword);
 	}
 	
 	public int incPacketNumber() {
@@ -99,8 +74,8 @@ final class AuthRemoteEngine {
 			LOGGER.trace("Auth engine ID: {} -> {}", (this.id == null) ? null : BaseEncoding.base16().encode(this.id), BaseEncoding.base16().encode(id));
 		}
 		this.id = id;
-		authKey = encryptionEngine.regenerateKey(this.id, authRemoteSpecification.authPassword);
-		privKey = encryptionEngine.regenerateKey(this.id, authRemoteSpecification.privPassword);
+		authKey = encryptionEngine.regenerateKey(this.id, auth.authPassword);
+		privKey = encryptionEngine.regenerateKey(this.id, auth.privPassword);
 	}
 	public void setEncryptionParameters(byte[] encryptionParameters) {
 		this.encryptionParameters = encryptionParameters;

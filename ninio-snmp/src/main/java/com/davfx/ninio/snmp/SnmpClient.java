@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Random;
 import java.util.concurrent.Executor;
 
@@ -67,14 +68,46 @@ public final class SnmpClient implements SnmpConnecter {
 		};
 	}
 	
+	private static final class EncryptionEngineKey {
+		public final String authDigestAlgorithm;
+		public final String privEncryptionAlgorithm;
+		
+		public EncryptionEngineKey(String authDigestAlgorithm, String privEncryptionAlgorithm) {
+			this.authDigestAlgorithm = authDigestAlgorithm;
+			this.privEncryptionAlgorithm = privEncryptionAlgorithm;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(authDigestAlgorithm, privEncryptionAlgorithm);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (!(obj instanceof EncryptionEngineKey)) {
+				return false;
+			}
+			EncryptionEngineKey other = (EncryptionEngineKey) obj;
+			return Objects.equals(authDigestAlgorithm, other.authDigestAlgorithm)
+				&& Objects.equals(privEncryptionAlgorithm, other.privEncryptionAlgorithm);
+		}
+	}
+
 	private final Executor executor;
 	private final Connecter connecter;
 	
 	private final InstanceMapper instanceMapper;
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
-	private final MemoryCache<Address, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Address, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
-	private final MemoryCache<AuthRemoteEngine.EncryptionEngineKey, EncryptionEngine> encryptionEngines = MemoryCache.<AuthRemoteEngine.EncryptionEngineKey, EncryptionEngine> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+	private final MemoryCache<Address, Auth> auths = MemoryCache.<Address, Auth> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+	private final MemoryCache<Auth, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Auth, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+	private final MemoryCache<EncryptionEngineKey, EncryptionEngine> encryptionEngines = MemoryCache.<EncryptionEngineKey, EncryptionEngine> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
 
 	private SnmpClient(Executor executor, Connecter connecter) {
 		this.executor = executor;
@@ -135,7 +168,8 @@ public final class SnmpClient implements SnmpConnecter {
 
 			@Override
 			public Cancelable call(final SnmpCallType type, final SnmpReceiver r) {
-				final AuthRemoteSpecification s = authRemoteSpecification;
+				final Auth auth = (authRemoteSpecification == null) ? null : new Auth(authRemoteSpecification.login, authRemoteSpecification.authPassword, authRemoteSpecification.authDigestAlgorithm, authRemoteSpecification.privPassword, authRemoteSpecification.privEncryptionAlgorithm);;
+				final String contextName = (authRemoteSpecification == null) ? null : authRemoteSpecification.contextName;
 				final Oid o = oid;
 				final Address a = address;
 				final String c = community;
@@ -147,24 +181,32 @@ public final class SnmpClient implements SnmpConnecter {
 							throw new IllegalStateException();
 						}
 						
-						instance = new Instance(connecter, instanceMapper, o, a, type, c, t);
+						instance = new Instance(connecter, instanceMapper, o, contextName, a, type, c, t);
 
 						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = null;
-						if (s != null) {
-							authRemoteEnginePendingRequestManager = authRemoteEngines.get(a);
-							if (authRemoteEnginePendingRequestManager == null) {
-								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager();
-								authRemoteEngines.put(a, authRemoteEnginePendingRequestManager);
+						if (auth != null) {
+							Auth previousAuth = auths.get(a);
+							if (previousAuth != null) {
+								if (!previousAuth.equals(auth)) {
+									LOGGER.debug("Auth changed ({} -> {}) for {}", previousAuth, auth, a);
+								}
 							}
-
-							AuthRemoteEngine.EncryptionEngineKey k = new AuthRemoteEngine.EncryptionEngineKey(s.authDigestAlgorithm, s.privEncryptionAlgorithm);
-							EncryptionEngine encryptionEngine = encryptionEngines.get(k);
+							auths.put(a, auth);
+							
+							EncryptionEngineKey encryptionEngineKey = new EncryptionEngineKey(auth.authDigestAlgorithm, auth.privEncryptionAlgorithm);
+							EncryptionEngine encryptionEngine = encryptionEngines.get(encryptionEngineKey);
 							if (encryptionEngine == null) {
-								encryptionEngine = new EncryptionEngine(s.authDigestAlgorithm, s.privEncryptionAlgorithm, AUTH_ENGINES_CACHE_DURATION);
-								encryptionEngines.put(k, encryptionEngine);
+								encryptionEngine = new EncryptionEngine(auth.authDigestAlgorithm, auth.privEncryptionAlgorithm, AUTH_ENGINES_CACHE_DURATION);
+								encryptionEngines.put(encryptionEngineKey, encryptionEngine);
 							}
 
-							authRemoteEnginePendingRequestManager.update(s, encryptionEngine, a, connecter);
+							authRemoteEnginePendingRequestManager = authRemoteEngines.get(auth);
+							if (authRemoteEnginePendingRequestManager == null) {
+								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager(auth, encryptionEngine);
+								authRemoteEngines.put(auth, authRemoteEnginePendingRequestManager);
+
+								authRemoteEnginePendingRequestManager.discoverIfNecessary(a, connecter);
+							}
 						}
 
 						instance.receiver = r;
@@ -201,7 +243,16 @@ public final class SnmpClient implements SnmpConnecter {
 						int errorStatus;
 						int errorIndex;
 						Iterable<SnmpResult> results;
-						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager = authRemoteEngines.get(address);
+
+						Auth auth = auths.get(address);
+
+						AuthRemoteEnginePendingRequestManager authRemoteEnginePendingRequestManager;
+						if (auth == null) {
+							authRemoteEnginePendingRequestManager = null;
+						} else {
+							authRemoteEnginePendingRequestManager = authRemoteEngines.get(auth);
+						}
+
 						boolean ready;
 						if (authRemoteEnginePendingRequestManager != null) {
 							ready = authRemoteEnginePendingRequestManager.isReady();
@@ -287,35 +338,25 @@ public final class SnmpClient implements SnmpConnecter {
 			public final SnmpCallType request;
 			public final int instanceId;
 			public final Oid oid;
+			public final String contextName;
 //			public final Iterable<SnmpResult> trap;
 			public final SendCallback sendCallback;
 
-			public PendingRequest(SnmpCallType request, int instanceId, Oid oid, /*Iterable<SnmpResult> trap, */SendCallback sendCallback) {
+			public PendingRequest(SnmpCallType request, int instanceId, Oid oid, String contextName, /*Iterable<SnmpResult> trap, */SendCallback sendCallback) {
 				this.request = request;
 				this.instanceId = instanceId;
 				this.oid = oid;
+				this.contextName = contextName;
 //				this.trap = trap;
 				this.sendCallback = sendCallback;
 			}
 		}
 		
-		public AuthRemoteEngine engine = null;
+		public final AuthRemoteEngine engine;
 		public final List<PendingRequest> pendingRequests = new LinkedList<>();
 		
-		public AuthRemoteEnginePendingRequestManager() {
-		}
-		
-		public void update(AuthRemoteSpecification authRemoteSpecification, EncryptionEngine encryptionEngine, Address address, Connecter connector) {
-			if (engine == null) {
-				engine = new AuthRemoteEngine(authRemoteSpecification, encryptionEngine);
-				discoverIfNecessary(address, connector);
-			} else {
-				if (AuthRemoteEngine.hasChanged(engine.authRemoteSpecification, authRemoteSpecification)) {
-					LOGGER.trace("Auth method changed, engine reset ({})", address);
-					engine = new AuthRemoteEngine(authRemoteSpecification, encryptionEngine);
-					discoverIfNecessary(address, connector);
-				}
-			}
+		public AuthRemoteEnginePendingRequestManager(Auth auth, EncryptionEngine encryptionEngine) {
+			engine = new AuthRemoteEngine(auth, encryptionEngine);
 		}
 		
 		public boolean isReady() {
@@ -323,12 +364,12 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 		
 		public void reset() {
-			engine = new AuthRemoteEngine(engine.authRemoteSpecification, engine.encryptionEngine);
+			engine.reset();
 		}
 		
 		public void discoverIfNecessary(Address address, Connecter connector) {
 			if (!engine.isValid()) {
-				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, RequestIdProvider.IGNORE_ID, null);
+				Version3PacketBuilder builder = Version3PacketBuilder.get(engine, null, RequestIdProvider.IGNORE_ID, null);
 				ByteBuffer b = builder.getBuffer();
 				LOGGER.trace("Writing discover GET v3: #{}, packet size = {}", RequestIdProvider.IGNORE_ID, b.remaining());
 				connector.send(address, b, new SendCallback() {
@@ -362,21 +403,21 @@ public final class SnmpClient implements SnmpConnecter {
 			for (PendingRequest r : pendingRequests) {
 				switch (r.request) {
 					case GET: {
-						Version3PacketBuilder builder = Version3PacketBuilder.get(engine, r.instanceId, r.oid);
+						Version3PacketBuilder builder = Version3PacketBuilder.get(engine, r.contextName, r.instanceId, r.oid);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing GET v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
 						break;
 					}
 					case GETNEXT: {
-						Version3PacketBuilder builder = Version3PacketBuilder.getNext(engine, r.instanceId, r.oid);
+						Version3PacketBuilder builder = Version3PacketBuilder.getNext(engine, r.contextName, r.instanceId, r.oid);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing GETNEXT v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
 						break;
 					}
 					case GETBULK: {
-						Version3PacketBuilder builder = Version3PacketBuilder.getBulk(engine, r.instanceId, r.oid, BULK_SIZE);
+						Version3PacketBuilder builder = Version3PacketBuilder.getBulk(engine, r.contextName, r.instanceId, r.oid, BULK_SIZE);
 						ByteBuffer b = builder.getBuffer();
 						LOGGER.trace("Writing GETBULK v3: {} #{}, packet size = {}", r.oid, r.instanceId, b.remaining());
 						connector.send(address, b, r.sendCallback);
@@ -496,6 +537,7 @@ public final class SnmpClient implements SnmpConnecter {
 		private SnmpReceiver receiver;
 		
 		private final Oid requestOid;
+		private final String requestContextName;
 		public int instanceId = RequestIdProvider.IGNORE_ID;
 
 		private final Address address;
@@ -505,11 +547,12 @@ public final class SnmpClient implements SnmpConnecter {
 		
 		private final Iterable<SnmpResult> trap;
 
-		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, Address address, SnmpCallType snmpCallType, String community, Iterable<SnmpResult> trap) {
+		public Instance(Connecter connector, InstanceMapper instanceMapper, Oid requestOid, String requestContextName, Address address, SnmpCallType snmpCallType, String community, Iterable<SnmpResult> trap) {
 			this.connector = connector;
 			this.instanceMapper = instanceMapper;
 			
 			this.requestOid = requestOid;
+			this.requestContextName = requestContextName;
 			
 			this.address = address;
 			this.snmpCallType = snmpCallType;
@@ -582,7 +625,7 @@ public final class SnmpClient implements SnmpConnecter {
 						break;
 				}
 			} else {
-				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(snmpCallType, instanceId, requestOid, /*trap, */sendCallback));
+				authRemoteEnginePendingRequestManager.registerPendingRequest(new AuthRemoteEnginePendingRequestManager.PendingRequest(snmpCallType, instanceId, requestOid, requestContextName, /*trap, */sendCallback));
 				authRemoteEnginePendingRequestManager.sendPendingRequestsIfReady(address, connector);
 			}
 		}

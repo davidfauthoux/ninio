@@ -68,15 +68,15 @@ public final class Version3PacketBuilder {
 		}
 	}
 
-	private Version3PacketBuilder(AuthRemoteEngine authEngine, int requestId, int type, int bulkLength, Oid oid) {
+	private Version3PacketBuilder(AuthRemoteEngine authEngine, String contextName, int requestId, int type, int bulkLength, Oid oid) {
 		authEngine.renewTime();
 		
 		boolean encrypt = false;
 		int securityFlags = 0x0;
 		if (authEngine.isValid()) {
-			if (authEngine.authRemoteSpecification.login != null) {
+			if (authEngine.auth.login != null) {
 				securityFlags |= BerConstants.VERSION_3_AUTH_FLAG;
-				if (authEngine.authRemoteSpecification.privPassword != null) {
+				if (authEngine.auth.privPassword != null) {
 					securityFlags |= BerConstants.VERSION_3_PRIV_FLAG;
 					encrypt = true;
 				}
@@ -99,7 +99,7 @@ public final class Version3PacketBuilder {
 				.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
 				.add(new IntegerBerPacket(authEngine.getBootCount()))
 				.add(new IntegerBerPacket(authEngine.getTime()))
-				.add(new BytesBerPacket((authEngine.authRemoteSpecification.login == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.authRemoteSpecification.login)))
+				.add(new BytesBerPacket((authEngine.auth.login == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.auth.login)))
 				.add((auth == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : auth)
 				.add((priv == null) ? new BytesBerPacket(ByteBuffer.allocate(0)) : priv)
 			));
@@ -111,7 +111,7 @@ public final class Version3PacketBuilder {
 
 		BerPacket pduPacket = new SequenceBerPacket(BerConstants.SEQUENCE)
 			.add(new BytesBerPacket((authEngine.getId() == null) ? ByteBuffer.allocate(0) : ByteBuffer.wrap(authEngine.getId())))
-			.add(new BytesBerPacket((authEngine.authRemoteSpecification.contextName == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(authEngine.authRemoteSpecification.contextName)))
+			.add(new BytesBerPacket((contextName == null) ? ByteBuffer.allocate(0) : BerPacketUtils.bytes(contextName)))
 			.add(new SequenceBerPacket(type)
 				.add(new IntegerBerPacket(requestId))
 				.add(new IntegerBerPacket(0))
@@ -159,14 +159,14 @@ public final class Version3PacketBuilder {
 	}
 */
 	
-	public static Version3PacketBuilder getBulk(AuthRemoteEngine authEngine, int requestId, Oid oid, int bulkLength) {
-		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETBULK, bulkLength, oid);
+	public static Version3PacketBuilder getBulk(AuthRemoteEngine authEngine, String contextName, int requestId, Oid oid, int bulkLength) {
+		return new Version3PacketBuilder(authEngine, contextName, requestId, BerConstants.GETBULK, bulkLength, oid);
 	}
-	public static Version3PacketBuilder get(AuthRemoteEngine authEngine, int requestId, Oid oid) {
-		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GET, 0, oid);
+	public static Version3PacketBuilder get(AuthRemoteEngine authEngine, String contextName, int requestId, Oid oid) {
+		return new Version3PacketBuilder(authEngine, contextName, requestId, BerConstants.GET, 0, oid);
 	}
-	public static Version3PacketBuilder getNext(AuthRemoteEngine authEngine, int requestId, Oid oid) {
-		return new Version3PacketBuilder(authEngine, requestId, BerConstants.GETNEXT, 0, oid);
+	public static Version3PacketBuilder getNext(AuthRemoteEngine authEngine, String contextName, int requestId, Oid oid) {
+		return new Version3PacketBuilder(authEngine, contextName, requestId, BerConstants.GETNEXT, 0, oid);
 	}
 	
 /*

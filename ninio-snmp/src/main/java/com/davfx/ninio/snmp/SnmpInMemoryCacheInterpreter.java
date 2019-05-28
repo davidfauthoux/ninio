@@ -54,6 +54,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
+					if (true) return null;
 					// LOGGER.info("handleRequest VERSION_3");
 					byte securityFlags;
 		
@@ -92,7 +93,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 		
 					pdu.beginReadSequence();
 					pdu.readBytes();
-					pdu.readBytes();
+					String contextName = BerPacketUtils.string(pdu.readBytes());
 		
 					int type = pdu.beginReadSequence();
 					{
@@ -108,7 +109,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 									Oid oid = pdu.readOid();
 									pdu.readValue();
 									
-									String key = oid + "/" + type;
+									String key = oid + "/" + type + "/" + contextName;
 									// LOGGER.info("key={}", key);
 
 									return new InMemoryCache.Context<Integer>(key, requestId);
@@ -148,6 +149,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					// ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
+					if (true) return null;
 					// LOGGER.info("handleResponse VERSION_3");
 					byte securityFlags;
 					
@@ -249,6 +251,7 @@ public final class SnmpInMemoryCacheInterpreter implements InMemoryCache.Interpr
 					}
 					ber.endReadSequence();
 				} else if (version == BerConstants.VERSION_3) {
+					if (true) return null;
 					// LOGGER.info("transform VERSION_3");
 					byte securityFlags;
 					
