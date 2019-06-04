@@ -99,6 +99,37 @@ public final class SnmpClient implements SnmpConnecter {
 		}
 	}
 
+	private static final class AuthRemoteEngineKey {
+		public final Address address;
+		public final Auth auth;
+		
+		public AuthRemoteEngineKey(Address address, Auth auth) {
+			this.address = address;
+			this.auth = auth;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(address, auth);
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if (this == obj) {
+				return true;
+			}
+			if (obj == null) {
+				return false;
+			}
+			if (!(obj instanceof AuthRemoteEngineKey)) {
+				return false;
+			}
+			AuthRemoteEngineKey other = (AuthRemoteEngineKey) obj;
+			return Objects.equals(address, other.address)
+				&& Objects.equals(auth, other.auth);
+		}
+	}
+
 	private final Executor executor;
 	private final Connecter connecter;
 	
@@ -106,7 +137,7 @@ public final class SnmpClient implements SnmpConnecter {
 
 	private final RequestIdProvider requestIdProvider = new RequestIdProvider();
 	private final MemoryCache<Address, Auth> auths = MemoryCache.<Address, Auth> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
-	private final MemoryCache<Auth, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<Auth, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
+	private final MemoryCache<AuthRemoteEngineKey, AuthRemoteEnginePendingRequestManager> authRemoteEngines = MemoryCache.<AuthRemoteEngineKey, AuthRemoteEnginePendingRequestManager> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
 	private final MemoryCache<EncryptionEngineKey, EncryptionEngine> encryptionEngines = MemoryCache.<EncryptionEngineKey, EncryptionEngine> builder().expireAfterAccess(AUTH_ENGINES_CACHE_DURATION).build();
 
 	private SnmpClient(Executor executor, Connecter connecter) {
@@ -200,10 +231,11 @@ public final class SnmpClient implements SnmpConnecter {
 								encryptionEngines.put(encryptionEngineKey, encryptionEngine);
 							}
 
-							authRemoteEnginePendingRequestManager = authRemoteEngines.get(auth);
+							AuthRemoteEngineKey authRemoteEngineKey = new AuthRemoteEngineKey(a, auth);
+							authRemoteEnginePendingRequestManager = authRemoteEngines.get(authRemoteEngineKey);
 							if (authRemoteEnginePendingRequestManager == null) {
 								authRemoteEnginePendingRequestManager = new AuthRemoteEnginePendingRequestManager(auth, encryptionEngine);
-								authRemoteEngines.put(auth, authRemoteEnginePendingRequestManager);
+								authRemoteEngines.put(authRemoteEngineKey, authRemoteEnginePendingRequestManager);
 
 								authRemoteEnginePendingRequestManager.discoverIfNecessary(a, connecter);
 							}
@@ -250,7 +282,8 @@ public final class SnmpClient implements SnmpConnecter {
 						if (auth == null) {
 							authRemoteEnginePendingRequestManager = null;
 						} else {
-							authRemoteEnginePendingRequestManager = authRemoteEngines.get(auth);
+							AuthRemoteEngineKey authRemoteEngineKey = new AuthRemoteEngineKey(address, auth);
+							authRemoteEnginePendingRequestManager = authRemoteEngines.get(authRemoteEngineKey);
 						}
 
 						boolean ready;
