@@ -99,8 +99,8 @@ final class RedirectHttpReceiver implements HttpReceiver {
 					newPath = location;
 				}
 				
-				HttpRequest newRequest = new HttpRequest(new HttpRequestAddress(newHost, newPort, newSecure), request.method, newPath);
-				
+				HttpRequest newRequest = new HttpRequest(new HttpRequestAddress(newHost, newPort, newSecure), HttpMethod.GET/*request.method*/, newPath, request.headers);
+
 				client.request().build(newRequest).receive(new RedirectHttpReceiver(client, maxRedirections, levelOfRedirect + 1, newRequest, wrappee)).finish();
 
 				return new IgnoreContentHttpContentReceiver();
